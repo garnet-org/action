@@ -1,0 +1,25 @@
+name: Test GarnetAI Action
+
+on:
+  workflow_dispatch:
+    inputs:
+      api_token:
+        description: 'API token for GarnetAI service'
+        required: true
+      api_url:
+        description: 'API URL for GarnetAI service'
+        required: false
+        default: 'https://api.garnet.ai'
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        
+      - name: Run GarnetAI Action
+        uses: ./
+        with:
+          api_token: ${{ github.event.inputs.api_token }}
+          api_url: ${{ github.event.inputs.api_url }}
