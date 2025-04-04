@@ -12,7 +12,7 @@ RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o action .
 # Final stage
 FROM scratch
 
-LABEL maintainer="GarnetAI <support@garnetai.com>"
+LABEL maintainer="GarnetAI <support@garnet.ai>"
 
 # Copy the compiled binary from builder stage
 COPY --from=builder /app/action /action

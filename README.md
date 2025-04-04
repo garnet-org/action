@@ -1,4 +1,4 @@
-# GarnetAI Security Monitoring
+# GarnetAI Action
 
 A GitHub Action that runs the GarnetAI event generator for security monitoring.
 
@@ -16,8 +16,18 @@ on:
 jobs:
   monitor:
     runs-on: ubuntu-latest
+    permissions:
+      packages: read
+      contents: read
     steps:
       - uses: actions/checkout@v3
+      
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v2
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
       
       - name: Run GarnetAI Security Monitoring
         uses: garnet-org/action@v1

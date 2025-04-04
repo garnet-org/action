@@ -19,7 +19,8 @@ inputs:
 
 runs:
   using: 'docker'
-  image: 'docker://ghcr.io/garnet-org/action:${{ inputs.version }}'
+  image: 'ghcr.io/garnet-org/action:latest'
   env:
     GARNETAI_API_TOKEN: ${{ inputs.api_token }}
     GARNETAI_API_URL: ${{ inputs.api_url }}
+    VERSION: ${{ inputs.version }}
