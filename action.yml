@@ -25,9 +25,9 @@ inputs:
     required: false
     default: 'latest'
   jibril_version:
-    description: 'Jibril release version for the daemon'
+    description: 'Jibril release version for the daemon (leave empty for latest)'
     required: false
-    default: 'latest'
+    default: ''
 
 runs:
   using: "composite"
@@ -132,9 +132,16 @@ runs:
       shell: bash
       run: |
         echo "Starting security monitoring daemon..."
-        ./garnetctl start-daemon \
-          --config agent-config.yaml \
-          --agent-token ${{ env.AGENT_TOKEN }} \
-          --release ${{ inputs.jibril_version }}
+        
+        # Start command with basic parameters
+        START_CMD="./garnetctl start-daemon --config agent-config.yaml --agent-token ${{ env.AGENT_TOKEN }}"
+        
+        # Add release parameter only if a version was specified
+        if [ -n "${{ inputs.jibril_version }}" ]; then
+          START_CMD="$START_CMD --release ${{ inputs.jibril_version }}"
+        fi
+        
+        # Execute the command
+        eval "$START_CMD"
         
         echo "Security monitoring daemon started"

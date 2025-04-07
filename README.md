@@ -78,7 +78,7 @@ jobs:
           policy_path: ./custom/path/policy.yaml
           agent_version: 1.1.0
           garnetctl_version: 2.3.4
-          jibril_version: 0.9.5
+          jibril_version: v0.9.5
 ```
 
 ## Inputs
@@ -90,7 +90,7 @@ jobs:
 | `policy_path` | Path to save the network policy file | No | `./jibril/netpolicy.yaml` |
 | `agent_version` | Version to use for the agent | No | `1.0.0` |
 | `garnetctl_version` | Version of garnetctl CLI to download | No | `latest` |
-| `jibril_version` | Jibril version for the daemon | No | `latest` |
+| `jibril_version` | Jibril release version for the daemon | No | empty (uses latest) |
 
 ## How It Works
 
