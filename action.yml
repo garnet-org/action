@@ -35,10 +35,15 @@ runs:
     - name: Setup GarnetAI tools
       shell: bash
       run: |
-        # Download garnetctl tool
-        echo "Downloading garnetctl version ${{ inputs.garnetctl_version }}..."
-        curl -sL "${{ inputs.api_url }}/cli/download/${{ inputs.garnetctl_version }}" -o garnetctl
-        chmod +x garnetctl
+        # Use vendored garnetctl tool instead of downloading
+        echo "Using vendored garnetctl..."
+        cp ${{ github.action_path }}/bin/garnetctl ./garnetctl
+        chmod +x ./garnetctl
+        
+        # Commented out download code (for reference)
+        # echo "Downloading garnetctl version ${{ inputs.garnetctl_version }}..."
+        # curl -sL "${{ inputs.api_url }}/cli/download/${{ inputs.garnetctl_version }}" -o garnetctl
+        # chmod +x garnetctl
         
         # Create directories
         mkdir -p $(dirname "${{ inputs.policy_path }}")
