@@ -25,7 +25,7 @@ inputs:
     required: false
     default: 'latest'
   jibril_version:
-    description: 'Jibril version for the daemon'
+    description: 'Jibril release version for the daemon'
     required: false
     default: 'latest'
 
@@ -135,6 +135,6 @@ runs:
         ./garnetctl start-daemon \
           --config agent-config.yaml \
           --agent-token ${{ env.AGENT_TOKEN }} \
-          --version ${{ inputs.jibril_version }}
+          --release ${{ inputs.jibril_version }}
         
         echo "Security monitoring daemon started"
