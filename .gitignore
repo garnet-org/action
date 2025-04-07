@@ -1,0 +1,12 @@
+# Ignore environment file
+.env
+
+# Ignore event generator binary
+event_generator
+
+# Ignore downloaded garnetctl binary
+garnetctl
+
+# Ignore generated config files
+*-config.yaml
+github-context.json

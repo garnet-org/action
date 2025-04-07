@@ -12,15 +12,120 @@ inputs:
     description: 'API URL for GarnetAI service'
     required: false
     default: 'https://api.garnet.ai'
-  version:
-    description: 'Docker image version to use'
+  policy_path:
+    description: 'Path to save the network policy file'
+    required: false
+    default: './jibril/netpolicy.yaml'
+  agent_version:
+    description: 'Version to use for the agent'
+    required: false
+    default: '1.0.0'
+  garnetctl_version:
+    description: 'Version of garnetctl CLI to download'
+    required: false
+    default: 'latest'
+  jibril_version:
+    description: 'Jibril version for the daemon'
     required: false
     default: 'latest'
 
 runs:
-  using: 'docker'
-  image: 'ghcr.io/garnet-org/action:latest'
-  env:
-    GARNETAI_API_TOKEN: ${{ inputs.api_token }}
-    GARNETAI_API_URL: ${{ inputs.api_url }}
-    VERSION: ${{ inputs.version }}
+  using: "composite"
+  steps:
+    - name: Setup GarnetAI tools
+      shell: bash
+      run: |
+        # Download garnetctl tool
+        echo "Downloading garnetctl version ${{ inputs.garnetctl_version }}..."
+        curl -sL "${{ inputs.api_url }}/cli/download/${{ inputs.garnetctl_version }}" -o garnetctl
+        chmod +x garnetctl
+        
+        # Create directories
+        mkdir -p $(dirname "${{ inputs.policy_path }}")
+        
+        # Configure garnetctl base URL and set token
+        ./garnetctl config set-baseurl ${{ inputs.api_url }}
+        ./garnetctl config set-token ${{ inputs.api_token }}
+
+    - name: Create GitHub context file
+      shell: bash
+      run: |
+        echo "Creating GitHub context file..."
+        cat > github-context.json << EOF
+        {
+          "job": "${{ github.job }}",
+          "run_id": "${{ github.run_id }}",
+          "workflow": "${{ github.workflow }}",
+          "repository": "${{ github.repository }}",
+          "repository_owner": "${{ github.repository_owner }}",
+          "event_name": "${{ github.event_name }}",
+          "ref": "${{ github.ref }}",
+          "sha": "${{ github.sha }}",
+          "actor": "${{ github.actor }}",
+          "runner_os": "${{ runner.os }}",
+          "runner_arch": "${{ runner.arch }}"
+        }
+        EOF
+
+    - name: Create agent
+      shell: bash
+      run: |
+        echo "Creating GitHub agent..."
+        AGENT_INFO=$(./garnetctl create agent \
+          --version "${{ inputs.agent_version }}" \
+          --ip "127.0.0.1" \
+          --machine-id "github-${{ github.run_id }}" \
+          --kind github \
+          --context-file github-context.json)
+        
+        # Extract agent details
+        AGENT_ID=$(echo "$AGENT_INFO" | jq -r '.id')
+        AGENT_TOKEN=$(echo "$AGENT_INFO" | jq -r '.agent_token')
+        
+        echo "Created agent with ID: $AGENT_ID"
+        
+        # Save for other steps
+        echo "AGENT_ID=$AGENT_ID" >> $GITHUB_ENV
+        echo "AGENT_TOKEN=$AGENT_TOKEN" >> $GITHUB_ENV
+
+    - name: Create agent config file
+      shell: bash
+      run: |
+        echo "Creating agent configuration file..."
+        cat > agent-config.yaml << EOF
+        daemon:
+          loglevel: info
+          debug: false
+        
+        config:
+          plugins:
+          - jibril:printers:varlog
+          - jibril:printers:garnet
+        EOF
+
+    - name: Get network policy
+      shell: bash
+      run: |
+        echo "Getting network policy..."
+        REPO_ID="${{ github.repository }}"
+        WORKFLOW="${{ github.workflow }}"
+        
+        # Get the network policy and save it to the specified path
+        ./garnetctl get network-policy merged \
+          --repository-id "$REPO_ID" \
+          --workflow-name "$WORKFLOW" \
+          --format jibril \
+          --output "${{ inputs.policy_path }}"
+        
+        echo "Network policy saved to ${{ inputs.policy_path }}"
+
+    - name: Start security monitoring
+      shell: bash
+      run: |
+        echo "Starting security monitoring daemon..."
+        ./garnetctl start-daemon \
+          --config agent-config.yaml \
+          --agent-token ${{ env.AGENT_TOKEN }} \
+          --version ${{ inputs.jibril_version }}
+        
+        echo "Security monitoring daemon started"
