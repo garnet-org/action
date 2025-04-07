@@ -1,0 +1,45 @@
+name: Run Security Scanner
+
+on:
+  workflow_dispatch:
+    inputs:
+      api_token:
+        description: 'API token for GarnetAI service'
+        required: true
+      api_url:
+        description: 'API URL for GarnetAI service'
+        required: false
+        default: 'https://api.garnet.ai'
+      policy_path:
+        description: 'Path to save the network policy file'
+        required: false
+        default: './jibril/netpolicy.yaml'
+      agent_version:
+        description: 'Version to use for the agent'
+        required: false
+        default: '1.0.0'
+      garnetctl_version:
+        description: 'Version of garnetctl CLI to download'
+        required: false
+        default: 'latest'
+      jibril_version:
+        description: 'Jibril version for the daemon'
+        required: false
+        default: 'latest'
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Run Jibril Security Scanner
+        uses: ./
+        with:
+          api_token: ${{ inputs.api_token }}
+          api_url: ${{ inputs.api_url }}
+          policy_path: ${{ inputs.policy_path }}
+          agent_version: ${{ inputs.agent_version }}
+          garnetctl_version: ${{ inputs.garnetctl_version }}
+          jibril_version: ${{ inputs.jibril_version }}
