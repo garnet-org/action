@@ -35,15 +35,19 @@ runs:
     - name: Setup GarnetAI tools
       shell: bash
       run: |
-        # Use vendored garnetctl tool instead of downloading
-        echo "Using vendored garnetctl..."
-        cp ${{ github.action_path }}/bin/garnetctl ./garnetctl
-        chmod +x ./garnetctl
+        # Try to use vendored garnetctl tool first
+        echo "Checking for vendored garnetctl..."
+        VENDORED_PATH="${{ github.action_path }}/bin/garnetctl"
+        if [ -f "$VENDORED_PATH" ]; then
+          echo "Using vendored garnetctl from $VENDORED_PATH"
+          cp "$VENDORED_PATH" ./garnetctl
+        else
+          # Fall back to downloading if vendored binary isn't available
+          echo "Vendored garnetctl not found. Downloading version ${{ inputs.garnetctl_version }}..."
+          curl -sL "${{ inputs.api_url }}/cli/download/${{ inputs.garnetctl_version }}" -o garnetctl
+        fi
         
-        # Commented out download code (for reference)
-        # echo "Downloading garnetctl version ${{ inputs.garnetctl_version }}..."
-        # curl -sL "${{ inputs.api_url }}/cli/download/${{ inputs.garnetctl_version }}" -o garnetctl
-        # chmod +x garnetctl
+        chmod +x ./garnetctl
         
         # Create directories
         mkdir -p $(dirname "${{ inputs.policy_path }}")
