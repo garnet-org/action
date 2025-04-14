@@ -1,0 +1,17 @@
+[Unit]
+Description=Jibril Security Scanner Loader
+After=network.target
+
+[Service]
+Type=notify
+NotifyAccess=all
+User=root
+Environment=TERM=xterm
+EnvironmentFile=-/etc/default/loader
+ExecStartPre=/bin/rm -f /var/run/loader.pid /var/log/loader.log /var/log/loader.err /var/log/loader.events
+ExecStart=/usr/local/bin/loader --notify --log-level info --stdout /var/log/loader.log --stderr /var/log/loader.err --config /etc/loader/config.yaml
+Restart=on-failure
+RestartSec=5s
+
+[Install]
+WantedBy=multi-user.target
