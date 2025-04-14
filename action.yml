@@ -295,9 +295,9 @@ runs:
         if [ "$SERVICE_STARTED" = "true" ]; then
           echo "Security monitoring started successfully"
           
-          # Wait for the service to fully initialize (takes about 20 seconds)
-          echo "Waiting 20 seconds for loader service to fully initialize..."
-          sleep 20
+          # Wait for the service to initialize
+          echo "Waiting 5 seconds for loader service to initialize..."
+          sleep 5
           
           # Verify the service is running
           if [ "${{ inputs.debug }}" == "true" ]; then
