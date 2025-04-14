@@ -12,10 +12,6 @@ inputs:
     description: 'API URL for GarnetAI service'
     required: false
     default: 'https://api.garnet.ai'
-  policy_path:
-    description: 'Path to save the network policy file'
-    required: false
-    default: './config/netpolicy.yaml'
   garnetctl_version:
     description: 'Version of garnetctl CLI to download (without v prefix)'
     required: false
@@ -160,7 +156,7 @@ runs:
         WORKFLOW="${{ github.workflow }}"
 
         # Create directory for policy file if it doesn't exist
-        POLICY_DIR=$(dirname "${{ inputs.policy_path }}")
+        POLICY_DIR="./config"
         echo "Creating policy directory: $POLICY_DIR"
         mkdir -p "$POLICY_DIR"
         
@@ -178,20 +174,20 @@ runs:
           --repository-id "$REPO_ID" \
           --workflow-name "$WORKFLOW" \
           --format jibril \
-          --output "${{ inputs.policy_path }}"
+          --output "./config/netpolicy.yaml"
 
         # Check if policy file was created successfully
-        if [ -f "${{ inputs.policy_path }}" ]; then
-          echo "Network policy saved to ${{ inputs.policy_path }}"
+        if [ -f "./config/netpolicy.yaml" ]; then
+          echo "Network policy saved to ./config/netpolicy.yaml"
           if [ "${{ inputs.debug }}" == "true" ]; then
             echo "DEBUG: Network policy content:"
-            cat "${{ inputs.policy_path }}"
+            cat "./config/netpolicy.yaml"
           fi
         else
-          echo "ERROR: Network policy file was not created at ${{ inputs.policy_path }}"
+          echo "ERROR: Network policy file was not created at ./config/netpolicy.yaml"
           if [ "${{ inputs.debug }}" == "true" ]; then
             echo "DEBUG: Directory permissions:"
-            ls -la $(dirname "${{ inputs.policy_path }}")
+            ls -la "./config"
             echo "DEBUG: garnetctl version:"
             garnetctl --version
           fi
@@ -222,7 +218,7 @@ runs:
         
         # Copy both configuration files directly (no modifications needed)
         sudo cp "$CONFIG_PATH" /etc/loader/config.yaml
-        sudo cp "${{ inputs.policy_path }}" /etc/loader/netpolicy.yaml
+        sudo cp "./config/netpolicy.yaml" /etc/loader/netpolicy.yaml
         
         # Set proper permissions
         sudo chmod 644 /etc/loader/config.yaml

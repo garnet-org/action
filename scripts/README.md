@@ -21,7 +21,6 @@ This script (`action.sh`) allows you to test the GarnetAI GitHub Action locally 
    ```
    export API_TOKEN="your-garnet-api-token"
    export API_URL="https://api.garnet.ai"  # Optional, default is shown
-   export POLICY_PATH="/etc/jibril/netpolicy.yaml"  # Optional, default is shown
    export GARNETCTL_VERSION="latest"  # Optional, default is shown
    export JIBRIL_VERSION="0.0"  # Optional, default is shown
    ```
