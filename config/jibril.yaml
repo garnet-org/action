@@ -24,6 +24,13 @@ printer:
   - jibril:printers:varlog
   - jibril:printers:garnet:error_log_rate=5s:warn_log_rate=1s
 event:
+  #
+  # Network Policy.
+  #
+  - jibril:netpolicy:dropip
+  - jibril:netpolicy:dropdomain
+
+  # Other events
   - jibril:detect:flow
   - jibril:detect:file_example
   - jibril:detect:capabilities_modification
