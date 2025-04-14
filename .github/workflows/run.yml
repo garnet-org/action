@@ -1,0 +1,87 @@
+name: Run Security Scanner
+
+on:
+  workflow_dispatch:
+    inputs:
+      api_token:
+        description: 'API token for GarnetAI service'
+        required: true
+      api_url:
+        description: 'API URL for GarnetAI service'
+        required: false
+        default: 'https://api.garnet.ai'
+      policy_path:
+        description: 'Path to save the network policy file'
+        required: false
+        default: './config/netpolicy.yaml'
+      garnetctl_version:
+        description: 'Version of garnetctl CLI to download (without v prefix)'
+        required: false
+        default: 'latest'
+      jibril_version:
+        description: 'Jibril version for the daemon (without v prefix)'
+        required: false
+        default: '0.0'
+      debug:
+        description: 'Enable detailed debug output'
+        required: false
+        default: 'true'
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Run Jibril Security Scanner
+        uses: ./
+        with:
+          api_token: ${{ inputs.api_token }}
+          api_url: ${{ inputs.api_url }}
+          policy_path: ${{ inputs.policy_path }}
+          garnetctl_version: ${{ inputs.garnetctl_version }}
+          jibril_version: ${{ inputs.jibril_version }}
+          debug: ${{ inputs.debug }}
+          
+      - name: Trigger network detection
+        run: |
+          echo "Running ping test to trigger detection..."
+          ping -c 4 203.0.113.1 || echo "Ping test completed"
+          
+          # Wait a moment for the detection to be logged
+          echo "Waiting 10 seconds for detection to be processed..."
+          sleep 10
+          
+          echo "======= LOADER SERVICE STATUS ======="
+          sudo systemctl status loader.service || true
+          
+          echo "======= LOADER SERVICE LOGS ======="
+          sudo journalctl -u loader.service --no-pager -n 100 || true
+          
+          echo "======= LOADER STDOUT LOGS ======="
+          sudo cat /var/log/loader.log || echo "No loader stdout log found"
+          
+          echo "======= LOADER STDERR LOGS ======="
+          sudo cat /var/log/loader.err || echo "No loader stderr log found"
+          
+          echo "======= LOADER EVENTS LOGS ======="
+          sudo cat /var/log/loader.events || echo "No loader events log found"
+          
+          echo "======= CONFIGURATION FILES ======="
+          echo "Checking configuration files..."
+          sudo ls -la /etc/loader/ || echo "No /etc/loader directory found"
+          echo "Config file content:"
+          sudo cat /etc/loader/config.yaml || echo "No config file found"
+          echo "Network policy file content:"
+          sudo cat /etc/loader/netpolicy.yaml || echo "No policy file found"
+          
+          echo "======= ENVIRONMENT VARIABLES ======="
+          echo "Checking if environment variables are available to the service..."
+          sudo cat /proc/$(pgrep -f loader)/environ 2>/dev/null | tr '\0' '\n' | grep -i GARNET || echo "No GARNET environment variables found in process"
+          echo "Environment file content:"
+          sudo cat /etc/default/loader || echo "No environment file found at /etc/default/loader"
+          
+          echo "======= NETWORK CONNECTIONS ======="
+          echo "Checking network connections from loader..."
+          sudo ss -tuap | grep -i loader || echo "No network connections found for loader service"
