@@ -19,7 +19,7 @@ plugin:
   - jibril:procfs
   - jibril:printers
   - jibril:detect
-  - jibril:netpolicy:file=/etc/jibril/netpolicy.yaml
+  - jibril:netpolicy:file=./config/netpolicy.yaml
 printer:
   - jibril:printers:varlog
   - jibril:printers:garnet:error_log_rate=5s:warn_log_rate=1s

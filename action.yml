@@ -15,7 +15,7 @@ inputs:
   policy_path:
     description: 'Path to save the network policy file'
     required: false
-    default: '/etc/jibril/netpolicy.yaml'
+    default: './config/netpolicy.yaml'
   garnetctl_version:
     description: 'Version of garnetctl CLI to download (without v prefix)'
     required: false
@@ -150,6 +150,9 @@ runs:
         REPO_ID="${{ github.repository }}"
         WORKFLOW="${{ github.workflow }}"
 
+        # Create directory for policy file if it doesn't exist
+        mkdir -p $(dirname "${{ inputs.policy_path }}")
+        
         # Get the network policy and save it to the specified path
         garnetctl get network-policy merged \
           --repository-id "$REPO_ID" \
@@ -158,9 +161,6 @@ runs:
           --output "${{ inputs.policy_path }}"
 
         echo "Network policy saved to ${{ inputs.policy_path }}"
-        
-        # Set up environment variables for configuration
-        export POLICY_PATH="${{ inputs.policy_path }}"
 
         # Step 4: Start Jibril with loader using config from ./config
         echo "Starting Jibril security monitoring..."

@@ -13,7 +13,7 @@ on:
       policy_path:
         description: 'Path to save the network policy file'
         required: false
-        default: '/etc/jibril/netpolicy.yaml'
+        default: './config/netpolicy.yaml'
       garnetctl_version:
         description: 'Version of garnetctl CLI to download (without v prefix)'
         required: false
