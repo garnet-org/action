@@ -4,7 +4,7 @@ set -e
 # Default values
 API_TOKEN=${API_TOKEN:-"YOUR_TOKEN_HERE"}
 API_URL=${API_URL:-"https://api.garnet.ai"}
-POLICY_PATH=${POLICY_PATH:-"/etc/jibril/netpolicy.yaml"}
+POLICY_PATH=${POLICY_PATH:-"./config/netpolicy.yaml"}
 GARNETCTL_VERSION=${GARNETCTL_VERSION:-"latest"}
 JIBRIL_VERSION=${JIBRIL_VERSION:-"0.0"}
 
@@ -136,6 +136,9 @@ echo "Getting network policy..."
 REPO_ID="garnet-org/action"
 WORKFLOW="Local Test Workflow"
 
+# Create directory for policy file if it doesn't exist
+mkdir -p $(dirname "$POLICY_PATH")
+
 # Get the network policy and save it to the specified path
 echo "Fetching network policy for $REPO_ID/$WORKFLOW..."
 garnetctl get network-policy merged \
@@ -145,9 +148,6 @@ garnetctl get network-policy merged \
   --output "$POLICY_PATH"
 
 echo "Network policy saved to $POLICY_PATH"
-
-# Set up environment variables for configuration
-export POLICY_PATH
 
 # Step 4: Start Jibril with loader
 echo "=== Step 4: Starting Jibril security monitoring ==="
