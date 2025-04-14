@@ -22,6 +22,10 @@ on:
         description: 'Jibril version for the daemon (without v prefix)'
         required: false
         default: '0.0'
+      debug:
+        description: 'Enable detailed debug output'
+        required: false
+        default: 'true'
 
 jobs:
   test:
@@ -38,3 +42,4 @@ jobs:
           policy_path: ${{ inputs.policy_path }}
           garnetctl_version: ${{ inputs.garnetctl_version }}
           jibril_version: ${{ inputs.jibril_version }}
+          debug: ${{ inputs.debug }}

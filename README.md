@@ -75,9 +75,10 @@ jobs:
         with:
           api_token: ${{ secrets.GARNET_API_TOKEN }}
           api_url: https://dev-api.garnet.ai
-          policy_path: /etc/jibril/netpolicy.yaml
+          policy_path: ./config/netpolicy.yaml
           garnetctl_version: 1.2.0
           jibril_version: 0.9.5
+          debug: true
 ```
 
 ## Inputs
@@ -86,9 +87,10 @@ jobs:
 |------|-------------|----------|---------|
 | `api_token` | API token for GarnetAI service | Yes | N/A |
 | `api_url` | API URL for GarnetAI service | No | `https://api.garnet.ai` |
-| `policy_path` | Path to save the network policy file | No | `/etc/jibril/netpolicy.yaml` |
+| `policy_path` | Path to save the network policy file | No | `./config/netpolicy.yaml` |
 | `garnetctl_version` | Version of garnetctl CLI to download | No | `latest` |
 | `jibril_version` | Jibril release version (without v prefix) | No | `0.0` |
+| `debug` | Enable detailed debug output | No | `false` |
 
 ## How It Works
 
