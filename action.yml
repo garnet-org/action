@@ -24,6 +24,10 @@ inputs:
     description: 'Jibril release version for the daemon (without v prefix)'
     required: false
     default: '0.0'
+  debug:
+    description: 'Enable detailed debug output'
+    required: false
+    default: 'false'
 
 runs:
   using: "composite"
@@ -31,6 +35,11 @@ runs:
     - name: Download and setup tools
       shell: bash
       run: |
+        # Enable debug output if requested
+        if [ "${{ inputs.debug }}" == "true" ]; then
+          echo "DEBUG MODE ENABLED - Will provide detailed output"
+          set -x
+        fi
         # Set up versions
         GARNETCTL_VERSION="${{ inputs.garnetctl_version }}"
         JIBRIL_VERSION="${{ inputs.jibril_version }}"
@@ -151,22 +160,77 @@ runs:
         WORKFLOW="${{ github.workflow }}"
 
         # Create directory for policy file if it doesn't exist
-        mkdir -p $(dirname "${{ inputs.policy_path }}")
+        POLICY_DIR=$(dirname "${{ inputs.policy_path }}")
+        echo "Creating policy directory: $POLICY_DIR"
+        mkdir -p "$POLICY_DIR"
+        
+        # Debug: Show working directory and directory structure
+        if [ "${{ inputs.debug }}" == "true" ]; then
+          echo "DEBUG: Current working directory: $(pwd)"
+          echo "DEBUG: Directory structure:"
+          ls -la "$POLICY_DIR"
+          echo "DEBUG: Full path to policy file: $(realpath "${{ inputs.policy_path }}" 2>/dev/null || echo "Path not accessible: ${{ inputs.policy_path }}")"
+        fi
         
         # Get the network policy and save it to the specified path
+        echo "Fetching network policy for repository '$REPO_ID' and workflow '$WORKFLOW'..."
         garnetctl get network-policy merged \
           --repository-id "$REPO_ID" \
           --workflow-name "$WORKFLOW" \
           --format jibril \
           --output "${{ inputs.policy_path }}"
 
-        echo "Network policy saved to ${{ inputs.policy_path }}"
+        # Check if policy file was created successfully
+        if [ -f "${{ inputs.policy_path }}" ]; then
+          echo "Network policy saved to ${{ inputs.policy_path }}"
+          if [ "${{ inputs.debug }}" == "true" ]; then
+            echo "DEBUG: Network policy content:"
+            cat "${{ inputs.policy_path }}"
+          fi
+        else
+          echo "ERROR: Network policy file was not created at ${{ inputs.policy_path }}"
+          if [ "${{ inputs.debug }}" == "true" ]; then
+            echo "DEBUG: Directory permissions:"
+            ls -la $(dirname "${{ inputs.policy_path }}")
+            echo "DEBUG: garnetctl version:"
+            garnetctl --version
+          fi
+          exit 1
+        fi
 
         # Step 4: Start Jibril with loader using config from ./config
         echo "Starting Jibril security monitoring..."
         export GARNET_AGENT_TOKEN="${{ env.AGENT_TOKEN }}"
         
-        echo "Running Jibril loader with config from ./config/jibril.yaml"
-        sudo -E loader --config ./config/jibril.yaml --systemd enable-now
+        CONFIG_PATH="./config/jibril.yaml"
+        echo "Running Jibril loader with config from $CONFIG_PATH"
         
-        echo "Security monitoring started"
+        # Debug configuration before starting
+        if [ "${{ inputs.debug }}" == "true" ]; then
+          echo "DEBUG: Jibril configuration file content:"
+          cat "$CONFIG_PATH"
+          echo "DEBUG: Environment variables:"
+          env | grep -E 'GARNET|PATH'
+          echo "DEBUG: Loader executable:"
+          which loader || echo "Loader not found in PATH"
+          ls -la /usr/local/bin/loader || echo "Loader not found in /usr/local/bin"
+        fi
+        
+        # Run the loader with detailed error handling
+        if sudo -E loader --config "$CONFIG_PATH" --systemd enable-now; then
+          echo "Security monitoring started successfully"
+        else
+          LOADER_EXIT=$?
+          echo "ERROR: Failed to start Jibril loader. Exit code: $LOADER_EXIT"
+          
+          if [ "${{ inputs.debug }}" == "true" ]; then
+            echo "DEBUG: Checking system logs for errors:"
+            sudo journalctl -u jibril --no-pager -n 50 || echo "Unable to get journalctl logs"
+            echo "DEBUG: Loader version information:"
+            loader --version || echo "Unable to get loader version"
+            echo "DEBUG: Run loader with --help to see options:"
+            loader --help || echo "Unable to show loader help"
+          fi
+          
+          exit $LOADER_EXIT
+        fi

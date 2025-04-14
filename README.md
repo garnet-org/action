@@ -89,6 +89,7 @@ jobs:
 | `policy_path` | Path to save the network policy file | No | `./config/netpolicy.yaml` |
 | `garnetctl_version` | Version of garnetctl CLI to download | No | `latest` |
 | `jibril_version` | Jibril release version (without v prefix) | No | `0.0` |
+| `debug` | Enable detailed debug output | No | `false` |
 
 ## How It Works
 
