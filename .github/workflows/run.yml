@@ -13,19 +13,15 @@ on:
       policy_path:
         description: 'Path to save the network policy file'
         required: false
-        default: './jibril/netpolicy.yaml'
-      agent_version:
-        description: 'Version to use for the agent'
-        required: false
-        default: '1.0.0'
+        default: '/etc/jibril/netpolicy.yaml'
       garnetctl_version:
-        description: 'Version of garnetctl CLI to download'
+        description: 'Version of garnetctl CLI to download (without v prefix)'
         required: false
         default: 'latest'
       jibril_version:
-        description: 'Jibril version for the daemon'
+        description: 'Jibril version for the daemon (without v prefix)'
         required: false
-        default: 'latest'
+        default: '0.0'
 
 jobs:
   scan:
@@ -40,6 +36,5 @@ jobs:
           api_token: ${{ inputs.api_token }}
           api_url: ${{ inputs.api_url }}
           policy_path: ${{ inputs.policy_path }}
-          agent_version: ${{ inputs.agent_version }}
           garnetctl_version: ${{ inputs.garnetctl_version }}
           jibril_version: ${{ inputs.jibril_version }}

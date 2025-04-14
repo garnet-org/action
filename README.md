@@ -75,10 +75,9 @@ jobs:
         with:
           api_token: ${{ secrets.GARNET_API_TOKEN }}
           api_url: https://dev-api.garnet.ai
-          policy_path: ./custom/path/policy.yaml
-          agent_version: 1.1.0
-          garnetctl_version: 2.3.4
-          jibril_version: v0.9.5
+          policy_path: /etc/jibril/netpolicy.yaml
+          garnetctl_version: 1.2.0
+          jibril_version: 0.9.5
 ```
 
 ## Inputs
@@ -87,31 +86,33 @@ jobs:
 |------|-------------|----------|---------|
 | `api_token` | API token for GarnetAI service | Yes | N/A |
 | `api_url` | API URL for GarnetAI service | No | `https://api.garnet.ai` |
-| `policy_path` | Path to save the network policy file | No | `./jibril/netpolicy.yaml` |
-| `agent_version` | Version to use for the agent | No | `1.0.0` |
+| `policy_path` | Path to save the network policy file | No | `/etc/jibril/netpolicy.yaml` |
 | `garnetctl_version` | Version of garnetctl CLI to download | No | `latest` |
-| `jibril_version` | Jibril release version for the daemon | No | empty (uses latest) |
+| `jibril_version` | Jibril release version (without v prefix) | No | `0.0` |
 
 ## How It Works
 
 When this action runs, it:
 
-1. Downloads and configures the garnetctl CLI tool
+1. Downloads the necessary tools from GitHub releases:
+   - garnetctl from garnet-org/garnetctl-releases
+   - Jibril loader from listendev/jibril-releases
 2. Creates a GitHub context file with workflow information
 3. Creates a Garnet agent using the GitHub context
-4. Creates an agent configuration file
+4. Uses the configuration file from ./config/jibril.yaml
 5. Retrieves the network policy for the repository and workflow
-6. Starts the Jibril security daemon
+6. Starts the Jibril loader directly using sudo
 
-The security daemon runs in the background for the duration of your workflow, monitoring for suspicious activity.
+The security monitoring runs in the background for the duration of your workflow, detecting suspicious activity. The configuration includes extensive detection events for file access, execution monitoring, and network peer analysis.
 
 ## Troubleshooting
 
 If you encounter issues:
 
 1. Verify your API token has the proper permissions
-2. Check that your action has access to the internet
+2. Check that your workflow has sudo access for running the loader
 3. Ensure the agent can properly register with GarnetAI
+4. Check that the specified versions of garnetctl and Jibril are available in their respective release repositories
 
 For more detailed errors, check the GitHub Actions logs.
 

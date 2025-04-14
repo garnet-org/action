@@ -10,6 +10,18 @@ on:
         description: 'API URL for GarnetAI service'
         required: false
         default: 'https://api.garnet.ai'
+      policy_path:
+        description: 'Path to save the network policy file'
+        required: false
+        default: '/etc/jibril/netpolicy.yaml'
+      garnetctl_version:
+        description: 'Version of garnetctl CLI to download (without v prefix)'
+        required: false
+        default: 'latest'
+      jibril_version:
+        description: 'Jibril version for the daemon (without v prefix)'
+        required: false
+        default: '0.0'
 
 jobs:
   test:
@@ -18,15 +30,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v3
       
-      - name: Login to GitHub Container Registry
-        uses: docker/login-action@v2
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-        
       - name: Run GarnetAI Action
         uses: ./
         with:
-          api_token: ${{ github.event.inputs.api_token }}
-          api_url: ${{ github.event.inputs.api_url }}
+          api_token: ${{ inputs.api_token }}
+          api_url: ${{ inputs.api_url }}
+          policy_path: ${{ inputs.policy_path }}
+          garnetctl_version: ${{ inputs.garnetctl_version }}
+          jibril_version: ${{ inputs.jibril_version }}
