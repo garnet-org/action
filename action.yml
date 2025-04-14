@@ -96,6 +96,7 @@ runs:
         
         # Clean up
         rm -rf "$GARNETCTL_TMP_DIR"
+        echo "Garnetctl downloaded and installed successfully ✅"
         
         # Download Jibril loader
         echo "Downloading Jibril loader $JIBRIL_VERSION..."
@@ -104,10 +105,12 @@ runs:
         echo "Downloading Jibril loader from: $JIBRIL_URL"
         curl -sL -o /usr/local/bin/loader "$JIBRIL_URL"
         chmod +x /usr/local/bin/loader
+        echo "Jibril loader downloaded and installed successfully ✅"
         
         # Configure garnetctl
         garnetctl config set-baseurl ${{ inputs.api_url }}
         garnetctl config set-token ${{ inputs.api_token }}
+        echo "Download and setup tools completed ✅"
 
     - name: Create GitHub context and agent
       shell: bash
@@ -143,7 +146,7 @@ runs:
         AGENT_ID=$(echo "$AGENT_INFO" | jq -r '.id')
         AGENT_TOKEN=$(echo "$AGENT_INFO" | jq -r '.agent_token')
 
-        echo "Created agent with ID: $AGENT_ID"
+        echo "Step 1 & 2 completed ✅ - Created agent with ID: $AGENT_ID"
         echo "AGENT_ID=$AGENT_ID" >> $GITHUB_ENV
         echo "AGENT_TOKEN=$AGENT_TOKEN" >> $GITHUB_ENV
 
@@ -178,7 +181,7 @@ runs:
 
         # Check if policy file was created successfully
         if [ -f "./config/netpolicy.yaml" ]; then
-          echo "Network policy saved to ./config/netpolicy.yaml"
+          echo "Step 3 completed ✅ - Network policy saved to ./config/netpolicy.yaml"
           if [ "${{ inputs.debug }}" == "true" ]; then
             echo "DEBUG: Network policy content:"
             cat "./config/netpolicy.yaml"
@@ -211,6 +214,7 @@ runs:
         sudo cp /tmp/loader-env/loader /etc/default/loader
         sudo chmod 644 /etc/default/loader
         rm -rf /tmp/loader-env
+        echo "Step 4 completed ✅ - Environment setup successful"
         
     - name: Copy configuration files
       shell: bash
@@ -238,6 +242,7 @@ runs:
           echo "✅ Configuration files found in /etc/loader/"
           echo "  - /etc/loader/config.yaml"
           echo "  - /etc/loader/netpolicy.yaml"
+          echo "Step 5 completed ✅ - Configuration files copied successfully"
         else
           echo "❌ Configuration files missing from /etc/loader/"
           if [ ! -f "/etc/loader/config.yaml" ]; then
@@ -295,7 +300,7 @@ runs:
         fi
         
         if [ "$SERVICE_STARTED" = "true" ]; then
-          echo "Security monitoring started successfully"
+          echo "Step 6 completed ✅ - Security monitoring started successfully"
           
           # Wait for the service to initialize
           echo "Waiting 5 seconds for loader service to initialize..."
@@ -343,4 +348,4 @@ runs:
           exit 1
         fi
         
-        echo "✅ Security monitoring service is running successfully"
+        echo "Step 7 completed ✅ - Security monitoring service is running successfully"
