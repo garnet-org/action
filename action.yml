@@ -15,50 +15,99 @@ inputs:
   policy_path:
     description: 'Path to save the network policy file'
     required: false
-    default: './jibril/netpolicy.yaml'
-  agent_version:
-    description: 'Version to use for the agent'
-    required: false
-    default: '1.0.0'
+    default: '/etc/jibril/netpolicy.yaml'
   garnetctl_version:
-    description: 'Version of garnetctl CLI to download'
+    description: 'Version of garnetctl CLI to download (without v prefix)'
     required: false
     default: 'latest'
   jibril_version:
-    description: 'Jibril release version for the daemon (leave empty for latest)'
+    description: 'Jibril release version for the daemon (without v prefix)'
     required: false
-    default: ''
+    default: '0.0'
 
 runs:
   using: "composite"
   steps:
-    - name: Setup GarnetAI tools
+    - name: Download and setup tools
       shell: bash
       run: |
-        # Try to use vendored garnetctl tool first
-        echo "Checking for vendored garnetctl..."
-        VENDORED_PATH="${{ github.action_path }}/bin/garnetctl"
-        if [ -f "$VENDORED_PATH" ]; then
-          echo "Using vendored garnetctl from $VENDORED_PATH"
-          cp "$VENDORED_PATH" ./garnetctl
-        else
-          # Fall back to downloading if vendored binary isn't available
-          echo "Vendored garnetctl not found. Downloading version ${{ inputs.garnetctl_version }}..."
-          curl -sL "${{ inputs.api_url }}/cli/download/${{ inputs.garnetctl_version }}" -o garnetctl
+        # Set up versions
+        GARNETCTL_VERSION="${{ inputs.garnetctl_version }}"
+        JIBRIL_VERSION="${{ inputs.jibril_version }}"
+        
+        # Ensure we have the proper version format
+        if [[ "$GARNETCTL_VERSION" != "latest" && "$GARNETCTL_VERSION" != v* ]]; then
+          GARNETCTL_VERSION="v$GARNETCTL_VERSION"
         fi
         
-        chmod +x ./garnetctl
+        if [[ "$JIBRIL_VERSION" != v* ]]; then
+          JIBRIL_VERSION="v$JIBRIL_VERSION"
+        fi
         
-        # Create directories
-        mkdir -p $(dirname "${{ inputs.policy_path }}")
+        # Download garnetctl from GitHub
+        echo "Downloading garnetctl $GARNETCTL_VERSION..."
         
-        # Configure garnetctl base URL and set token
-        ./garnetctl config set-baseurl ${{ inputs.api_url }}
-        ./garnetctl config set-token ${{ inputs.api_token }}
+        # Map OS and arch to garnetctl release names
+        OS=$(uname -s)
+        ARCH=$(uname -m)
+        
+        # Convert to garnetctl naming format
+        if [ "$OS" = "Linux" ]; then
+          GARNET_OS="Linux"
+        elif [ "$OS" = "Darwin" ]; then
+          GARNET_OS="Darwin"
+        else
+          echo "Unsupported OS: $OS"
+          exit 1
+        fi
+        
+        if [ "$ARCH" = "x86_64" ]; then
+          GARNET_ARCH="x86_64"
+        elif [ "$ARCH" = "aarch64" ] || [ "$ARCH" = "arm64" ]; then
+          GARNET_ARCH="arm64"
+        else
+          echo "Unsupported architecture: $ARCH"
+          exit 1
+        fi
+        
+        # Construct download URL
+        if [ "$GARNETCTL_VERSION" = "latest" ]; then
+          GARNETCTL_URL="https://github.com/garnet-org/garnetctl-releases/releases/latest/download/garnetctl_${GARNET_OS}_${GARNET_ARCH}.tar.gz"
+        else
+          GARNETCTL_URL="https://github.com/garnet-org/garnetctl-releases/releases/download/$GARNETCTL_VERSION/garnetctl_${GARNET_OS}_${GARNET_ARCH}.tar.gz"
+        fi
+        
+        echo "Downloading garnetctl from: $GARNETCTL_URL"
+        
+        # Create temporary directory for extraction
+        GARNETCTL_TMP_DIR=$(mktemp -d)
+        
+        # Download and extract
+        curl -sL "$GARNETCTL_URL" | tar -xz -C "$GARNETCTL_TMP_DIR"
+        
+        # Move binary to path
+        mv "$GARNETCTL_TMP_DIR/garnetctl" /usr/local/bin/garnetctl
+        chmod +x /usr/local/bin/garnetctl
+        
+        # Clean up
+        rm -rf "$GARNETCTL_TMP_DIR"
+        
+        # Download Jibril loader
+        echo "Downloading Jibril loader $JIBRIL_VERSION..."
+        
+        JIBRIL_URL="https://github.com/listendev/jibril-releases/releases/download/$JIBRIL_VERSION/loader"
+        echo "Downloading Jibril loader from: $JIBRIL_URL"
+        curl -sL -o /usr/local/bin/loader "$JIBRIL_URL"
+        chmod +x /usr/local/bin/loader
+        
+        # Configure garnetctl
+        garnetctl config set-baseurl ${{ inputs.api_url }}
+        garnetctl config set-token ${{ inputs.api_token }}
 
-    - name: Create GitHub context file
+    - name: Create GitHub context and agent
       shell: bash
       run: |
+        # Step 1: Create the GitHub context file
         echo "Creating GitHub context file..."
         cat > github-context.json << EOF
         {
@@ -76,72 +125,48 @@ runs:
         }
         EOF
 
-    - name: Create agent
-      shell: bash
-      run: |
+        # Step 2: Create the agent
         echo "Creating GitHub agent..."
-        AGENT_INFO=$(./garnetctl create agent \
-          --version "${{ inputs.agent_version }}" \
+        AGENT_INFO=$(garnetctl create agent \
+          --version "1.0.0" \
           --ip "127.0.0.1" \
           --machine-id "github-${{ github.run_id }}" \
           --kind github \
           --context-file github-context.json)
-        
+
         # Extract agent details
         AGENT_ID=$(echo "$AGENT_INFO" | jq -r '.id')
         AGENT_TOKEN=$(echo "$AGENT_INFO" | jq -r '.agent_token')
-        
+
         echo "Created agent with ID: $AGENT_ID"
-        
-        # Save for other steps
         echo "AGENT_ID=$AGENT_ID" >> $GITHUB_ENV
         echo "AGENT_TOKEN=$AGENT_TOKEN" >> $GITHUB_ENV
 
-    - name: Create agent config file
+    - name: Configure and start monitoring
       shell: bash
       run: |
-        echo "Creating agent configuration file..."
-        cat > agent-config.yaml << EOF
-        daemon:
-          loglevel: info
-          debug: false
-        
-        config:
-          plugins:
-          - jibril:printers:varlog
-          - jibril:printers:garnet
-        EOF
-
-    - name: Get network policy
-      shell: bash
-      run: |
+        # Step 3: Get network policy
         echo "Getting network policy..."
         REPO_ID="${{ github.repository }}"
         WORKFLOW="${{ github.workflow }}"
-        
+
         # Get the network policy and save it to the specified path
-        ./garnetctl get network-policy merged \
+        garnetctl get network-policy merged \
           --repository-id "$REPO_ID" \
           --workflow-name "$WORKFLOW" \
           --format jibril \
           --output "${{ inputs.policy_path }}"
-        
-        echo "Network policy saved to ${{ inputs.policy_path }}"
 
-    - name: Start security monitoring
-      shell: bash
-      run: |
-        echo "Starting security monitoring daemon..."
+        echo "Network policy saved to ${{ inputs.policy_path }}"
         
-        # Start command with basic parameters
-        START_CMD="./garnetctl start-daemon --config agent-config.yaml --agent-token ${{ env.AGENT_TOKEN }}"
+        # Set up environment variables for configuration
+        export POLICY_PATH="${{ inputs.policy_path }}"
+
+        # Step 4: Start Jibril with loader using config from ./config
+        echo "Starting Jibril security monitoring..."
+        export GARNET_AGENT_TOKEN="${{ env.AGENT_TOKEN }}"
         
-        # Add release parameter only if a version was specified
-        if [ -n "${{ inputs.jibril_version }}" ]; then
-          START_CMD="$START_CMD --release ${{ inputs.jibril_version }}"
-        fi
+        echo "Running Jibril loader with config from ./config/jibril.yaml"
+        sudo -E loader --config ./config/jibril.yaml --systemd enable-now
         
-        # Execute the command
-        eval "$START_CMD"
-        
-        echo "Security monitoring daemon started"
+        echo "Security monitoring started"
