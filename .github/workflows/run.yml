@@ -10,10 +10,6 @@ on:
         description: 'API URL for GarnetAI service'
         required: false
         default: 'https://api.garnet.ai'
-      policy_path:
-        description: 'Path to save the network policy file'
-        required: false
-        default: './config/netpolicy.yaml'
       garnetctl_version:
         description: 'Version of garnetctl CLI to download (without v prefix)'
         required: false
@@ -39,7 +35,6 @@ jobs:
         with:
           api_token: ${{ inputs.api_token }}
           api_url: ${{ inputs.api_url }}
-          policy_path: ${{ inputs.policy_path }}
           garnetctl_version: ${{ inputs.garnetctl_version }}
           jibril_version: ${{ inputs.jibril_version }}
           debug: ${{ inputs.debug }}
