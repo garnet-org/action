@@ -113,7 +113,7 @@ runs:
       shell: bash
       run: |
         # Step 1: Create the GitHub context file
-        echo "Creating GitHub context file..."
+        echo "Step 1: Creating GitHub context file..."
         cat > github-context.json << EOF
         {
           "job": "${{ github.job }}",
@@ -131,7 +131,7 @@ runs:
         EOF
 
         # Step 2: Create the agent
-        echo "Creating GitHub agent..."
+        echo "Step 2: Creating GitHub agent..."
         AGENT_INFO=$(garnetctl create agent \
           --version "1.0.0" \
           --ip "127.0.0.1" \
@@ -147,11 +147,11 @@ runs:
         echo "AGENT_ID=$AGENT_ID" >> $GITHUB_ENV
         echo "AGENT_TOKEN=$AGENT_TOKEN" >> $GITHUB_ENV
 
-    - name: Configure and start monitoring
+    - name: Fetch network policy
       shell: bash
       run: |
         # Step 3: Get network policy
-        echo "Getting network policy..."
+        echo "Step 3: Getting network policy..."
         REPO_ID="${{ github.repository }}"
         WORKFLOW="${{ github.workflow }}"
 
@@ -194,8 +194,11 @@ runs:
           exit 1
         fi
 
-        # Step 4: Start Jibril with loader using config from ./config
-        echo "Starting Jibril security monitoring..."
+    - name: Setup environment
+      shell: bash
+      run: |
+        # Step 4: Setup environment variables for loader
+        echo "Step 4: Setting up environment for security monitoring..."
         export GARNET_AGENT_TOKEN="${{ env.AGENT_TOKEN }}"
         export GARNET_URL="${{ inputs.api_url }}"
         
@@ -209,6 +212,11 @@ runs:
         sudo chmod 644 /etc/default/loader
         rm -rf /tmp/loader-env
         
+    - name: Copy configuration files
+      shell: bash
+      run: |
+        # Step 5: Copy configuration files to system locations
+        echo "Step 5: Copying configuration files..."
         CONFIG_PATH="./config/loader.yaml"
         echo "Running loader with config from $CONFIG_PATH"
         
@@ -242,11 +250,7 @@ runs:
           exit 1
         fi
         
-        # Reload systemd after config changes
-        echo "Reloading systemd daemon to apply any configuration changes"
-        sudo systemctl daemon-reload
-        
-        # Debug configuration before starting
+        # Debug configuration if requested
         if [ "${{ inputs.debug }}" == "true" ]; then
           echo "DEBUG: Configuration files:"
           echo "  Original loader config (config/loader.yaml):"
@@ -257,19 +261,17 @@ runs:
           sudo cat /etc/loader/config.yaml || echo "Service config file not found"
           echo "  Network policy (/etc/loader/netpolicy.yaml):"
           sudo cat /etc/loader/netpolicy.yaml || echo "Network policy file not found"
-          echo "  Installed systemd service (/etc/systemd/system/loader.service):"
-          sudo cat /etc/systemd/system/loader.service || echo "Service file not found"
-          echo "DEBUG: Environment variables:"
-          env | grep -E 'GARNET|PATH'
-          echo "DEBUG: Garnet URL: $GARNET_URL"
-          echo "DEBUG: Garnet Agent Token: ${GARNET_AGENT_TOKEN:0:8}..." # Only show first 8 chars for security
-          echo "DEBUG: Systemd environment file:"
-          echo "  /etc/default/loader:"
-          sudo cat /etc/default/loader || echo "loader environment file not found"
-          echo "DEBUG: Loader executable:"
-          which loader || echo "Loader not found in PATH"
-          ls -la /usr/local/bin/loader || echo "Loader not found in /usr/local/bin"
         fi
+        
+    - name: Start security monitoring service
+      shell: bash
+      run: |
+        # Step 6: Install and start the service
+        echo "Step 6: Starting security monitoring service..."
+        
+        # Reload systemd after config changes
+        echo "Reloading systemd daemon to apply any configuration changes"
+        sudo systemctl daemon-reload
         
         # Install systemd service file
         echo "Installing systemd service file..."
@@ -298,9 +300,19 @@ runs:
           # Wait for the service to initialize
           echo "Waiting 5 seconds for loader service to initialize..."
           sleep 5
-          
-          # Verify the service is running
-          if [ "${{ inputs.debug }}" == "true" ]; then
+        else
+          LOADER_EXIT=$?
+          echo "ERROR: Failed to start Jibril loader. Exit code: $LOADER_EXIT"
+          exit $LOADER_EXIT
+        fi
+        
+    - name: Verify service status
+      shell: bash
+      run: |
+        # Step 7: Verify service is running properly
+        echo "Step 7: Verifying service status..."
+        
+        if [ "${{ inputs.debug }}" == "true" ]; then
             echo "DEBUG: Checking service status after initialization period:"
             sudo systemctl status loader.service || true
             
@@ -313,28 +325,22 @@ runs:
             echo "DEBUG: Checking service configuration:"
             sudo systemctl cat loader.service || echo "Unable to show service configuration"
             
-            # Wait a moment for the service to initialize
-            echo "DEBUG: Waiting 5 seconds for service to initialize fully..."
-            sleep 5
-            
-            echo "DEBUG: Checking service status after delay:"
-            sudo systemctl status loader.service || true
           fi
-        else
-          LOADER_EXIT=$?
-          echo "ERROR: Failed to start Jibril loader. Exit code: $LOADER_EXIT"
+        
+        # Final verification that service is running
+        if ! systemctl is-active --quiet loader.service; then
+          echo "ERROR: Loader service is not running after initialization"
           
           if [ "${{ inputs.debug }}" == "true" ]; then
             echo "DEBUG: Checking system logs for errors:"
             sudo journalctl -u loader.service --no-pager -n 50 || echo "Unable to get journalctl logs"
             echo "DEBUG: Loader version information:"
             loader --version || echo "Unable to get loader version"
-            echo "DEBUG: Run loader with --help to see options:"
-            loader --help || echo "Unable to show loader help"
-            
             echo "DEBUG: Checking if systemd service was created:"
             sudo systemctl list-unit-files | grep loader || echo "No loader service found"
           fi
           
-          exit $LOADER_EXIT
+          exit 1
         fi
+        
+        echo "✅ Security monitoring service is running successfully"
