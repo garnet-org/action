@@ -1,0 +1,413 @@
+name: 'GarnetAI'
+description: 'Runs the Jibril security scanner for runtime threat detection'
+branding:
+  icon: 'shield'
+  color: 'blue'
+
+inputs:
+  api_token:
+    description: 'API token for GarnetAI service'
+    required: true
+  api_url:
+    description: 'API URL for GarnetAI service'
+    required: false
+    default: 'https://api.garnet.ai'
+  garnetctl_version:
+    description: 'Version of garnetctl CLI to download (without v prefix)'
+    required: false
+    default: 'latest'
+  jibril_version:
+    description: 'Jibril release version for the daemon (without v prefix)'
+    required: false
+    default: '1.7'
+  debug:
+    description: 'Enable detailed debug output'
+    required: false
+    default: 'false'
+
+runs:
+  using: "composite"
+  steps:
+    - name: Download and setup tools
+      shell: bash
+      run: |
+        # Enable debug output if requested
+        if [ "${{ inputs.debug }}" == "true" ]; then
+          echo "DEBUG MODE ENABLED - Will provide detailed output"
+          set -x
+        fi
+        # Set up versions
+        GARNETCTL_VERSION="${{ inputs.garnetctl_version }}"
+        JIBRIL_VERSION="${{ inputs.jibril_version }}"
+        
+        # Ensure we have the proper version format
+        if [[ "$GARNETCTL_VERSION" != "latest" && "$GARNETCTL_VERSION" != v* ]]; then
+          GARNETCTL_VERSION="v$GARNETCTL_VERSION"
+        fi
+        
+        if [[ "$JIBRIL_VERSION" != v* ]]; then
+          JIBRIL_VERSION="v$JIBRIL_VERSION"
+        fi
+        
+        # Download garnetctl from GitHub
+        echo "Downloading garnetctl $GARNETCTL_VERSION..."
+        
+        # Map OS and arch to garnetctl release names
+        OS=$(uname -s)
+        ARCH=$(uname -m)
+        
+        # Convert to garnetctl naming format
+        if [ "$OS" = "Linux" ]; then
+          GARNET_OS="Linux"
+        elif [ "$OS" = "Darwin" ]; then
+          GARNET_OS="Darwin"
+        else
+          echo "Unsupported OS: $OS"
+          exit 1
+        fi
+        
+        if [ "$ARCH" = "x86_64" ]; then
+          GARNET_ARCH="x86_64"
+        elif [ "$ARCH" = "aarch64" ] || [ "$ARCH" = "arm64" ]; then
+          GARNET_ARCH="arm64"
+        else
+          echo "Unsupported architecture: $ARCH"
+          exit 1
+        fi
+        
+        # Construct download URL
+        if [ "$GARNETCTL_VERSION" = "latest" ]; then
+          GARNETCTL_URL="https://github.com/garnet-org/garnetctl-releases/releases/latest/download/garnetctl_${GARNET_OS}_${GARNET_ARCH}.tar.gz"
+        else
+          GARNETCTL_URL="https://github.com/garnet-org/garnetctl-releases/releases/download/$GARNETCTL_VERSION/garnetctl_${GARNET_OS}_${GARNET_ARCH}.tar.gz"
+        fi
+        
+        echo "Downloading garnetctl from: $GARNETCTL_URL"
+        
+        # Create temporary directory for extraction
+        GARNETCTL_TMP_DIR=$(mktemp -d)
+        
+        # Download and extract
+        curl -sL "$GARNETCTL_URL" | tar -xz -C "$GARNETCTL_TMP_DIR"
+        
+        # Move binary to path
+        mv "$GARNETCTL_TMP_DIR/garnetctl" /usr/local/bin/garnetctl
+        chmod +x /usr/local/bin/garnetctl
+        
+        # Clean up
+        rm -rf "$GARNETCTL_TMP_DIR"
+        echo "Garnetctl downloaded and installed successfully ✅"
+        
+        # Download Jibril loader
+        echo "Downloading Jibril loader $JIBRIL_VERSION..."
+        
+        JIBRIL_URL="https://github.com/listendev/jibril-releases/releases/download/$JIBRIL_VERSION/loader"
+        echo "Downloading Jibril loader from: $JIBRIL_URL"
+        curl -sL -o /usr/local/bin/loader "$JIBRIL_URL"
+        chmod +x /usr/local/bin/loader
+        echo "Jibril loader downloaded and installed successfully ✅"
+        
+        # Configure garnetctl
+        garnetctl config set-baseurl ${{ inputs.api_url }}
+        garnetctl config set-token ${{ inputs.api_token }}
+        echo "Download and setup tools completed ✅"
+
+    - name: Create GitHub context and agent
+      shell: bash
+      run: |
+        # Step 1: Create the GitHub context file
+        echo "Step 1: Creating GitHub context file..."
+        cat > github-context.json << EOF
+        {
+          "job": "${{ github.job }}",
+          "run_id": "${{ github.run_id }}",
+          "workflow": "${{ github.workflow }}",
+          "repository": "${{ github.repository }}",
+          "repository_owner": "${{ github.repository_owner }}",
+          "event_name": "${{ github.event_name }}",
+          "ref": "${{ github.ref }}",
+          "sha": "${{ github.sha }}",
+          "actor": "${{ github.actor }}",
+          "runner_os": "${{ runner.os }}",
+          "runner_arch": "${{ runner.arch }}"
+        }
+        EOF
+
+        # Step 2: Create the agent
+        echo "Step 2: Creating GitHub agent..."
+        AGENT_INFO=$(garnetctl create agent \
+          --version "1.0.0" \
+          --ip "127.0.0.1" \
+          --machine-id "github-${{ github.run_id }}" \
+          --kind github \
+          --context-file github-context.json)
+
+        # Extract agent details
+        AGENT_ID=$(echo "$AGENT_INFO" | jq -r '.id')
+        AGENT_TOKEN=$(echo "$AGENT_INFO" | jq -r '.agent_token')
+
+        echo "Step 1 & 2 completed ✅ - Created agent with ID: $AGENT_ID"
+        echo "AGENT_ID=$AGENT_ID" >> $GITHUB_ENV
+        echo "AGENT_TOKEN=$AGENT_TOKEN" >> $GITHUB_ENV
+
+    - name: Fetch network policy
+      shell: bash
+      run: |
+        # Step 3: Get network policy
+        echo "Step 3: Getting network policy..."
+        REPO_ID="${{ github.repository }}"
+        WORKFLOW="${{ github.workflow }}"
+
+        # Define action paths
+        GITHUB_ACTION_PATH="${GITHUB_ACTION_PATH:-$(pwd)}"
+        POLICY_DIR="${GITHUB_ACTION_PATH}/config"
+        echo "Creating policy directory: $POLICY_DIR"
+        mkdir -p "$POLICY_DIR"
+        
+        # Debug: Show working directory and directory structure
+        if [ "${{ inputs.debug }}" == "true" ]; then
+          echo "DEBUG: Current working directory: $(pwd)"
+          echo "DEBUG: Directory structure (action path: $GITHUB_ACTION_PATH):"
+          ls -la "$POLICY_DIR"
+          echo "DEBUG: Action full path: $(realpath "$GITHUB_ACTION_PATH" 2>/dev/null || echo "Action path not accessible")"
+        fi
+        
+        # Get the network policy and save it to the specified path
+        echo "Fetching network policy for repository '$REPO_ID' and workflow '$WORKFLOW'..."
+        # Set path for netpolicy.yaml
+        NETPOLICY_PATH="./config/netpolicy.yaml"
+        garnetctl get network-policy merged \
+          --repository-id "$REPO_ID" \
+          --workflow-name "$WORKFLOW" \
+          --format jibril \
+          --output "$NETPOLICY_PATH"
+
+        # Check if policy file was created successfully
+        if [ -f "$NETPOLICY_PATH" ]; then
+          echo "Step 3 completed ✅ - Network policy saved to $NETPOLICY_PATH"
+          if [ "${{ inputs.debug }}" == "true" ]; then
+            echo "DEBUG: Network policy content:"
+            cat "$NETPOLICY_PATH"
+          fi
+        else
+          echo "ERROR: Network policy file was not created at $NETPOLICY_PATH"
+          if [ "${{ inputs.debug }}" == "true" ]; then
+            echo "DEBUG: Directory permissions:"
+            ls -la "$(dirname "$NETPOLICY_PATH")"
+            echo "DEBUG: garnetctl version:"
+            garnetctl --version
+          fi
+          exit 1
+        fi
+
+    - name: Setup environment
+      shell: bash
+      run: |
+        # Step 4: Setup environment variables for loader
+        echo "Step 4: Setting up environment for security monitoring..."
+        export GARNET_AGENT_TOKEN="${{ env.AGENT_TOKEN }}"
+        export GARNET_URL="${{ inputs.api_url }}"
+        
+        # Create systemd environment file for loader service
+        echo "Creating environment file for systemd service..."
+        mkdir -p /tmp/loader-env
+        echo "GARNET_AGENT_TOKEN=\"${{ env.AGENT_TOKEN }}\"" > /tmp/loader-env/loader
+        echo "GARNET_URL=\"${{ inputs.api_url }}\"" >> /tmp/loader-env/loader
+        sudo mkdir -p /etc/default
+        sudo cp /tmp/loader-env/loader /etc/default/loader
+        sudo chmod 644 /etc/default/loader
+        rm -rf /tmp/loader-env
+        echo "Step 4 completed ✅ - Environment setup successful"
+        
+    - name: Copy configuration files
+      shell: bash
+      run: |
+        # Step 5: Copy configuration files to system locations
+        echo "Step 5: Copying configuration files..."
+        
+        # Add extensive debugging to understand path issues
+        echo "==== DEBUG: ENVIRONMENT INFORMATION ===="
+        echo "GITHUB_ACTION_PATH is: ${GITHUB_ACTION_PATH:-not set}"
+        echo "Current directory: $(pwd)"
+        echo "Current user: $(whoami)"
+        
+        echo "==== DEBUG: ACTION DIRECTORY CONTENTS ===="
+        GITHUB_ACTION_PATH="${GITHUB_ACTION_PATH:-$(pwd)}"
+        ls -la "$GITHUB_ACTION_PATH" || echo "Cannot access $GITHUB_ACTION_PATH"
+        
+        echo "==== DEBUG: CONFIG DIRECTORY CONTENTS ===="
+        ls -la "$GITHUB_ACTION_PATH/config" || echo "Cannot access $GITHUB_ACTION_PATH/config"
+        
+        echo "==== DEBUG: CHECKING SPECIFIC FILES ===="
+        if [ -f "$GITHUB_ACTION_PATH/config/loader.yaml" ]; then
+          echo "loader.yaml EXISTS at $GITHUB_ACTION_PATH/config/loader.yaml"
+          echo "File size: $(stat -c %s "$GITHUB_ACTION_PATH/config/loader.yaml" 2>/dev/null || stat -f %z "$GITHUB_ACTION_PATH/config/loader.yaml" 2>/dev/null || echo "unknown")"
+        else
+          echo "loader.yaml DOES NOT EXIST at $GITHUB_ACTION_PATH/config/loader.yaml"
+        fi
+        
+        if [ -f "$GITHUB_ACTION_PATH/config/loader.service" ]; then
+          echo "loader.service EXISTS at $GITHUB_ACTION_PATH/config/loader.service"
+        else
+          echo "loader.service DOES NOT EXIST at $GITHUB_ACTION_PATH/config/loader.service"
+        fi
+        
+        # Use the config files directly from the repository
+        CONFIG_PATH="$GITHUB_ACTION_PATH/config/loader.yaml"
+        
+        echo "Using config from $CONFIG_PATH"
+        echo "Using netpolicy from $NETPOLICY_PATH"
+        
+        echo "==== DEBUG: CHECKING NETPOLICY FILE ===="
+        if [ -f "$NETPOLICY_PATH" ]; then
+          echo "netpolicy.yaml EXISTS at $NETPOLICY_PATH"
+          echo "File size: $(stat -c %s "$NETPOLICY_PATH" 2>/dev/null || stat -f %z "$NETPOLICY_PATH" 2>/dev/null || echo "unknown")"
+        else
+          echo "netpolicy.yaml DOES NOT EXIST at $NETPOLICY_PATH"
+          echo "Directory listing:"
+          ls -la "$(dirname "$NETPOLICY_PATH")" || echo "Cannot access directory"
+        fi
+        
+        # Copy config to /etc/loader directory
+        echo "Copying configuration files to /etc/loader/"
+        sudo mkdir -p /etc/loader
+        
+        # Copy config file
+        echo "Copying $CONFIG_PATH to /etc/loader/loader.yaml"
+        sudo cp "$CONFIG_PATH" /etc/loader/loader.yaml
+        
+        # Copy netpolicy file with explicit path and check
+        NETPOLICY_FILE="./config/netpolicy.yaml"
+        if [ -f "$NETPOLICY_FILE" ]; then
+          echo "Copying $NETPOLICY_FILE to /etc/loader/netpolicy.yaml"
+          sudo cp "$NETPOLICY_FILE" /etc/loader/netpolicy.yaml
+        else
+          echo "WARNING: $NETPOLICY_FILE does not exist"
+          echo "Creating empty netpolicy file"
+          sudo touch /etc/loader/netpolicy.yaml
+        fi
+        
+        # Set proper permissions
+        sudo chmod 644 /etc/loader/loader.yaml
+        sudo chmod 644 /etc/loader/netpolicy.yaml
+        
+        # Verify config files are in place before continuing
+        echo "Verifying configuration files are in place before starting service:"
+        if [ -f "/etc/loader/loader.yaml" ] && [ -f "/etc/loader/netpolicy.yaml" ]; then
+          echo "✅ Configuration files found in /etc/loader/"
+          echo "  - /etc/loader/loader.yaml"
+          echo "  - /etc/loader/netpolicy.yaml"
+          echo "Step 5 completed ✅ - Configuration files copied successfully"
+        else
+          echo "❌ Configuration files missing from /etc/loader/"
+          if [ ! -f "/etc/loader/loader.yaml" ]; then
+            echo "  - Missing: /etc/loader/loader.yaml"
+          fi
+          if [ ! -f "/etc/loader/netpolicy.yaml" ]; then
+            echo "  - Missing: /etc/loader/netpolicy.yaml"
+          fi
+          echo "Error: Cannot continue without proper configuration files"
+          exit 1
+        fi
+        
+        # Debug configuration if requested
+        if [ "${{ inputs.debug }}" == "true" ]; then
+          echo "DEBUG: Configuration files:"
+          echo "  Original loader config (config/loader.yaml):"
+          cat "$CONFIG_PATH"
+          echo "  Original systemd service file ($GITHUB_ACTION_PATH/config/loader.service):"
+          cat "$GITHUB_ACTION_PATH/config/loader.service" || echo "Service file not found"
+          echo "  Installed config (/etc/loader/loader.yaml):"
+          sudo cat /etc/loader/loader.yaml || echo "Service config file not found"
+          echo "  Network policy (/etc/loader/netpolicy.yaml):"
+          sudo cat /etc/loader/netpolicy.yaml || echo "Network policy file not found"
+        fi
+        
+    - name: Start security monitoring service
+      shell: bash
+      run: |
+        # Step 6: Install and start the service
+        echo "Step 6: Starting security monitoring service..."
+        
+        # Reload systemd after config changes
+        echo "Reloading systemd daemon to apply any configuration changes"
+        sudo systemctl daemon-reload
+        
+        # Install systemd service file
+        echo "Installing systemd service file..."
+        SERVICE_FILE="${GITHUB_ACTION_PATH}/config/loader.service"
+        if [ -f "$SERVICE_FILE" ]; then
+          echo "Copying service file from $SERVICE_FILE"
+          sudo cp "$SERVICE_FILE" /etc/systemd/system/
+        else
+          echo "ERROR: Service file not found at $SERVICE_FILE - cannot continue"
+          exit 1
+        fi
+        sudo systemctl daemon-reload
+        
+        # Check if the service is already running, if so restart it
+        if systemctl is-active --quiet loader.service; then
+          echo "Loader service is already running, restarting with new configuration..."
+          sudo systemctl restart loader.service
+          SERVICE_STARTED=true
+        else
+          # Start the service
+          echo "Starting loader service..."
+          if sudo systemctl start loader.service; then
+            sudo systemctl enable loader.service
+            SERVICE_STARTED=true
+          else
+            SERVICE_STARTED=false
+          fi
+        fi
+        
+        if [ "$SERVICE_STARTED" = "true" ]; then
+          echo "Step 6 completed ✅ - Security monitoring started successfully"
+          
+          # Wait for the service to initialize
+          echo "Waiting 5 seconds for loader service to initialize..."
+          sleep 5
+        else
+          LOADER_EXIT=$?
+          echo "ERROR: Failed to start Jibril loader. Exit code: $LOADER_EXIT"
+          exit $LOADER_EXIT
+        fi
+        
+    - name: Verify service status
+      shell: bash
+      run: |
+        # Step 7: Verify service is running properly
+        echo "Step 7: Verifying service status..."
+        
+        if [ "${{ inputs.debug }}" == "true" ]; then
+            echo "DEBUG: Checking service status after initialization period:"
+            sudo systemctl status loader.service || true
+            
+            echo "DEBUG: Checking for listening ports:"
+            sudo ss -tlnp | grep -E 'jibril|loader' || echo "No listening ports found"
+            
+            echo "DEBUG: Checking systemd service environment variables:"
+            sudo systemctl show-environment loader.service || echo "Unable to show service environment"
+            
+            echo "DEBUG: Checking service configuration:"
+            sudo systemctl cat loader.service || echo "Unable to show service configuration"
+            
+          fi
+        
+        # Final verification that service is running
+        if ! systemctl is-active --quiet loader.service; then
+          echo "ERROR: Loader service is not running after initialization"
+          
+          if [ "${{ inputs.debug }}" == "true" ]; then
+            echo "DEBUG: Checking system logs for errors:"
+            sudo journalctl -u loader.service --no-pager -n 50 || echo "Unable to get journalctl logs"
+            echo "DEBUG: Loader version information:"
+            loader --version || echo "Unable to get loader version"
+            echo "DEBUG: Checking if systemd service was created:"
+            sudo systemctl list-unit-files | grep loader || echo "No loader service found"
+          fi
+          
+          exit 1
+        fi
+        
+        echo "Step 7 completed ✅ - Security monitoring service is running successfully"

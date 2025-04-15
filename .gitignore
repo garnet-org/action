@@ -1,0 +1,9 @@
+# Ignore environment file
+.env
+
+# Ignore event generator binary
+event_generator
+
+# Ignore generated config files
+*-config.yaml
+github-context.json
