@@ -123,7 +123,9 @@ runs:
           "run_id": "${{ github.run_id }}",
           "workflow": "${{ github.workflow }}",
           "repository": "${{ github.repository }}",
+          "repository_id": "${{ github.repository_id }}",
           "repository_owner": "${{ github.repository_owner }}",
+          "repository_owner_id": "${{ github.repository_owner_id }}",
           "event_name": "${{ github.event_name }}",
           "ref": "${{ github.ref }}",
           "sha": "${{ github.sha }}",
@@ -225,47 +227,31 @@ runs:
         # Step 5: Copy configuration files to system locations
         echo "Step 5: Copying configuration files..."
         
-        # Add extensive debugging to understand path issues
-        echo "==== DEBUG: ENVIRONMENT INFORMATION ===="
-        echo "GITHUB_ACTION_PATH is: ${GITHUB_ACTION_PATH:-not set}"
-        echo "Current directory: $(pwd)"
-        echo "Current user: $(whoami)"
-        
-        echo "==== DEBUG: ACTION DIRECTORY CONTENTS ===="
+        # Set up paths for configuration files
         GITHUB_ACTION_PATH="${GITHUB_ACTION_PATH:-$(pwd)}"
-        ls -la "$GITHUB_ACTION_PATH" || echo "Cannot access $GITHUB_ACTION_PATH"
-        
-        echo "==== DEBUG: CONFIG DIRECTORY CONTENTS ===="
-        ls -la "$GITHUB_ACTION_PATH/config" || echo "Cannot access $GITHUB_ACTION_PATH/config"
-        
-        echo "==== DEBUG: CHECKING SPECIFIC FILES ===="
-        if [ -f "$GITHUB_ACTION_PATH/config/loader.yaml" ]; then
-          echo "loader.yaml EXISTS at $GITHUB_ACTION_PATH/config/loader.yaml"
-          echo "File size: $(stat -c %s "$GITHUB_ACTION_PATH/config/loader.yaml" 2>/dev/null || stat -f %z "$GITHUB_ACTION_PATH/config/loader.yaml" 2>/dev/null || echo "unknown")"
-        else
-          echo "loader.yaml DOES NOT EXIST at $GITHUB_ACTION_PATH/config/loader.yaml"
-        fi
-        
-        if [ -f "$GITHUB_ACTION_PATH/config/loader.service" ]; then
-          echo "loader.service EXISTS at $GITHUB_ACTION_PATH/config/loader.service"
-        else
-          echo "loader.service DOES NOT EXIST at $GITHUB_ACTION_PATH/config/loader.service"
-        fi
-        
-        # Use the config files directly from the repository
         CONFIG_PATH="$GITHUB_ACTION_PATH/config/loader.yaml"
         
         echo "Using config from $CONFIG_PATH"
         echo "Using netpolicy from $NETPOLICY_PATH"
         
-        echo "==== DEBUG: CHECKING NETPOLICY FILE ===="
-        if [ -f "$NETPOLICY_PATH" ]; then
-          echo "netpolicy.yaml EXISTS at $NETPOLICY_PATH"
-          echo "File size: $(stat -c %s "$NETPOLICY_PATH" 2>/dev/null || stat -f %z "$NETPOLICY_PATH" 2>/dev/null || echo "unknown")"
-        else
-          echo "netpolicy.yaml DOES NOT EXIST at $NETPOLICY_PATH"
-          echo "Directory listing:"
-          ls -la "$(dirname "$NETPOLICY_PATH")" || echo "Cannot access directory"
+        # Debug information if requested
+        if [ "${{ inputs.debug }}" == "true" ]; then
+          echo "DEBUG: GITHUB_ACTION_PATH: ${GITHUB_ACTION_PATH}"
+          echo "DEBUG: Current directory: $(pwd)"
+          echo "DEBUG: Config file path: $CONFIG_PATH"
+          echo "DEBUG: Netpolicy path: $NETPOLICY_PATH"
+          
+          if [ -f "$CONFIG_PATH" ]; then
+            echo "DEBUG: loader.yaml exists with size: $(stat -c %s "$CONFIG_PATH" 2>/dev/null || stat -f %z "$CONFIG_PATH" 2>/dev/null || echo "unknown")"
+          else
+            echo "DEBUG: loader.yaml does not exist at $CONFIG_PATH"
+          fi
+          
+          if [ -f "$NETPOLICY_PATH" ]; then
+            echo "DEBUG: netpolicy.yaml exists with size: $(stat -c %s "$NETPOLICY_PATH" 2>/dev/null || stat -f %z "$NETPOLICY_PATH" 2>/dev/null || echo "unknown")"
+          else
+            echo "DEBUG: netpolicy.yaml does not exist at $NETPOLICY_PATH"
+          fi
         fi
         
         # Copy config to /etc/loader directory

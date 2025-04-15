@@ -101,7 +101,9 @@ cat > github-context.json << EOF
   "run_id": "123456789",
   "workflow": "Local Test Workflow",
   "repository": "garnet-org/action",
+  "repository_id": "12345678",
   "repository_owner": "garnet-org",
+  "repository_owner_id": "87654321",
   "event_name": "local-test",
   "ref": "refs/heads/main",
   "sha": "$(git rev-parse HEAD || echo "0000000000000000000000000000000000000000")",
@@ -152,17 +154,17 @@ echo "=== Step 4: Starting Jibril security monitoring ==="
 export GARNET_AGENT_TOKEN="$AGENT_TOKEN"
 
 echo "Running Jibril loader..."
-echo "Command: sudo -E loader --config ./config/jibril.yaml --systemd enable-now"
+echo "Command: sudo -E loader --config ./config/loader.yaml --systemd enable-now"
 
 # Prompt user before running with sudo
 read -p "Ready to run Jibril with sudo. Continue? (y/n) " -n 1 -r
 echo
 if [[ $REPLY =~ ^[Yy]$ ]]; then
-  sudo -E loader --config ./config/jibril.yaml --systemd enable-now
+  sudo -E loader --config ./config/loader.yaml --systemd enable-now
   echo "Security monitoring installed and started"
 else
   echo "Skipped running Jibril loader. You can run it manually with:"
-  echo "  sudo -E loader --config ./config/jibril.yaml --systemd enable-now"
+  echo "  sudo -E loader --config ./config/loader.yaml --systemd enable-now"
 fi
 
 echo "=== Test completed ==="
