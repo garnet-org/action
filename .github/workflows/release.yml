@@ -18,13 +18,22 @@ jobs:
       - name: Get jibril and garnetctl versions
         id: get-versions
         run: |
-          # Get default jibril version from action.yml
-          JIBRIL_VERSION=$(grep -oP 'jibril_version:.*default: ["\x27]\K[^"\x27]+' action.yml)
+          # Get default jibril version from action.yml using simpler grep patterns
+          JIBRIL_VERSION=$(grep -A1 'jibril_version:' action.yml | grep 'default:' | awk -F: '{print $2}' | tr -d "' \"")
           echo "JIBRIL_VERSION=$JIBRIL_VERSION" >> $GITHUB_ENV
           
-          # Get default garnetctl version from action.yml
-          GARNETCTL_VERSION=$(grep -oP 'garnetctl_version:.*default: ["\x27]\K[^"\x27]+' action.yml)
+          # Get default garnetctl version from action.yml using simpler grep patterns
+          GARNETCTL_VERSION=$(grep -A1 'garnetctl_version:' action.yml | grep 'default:' | awk -F: '{print $2}' | tr -d "' \"")
           echo "GARNETCTL_VERSION=$GARNETCTL_VERSION" >> $GITHUB_ENV
+          
+          # Set fallback values if extraction failed
+          JIBRIL_VERSION=${JIBRIL_VERSION:-"0.0"}
+          GARNETCTL_VERSION=${GARNETCTL_VERSION:-"latest"}
+          
+          # Debug: show extraction results
+          echo "=== DEBUG: Extraction results ==="
+          echo "JIBRIL_VERSION: $JIBRIL_VERSION"
+          echo "GARNETCTL_VERSION: $GARNETCTL_VERSION"
           
           # Set the tag name (without the 'v' prefix)
           TAG_NAME=${GITHUB_REF#refs/tags/}
