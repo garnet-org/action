@@ -1,0 +1,60 @@
+name: Create Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build:
+    name: Create Release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+        
+      - name: Get jibril and garnetctl versions
+        id: get-versions
+        run: |
+          # Get default jibril version from action.yml
+          JIBRIL_VERSION=$(grep -oP 'jibril_version:.*default: ["\x27]\K[^"\x27]+' action.yml)
+          echo "JIBRIL_VERSION=$JIBRIL_VERSION" >> $GITHUB_ENV
+          
+          # Get default garnetctl version from action.yml
+          GARNETCTL_VERSION=$(grep -oP 'garnetctl_version:.*default: ["\x27]\K[^"\x27]+' action.yml)
+          echo "GARNETCTL_VERSION=$GARNETCTL_VERSION" >> $GITHUB_ENV
+          
+          # Set the tag name (without the 'v' prefix)
+          TAG_NAME=${GITHUB_REF#refs/tags/}
+          echo "TAG_NAME=$TAG_NAME" >> $GITHUB_ENV
+          
+          # For release body
+          echo "jibril_version=$JIBRIL_VERSION" >> $GITHUB_OUTPUT
+          echo "garnetctl_version=$GARNETCTL_VERSION" >> $GITHUB_OUTPUT
+          
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          name: "GarnetAI Security Scanner Action ${{ env.TAG_NAME }}"
+          body: |
+            # GarnetAI Security Scanner GitHub Action ${{ env.TAG_NAME }}
+            
+            This release provides the GarnetAI Security Scanner integration for GitHub Actions.
+            
+            ## Default Tool Versions
+            
+            - **Jibril Version**: ${{ steps.get-versions.outputs.jibril_version }} ([view on GitHub](https://github.com/listendev/jibril-releases/releases/tag/v${{ steps.get-versions.outputs.jibril_version }}))
+            - **GarnetCtl Version**: ${{ steps.get-versions.outputs.garnetctl_version }} ([view on GitHub](https://github.com/garnet-org/garnetctl-releases/releases/${{ steps.get-versions.outputs.garnetctl_version == 'latest' && 'latest' || format('tag/v{0}', steps.get-versions.outputs.garnetctl_version) }}))
+            
+            ## Usage
+            
+            ```yaml
+            - name: Run GarnetAI Security Scanner
+              uses: garnet-org/action@${{ env.TAG_NAME }}
+              with:
+                api_token: ${{ '${{' }} secrets.GARNET_API_TOKEN {{ '}}' }}
+            ```
+            
+            For more details, see the [README](https://github.com/garnet-org/action/blob/main/README.md).
