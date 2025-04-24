@@ -112,6 +112,8 @@ runs:
         
         # Check API token first - exit early if missing
         if [ -z "${{ inputs.api_token }}" ]; then
+          echo "::error::api_token is required but was not provided"
+          echo "::error::Please provide the api_token input parameter in your workflow file"
           echo "❌ ERROR: api_token is required but was not provided"
           echo "Please provide an API token with the api_token input parameter"
           exit 1
@@ -121,6 +123,7 @@ runs:
         API_URL="${{ inputs.api_url }}"
         if [ -z "$API_URL" ]; then
           API_URL="https://api.garnet.ai"
+          echo "::warning::api_url not specified, using default: $API_URL"
           echo "⚠️ WARNING: api_url not specified, using default: $API_URL"
         fi
         
