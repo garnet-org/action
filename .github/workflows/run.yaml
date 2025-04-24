@@ -15,8 +15,7 @@ jobs:
         uses: actions/checkout@v4
       
       - name: Run Garnet Security Scanner
-        # Using the PR branch to test the changes
-        uses: garnet-org/action@fix/garnetctl-config-validation
+        uses: garnet-org/action@main
         with:
           api_token: ${{ secrets.GARNET_API_TOKEN }}
           # Optional: Uncomment to customize API URL
