@@ -109,20 +109,25 @@ runs:
         
         # Pre-flight checks for API configuration
         echo "Validating API configuration..."
+        
+        # Check API token first - exit early if missing
         if [ -z "${{ inputs.api_token }}" ]; then
           echo "❌ ERROR: api_token is required but was not provided"
+          echo "Please provide an API token with the api_token input parameter"
           exit 1
         fi
         
+        # Check API URL and set default if needed
         API_URL="${{ inputs.api_url }}"
         if [ -z "$API_URL" ]; then
           API_URL="https://api.garnet.ai"
           echo "⚠️ WARNING: api_url not specified, using default: $API_URL"
         fi
         
-        # Configure garnetctl with default URL if needed
+        # Configure garnetctl with validated parameters
         echo "Configuring garnetctl with URL: $API_URL"
         garnetctl config set-baseurl "$API_URL"
+        echo "Configuring garnetctl with provided API token"
         garnetctl config set-token "${{ inputs.api_token }}"
         echo "Download and setup tools completed ✅"
 
