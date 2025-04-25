@@ -137,9 +137,10 @@ runs:
     - name: Create GitHub context and agent
       shell: bash
       run: |
-        # Step 1: Create the GitHub context file
+        # Step 1: Create the GitHub context file in a temporary directory
         echo "Step 1: Creating GitHub context file..."
-        cat > github-context.json << EOF
+        TEMP_DIR=$(mktemp -d)
+        cat > "$TEMP_DIR/github-context.json" << EOF
         {
           "job": "${{ github.job }}",
           "run_id": "${{ github.run_id }}",
@@ -164,11 +165,15 @@ runs:
           --ip "127.0.0.1" \
           --machine-id "github-${{ github.run_id }}" \
           --kind github \
-          --context-file github-context.json)
+          --context-file "$TEMP_DIR/github-context.json")
 
         # Extract agent details
         AGENT_ID=$(echo "$AGENT_INFO" | jq -r '.id')
         AGENT_TOKEN=$(echo "$AGENT_INFO" | jq -r '.agent_token')
+
+        # Clean up temporary file
+        rm -f "$TEMP_DIR/github-context.json"
+        rmdir "$TEMP_DIR"
 
         echo "Step 1 & 2 completed ✅ - Created agent with ID: $AGENT_ID"
         echo "AGENT_ID=$AGENT_ID" >> $GITHUB_ENV
@@ -182,24 +187,22 @@ runs:
         REPO_ID="${{ github.repository }}"
         WORKFLOW="${{ github.workflow }}"
 
-        # Define action paths
-        GITHUB_ACTION_PATH="${GITHUB_ACTION_PATH:-$(pwd)}"
-        POLICY_DIR="${GITHUB_ACTION_PATH}/config"
-        echo "Creating policy directory: $POLICY_DIR"
-        mkdir -p "$POLICY_DIR"
+        # Define action paths - use a temporary directory for policy files
+        TEMP_POLICY_DIR=$(mktemp -d)
+        echo "Creating temporary policy directory: $TEMP_POLICY_DIR"
         
         # Debug: Show working directory and directory structure
         if [ "${{ inputs.debug }}" == "true" ]; then
           echo "DEBUG: Current working directory: $(pwd)"
-          echo "DEBUG: Directory structure (action path: $GITHUB_ACTION_PATH):"
-          ls -la "$POLICY_DIR"
+          echo "DEBUG: Created temporary policy directory: $TEMP_POLICY_DIR"
+          echo "DEBUG: GitHub Action path: $GITHUB_ACTION_PATH"
           echo "DEBUG: Action full path: $(realpath "$GITHUB_ACTION_PATH" 2>/dev/null || echo "Action path not accessible")"
         fi
         
         # Get the network policy and save it to the specified path
         echo "Fetching network policy for repository '$REPO_ID' and workflow '$WORKFLOW'..."
-        # Set path for netpolicy.yaml
-        NETPOLICY_PATH="./config/netpolicy.yaml"
+        # Set path for netpolicy.yaml in the temporary directory
+        NETPOLICY_PATH="$TEMP_POLICY_DIR/netpolicy.yaml"
         garnetctl get network-policy merged \
           --repository-id "$REPO_ID" \
           --workflow-name "$WORKFLOW" \
@@ -217,12 +220,17 @@ runs:
           echo "ERROR: Network policy file was not created at $NETPOLICY_PATH"
           if [ "${{ inputs.debug }}" == "true" ]; then
             echo "DEBUG: Directory permissions:"
-            ls -la "$(dirname "$NETPOLICY_PATH")"
+            ls -la "$TEMP_POLICY_DIR"
             echo "DEBUG: garnetctl version:"
             garnetctl --version
           fi
+          # Clean up temporary directory before exiting
+          rm -rf "$TEMP_POLICY_DIR"
           exit 1
         fi
+        
+        # Store the temporary policy directory path for later steps
+        echo "TEMP_POLICY_DIR=$TEMP_POLICY_DIR" >> $GITHUB_ENV
 
     - name: Setup environment
       shell: bash
@@ -252,6 +260,7 @@ runs:
         # Set up paths for configuration files
         GITHUB_ACTION_PATH="${GITHUB_ACTION_PATH:-$(pwd)}"
         CONFIG_PATH="$GITHUB_ACTION_PATH/config/loader.yaml"
+        NETPOLICY_PATH="${{ env.TEMP_POLICY_DIR }}/netpolicy.yaml"
         
         echo "Using config from $CONFIG_PATH"
         echo "Using netpolicy from $NETPOLICY_PATH"
@@ -285,12 +294,11 @@ runs:
         sudo cp "$CONFIG_PATH" /etc/loader/loader.yaml
         
         # Copy netpolicy file with explicit path and check
-        NETPOLICY_FILE="./config/netpolicy.yaml"
-        if [ -f "$NETPOLICY_FILE" ]; then
-          echo "Copying $NETPOLICY_FILE to /etc/loader/netpolicy.yaml"
-          sudo cp "$NETPOLICY_FILE" /etc/loader/netpolicy.yaml
+        if [ -f "$NETPOLICY_PATH" ]; then
+          echo "Copying $NETPOLICY_PATH to /etc/loader/netpolicy.yaml"
+          sudo cp "$NETPOLICY_PATH" /etc/loader/netpolicy.yaml
         else
-          echo "WARNING: $NETPOLICY_FILE does not exist"
+          echo "WARNING: $NETPOLICY_PATH does not exist"
           echo "Creating empty netpolicy file"
           sudo touch /etc/loader/netpolicy.yaml
         fi
@@ -415,7 +423,17 @@ runs:
             sudo systemctl list-unit-files | grep loader || echo "No loader service found"
           fi
           
+          # Clean up temporary directory
+          if [ -n "${{ env.TEMP_POLICY_DIR }}" ] && [ -d "${{ env.TEMP_POLICY_DIR }}" ]; then
+            rm -rf "${{ env.TEMP_POLICY_DIR }}"
+          fi
+          
           exit 1
+        fi
+        
+        # Clean up temporary directory
+        if [ -n "${{ env.TEMP_POLICY_DIR }}" ] && [ -d "${{ env.TEMP_POLICY_DIR }}" ]; then
+          rm -rf "${{ env.TEMP_POLICY_DIR }}"
         fi
         
         echo "Step 7 completed ✅ - Security monitoring service is running successfully"
