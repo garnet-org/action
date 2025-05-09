@@ -338,7 +338,24 @@ runs:
           echo "  Network policy (/etc/loader/netpolicy.yaml):"
           sudo cat /etc/loader/netpolicy.yaml || echo "Network policy file not found"
         fi
-        
+  
+      # An installation access token expires after 1 hour.
+    - name: Generate Token using GitHub App Auth
+      id: generate-token
+      if: ${{ github.event_name == 'pull_request' }} # only for PRs
+      uses: actions/create-github-app-token@v1
+      with:
+        app-id: ${{ vars.GH_APP_ID }}
+        private-key: ${{ secrets.GH_APP_PVT_KEY }}
+    
+    - name: Set the token to GarnetAI
+      id: set-token
+      if: ${{ github.event_name == 'pull_request' }} # only for PRs
+      env:
+        GH_APP_TOKEN: ${{ steps.generate-token.outputs.token }}
+      run: |
+        garnetctl config set-github-app-token "${GH_APP_TOKEN}"
+      
     - name: Start security monitoring service
       shell: bash
       run: |
