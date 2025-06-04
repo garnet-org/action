@@ -387,6 +387,22 @@ runs:
         else
           LOADER_EXIT=$?
           echo "ERROR: Failed to start Jibril loader. Exit code: $LOADER_EXIT"
+          
+          if [ "${{ inputs.debug }}" == "true" ]; then
+            echo "DEBUG: Service startup failed - collecting diagnostic information:"
+            echo "DEBUG: Service status:"
+            sudo systemctl status loader.service || true
+            echo "DEBUG: Service logs (last 50 lines):"
+            sudo journalctl -xeu loader.service --no-pager -n 50 || true
+            echo "DEBUG: Environment file contents:"
+            sudo cat /etc/default/loader || echo "Environment file not found"
+            echo "DEBUG: Configuration files:"
+            sudo ls -la /etc/loader/ || echo "Config directory not found"
+            echo "DEBUG: Loader binary info:"
+            ls -la /usr/local/bin/loader || echo "Loader binary not found"
+            loader --version || echo "Unable to get loader version"
+          fi
+          
           exit $LOADER_EXIT
         fi
         

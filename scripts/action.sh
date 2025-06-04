@@ -6,12 +6,20 @@ API_TOKEN=${API_TOKEN:-"YOUR_TOKEN_HERE"}
 API_URL=${API_URL:-"https://api.garnet.ai"}
 GARNETCTL_VERSION=${GARNETCTL_VERSION:-"latest"}
 JIBRIL_VERSION=${JIBRIL_VERSION:-"0.0"}
+DEBUG=${DEBUG:-"false"}
+
+# Enable debug output if requested
+if [ "$DEBUG" == "true" ]; then
+  echo "DEBUG MODE ENABLED - Will provide detailed output"
+  set -x
+fi
 
 # Print configuration
 echo "Testing GarnetAI Action with:"
 echo "  API URL: $API_URL"
 echo "  GarnetCtl Version: $GARNETCTL_VERSION"
 echo "  Jibril Version: $JIBRIL_VERSION"
+echo "  Debug: $DEBUG"
 
 # Step 1: Download and setup tools
 echo "=== Step 1: Download and setup tools ==="
@@ -160,8 +168,50 @@ echo "Command: sudo -E loader --config ./config/loader.yaml --systemd enable-now
 read -p "Ready to run Jibril with sudo. Continue? (y/n) " -n 1 -r
 echo
 if [[ $REPLY =~ ^[Yy]$ ]]; then
-  sudo -E loader --config ./config/loader.yaml --systemd enable-now
-  echo "Security monitoring installed and started"
+  if sudo -E loader --config ./config/loader.yaml --systemd enable-now; then
+    echo "Security monitoring installed and started"
+    
+    # Wait for service to initialize
+    echo "Waiting 5 seconds for service to initialize..."
+    sleep 5
+    
+    # Check service status
+    if systemctl is-active --quiet loader.service; then
+      echo "✅ Loader service is running successfully"
+    else
+      echo "❌ Loader service failed to start"
+      
+      if [ "$DEBUG" == "true" ]; then
+        echo "DEBUG: Service startup failed - collecting diagnostic information:"
+        echo "DEBUG: Service status:"
+        sudo systemctl status loader.service || true
+        echo "DEBUG: Service logs (last 50 lines):"
+        sudo journalctl -xeu loader.service --no-pager -n 50 || true
+        echo "DEBUG: Environment file contents:"
+        sudo cat /etc/default/loader || echo "Environment file not found"
+        echo "DEBUG: Configuration files:"
+        sudo ls -la /etc/loader/ || echo "Config directory not found"
+        echo "DEBUG: Loader binary info:"
+        ls -la /usr/local/bin/loader || echo "Loader binary not found"
+        loader --version || echo "Unable to get loader version"
+      fi
+      
+      exit 1
+    fi
+  else
+    echo "❌ Failed to install/start Jibril loader"
+    
+    if [ "$DEBUG" == "true" ]; then
+      echo "DEBUG: Installation failed - collecting diagnostic information:"
+      echo "DEBUG: Loader binary info:"
+      ls -la /usr/local/bin/loader || echo "Loader binary not found"
+      loader --version || echo "Unable to get loader version"
+      echo "DEBUG: Configuration files:"
+      ls -la ./config/ || echo "Config directory not found"
+    fi
+    
+    exit 1
+  fi
 else
   echo "Skipped running Jibril loader. You can run it manually with:"
   echo "  sudo -E loader --config ./config/loader.yaml --systemd enable-now"
