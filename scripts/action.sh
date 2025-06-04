@@ -88,7 +88,7 @@ rm -rf "$GARNETCTL_TMP_DIR"
 # Download Jibril loader
 echo "Downloading Jibril loader $JIBRIL_VERSION..."
 
-JIBRIL_URL="https://github.com/listendev/jibril-releases/releases/download/$JIBRIL_VERSION/loader"
+JIBRIL_URL="https://github.com/garnet-org/jibril-balag/releases/download/$JIBRIL_VERSION/loader"
 echo "Downloading Jibril loader from: $JIBRIL_URL"
 sudo curl -sL -o /usr/local/bin/loader "$JIBRIL_URL"
 sudo chmod +x /usr/local/bin/loader

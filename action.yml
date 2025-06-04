@@ -19,7 +19,7 @@ inputs:
   jibril_version:
     description: 'Jibril release version for the daemon (without v prefix)'
     required: false
-    default: '1.9'
+    default: '1.9.1'
   debug:
     description: 'Enable detailed debug output'
     required: false
@@ -101,7 +101,7 @@ runs:
         # Download Jibril loader
         echo "Downloading Jibril loader $JIBRIL_VERSION..."
         
-        JIBRIL_URL="https://github.com/listendev/jibril-releases/releases/download/$JIBRIL_VERSION/loader"
+        JIBRIL_URL="https://github.com/garnet-org/jibril-balag/releases/download/$JIBRIL_VERSION/loader"
         echo "Downloading Jibril loader from: $JIBRIL_URL"
         curl -sL -o /usr/local/bin/loader "$JIBRIL_URL"
         chmod +x /usr/local/bin/loader
