@@ -9,7 +9,7 @@ no-health: false
 profiler: false
 cardinal: true
 daemon: false
-notify: false
+notify: true
 extension:
   - config
   - data
