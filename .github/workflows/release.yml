@@ -73,7 +73,7 @@ jobs:
           - name: Run GarnetAI Security Scanner
             uses: garnet-org/action@$TAG_NAME
             with:
-              api_token: \${{ secrets.GARNET_API_TOKEN }}
+              api_token: XXXXX
           \`\`\`
           
           For more details, see the [README](https://github.com/garnet-org/action/blob/main/README.md).
