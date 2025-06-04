@@ -105,6 +105,7 @@ runs:
         echo "Downloading Jibril loader from: $JIBRIL_URL"
         curl -sL -o /usr/local/bin/loader "$JIBRIL_URL"
         chmod +x /usr/local/bin/loader
+
         echo "Jibril loader downloaded and installed successfully ✅"
         
         # Pre-flight checks for API configuration
@@ -206,7 +207,7 @@ runs:
         garnetctl get network-policy merged \
           --repository-id "$REPO_ID" \
           --workflow-name "$WORKFLOW" \
-          --format jibril \
+          --format yaml \
           --output "$NETPOLICY_PATH"
 
         # Check if policy file was created successfully
