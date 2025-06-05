@@ -3,10 +3,16 @@
 # GarnetAI Security Scanner Action Script
 # This script handles all steps of the security monitoring setup
 
+# Track if any critical errors occurred
+HAS_ERRORS=false
+
 # Error handling function
 handle_error() {
   local exit_code=$1
   local error_msg="$2"
+  
+  # Mark that we had an error
+  HAS_ERRORS=true
   
   if [ "$CONTINUE_ON_ERROR" == "true" ]; then
     echo "::warning::$error_msg (Exit code: $exit_code)"
@@ -463,8 +469,18 @@ if [ -n "$TEMP_POLICY_DIR" ] && [ -d "$TEMP_POLICY_DIR" ]; then
   rm -rf "$TEMP_POLICY_DIR"
 fi
 
-echo "Step 7 completed ✅ - Security monitoring service is running successfully"
-
-echo ""
-echo "🎉 GarnetAI Security Scanner setup completed successfully!"
-echo "✅ All components are running and monitoring is active"
+if [ "$HAS_ERRORS" = "true" ]; then
+  echo "Step 7 completed ⚠️ - Security monitoring setup finished with warnings"
+  echo ""
+  echo "⚠️ GarnetAI Security Scanner setup completed with errors!"
+  echo "❌ Some components may not be running properly - check logs above"
+  
+  if [ "$CONTINUE_ON_ERROR" == "true" ]; then
+    echo "✅ Action continued due to continue_on_error=true"
+  fi
+else
+  echo "Step 7 completed ✅ - Security monitoring service is running successfully"
+  echo ""
+  echo "🎉 GarnetAI Security Scanner setup completed successfully!"
+  echo "✅ All components are running and monitoring is active"
+fi
