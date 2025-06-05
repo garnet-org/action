@@ -3,36 +3,28 @@
 # GarnetAI Security Scanner Action Script
 # This script handles all steps of the security monitoring setup
 
-# Setup comprehensive error handling with trap
-error_handler() {
-  local exit_code=$?
-  local line_number=$1
+# Error handling function
+handle_error() {
+  local exit_code=$1
+  local error_msg="$2"
   
-  if [ $exit_code -ne 0 ]; then
-    if [ "$CONTINUE_ON_ERROR" == "true" ]; then
-      echo "::warning::Command failed at line $line_number with exit code $exit_code"
-      echo "⚠️ WARNING: Error at line $line_number (exit code: $exit_code) - Continuing due to continue_on_error=true"
-      
-      if [ "$DEBUG" == "true" ]; then
-        echo "DEBUG: Last command that failed: $(history | tail -1 | sed 's/^[ ]*[0-9]*[ ]*//')"
-        echo "DEBUG: Working directory: $(pwd)"
-        echo "DEBUG: Environment variables related to this step:"
-        env | grep -E "(GARNET|JIBRIL|API)" || true
-      fi
-      
-      # Reset exit code to continue execution
-      return 0
-    else
-      echo "::error::Command failed at line $line_number with exit code $exit_code"
-      echo "❌ ERROR: Script failed at line $line_number with exit code $exit_code"
-      exit $exit_code
+  if [ "$CONTINUE_ON_ERROR" == "true" ]; then
+    echo "::warning::$error_msg (Exit code: $exit_code)"
+    echo "⚠️ WARNING: $error_msg - Continuing due to continue_on_error=true"
+    
+    if [ "$DEBUG" == "true" ]; then
+      echo "DEBUG: Working directory: $(pwd)"
+      echo "DEBUG: Environment variables related to this step:"
+      env | grep -E "(GARNET|JIBRIL|API)" || true
     fi
+    
+    return 0
+  else
+    echo "::error::$error_msg (Exit code: $exit_code)"
+    echo "❌ ERROR: $error_msg"
+    exit $exit_code
   fi
 }
-
-# Set up trap to catch any command failures
-set -eE
-trap 'error_handler $LINENO' ERR
 
 # Parse input parameters
 API_TOKEN="$1"
@@ -100,8 +92,7 @@ if [ "$OS" = "Linux" ]; then
 elif [ "$OS" = "Darwin" ]; then
   GARNET_OS="Darwin"
 else
-  echo "Unsupported OS: $OS"
-  exit 1
+  handle_error 1 "Unsupported OS: $OS"
 fi
 
 if [ "$ARCH" = "x86_64" ]; then
@@ -109,8 +100,7 @@ if [ "$ARCH" = "x86_64" ]; then
 elif [ "$ARCH" = "aarch64" ] || [ "$ARCH" = "arm64" ]; then
   GARNET_ARCH="arm64"
 else
-  echo "Unsupported architecture: $ARCH"
-  exit 1
+  handle_error 1 "Unsupported architecture: $ARCH"
 fi
 
 # Construct download URL
@@ -151,11 +141,7 @@ echo "Validating API configuration..."
 
 # Check API token first - exit early if missing
 if [ -z "$API_TOKEN" ]; then
-  echo "::error::api_token is required but was not provided"
-  echo "::error::Please provide the api_token input parameter in your workflow file"
-  echo "❌ ERROR: api_token is required but was not provided"
-  echo "Please provide an API token with the api_token input parameter"
-  exit 1
+  handle_error 1 "api_token is required but was not provided. Please provide the api_token input parameter in your workflow file"
 fi
 
 # Check API URL and set default if needed
@@ -263,7 +249,7 @@ else
   fi
   # Clean up temporary directory before exiting
   rm -rf "$TEMP_POLICY_DIR"
-  exit 1
+  handle_error 1 "Network policy file was not created at $NETPOLICY_PATH"
 fi
 
 echo "Step 3 completed ✅"
@@ -352,8 +338,7 @@ else
   if [ ! -f "/etc/loader/netpolicy.yaml" ]; then
     echo "  - Missing: /etc/loader/netpolicy.yaml"
   fi
-  echo "Error: Cannot continue without proper configuration files"
-  exit 1
+  handle_error 1 "Cannot continue without proper configuration files"
 fi
 
 # Debug configuration if requested
@@ -385,8 +370,7 @@ if [ -f "$SERVICE_FILE" ]; then
   echo "Copying service file from $SERVICE_FILE"
   sudo cp "$SERVICE_FILE" /etc/systemd/system/
 else
-  echo "ERROR: Service file not found at $SERVICE_FILE - cannot continue"
-  exit 1
+  handle_error 1 "Service file not found at $SERVICE_FILE - cannot continue"
 fi
 sudo systemctl daemon-reload
 
@@ -431,7 +415,7 @@ else
     loader --version || echo "Unable to get loader version"
   fi
   
-  exit $LOADER_EXIT
+  handle_error $LOADER_EXIT "Failed to start Jibril loader"
 fi
 
 # =============================================================================
@@ -471,7 +455,7 @@ if ! systemctl is-active --quiet loader.service; then
     rm -rf "$TEMP_POLICY_DIR"
   fi
   
-  exit 1
+  handle_error 1 "Loader service is not running after initialization"
 fi
 
 # Clean up temporary directory
