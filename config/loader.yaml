@@ -1,28 +1,61 @@
-#
-# Jibril Configuration File.
-#
-log-level: info
-stdout: stdout
-stderr: stderr
-chop-lines: false
-no-health: false
-profiler: false
-cardinal: true
-daemon: false
-notify: true
-extension:
-  - config
-  - data
-  - jibril
-plugin:
-  - jibril:hold
-  - jibril:procfs
-  - jibril:printers
-  - jibril:detect
-  - jibril:netpolicy:file=/etc/loader/netpolicy.yaml
-printer:
-  - jibril:printers:varlog
-  - jibril:printers:garnet:error_log_rate=5s:warn_log_rate=1s
+#### GarnetAI Configuration File.
+
+run-time:
+  log-level: info
+  profiler: false
+  health: true
+  cardinal: true
+  stdout: stdout
+  stderr: stderr
+  metrics: false
+
+#### Cadences.
+
+# Cadences are the intervals at which patterns are detected.
+# https://jibril.garnet.ai/installation/configuration-file/cadence-configuration
+
+cadences:
+  file-access: 9
+  network-peers: 9
+  network-flows: 9
+  env-vars: 9
+
+#### Caches.
+
+# Caches are both the kernel maps and the in-memory caches for OS resources.
+# https://jibril.garnet.ai/installation/configuration-file/cache-configuration
+
+caches:
+  rec-tasks: 32
+  tasks: 64
+  cmds: 32
+  args: 32
+  files: 32
+  dirs: 8
+  bases: 16
+  task-file: 512
+  file-task: 512
+  task-ref: 512
+  flows: 128
+  task-flow: 128
+  flow-task: 128
+  flow-ref: 128
+
+#### Old Config.
+
+config:
+  extension:
+    - config
+    - data
+    - jibril
+  plugin:
+    - jibril:hold
+    - jibril:procfs
+    - jibril:printers
+    - jibril:detect
+    - jibril:netpolicy:file=/etc/loader/netpolicy.yaml
+  printer:
+    - jibril:printers:garnet:error_log_rate=5s:warn_log_rate=1s
 event:
   #
   # Network Policy.
