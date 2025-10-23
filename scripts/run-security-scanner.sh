@@ -169,6 +169,32 @@ echo "Download and setup tools completed ✅"
 # =============================================================================
 echo "=== Step 2: Create GitHub context and agent ==="
 
+# Get version from garnetctl
+VERSION=$(garnetctl version | grep -oP 'Version: \K[^,]+')
+
+# Get runner IP (fallback to localhost)
+RUNNER_IP=$(hostname -I | awk '{print $1}')
+RUNNER_IP=${RUNNER_IP:-127.0.0.1}
+
+# Get machine ID or construct unique one
+if [ -f /etc/machine-id ]; then
+  SYSTEM_MACHINE_ID=$(cat /etc/machine-id)
+elif [ -f /var/lib/dbus/machine-id ]; then
+  SYSTEM_MACHINE_ID=$(cat /var/lib/dbus/machine-id)
+else
+  SYSTEM_MACHINE_ID=$(hostname)
+fi
+
+# Construct unique identifiers for this workflow job
+MACHINE_ID="${SYSTEM_MACHINE_ID}"
+HOSTNAME="$(hostname)-${GITHUB_RUN_ID}-${GITHUB_JOB}"
+
+echo "Agent details:"
+echo "  Version: $VERSION"
+echo "  IP: $RUNNER_IP"
+echo "  Hostname: $HOSTNAME"
+echo "  Machine ID: $MACHINE_ID"
+
 # Create the GitHub context file in a temporary directory
 echo "Creating GitHub context file..."
 TEMP_DIR=$(mktemp -d)
@@ -193,9 +219,10 @@ EOF
 # Create the agent
 echo "Creating GitHub agent..."
 AGENT_INFO=$(garnetctl create agent \
-  --version "1.0.0" \
-  --ip "127.0.0.1" \
-  --machine-id "github-$GITHUB_RUN_ID" \
+  --version "$VERSION" \
+  --ip "$RUNNER_IP" \
+  --hostname "$HOSTNAME" \
+  --machine-id "$MACHINE_ID" \
   --kind github \
   --context-file "$TEMP_DIR/github-context.json")
 
