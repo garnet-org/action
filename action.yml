@@ -19,7 +19,7 @@ inputs:
   jibril_version:
     description: 'Jibril release version for the daemon (without v prefix)'
     required: false
-    default: '2.6.10'
+    default: '2.8.2'
   debug:
     description: 'Enable detailed debug output'
     required: false
