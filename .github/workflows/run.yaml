@@ -2,9 +2,9 @@ name: Garnet Security Check
 
 on:
   pull_request:
-    branches: [ main ]
+    branches: [main]
   push:
-    branches: [ main ]
+    branches: [main]
 
 jobs:
   garnet-scan:
@@ -13,7 +13,7 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-      
+
       - name: Run Garnet Security Scanner
         uses: garnet-org/action@main
         with:

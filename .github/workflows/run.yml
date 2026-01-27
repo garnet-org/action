@@ -4,24 +4,24 @@ on:
   workflow_dispatch:
     inputs:
       api_token:
-        description: 'API token for GarnetAI service'
+        description: "API token for GarnetAI service"
         required: true
       api_url:
-        description: 'API URL for GarnetAI service'
+        description: "API URL for GarnetAI service"
         required: false
-        default: 'https://api.garnet.ai'
+        default: "https://api.garnet.ai"
       garnetctl_version:
-        description: 'Version of garnetctl CLI to download (without v prefix)'
+        description: "Version of garnetctl CLI to download (without v prefix)"
         required: false
-        default: 'latest'
+        default: "latest"
       jibril_version:
-        description: 'Jibril version for the daemon (without v prefix)'
+        description: "Jibril version for the daemon (without v prefix)"
         required: false
-        default: '0.0'
+        default: "0.0"
       debug:
-        description: 'Enable detailed debug output'
+        description: "Enable detailed debug output"
         required: false
-        default: 'true'
+        default: "true"
 
 jobs:
   scan:
@@ -38,45 +38,49 @@ jobs:
           garnetctl_version: ${{ inputs.garnetctl_version }}
           jibril_version: ${{ inputs.jibril_version }}
           debug: ${{ inputs.debug }}
-          
+
       - name: Trigger network detection
         run: |
           echo "Running ping test to trigger detection..."
           ping -c 4 203.0.113.1 || echo "Ping test completed"
-          
+
           # Wait a moment for the detection to be logged
           echo "Waiting 10 seconds for detection to be processed..."
           sleep 10
-          
-          echo "======= LOADER SERVICE STATUS ======="
-          sudo systemctl status loader.service || true
-          
-          echo "======= LOADER SERVICE LOGS ======="
-          sudo journalctl -u loader.service --no-pager -n 100 || true
-          
-          echo "======= LOADER STDOUT LOGS ======="
-          sudo cat /var/log/loader.log || echo "No loader stdout log found"
-          
-          echo "======= LOADER STDERR LOGS ======="
-          sudo cat /var/log/loader.err || echo "No loader stderr log found"
-          
-          echo "======= LOADER EVENTS LOGS ======="
-          sudo cat /var/log/loader.events || echo "No loader events log found"
-          
+
+          echo "======= JIBRIL SERVICE STATUS ======="
+          sudo systemctl status jibril.service || true
+
+          echo "======= JIBRIL SERVICE LOGS ======="
+          sudo journalctl -u jibril.service --no-pager -n 100 || true
+
+          echo "======= JIBRIL STDOUT LOGS ======="
+          sudo cat /var/log/jibril.log || echo "No jibril stdout log found"
+
+          echo "======= JIBRIL STDERR LOGS ======="
+          sudo cat /var/log/jibril.err || echo "No jibril stderr log found"
+
+          echo "======= JIBRIL EVENTS LOGS ======="
+          sudo cat /var/log/jibril.events || echo "No jibril events log found"
+
           echo "======= CONFIGURATION FILES ======="
           echo "Checking configuration files..."
-          sudo ls -la /etc/loader/ || echo "No /etc/loader directory found"
+          sudo ls -la /etc/jibril/ || echo "No /etc/jibril directory found"
           echo "Config file content:"
-          sudo cat /etc/loader/config.yaml || echo "No config file found"
+          sudo cat /etc/jibril/config.yaml || echo "No config file found"
           echo "Network policy file content:"
-          sudo cat /etc/loader/netpolicy.yaml || echo "No policy file found"
-          
+          sudo cat /etc/jibril/netpolicy.yaml || echo "No policy file found"
+
           echo "======= ENVIRONMENT VARIABLES ======="
           echo "Checking if environment variables are available to the service..."
-          sudo cat /proc/$(pgrep -f loader)/environ 2>/dev/null | tr '\0' '\n' | grep -i GARNET || echo "No GARNET environment variables found in process"
+          if pid=$(pgrep -f jibril); then
+            sudo cat /proc/$pid/environ 2>/dev/null | tr '\0' '\n' | grep -i GARNET || echo "No GARNET environment variables found in process"
+          else
+            echo "No jibril process running"
+          fi
           echo "Environment file content:"
-          sudo cat /etc/default/loader || echo "No environment file found at /etc/default/loader"
-          
+          sudo cat /etc/default/jibril || echo "No environment file found at /etc/default/jibril"
+
           echo "======= NETWORK CONNECTIONS ======="
-          echo "Checking network connections from loader..."
-          sudo ss -tuap | grep -i loader || echo "No network connections found for loader service"
+          echo "Checking network connections from jibril..."
+          sudo ss -tuap | grep -i jibril || echo "No network connections found for jibril service"

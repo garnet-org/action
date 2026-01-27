@@ -3,7 +3,7 @@ name: Create Release
 on:
   push:
     tags:
-      - 'v*'
+      - "v*"
 
 jobs:
   build:
@@ -14,36 +14,37 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
-        
+
       - name: Get jibril and garnetctl versions
         id: get-versions
         run: |
           # Display action.yml content for reference
           echo "Showing action.yml content:"
           cat action.yml
-          
+
           # Extract jibril_version directly from action.yml
           JIBRIL_VERSION=$(sed -n 's/^.*jibril_version:.*default:[[:space:]]*'"'"'\([^'"'"']*\)'"'"'.*/\1/p' action.yml)
           echo "Found jibril_version: $JIBRIL_VERSION"
           echo "JIBRIL_VERSION=$JIBRIL_VERSION" >> $GITHUB_ENV
-          
+
           # Extract garnetctl_version directly from action.yml
           GARNETCTL_VERSION=$(sed -n 's/^.*garnetctl_version:.*default:[[:space:]]*'"'"'\([^'"'"']*\)'"'"'.*/\1/p' action.yml)
           echo "Found garnetctl_version: $GARNETCTL_VERSION"
           echo "GARNETCTL_VERSION=$GARNETCTL_VERSION" >> $GITHUB_ENV
-          
+
           # Output values for steps.get-versions.outputs
           echo "jibril_version=$JIBRIL_VERSION" >> $GITHUB_OUTPUT
           echo "garnetctl_version=$GARNETCTL_VERSION" >> $GITHUB_OUTPUT
-          
+
           # Set the tag name (without the 'v' prefix)
           TAG_NAME=${GITHUB_REF#refs/tags/}
           echo "TAG_NAME=$TAG_NAME" >> $GITHUB_ENV
-          
+
           # For release body
           echo "jibril_version=$JIBRIL_VERSION" >> $GITHUB_OUTPUT
           echo "garnetctl_version=$GARNETCTL_VERSION" >> $GITHUB_OUTPUT
-          
+          echo "tag_name=$TAG_NAME" >> $GITHUB_OUTPUT
+
       - name: Prepare release body
         id: prepare-body
         run: |
@@ -53,36 +54,37 @@ jobs:
           else
             GARNETCTL_URL="https://github.com/garnet-org/garnetctl-releases/releases/tag/v$GARNETCTL_VERSION"
           fi
-          
-          JIBRIL_URL="https://github.com/listendev/jibril-releases/releases/tag/v$JIBRIL_VERSION"
-          
+
+          JIBRIL_URL="https://github.com/garnet-org/jibril-releases/releases/tag/v$JIBRIL_VERSION"
+
           # Create release body
           cat > release-body.md << EOF
           # GarnetAI Security Scanner GitHub Action $TAG_NAME
-          
+
           This release provides the GarnetAI Security Scanner integration for GitHub Actions.
-          
+
           ## Default Tool Versions
-          
+
           - **Jibril Version**: $JIBRIL_VERSION ([view on GitHub]($JIBRIL_URL))
           - **GarnetCtl Version**: $GARNETCTL_VERSION ([view on GitHub]($GARNETCTL_URL))
-          
+
           ## Usage
-          
+
           \`\`\`yaml
           - name: Run GarnetAI Security Scanner
             uses: garnet-org/action@$TAG_NAME
             with:
               api_token: XXXXX
           \`\`\`
-          
+
           For more details, see the [README](https://github.com/garnet-org/action/blob/main/README.md).
           EOF
-          
+
           cat release-body.md
-          
+
       - name: Create Release
         uses: softprops/action-gh-release@v1
         with:
-          name: "GarnetAI Security Scanner Action ${{ env.TAG_NAME }}"
+          name: "GarnetAI Security Scanner Action ${{ steps.get-versions.outputs.tag_name }}"
+          tag_name: ${{ steps.get-versions.outputs.tag_name }}
           body_path: release-body.md
