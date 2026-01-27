@@ -1,33 +1,33 @@
-name: 'GarnetAI'
-description: 'Runs the Jibril security scanner for runtime threat detection'
+name: "GarnetAI"
+description: "Runs the Jibril security scanner for runtime threat detection"
 branding:
-  icon: 'shield'
-  color: 'blue'
+  icon: "shield"
+  color: "blue"
 
 inputs:
   api_token:
-    description: 'API token for GarnetAI service'
+    description: "API token for GarnetAI service"
     required: true
   api_url:
-    description: 'API URL for GarnetAI service'
+    description: "API URL for GarnetAI service"
     required: false
-    default: 'https://api.garnet.ai'
+    default: "https://api.garnet.ai"
   garnetctl_version:
-    description: 'Version of garnetctl CLI to download (without v prefix)'
+    description: "Version of garnetctl CLI to download (without v prefix)"
     required: false
-    default: 'latest'
+    default: "latest"
   jibril_version:
-    description: 'Jibril release version for the daemon (without v prefix)'
+    description: "Jibril release version for the daemon (without v prefix)"
     required: false
-    default: '2.9.1'
+    default: "2.9.1"
   debug:
-    description: 'Enable detailed debug output'
+    description: "Enable detailed debug output"
     required: false
-    default: 'false'
+    default: "false"
   continue_on_error:
-    description: 'Continue execution even if errors occur (logs errors but does not fail the action)'
+    description: "Continue execution even if errors occur (logs errors but does not fail the action)"
     required: false
-    default: 'true'
+    default: "true"
 
 runs:
   using: "composite"
@@ -36,8 +36,8 @@ runs:
       shell: bash
       run: |
         # Make script executable and run it
-        chmod +x "${{ github.action_path }}/scripts/run-security-scanner.sh"
-        
+        chmod +x "${{ github.action_path }}/scripts/garnet-ci.sh"
+
         # Export GitHub environment variables so the script can access them
         export GITHUB_JOB="${{ github.job }}"
         export GITHUB_RUN_ID="${{ github.run_id }}"
@@ -53,9 +53,9 @@ runs:
         export RUNNER_OS="${{ runner.os }}"
         export RUNNER_ARCH="${{ runner.arch }}"
         export GITHUB_ACTION_PATH="${{ github.action_path }}"
-        
+
         # Run the unified script with all parameters
-        sudo -E "${{ github.action_path }}/scripts/run-security-scanner.sh" \
+        sudo -E "${{ github.action_path }}/scripts/garnet-ci.sh" \
           "${{ inputs.api_token }}" \
           "${{ inputs.api_url }}" \
           "${{ inputs.garnetctl_version }}" \
