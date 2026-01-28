@@ -1,0 +1,47 @@
+name: Test Binaries
+on:
+  workflow_call:
+  workflow_dispatch:
+    inputs:
+      given_ref:
+        description: "ID or tag to build (optional)"
+        required: false
+        type: string
+  pull_request:
+    branches:
+      - main
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  tester:
+    name: Test Binaries
+    runs-on: ubuntu-24.04
+    steps:
+     - name: Checkout
+       uses: actions/checkout@v4
+       with:
+         fetch-depth: 0
+         submodules: true
+       #
+     - name: Checkout specific ref if provided
+       if: github.event.inputs.given_ref != ''
+       run: |
+         git fetch --prune --tags origin
+         git reset --hard origin/main
+         git reset --hard "${{ github.event.inputs.given_ref }}"
+         git clean -fd
+         git submodule update --init --recursive
+         echo "Checked out ref: $(git rev-parse HEAD)"
+       #
+     - name: Run local test script
+       shell: bash
+       env:
+          API_TOKEN: ${{ secrets.GARNET_API_TOKEN }}
+          API_URL: ${{ secrets.GARNET_API_URL }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+       run: |
+         chmod +x ./scripts/local-test.sh
+         ./scripts/local-test.sh
