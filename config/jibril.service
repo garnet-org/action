@@ -1,14 +1,6 @@
-Description=Jibril Security Scanner
-After=network.target
-
-[Service]
-Type=notify
-NotifyAccess=all
-User=root
-
-
 [Unit]
-Description=jibril
+Description=Jibril Security Agent
+After=network.target
 Conflicts=example.service
 Conflicts=loader.service
 
@@ -27,7 +19,7 @@ Environment=TERM=xterm
 Environment=LANG=en_US.UTF-8
 Environment=LC_ALL=en_US.UTF-8
 Environment=LANGUAGE=en_US.UTF-8
-Environment=PATH=/usr/sbin:/usr/bin:/sbin:/bin
+Environment=PATH=/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 #
 # Agent registration environment variables (set in /etc/default/jibril):
 # GARNET_API_TOKEN - Project API token (required)
@@ -55,4 +47,3 @@ KillMode=control-group
 
 [Install]
 WantedBy=multi-user.target
-
