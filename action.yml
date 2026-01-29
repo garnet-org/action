@@ -35,10 +35,8 @@ runs:
     - name: Run GarnetAI Security Scanner
       shell: bash
       run: |
-        # Make script executable and run it
-        chmod +x "${{ github.action_path }}/scripts/garnet-ci.sh"
+        chmod +x "${{ github.action_path }}/scripts/action.sh"
 
-        # Export GitHub environment variables so the script can access them
         export GITHUB_JOB="${{ github.job }}"
         export GITHUB_RUN_ID="${{ github.run_id }}"
         export GITHUB_WORKFLOW="${{ github.workflow }}"
@@ -54,8 +52,7 @@ runs:
         export RUNNER_ARCH="${{ runner.arch }}"
         export GITHUB_ACTION_PATH="${{ github.action_path }}"
 
-        # Run the unified script with all parameters
-        sudo -E "${{ github.action_path }}/scripts/garnet-ci.sh" \
+        sudo -E "${{ github.action_path }}/scripts/action.sh" \
           "${{ inputs.api_token }}" \
           "${{ inputs.api_url }}" \
           "${{ inputs.garnetctl_version }}" \
