@@ -225,21 +225,20 @@ sudo cp ./config/netpolicy.yaml /etc/jibril/netpolicy.yaml
 echo "New Jibril network policy:"
 sudo head -n 20 /etc/jibril/netpolicy.yaml || echo "No network policy file found"
 
+echo "Reloading systemd and enabling Jibril service:"
 sudo -E systemctl daemon-reload
 sudo -E systemctl enable jibril.service || true
+
+echo "Starting Jibril service:"
 sudo -E systemctl start jibril.service || sudo journalctl -xeu jibril.service
 
 sleep 5
 
-sudo -E systemctl status jibril.service --no-pager || true
-sudo journalctl -xeu jibril.service --no-pager || true
+echo "Checking Jibril service status:"
+sudo -E systemctl status jibril.service --no-pager
 
-if systemctl is-active --quiet jibril.service; then
-	echo "Jibril service is running successfully"
-else
-	echo "Jibril service failed to start"
-	exit 1
-fi
+echo "Stopping Jibril service:"
+sudo -E systemctl stop jibril.service || sudo journalctl -xeu jibril.service
 
 echo "Fetching recent Jibril logs for debugging:"
 sudo journalctl -u jibril.service --no-pager -n 50 || true

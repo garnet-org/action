@@ -1,4 +1,4 @@
-name: Test Binaries
+name: Test
 on:
   workflow_call:
   workflow_dispatch:
@@ -10,14 +10,14 @@ on:
   pull_request:
     branches:
       - main
-
+#
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
-
+#
 jobs:
-  tester:
-    name: Test Binaries
+  test:
+    name: Test
     runs-on: ubuntu-24.04
     steps:
      - name: Checkout
@@ -36,12 +36,11 @@ jobs:
          git submodule update --init --recursive
          echo "Checked out ref: $(git rev-parse HEAD)"
        #
-     - name: Run local test script
+     - name: Run test script
        shell: bash
        env:
           API_TOKEN: ${{ secrets.GARNET_API_TOKEN }}
           API_URL: ${{ secrets.GARNET_API_URL }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
        run: |
-         chmod +x ./scripts/local-test.sh
-         ./scripts/local-test.sh
+         ./scripts/test.sh

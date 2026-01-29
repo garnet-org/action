@@ -1,0 +1,83 @@
+name: Release
+on:
+  schedule:
+    # Daily at 02:00
+    - cron: 0 2 * * *
+  workflow_dispatch:
+    inputs:
+      given_ref:
+        description: Pick a tag (eg. v0)
+        required: false
+        type: string
+        default: "v0"
+#
+jobs:
+  release:
+    name: Release
+    runs-on:
+      - ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: true
+        #
+      - name: Checkout specific ref if provided
+        id: checkout-ref
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.given_ref != '' }}
+        run: |
+          git fetch --prune --tags origin
+          git reset --hard origin/main
+          git reset --hard "${{ inputs.given_ref }}"
+          git clean -fd
+          git submodule update --init --recursive
+          echo "Checked out ref: $(git rev-parse HEAD)"
+        #
+      - name: Resolve tag/commit
+        id: get-versions
+        shell: bash
+        run: |
+          set -euo pipefail
+          TAG_NAME="${{ inputs.given_ref }}"
+          if [ -z "$TAG_NAME" ]; then
+            TAG_NAME="v0"
+          fi
+          echo "tag_name=$TAG_NAME" >> "$GITHUB_OUTPUT"
+          echo "commit_sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+        #
+      - name: Release Body
+        id: prepare-body
+        shell: bash
+        env:
+          TAG_NAME: ${{ steps.get-versions.outputs.tag_name }}
+        run: |
+          cat > release-body.md << EOF
+          # Garnet Runtime Security $TAG_NAME
+
+          This release provides the Garnet Runtime Security for GitHub Actions.
+
+          ## Usage
+
+          \`\`\`yaml
+          - name: Run Garnet Runtime Security
+            uses: garnet-org/action@$TAG_NAME
+            with:
+              api_token: XXXXX
+          \`\`\`
+
+          For more details, see the [Garnet Dashboard](https://dashboard.garnet.ai).
+
+          EOF
+          cat release-body.md
+        #
+      - name: Create Release
+        id: create-release
+        uses: softprops/action-gh-release@v1
+        with:
+          name: "Garnet Runtime Security Action ${{ steps.get-versions.outputs.tag_name }}"
+          tag_name: ${{ steps.get-versions.outputs.tag_name }}
+          target_commitish: ${{ steps.get-versions.outputs.commit_sha }}
+          body_path: release-body.md

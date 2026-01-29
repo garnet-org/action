@@ -6,28 +6,24 @@ branding:
 
 inputs:
   api_token:
-    description: "API token for GarnetAI service"
+    description: "Garnet API token"
     required: true
   api_url:
-    description: "API URL for GarnetAI service"
+    description: "Garnet API URL"
     required: false
     default: "https://api.garnet.ai"
   garnetctl_version:
-    description: "Version of garnetctl CLI to download (without v prefix)"
+    description: "Garnet CLI version (1.2.3, or 'latest')"
     required: false
     default: "latest"
   jibril_version:
-    description: "Jibril release version for the daemon (without v prefix)"
+    description: "Jibril version (1.2.3, or 0.0)"
     required: false
     default: "2.9.1"
   debug:
-    description: "Enable detailed debug output"
+    description: "Enable debug mode"
     required: false
     default: "false"
-  continue_on_error:
-    description: "Continue execution even if errors occur (logs errors but does not fail the action)"
-    required: false
-    default: "true"
 
 runs:
   using: "composite"
@@ -35,10 +31,8 @@ runs:
     - name: Run GarnetAI Security Scanner
       shell: bash
       run: |
-        # Make script executable and run it
-        chmod +x "${{ github.action_path }}/scripts/garnet-ci.sh"
+        chmod +x "${{ github.action_path }}/scripts/action.sh"
 
-        # Export GitHub environment variables so the script can access them
         export GITHUB_JOB="${{ github.job }}"
         export GITHUB_RUN_ID="${{ github.run_id }}"
         export GITHUB_WORKFLOW="${{ github.workflow }}"
@@ -54,11 +48,9 @@ runs:
         export RUNNER_ARCH="${{ runner.arch }}"
         export GITHUB_ACTION_PATH="${{ github.action_path }}"
 
-        # Run the unified script with all parameters
-        sudo -E "${{ github.action_path }}/scripts/garnet-ci.sh" \
+        sudo -E "${{ github.action_path }}/scripts/action.sh" \
           "${{ inputs.api_token }}" \
           "${{ inputs.api_url }}" \
           "${{ inputs.garnetctl_version }}" \
           "${{ inputs.jibril_version }}" \
-          "${{ inputs.debug }}" \
-          "${{ inputs.continue_on_error }}"
+          "${{ inputs.debug }}"
