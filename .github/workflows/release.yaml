@@ -6,10 +6,10 @@ on:
   workflow_dispatch:
     inputs:
       given_ref:
-        description: Pick a tag (eg. v0)
+        description: "Optional tag/ref to release (blank for daily v0 from HEAD)"
         required: false
         type: string
-        default: "v0"
+        default: ""
 #
 jobs:
   release:
@@ -47,6 +47,22 @@ jobs:
           fi
           echo "tag_name=$TAG_NAME" >> "$GITHUB_OUTPUT"
           echo "commit_sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+        #
+      - name: Create/update daily v0 tag
+        id: create-tag
+        if: ${{ github.event_name != 'workflow_dispatch' || inputs.given_ref == '' }}
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG_NAME: ${{ steps.get-versions.outputs.tag_name }}
+          COMMIT_SHA: ${{ steps.get-versions.outputs.commit_sha }}
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          git tag -f "$TAG_NAME" "$COMMIT_SHA"
+          git push -f origin "refs/tags/$TAG_NAME"
         #
       - name: Release Body
         id: prepare-body
