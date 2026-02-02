@@ -144,12 +144,8 @@ export AGENT_TOKEN
 
 # Network Policy.
 
-echo "Getting network policy..."
-
 REPO_ID="garnet-org/action"
 WORKFLOW="Local Test Workflow"
-
-mkdir -p ./config
 
 echo "Fetching network policy for $REPO_ID/$WORKFLOW..."
 
@@ -157,15 +153,30 @@ $INSTPATH/garnetctl get network-policy merged \
 	--repository-id "$REPO_ID" \
 	--workflow-name "$WORKFLOW" \
 	--format yaml \
-	--output "./config/netpolicy.yaml"
+	--output "/tmp/netpolicy.yaml"
 
-echo "Network policy saved to ./config/netpolicy.yaml"
-sudo head -n 20 ./config/netpolicy.yaml || echo "No network policy file created"
+echo "Saved the network policy to /tmp/netpolicy.yaml"
+sudo head -n 20 /tmp/netpolicy.yaml || echo "No network policy file created"
 
-echo "Starting Jibril security monitoring"
+# Install Jibril as a systemd service.
+echo "Installing Jibril as a systemd service"
+sudo -E $INSTPATH/jibril --systemd install
+
+# Show all installed files.
+echo "Verifying installed files"
+sudo find /etc/jibril/ || echo "No files found in /etc/jibril/"
+
+# Show configuration.
+echo "Jibril configuration:"
+sudo cat /etc/jibril/config.yaml || echo "No configuration file found"
+
+# Show default network policy.
+echo "Jibril network policy:"
+sudo head -n 20 /etc/jibril/netpolicy.yaml || echo "No network policy file found"
+
+# Jibril default environment file.
+
 export GARNET_AGENT_TOKEN="$AGENT_TOKEN"
-
-echo "Creating Jibril default environment file"
 
 AI_ENABLED=${AI_ENABLED:-"false"}
 AI_MODE=${AI_MODE:-"reason"}
@@ -174,12 +185,15 @@ AI_MODEL=${AI_MODEL:-"gpt-4o"}
 AI_TEMPERATURE=${AI_TEMPERATURE:-"0.3"}
 GARNET_SAR=${GARNET_SAR:-"true"}
 
+echo "Creating Jibril default environment file"
+
 cat >/tmp/jibril.default <<EOF
 AI_ENABLED=$AI_ENABLED
 AI_MODE=$AI_MODE
 AI_TOKEN=$AI_TOKEN
 AI_MODEL=$AI_MODEL
 AI_TEMPERATURE=$AI_TEMPERATURE
+GARNET_AGENT_TOKEN=$GARNET_AGENT_TOKEN
 GARNET_SAR=$GARNET_SAR
 RUNNER_ARCH=X64
 RUNNER_OS=Linux
@@ -210,20 +224,20 @@ EOF
 
 sudo -E install -D -o root -m 644 /tmp/jibril.default /etc/default/jibril
 
-echo "Installing Jibril as a systemd service"
-sudo -E $INSTPATH/jibril --systemd install
-
-echo "Verifying installed files"
-sudo find /etc/jibril/ || echo "No files found in /etc/jibril/"
-echo "Jibril configuration:"
-sudo cat /etc/jibril/config.yaml || echo "No configuration file found"
-echo "Jibril network policy:"
-sudo head -n 20 /etc/jibril/netpolicy.yaml || echo "No network policy file found"
-
-# Replace default network policy with fetched one.
-sudo cp ./config/netpolicy.yaml /etc/jibril/netpolicy.yaml
+# Replace network policy.
+sudo cp /tmp/netpolicy.yaml /etc/jibril/netpolicy.yaml
 echo "New Jibril network policy:"
 sudo head -n 20 /etc/jibril/netpolicy.yaml || echo "No network policy file found"
+
+# Configure logging.
+echo "StandardError=append:/var/log/jibril.err" | sudo tee -a /etc/systemd/system/jibril.service
+echo "StandardOutput=append:/var/log/jibril.log" | sudo tee -a /etc/systemd/system/jibril.service
+
+# Read systemd jibril service.
+echo "Jibril systemd service file:"
+sudo cat /etc/systemd/system/jibril.service || echo "No Jibril systemd service file found"
+
+# Start Jibril service.
 
 echo "Reloading systemd and enabling Jibril service:"
 sudo -E systemctl daemon-reload
@@ -232,15 +246,29 @@ sudo -E systemctl enable jibril.service || true
 echo "Starting Jibril service:"
 sudo -E systemctl start jibril.service || sudo journalctl -xeu jibril.service
 
+# Wait.
 sleep 5
 
 echo "Checking Jibril service status:"
-sudo -E systemctl status jibril.service --no-pager
+sudo -E systemctl status jibril.service --no-pager || true
 
 echo "Stopping Jibril service:"
-sudo -E systemctl stop jibril.service || sudo journalctl -xeu jibril.service
+sudo -E systemctl stop jibril.service || true
 
-echo "Fetching recent Jibril logs for debugging:"
-sudo journalctl -u jibril.service --no-pager -n 50 || true
+# Check logs.
 
-echo "Test completed"
+echo "Jibril events log file:"
+sudo cat /var/log/jibril.out || echo "No Jibril events log file found"
+
+echo "Jibril log file:"
+sudo cat /var/log/jibril.log || echo "No Jibril log file found"
+
+echo "Jibril error file:"
+sudo cat /var/log/jibril.err || echo "No Jibril error log file found"
+
+if [[ $(cat /var/log/jibril.err | wc -l) -gt 0 ]]; then
+	echo "Errors were found in the Jibril error log."
+	exit 1
+fi
+
+echo "Test completed successfully."
