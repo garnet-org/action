@@ -261,10 +261,16 @@ sudo -E install -D -o root -m 644 "$TMP_DIR/jibril.default" /etc/default/jibril
 echo "Installing Jibril as a systemd service"
 sudo -E $INSTPATH/jibril --systemd install
 
-echo "Verifying installed files"
+echo "Listing installed Jibril files:"
 sudo find /etc/jibril/ || echo "No files found in /etc/jibril/"
+
+# Verify configuration.
 echo "Jibril configuration:"
 sudo cat /etc/jibril/config.yaml || echo "No configuration file found"
+
+# Configure logging.
+echo "StandardError=append:/var/log/jibril.err" | sudo tee -a /etc/systemd/system/jibril.service
+echo "StandardOutput=append:/var/log/jibril.log" | sudo tee -a /etc/systemd/system/jibril.service
 
 echo "Jibril network policy:"
 sudo head -n 20 /etc/jibril/netpolicy.yaml || echo "No network policy file found"
