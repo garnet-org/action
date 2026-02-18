@@ -19,11 +19,11 @@ on:
   pull_request:
     branches:
       - main
-#
+
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
-#
+
 jobs:
   test:
     name: Test
@@ -34,7 +34,7 @@ jobs:
         with:
           fetch-depth: 0
           submodules: true
-        #
+
       - name: Checkout specific ref if provided
         if: github.event.inputs.given_ref != ''
         run: |
@@ -44,7 +44,7 @@ jobs:
           git clean -fd
           git submodule update --init --recursive
           echo "Checked out ref: $(git rev-parse HEAD)"
-        #
+
       - name: Run test script
         shell: bash
         env:
