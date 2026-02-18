@@ -7,11 +7,11 @@ set -euo pipefail
 
 INSTPATH=${INSTALL_PATH:-"/usr/local/bin"}
 
-TOKEN=${API_TOKEN:-"YOUR_TOKEN_HERE"}
-API=${API_URL:-"https://api.garnet.ai"}
+TOKEN=${GARNET_API_TOKEN:-${API_TOKEN:-"YOUR_TOKEN_HERE"}}
+API=${GARNET_API_URL:-${API_URL:-"https://dev-api.garnet.ai"}}
 
 GARNETVER=${GARNETCTL_VERSION:-"latest"}
-JIBRILVER=${JIBRIL_VERSION:-"0.0"}
+JIBRILVER=${JIBRIL_VERSION:-"latest"}
 
 PLATFORM=$(uname -s | tr '[:upper:]' '[:lower:]')
 ARCH=$(uname -m)
@@ -50,7 +50,7 @@ if [[ "$GARNETVER" != "latest" ]]; then
 	fi
 fi
 
-if [[ "$JIBRILVER" != v* ]]; then
+if [[ "$JIBRILVER" != "latest" && "$JIBRILVER" != v* ]]; then
 	JIBRILVER="v$JIBRILVER"
 fi
 
@@ -66,7 +66,7 @@ echo "Jibril Version: $JIBRILVER"
 
 # Garnet Control.
 
-PREFIX="https://github.com/garnet-org/garnetctl-releases/releases/"
+PREFIX="https://github.com/garnet-org/garnetctl-releases/releases"
 URL="$PREFIX/download/$GARNETVER/garnetctl_${GARNET_OS}_${ALTARCH}.tar.gz"
 
 if [ "$GARNETVER" = "latest" ]; then
@@ -89,7 +89,12 @@ fi
 
 # Jibril.
 
-URL="https://github.com/garnet-org/jibril-releases/releases/download/$JIBRILVER/jibril"
+PREFIX="https://github.com/garnet-org/jibril-releases/releases"
+URL="$PREFIX/download/$JIBRILVER/jibril"
+
+if [ "$JIBRILVER" = "latest" ]; then
+	URL="$PREFIX/latest/download/jibril"
+fi
 
 echo "Downloading jibril: $URL"
 
@@ -176,6 +181,8 @@ sudo head -n 20 /etc/jibril/netpolicy.yaml || echo "No network policy file found
 
 # Jibril default environment file.
 
+export GARNET_API_URL="$API"
+export GARNET_API_TOKEN="$TOKEN"
 export GARNET_AGENT_TOKEN="$AGENT_TOKEN"
 
 AI_ENABLED=${AI_ENABLED:-"false"}
@@ -193,6 +200,8 @@ AI_MODE=$AI_MODE
 AI_TOKEN=$AI_TOKEN
 AI_MODEL=$AI_MODEL
 AI_TEMPERATURE=$AI_TEMPERATURE
+GARNET_API_URL=$GARNET_API_URL
+GARNET_API_TOKEN=$GARNET_API_TOKEN
 GARNET_AGENT_TOKEN=$GARNET_AGENT_TOKEN
 GARNET_SAR=$GARNET_SAR
 RUNNER_ARCH=X64
