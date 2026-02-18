@@ -7,7 +7,7 @@ set -euo pipefail
 
 INSTPATH=${INSTALL_PATH:-"/usr/local/bin"}
 
-TOKEN=${GARNET_API_TOKEN:-${API_TOKEN:-"YOUR_TOKEN_HERE"}}
+TOKEN=${GARNET_API_TOKEN:-${API_TOKEN:-""}}
 API=${GARNET_API_URL:-${API_URL:-"https://dev-api.garnet.ai"}}
 
 GARNETVER=${GARNETCTL_VERSION:-"latest"}
@@ -20,6 +20,11 @@ OS=$(uname -s)
 #
 # Sanity checks.
 #
+
+if [ -z "$TOKEN" ]; then
+	echo "API token is required"
+	exit 1
+fi
 
 case "$OS" in
 Linux)
