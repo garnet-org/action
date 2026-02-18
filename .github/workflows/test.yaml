@@ -3,6 +3,15 @@ on:
   workflow_call:
   workflow_dispatch:
     inputs:
+      environment:
+        description: "Target environment"
+        required: false
+        default: "dev"
+        type: choice
+        options:
+          - dev
+          - stg
+          - prod
       given_ref:
         description: "ID or tag to build (optional)"
         required: false
@@ -10,37 +19,37 @@ on:
   pull_request:
     branches:
       - main
-#
+
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
-#
+
 jobs:
   test:
     name: Test
     runs-on: ubuntu-24.04
     steps:
-     - name: Checkout
-       uses: actions/checkout@v4
-       with:
-         fetch-depth: 0
-         submodules: true
-       #
-     - name: Checkout specific ref if provided
-       if: github.event.inputs.given_ref != ''
-       run: |
-         git fetch --prune --tags origin
-         git reset --hard origin/main
-         git reset --hard "${{ github.event.inputs.given_ref }}"
-         git clean -fd
-         git submodule update --init --recursive
-         echo "Checked out ref: $(git rev-parse HEAD)"
-       #
-     - name: Run test script
-       shell: bash
-       env:
-          API_TOKEN: ${{ secrets.GARNET_API_TOKEN }}
-          API_URL: ${{ secrets.GARNET_API_URL }}
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          submodules: true
+
+      - name: Checkout specific ref if provided
+        if: github.event.inputs.given_ref != ''
+        run: |
+          git fetch --prune --tags origin
+          git reset --hard origin/main
+          git reset --hard "${{ github.event.inputs.given_ref }}"
+          git clean -fd
+          git submodule update --init --recursive
+          echo "Checked out ref: $(git rev-parse HEAD)"
+
+      - name: Run test script
+        shell: bash
+        env:
+          API_TOKEN: ${{ inputs.environment == 'prod' && secrets.GARNET_API_TOKEN || (inputs.environment == 'stg' && secrets.GARNET_API_TOKEN_STG || secrets.GARNET_API_TOKEN_DEV) }}
+          API_URL: ${{ inputs.environment == 'prod' && 'https://api.garnet.ai' || (inputs.environment == 'stg' && 'https://staging-api.garnet.ai' || 'https://dev-api.garnet.ai') }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-       run: |
-         ./scripts/test.sh
+        run: |
+          ./scripts/test.sh
