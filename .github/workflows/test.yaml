@@ -3,6 +3,15 @@ on:
   workflow_call:
   workflow_dispatch:
     inputs:
+      environment:
+        description: "Target environment"
+        required: false
+        default: "prod"
+        type: choice
+        options:
+          - dev
+          - stg
+          - prod
       given_ref:
         description: "ID or tag to build (optional)"
         required: false
@@ -36,11 +45,32 @@ jobs:
          git submodule update --init --recursive
          echo "Checked out ref: $(git rev-parse HEAD)"
        #
+     - name: Resolve environment
+       id: env
+       shell: bash
+       run: |
+         ENV="${{ inputs.environment || 'prod' }}"
+         case "$ENV" in
+           dev)
+             echo "api_url=https://dev-api.garnet.ai" >> "$GITHUB_OUTPUT"
+             echo "token_secret=GARNET_API_TOKEN_DEV" >> "$GITHUB_OUTPUT"
+             ;;
+           stg)
+             echo "api_url=https://staging-api.garnet.ai" >> "$GITHUB_OUTPUT"
+             echo "token_secret=GARNET_API_TOKEN_STG" >> "$GITHUB_OUTPUT"
+             ;;
+           *)
+             echo "api_url=https://api.garnet.ai" >> "$GITHUB_OUTPUT"
+             echo "token_secret=GARNET_API_TOKEN" >> "$GITHUB_OUTPUT"
+             ;;
+         esac
+         echo "Environment: $ENV"
+       #
      - name: Run test script
        shell: bash
        env:
-          API_TOKEN: ${{ secrets.GARNET_API_TOKEN }}
-          API_URL: ${{ secrets.GARNET_API_URL }}
+          API_TOKEN: ${{ steps.env.outputs.token_secret == 'GARNET_API_TOKEN_DEV' && secrets.GARNET_API_TOKEN_DEV || (steps.env.outputs.token_secret == 'GARNET_API_TOKEN_STG' && secrets.GARNET_API_TOKEN_STG || secrets.GARNET_API_TOKEN) }}
+          API_URL: ${{ steps.env.outputs.api_url }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
        run: |
          ./scripts/test.sh
