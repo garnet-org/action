@@ -29,48 +29,27 @@ jobs:
     name: Test
     runs-on: ubuntu-24.04
     steps:
-     - name: Checkout
-       uses: actions/checkout@v4
-       with:
-         fetch-depth: 0
-         submodules: true
-       #
-     - name: Checkout specific ref if provided
-       if: github.event.inputs.given_ref != ''
-       run: |
-         git fetch --prune --tags origin
-         git reset --hard origin/main
-         git reset --hard "${{ github.event.inputs.given_ref }}"
-         git clean -fd
-         git submodule update --init --recursive
-         echo "Checked out ref: $(git rev-parse HEAD)"
-       #
-     - name: Resolve environment
-       id: env
-       shell: bash
-       run: |
-         ENV="${{ inputs.environment || 'dev' }}"
-         case "$ENV" in
-           prod)
-             echo "api_url=https://api.garnet.ai" >> "$GITHUB_OUTPUT"
-             echo "token_secret=prod" >> "$GITHUB_OUTPUT"
-             ;;
-           stg)
-             echo "api_url=https://staging-api.garnet.ai" >> "$GITHUB_OUTPUT"
-             echo "token_secret=stg" >> "$GITHUB_OUTPUT"
-             ;;
-           *)
-             echo "api_url=https://dev-api.garnet.ai" >> "$GITHUB_OUTPUT"
-             echo "token_secret=dev" >> "$GITHUB_OUTPUT"
-             ;;
-         esac
-         echo "Environment: $ENV"
-       #
-     - name: Run test script
-       shell: bash
-       env:
-          API_TOKEN: ${{ steps.env.outputs.token_secret == 'dev' && secrets.GARNET_API_TOKEN_DEV || (steps.env.outputs.token_secret == 'stg' && secrets.GARNET_API_TOKEN_STG || secrets.GARNET_API_TOKEN) }}
-          API_URL: ${{ steps.env.outputs.api_url }}
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          submodules: true
+        #
+      - name: Checkout specific ref if provided
+        if: github.event.inputs.given_ref != ''
+        run: |
+          git fetch --prune --tags origin
+          git reset --hard origin/main
+          git reset --hard "${{ github.event.inputs.given_ref }}"
+          git clean -fd
+          git submodule update --init --recursive
+          echo "Checked out ref: $(git rev-parse HEAD)"
+        #
+      - name: Run test script
+        shell: bash
+        env:
+          API_TOKEN: ${{ inputs.environment == 'prod' && secrets.GARNET_API_TOKEN || (inputs.environment == 'stg' && secrets.GARNET_API_TOKEN_STG || secrets.GARNET_API_TOKEN_DEV) }}
+          API_URL: ${{ inputs.environment == 'prod' && 'https://api.garnet.ai' || (inputs.environment == 'stg' && 'https://staging-api.garnet.ai' || 'https://dev-api.garnet.ai') }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-       run: |
-         ./scripts/test.sh
+        run: |
+          ./scripts/test.sh
