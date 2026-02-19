@@ -1,0 +1,39 @@
+# Example workflow: run Garnet Runtime Security (Jibril) in your repository.
+#
+# This file is for reference only — it is not used by this repo.
+# Copy it into your repo's .github/workflows/ (e.g. as garnet-security.yaml).
+#
+# Setup:
+#   1. Add your Garnet API token as a repository secret named GARNET_API_TOKEN.
+#   2. Optionally adjust api_url, garnetctl_version, jibril_version, or debug below.
+#
+# This example runs on push to main and on pull requests targeting main.
+
+name: Garnet Runtime Security (example)
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  security:
+    name: Garnet Jibril
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Run Garnet Runtime Security
+        uses: garnet-org/action@v0  # or @main for latest, or pin to a release tag
+        with:
+          api_token: ${{ secrets.GARNET_API_TOKEN }}
+          # Optional: override API URL (e.g. for staging)
+          # api_url: "https://api.garnet.ai"
+          # Optional: CLI and Jibril versions ("latest" or e.g. "1.2.3")
+          # garnetctl_version: "latest"
+          # jibril_version: "0.0"
+          # Optional: enable debug output
+          # debug: "false"
