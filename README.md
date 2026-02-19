@@ -95,6 +95,8 @@ The action consists of two steps:
 - **Main step** — Installs and starts Jibril for runtime security monitoring
 - **Post step** — Runs at job completion (even on failure), stops Jibril, and appends the security profile to the job summary
 
+**Required:** Add `actions/checkout` before this action so Jibril can read the workflow file from the repository.
+
 ## License
 
 MIT
