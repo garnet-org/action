@@ -242,6 +242,7 @@ async function run() {
     process.env.GARNET_API_URL = API;
     process.env.GARNET_API_TOKEN = TOKEN;
     process.env.GARNET_AGENT_TOKEN = AGENT_TOKEN;
+    process.env.GITHUB_WORKFLOW_FILE = getWorkflowFilePath();
 
     // Create Jibril default environment file
     core.info("Creating Jibril default environment file");
@@ -287,6 +288,7 @@ GITHUB_TRIGGERING_ACTOR=${getEnv("GITHUB_TRIGGERING_ACTOR")}
 GITHUB_WORKFLOW_REF=${getEnv("GITHUB_WORKFLOW_REF")}
 GITHUB_WORKFLOW_SHA=${getEnv("GITHUB_WORKFLOW_SHA")}
 GITHUB_WORKFLOW=${getEnv("GITHUB_WORKFLOW")}
+GITHUB_WORKFLOW_FILE=${getEnv("GITHUB_WORKFLOW_FILE")}
 GITHUB_WORKSPACE=${getEnv("GITHUB_WORKSPACE")}
 `;
 
@@ -418,6 +420,26 @@ function fail(code, message) {
 // This function gets an environment variable with a default value.
 function getEnv(name, def = "") {
   return process.env[name] ?? def;
+}
+
+// Derives the full path to the workflow file from GITHUB_WORKFLOW_REF.
+// Format: owner/repo/.github/workflows/usage.yaml@refs/heads/main
+function getWorkflowFilePath() {
+  const workspace = getEnv("GITHUB_WORKSPACE");
+  const workflowRef = getEnv("GITHUB_WORKFLOW_REF");
+  const repository = getEnv("GITHUB_REPOSITORY");
+
+  if (!workspace || !workflowRef || !repository) {
+    return "";
+  }
+
+  const pathPart = workflowRef.split("@")[0];
+  const repoPrefix = `${repository}/`;
+  const relativePath = pathPart.startsWith(repoPrefix)
+    ? pathPart.slice(repoPrefix.length)
+    : pathPart;
+
+  return path.join(workspace, relativePath);
 }
 
 // This function executes a command and returns the output.
