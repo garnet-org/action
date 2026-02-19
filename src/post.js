@@ -76,13 +76,17 @@ async function uploadJibrilArtifacts() {
   const uploaded = [];
   for (const [src, destName] of logFiles) {
     try {
-      await exec.exec("sudo", ["cp", src, path.join(artifactDir, destName)], {
+      const destPath = path.join(artifactDir, destName);
+      const cpResult = await exec.getExecOutput("sudo", ["cp", src, destPath], {
         ignoreReturnCode: true,
+        silent: true,
       });
-      await exec.exec("sudo", ["chmod", "a+r", path.join(artifactDir, destName)], {
-        ignoreReturnCode: true,
-      });
-      if (fs.existsSync(path.join(artifactDir, destName))) {
+      if (cpResult.exitCode !== 0) {
+        core.debug(`Skipping ${destName}: source may not exist (cp exit ${cpResult.exitCode})`);
+        continue;
+      }
+      await exec.exec("sudo", ["chmod", "a+r", destPath], { ignoreReturnCode: true });
+      if (fs.existsSync(destPath)) {
         uploaded.push(destName);
       }
     } catch (_) {}
@@ -93,9 +97,13 @@ async function uploadJibrilArtifacts() {
     return;
   }
 
+  // Re-verify files exist before upload; pass absolute paths (artifact client resolves relative paths from CWD, not rootDirectory)
+  const existing = uploaded.filter((f) => fs.existsSync(path.join(artifactDir, f)));
+  const absolutePaths = existing.map((f) => path.resolve(artifactDir, f));
+
   try {
-    await artifactClient.uploadArtifact("jibril-debug-logs", uploaded, artifactDir);
-    core.info(`Uploaded jibril artifacts: ${uploaded.join(", ")}`);
+    await artifactClient.uploadArtifact("jibril-debug-logs", absolutePaths, artifactDir);
+    core.info(`Uploaded jibril artifacts: ${existing.join(", ")}`);
   } catch (err) {
     const msg = err.message || String(err);
     if (msg.includes("ACTIONS_RUNTIME_TOKEN") || msg.includes("AUTH_TOKEN") || msg.includes("token")) {
