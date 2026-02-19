@@ -1,6 +1,9 @@
 const core = require("@actions/core");
 const exec = require("@actions/exec");
 const fs = require("fs");
+const path = require("path");
+const os = require("os");
+const artifactClient = require("@actions/artifact").default;
 
 // This is the post step for the action. It is called by the GitHub Actions
 // runtime. It stops the Jibril service so the daemon flushes all pending events
@@ -12,6 +15,12 @@ async function run() {
     // Stop the Jibril service so the daemon flushes all pending events.
     core.info("stopping jibril service");
     await exec.exec("sudo", ["systemctl", "stop", "jibril.service"], { ignoreReturnCode: true });
+
+    // Upload jibril logs as artifacts when debug is enabled (only after service stops).
+    const debug = core.getState("debug");
+    if (debug === "true") {
+      await uploadJibrilArtifacts();
+    }
 
     const profilerFile =
       core.getState("profilerFile") || process.env.JIBRIL_PROFILER_FILE || "/var/log/jibril.profiler.out";
@@ -51,6 +60,46 @@ async function run() {
   } catch (err) {
     // Never fail the job because of the profiler step.
     core.warning(`failed to write summary: ${err.message}`);
+  }
+}
+
+async function uploadJibrilArtifacts() {
+  const artifactDir = path.join(os.tmpdir(), "garnet-jibril-artifacts");
+  fs.mkdirSync(artifactDir, { recursive: true });
+
+  const logFiles = [
+    ["/var/log/jibril.log", "jibril-stdout.log"],
+    ["/var/log/jibril.err", "jibril-stderr.log"],
+    ["/var/log/jibril.out", "jibril-events.log"],
+  ];
+
+  const uploaded = [];
+  for (const [src, destName] of logFiles) {
+    try {
+      await exec.exec("sudo", ["cp", src, path.join(artifactDir, destName)], {
+        ignoreReturnCode: true,
+      });
+      await exec.exec("sudo", ["chmod", "a+r", path.join(artifactDir, destName)], {
+        ignoreReturnCode: true,
+      });
+      if (fs.existsSync(path.join(artifactDir, destName))) {
+        uploaded.push(destName);
+      }
+    } catch (_) {}
+  }
+
+  if (uploaded.length === 0) {
+    core.info("No jibril log files to upload");
+    return;
+  }
+
+  try {
+    await artifactClient.uploadArtifact("jibril-debug-logs", uploaded, artifactDir);
+    core.info(`Uploaded jibril artifacts: ${uploaded.join(", ")}`);
+  } catch (err) {
+    core.warning(`Failed to upload jibril artifacts: ${err.message}`);
+  } finally {
+    fs.rmSync(artifactDir, { recursive: true, force: true });
   }
 }
 

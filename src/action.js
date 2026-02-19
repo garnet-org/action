@@ -9,7 +9,6 @@ const path = require("path");
 const https = require("https");
 const http = require("http");
 const tar = require("tar");
-
 const INSTPATH = "/usr/local/bin";
 
 let _tmpDirForCleanup = null;
@@ -377,11 +376,8 @@ StandardOutput=append:/var/log/jibril.log
 
     // Check if Jibril service started successfully.
     if (returnCode !== 0) {
-      if (DEBUG === "true") {
-        await execSudo(["journalctl", "-xeu", "jibril.service"], {
-          ignoreReturnCode: true,
-        });
-      }
+      core.error("Jibril service failed to start. Showing logs:");
+      await dumpJibrilLogs();
       fail(1, "Failed to start Jibril service");
     }
 
@@ -553,6 +549,35 @@ function redactSensitive(text) {
     .replace(/\bGITHUB_TOKEN=[^\s\n]*/gi, "GITHUB_TOKEN=***")
     .replace(/\bGARNET_API_TOKEN=[^\s\n]*/gi, "GARNET_API_TOKEN=***")
     .replace(/\bGARNET_AGENT_TOKEN=[^\s\n]*/gi, "GARNET_AGENT_TOKEN=***");
+}
+
+// Dumps jibril stdout/stderr and journalctl when jibril fails (for diagnostics).
+async function dumpJibrilLogs() {
+  const logPaths = [
+    ["/var/log/jibril.log", "Jibril stdout"],
+    ["/var/log/jibril.err", "Jibril stderr"],
+  ];
+  for (const [logPath, label] of logPaths) {
+    try {
+      const content = await execCapture("sudo", ["cat", logPath], { ignoreReturnCode: true });
+      core.info(`--- ${label} (${logPath}) ---`);
+      core.info(content || "(empty or file not found)");
+    } catch (_) {
+      core.info(`--- ${label}: failed to read ---`);
+    }
+  }
+  try {
+    core.info("--- systemctl status ---");
+    await exec.exec("sudo", ["systemctl", "status", "jibril.service", "--no-pager"], {
+      ignoreReturnCode: true,
+    });
+  } catch (_) {}
+  try {
+    core.info("--- journalctl (last 50 lines) ---");
+    await exec.exec("sudo", ["journalctl", "-u", "jibril.service", "-n", "50", "--no-pager"], {
+      ignoreReturnCode: true,
+    });
+  } catch (_) {}
 }
 
 module.exports = { run };

@@ -15,6 +15,7 @@ async function main() {
     const profilerFile = process.env.JIBRIL_PROFILER_FILE
       || '/var/log/jibril.profiler.out';
     core.saveState('profilerFile', profilerFile);
+    core.saveState('debug', core.getInput('debug'));
 
     // Set inputs as environment variables for the action
     process.env.GARNET_API_TOKEN = core.getInput('api_token');

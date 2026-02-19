@@ -9,7 +9,8 @@
   "dependencies": {
     "@actions/core": "^1.10.1",
     "@actions/exec": "^1.1.1",
-    "tar": "^7.5.9"
+    "tar": "^7.5.9",
+    "upload-artifact": "github:actions/upload-artifact#v4"
   },
   "devDependencies": {
     "@vercel/ncc": "^0.38.1"
