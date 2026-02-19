@@ -27559,10 +27559,14 @@ const core = __nccwpck_require__(7484);
 const exec = __nccwpck_require__(5236);
 const fs = __nccwpck_require__(9896);
 
+// This is the post step for the action. It is called by the GitHub Actions
+// runtime. It stops the Jibril service so the daemon flushes all pending events
+// and writes the profiler markdown before we read it. It then reads the profiler
+// markdown and appends it to the real GITHUB_STEP_SUMMARY.
+
 async function run() {
   try {
-    // Stop the Jibril service so the daemon flushes all pending events
-    // and writes the profiler markdown before we read it.
+    // Stop the Jibril service so the daemon flushes all pending events.
     core.info('stopping jibril service');
     await exec.exec('sudo', ['systemctl', 'stop', 'jibril.service'], {
       ignoreReturnCode: true,
@@ -27572,12 +27576,22 @@ async function run() {
       || process.env.JIBRIL_PROFILER_FILE
       || '/var/log/jibril.profiler.out';
 
-    if (!fs.existsSync(profilerFile)) {
-      core.warning(`profiler output not found: ${profilerFile}`);
+    // Read the profiler markdown from the file.
+    let content;
+    try {
+      const result = await exec.getExecOutput('sudo', ['cat', profilerFile], {
+        silent: true,
+        ignoreReturnCode: true,
+      });
+      if (result.exitCode !== 0) {
+        core.warning(`profiler output not found or unreadable: ${profilerFile}`);
+        return;
+      }
+      content = (result.stdout || '').trim();
+    } catch (e) {
+      core.warning(`failed to read profiler file: ${e.message}`);
       return;
     }
-
-    const content = fs.readFileSync(profilerFile, 'utf8').trim();
     if (!content) {
       core.warning('profiler output is empty, skipping summary');
       return;
@@ -27589,11 +27603,11 @@ async function run() {
       return;
     }
 
-    // Append with a newline separator to avoid merging with prior content.
+    // Append the profiler markdown to the job summary.
     fs.appendFileSync(summaryFile, '\n' + content + '\n');
-    core.info('security profile written to job summary');
+    core.info('profiler markdown written to job summary');
   } catch (err) {
-    // Never fail the job because of the summary step.
+    // Never fail the job because of the profiler step.
     core.warning(`failed to write summary: ${err.message}`);
   }
 }
