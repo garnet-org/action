@@ -25675,6 +25675,9 @@ async function run() {
     fail(1, "API token is required");
   }
 
+  // Checkout the repository so jibril can find the workflow file in the source directory.
+  await ensureCheckout();
+
   const platform = os.platform();
   const arch = os.arch();
 
@@ -26160,6 +26163,39 @@ function readdirRecursiveSafe(dirPath) {
   } catch (_) {
     return [];
   }
+}
+
+// This function ensures the repository is checked out so jibril can find workflow files.
+async function ensureCheckout() {
+  const workspace = getEnv("GITHUB_WORKSPACE");
+  const repository = getEnv("GITHUB_REPOSITORY");
+  const ref = getEnv("GITHUB_REF");
+  const sha = getEnv("GITHUB_SHA");
+  const token = getEnv("GITHUB_TOKEN");
+  const serverUrl = getEnv("GITHUB_SERVER_URL", "https://github.com");
+
+  if (!workspace || !repository) {
+    core.warning("GITHUB_WORKSPACE or GITHUB_REPOSITORY not set; skipping checkout");
+    return;
+  }
+
+  const gitDir = path.join(workspace, ".git");
+  if (fs.existsSync(gitDir)) {
+    core.info("Repository already checked out");
+    return;
+  }
+
+  core.info("Checking out repository for jibril workflow discovery");
+
+  const host = new URL(serverUrl).host;
+  const repoUrl = token
+    ? `https://x-access-token:${token}@${host}/${repository}.git`
+    : `https://${host}/${repository}.git`;
+
+  const checkoutRef = sha || ref || "HEAD";
+  await exec.exec("git", ["clone", "--depth", "1", repoUrl, workspace]);
+  await exec.exec("git", ["-C", workspace, "fetch", "--depth", "1", "origin", checkoutRef], { ignoreReturnCode: true });
+  await exec.exec("git", ["-C", workspace, "checkout", checkoutRef]);
 }
 
 module.exports = { run };
