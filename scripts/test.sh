@@ -3,12 +3,14 @@ set -euo pipefail
 
 #
 # Inputs from environment variables (same names as action.yaml for compatibility).
+# GARNET_* are the canonical names; TOKEN/API/GARNETVER/JIBRILVER are internal short names.
+# For local runs you can set GARNET_API_TOKEN (or legacy API_TOKEN) and GARNET_API_URL (or API_URL).
 #
 
-API_TOKEN="${GARNET_API_TOKEN:-}"
-API_URL="${GARNET_API_URL:-https://dev-api.garnet.ai}"
-GARNETCTL_VERSION="${GARNETCTL_VERSION:-latest}"
-JIBRIL_VERSION="${JIBRIL_VERSION:-latest}"
+TOKEN="${GARNET_API_TOKEN:-${API_TOKEN:-}}"
+API="${GARNET_API_URL:-${API_URL:-https://dev-api.garnet.ai}}"
+GARNETVER="${GARNETCTL_VERSION:-latest}"
+JIBRILVER="${JIBRIL_VERSION:-latest}"
 DEBUG="${DEBUG:-false}"
 
 if [ "$DEBUG" = "true" ]; then
@@ -20,12 +22,6 @@ fi
 #
 
 INSTPATH="${INSTALL_PATH:-/usr/local/bin}"
-
-TOKEN=$API_TOKEN
-API=$API_URL
-
-GARNETVER=$GARNETCTL_VERSION
-JIBRILVER=$JIBRIL_VERSION
 
 PLATFORM=$(uname -s | tr '[:upper:]' '[:lower:]')
 ARCH=$(uname -m)

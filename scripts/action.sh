@@ -3,12 +3,13 @@ set -euo pipefail
 
 #
 # Inputs from environment variables (set by action.yaml).
+# We use GARNET_* for the contract; TOKEN/API/GARNETVER/JIBRILVER are internal short names.
 #
 
-API_TOKEN="${GARNET_API_TOKEN:-}"
-API_URL="${GARNET_API_URL:-https://api.garnet.ai}"
-GARNETCTL_VERSION="${GARNETCTL_VERSION:-latest}"
-JIBRIL_VERSION="${JIBRIL_VERSION:-latest}"
+TOKEN="${GARNET_API_TOKEN:-}"
+API="${GARNET_API_URL:-https://api.garnet.ai}"
+GARNETVER="${GARNETCTL_VERSION:-latest}"
+JIBRILVER="${JIBRIL_VERSION:-latest}"
 DEBUG="${DEBUG:-false}"
 
 if [ "$DEBUG" = "true" ]; then
@@ -25,12 +26,6 @@ fail() {
 }
 
 INSTPATH="/usr/local/bin"
-
-TOKEN=$API_TOKEN
-API=$API_URL
-
-GARNETVER=$GARNETCTL_VERSION
-JIBRILVER=$JIBRIL_VERSION
 
 ARCH=$(uname -m)
 OS=$(uname -s)

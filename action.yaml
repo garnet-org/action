@@ -31,7 +31,7 @@ runs:
     - name: Run GarnetAI Security Scanner
       shell: bash
       env:
-        # Action inputs
+        # Action inputs (script expects GARNET_API_TOKEN, GARNET_API_URL, etc.)
         GARNET_API_TOKEN: ${{ inputs.api_token }}
         GARNET_API_URL: ${{ inputs.api_url }}
         GARNETCTL_VERSION: ${{ inputs.garnetctl_version }}
