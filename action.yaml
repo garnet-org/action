@@ -30,27 +30,49 @@ runs:
   steps:
     - name: Run GarnetAI Security Scanner
       shell: bash
+      env:
+        # Action inputs
+        GARNET_API_TOKEN: ${{ inputs.api_token }}
+        GARNET_API_URL: ${{ inputs.api_url }}
+        GARNETCTL_VERSION: ${{ inputs.garnetctl_version }}
+        JIBRIL_VERSION: ${{ inputs.jibril_version }}
+        DEBUG: ${{ inputs.debug }}
+        # Runner information
+        RUNNER_ARCH: ${{ runner.arch }}
+        RUNNER_OS: ${{ runner.os }}
+        # GitHub context
+        GITHUB_ACTION_PATH: ${{ github.action_path }}
+        GITHUB_ACTION: ${{ github.action }}
+        GITHUB_ACTOR_ID: ${{ github.actor_id }}
+        GITHUB_ACTOR: ${{ github.actor }}
+        GITHUB_EVENT_NAME: ${{ github.event_name }}
+        GITHUB_JOB: ${{ github.job }}
+        GITHUB_REF_NAME: ${{ github.ref_name }}
+        GITHUB_REF_PROTECTED: ${{ github.ref_protected }}
+        GITHUB_REF_TYPE: ${{ github.ref_type }}
+        GITHUB_REF: ${{ github.ref }}
+        GITHUB_REPOSITORY_ID: ${{ github.repository_id }}
+        GITHUB_REPOSITORY_OWNER_ID: ${{ github.repository_owner_id }}
+        GITHUB_REPOSITORY_OWNER: ${{ github.repository_owner }}
+        GITHUB_REPOSITORY: ${{ github.repository }}
+        GITHUB_RUN_ATTEMPT: ${{ github.run_attempt }}
+        GITHUB_RUN_ID: ${{ github.run_id }}
+        GITHUB_RUN_NUMBER: ${{ github.run_number }}
+        GITHUB_SERVER_URL: ${{ github.server_url }}
+        GITHUB_SHA: ${{ github.sha }}
+        GITHUB_STEP_SUMMARY: ${{ github.step_summary }}
+        GITHUB_TOKEN: ${{ github.token }}
+        GITHUB_TRIGGERING_ACTOR: ${{ github.triggering_actor }}
+        GITHUB_WORKFLOW_REF: ${{ github.workflow_ref }}
+        GITHUB_WORKFLOW_SHA: ${{ github.workflow_sha }}
+        GITHUB_WORKFLOW: ${{ github.workflow }}
+        GITHUB_WORKSPACE: ${{ github.workspace }}
       run: |
         chmod +x "${{ github.action_path }}/scripts/action.sh"
 
-        export GITHUB_JOB="${{ github.job }}"
-        export GITHUB_RUN_ID="${{ github.run_id }}"
-        export GITHUB_WORKFLOW="${{ github.workflow }}"
-        export GITHUB_REPOSITORY="${{ github.repository }}"
-        export GITHUB_REPOSITORY_ID="${{ github.repository_id }}"
-        export GITHUB_REPOSITORY_OWNER="${{ github.repository_owner }}"
-        export GITHUB_REPOSITORY_OWNER_ID="${{ github.repository_owner_id }}"
-        export GITHUB_EVENT_NAME="${{ github.event_name }}"
-        export GITHUB_REF="${{ github.ref }}"
-        export GITHUB_SHA="${{ github.sha }}"
-        export GITHUB_ACTOR="${{ github.actor }}"
-        export RUNNER_OS="${{ runner.os }}"
-        export RUNNER_ARCH="${{ runner.arch }}"
-        export GITHUB_ACTION_PATH="${{ github.action_path }}"
+        # The env block above sets the GitHub context variables and action inputs.
+        # The script uses these to populate /etc/default/jibril via heredoc
+        # (e.g., GITHUB_JOB=${GITHUB_JOB:-}). The -E flag on sudo preserves
+        # these environment variables when running action.sh as root.
 
-        sudo -E "${{ github.action_path }}/scripts/action.sh" \
-          "${{ inputs.api_token }}" \
-          "${{ inputs.api_url }}" \
-          "${{ inputs.garnetctl_version }}" \
-          "${{ inputs.jibril_version }}" \
-          "${{ inputs.debug }}"
+        sudo -E "${{ github.action_path }}/scripts/action.sh"

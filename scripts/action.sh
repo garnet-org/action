@@ -2,14 +2,14 @@
 set -euo pipefail
 
 #
-# Inputs (positional) from action.yaml.
+# Inputs from environment variables (set by action.yaml).
 #
 
-API_TOKEN=${1:-""}
-API_URL=${2:-"https://api.garnet.ai"}
-GARNETCTL_VERSION=${3:-"latest"}
-JIBRIL_VERSION=${4:-"latest"}
-DEBUG=${5:-"false"}
+API_TOKEN="${GARNET_API_TOKEN:-}"
+API_URL="${GARNET_API_URL:-https://api.garnet.ai}"
+GARNETCTL_VERSION="${GARNETCTL_VERSION:-latest}"
+JIBRIL_VERSION="${JIBRIL_VERSION:-latest}"
+DEBUG="${DEBUG:-false}"
 
 if [ "$DEBUG" = "true" ]; then
 	set -x
@@ -18,6 +18,11 @@ fi
 #
 # Global variables and defaults.
 #
+
+fail() {
+	echo "${2:-Error}" >&2
+	exit "${1:-1}"
+}
 
 INSTPATH="/usr/local/bin"
 
@@ -99,8 +104,8 @@ trap 'rm -rf "$TMP_DIR"' EXIT
 curl -sL "$URL" | tar -xz -C "$TMP_DIR"
 
 if [[ -f "$TMP_DIR/garnetctl" ]]; then
-	sudo mv "$TMP_DIR/garnetctl" $INSTPATH/garnetctl
-	sudo chmod +x $INSTPATH/garnetctl
+	sudo mv "$TMP_DIR/garnetctl" "$INSTPATH/garnetctl"
+	sudo chmod +x "$INSTPATH/garnetctl"
 else
 	echo "Failed to download garnetctl binary"
 	exit 1
@@ -117,15 +122,15 @@ fi
 
 echo "Downloading jibril: $URL"
 
-sudo curl -sL -o $INSTPATH/jibril "$URL"
-sudo chmod +x $INSTPATH/jibril
+sudo curl -sL -o "$INSTPATH/jibril" "$URL"
+sudo chmod +x "$INSTPATH/jibril"
 
 #### Configure.
 
 echo "Configuring garnetctl"
 
-$INSTPATH/garnetctl config set-baseurl "$API"
-$INSTPATH/garnetctl config set-token "$TOKEN"
+"$INSTPATH/garnetctl" config set-baseurl "$API"
+"$INSTPATH/garnetctl" config set-token "$TOKEN"
 
 # Context.
 
@@ -217,90 +222,124 @@ export GARNET_AGENT_TOKEN="$AGENT_TOKEN"
 
 echo "Creating Jibril default environment file"
 
-AI_ENABLED=${AI_ENABLED:-"false"}
-AI_MODE=${AI_MODE:-"reason"}
-AI_TOKEN=${AI_TOKEN:-""}
-AI_MODEL=${AI_MODEL:-"gpt-4o"}
-AI_TEMPERATURE=${AI_TEMPERATURE:-"0.3"}
-GARNET_SAR=${GARNET_SAR:-"true"}
-
 cat >"$TMP_DIR/jibril.default" <<EOF
-AI_ENABLED=$AI_ENABLED
-AI_MODE=$AI_MODE
-AI_TOKEN=$AI_TOKEN
-AI_MODEL=$AI_MODEL
-AI_TEMPERATURE=$AI_TEMPERATURE
-GARNET_API_URL=$GARNET_API_URL
-GARNET_API_TOKEN=$GARNET_API_TOKEN
-GARNET_AGENT_TOKEN=$GARNET_AGENT_TOKEN
-GARNET_SAR=$GARNET_SAR
+# Garnet API configuration
+GARNET_API_URL=${GARNET_API_URL}
+GARNET_API_TOKEN=${GARNET_API_TOKEN}
+GARNET_AGENT_TOKEN=${GARNET_AGENT_TOKEN}
+GARNET_SAR=${GARNET_SAR:-true}
+# AI configuration
+AI_ENABLED=${AI_ENABLED:-false}
+AI_MODE=${AI_MODE:-reason}
+AI_TOKEN=${AI_TOKEN:-}
+AI_MODEL=${AI_MODEL:-gpt-4o}
+AI_TEMPERATURE=${AI_TEMPERATURE:-0.3}
+# Runner information
 RUNNER_ARCH=${RUNNER_ARCH:-}
 RUNNER_OS=${RUNNER_OS:-}
+# Jibril writes profile markdown to this file
+JIBRIL_PROFILER_FILE=${GITHUB_STEP_SUMMARY:-}
+# GitHub context
 GITHUB_ACTION=${GITHUB_ACTION:-__run}
-GITHUB_TOKEN=${GITHUB_TOKEN:-}
-GITHUB_ACTOR=${GITHUB_ACTOR:-}
 GITHUB_ACTOR_ID=${GITHUB_ACTOR_ID:-}
+GITHUB_ACTOR=${GITHUB_ACTOR:-}
 GITHUB_EVENT_NAME=${GITHUB_EVENT_NAME:-}
 GITHUB_JOB=${GITHUB_JOB:-}
-GITHUB_REF=${GITHUB_REF:-}
 GITHUB_REF_NAME=${GITHUB_REF_NAME:-}
 GITHUB_REF_PROTECTED=${GITHUB_REF_PROTECTED:-}
 GITHUB_REF_TYPE=${GITHUB_REF_TYPE:-}
-GITHUB_REPOSITORY=${GITHUB_REPOSITORY:-}
+GITHUB_REF=${GITHUB_REF:-}
 GITHUB_REPOSITORY_ID=${GITHUB_REPOSITORY_ID:-}
-GITHUB_REPOSITORY_OWNER=${GITHUB_REPOSITORY_OWNER:-}
 GITHUB_REPOSITORY_OWNER_ID=${GITHUB_REPOSITORY_OWNER_ID:-}
+GITHUB_REPOSITORY_OWNER=${GITHUB_REPOSITORY_OWNER:-}
+GITHUB_REPOSITORY=${GITHUB_REPOSITORY:-}
 GITHUB_RUN_ATTEMPT=${GITHUB_RUN_ATTEMPT:-}
 GITHUB_RUN_ID=${GITHUB_RUN_ID:-}
 GITHUB_RUN_NUMBER=${GITHUB_RUN_NUMBER:-}
 GITHUB_SERVER_URL=${GITHUB_SERVER_URL:-}
 GITHUB_SHA=${GITHUB_SHA:-}
+GITHUB_STEP_SUMMARY=${GITHUB_STEP_SUMMARY:-}
+GITHUB_TOKEN=${GITHUB_TOKEN:-}
 GITHUB_TRIGGERING_ACTOR=${GITHUB_TRIGGERING_ACTOR:-}
-GITHUB_WORKFLOW=${GITHUB_WORKFLOW:-}
 GITHUB_WORKFLOW_REF=${GITHUB_WORKFLOW_REF:-}
 GITHUB_WORKFLOW_SHA=${GITHUB_WORKFLOW_SHA:-}
+GITHUB_WORKFLOW=${GITHUB_WORKFLOW:-}
 GITHUB_WORKSPACE=${GITHUB_WORKSPACE:-}
 EOF
 
 echo "Installing default environment file to /etc/default/jibril"
 sudo -E install -D -o root -m 644 "$TMP_DIR/jibril.default" /etc/default/jibril
 
-echo "Installing Jibril as a systemd service"
-sudo -E $INSTPATH/jibril --systemd install
+# Verify default environment file.
+if [ "$DEBUG" = "true" ]; then
+	echo "Default environment file:"
+	sudo cat /etc/default/jibril || echo "No default environment file found"
+fi
 
-echo "Listing installed Jibril files:"
-sudo find /etc/jibril/ || echo "No files found in /etc/jibril/"
+echo "Installing Jibril as a systemd service"
+sudo -E "$INSTPATH/jibril" --systemd install
+
+# Configure logging using a systemd drop-in override.
+sudo mkdir -p /etc/systemd/system/jibril.service.d
+cat <<EOF | sudo tee /etc/systemd/system/jibril.service.d/logging.conf
+[Service]
+StandardError=append:/var/log/jibril.err
+StandardOutput=append:/var/log/jibril.log
+EOF
+
+# Verify installed files.
+if [ "$DEBUG" = "true" ]; then
+	echo "Jibril installed files:"
+	sudo find /etc/jibril/ || echo "No files found in /etc/jibril/"
+fi
 
 # Verify configuration.
-echo "Jibril configuration:"
-sudo cat /etc/jibril/config.yaml || echo "No configuration file found"
+if [ "$DEBUG" = "true" ]; then
+	echo "Jibril configuration:"
+	sudo cat /etc/jibril/config.yaml || echo "No configuration file found"
+fi
 
-# Configure logging.
-echo "StandardError=append:/var/log/jibril.err" | sudo tee -a /etc/systemd/system/jibril.service
-echo "StandardOutput=append:/var/log/jibril.log" | sudo tee -a /etc/systemd/system/jibril.service
-
-echo "Jibril network policy:"
-sudo head -n 20 /etc/jibril/netpolicy.yaml || echo "No network policy file found"
+# Verify network policy.
+if [ "$DEBUG" = "true" ]; then
+	echo "Jibril default network policy:"
+	sudo head -n 20 /etc/jibril/netpolicy.yaml || echo "No network policy file found"
+fi
 
 # Replace network policy with fetched one.
 sudo cp -v "$NETPOLICY_PATH" /etc/jibril/netpolicy.yaml
+if [ "$DEBUG" = "true" ]; then
+	echo "Replaced Jibril network policy:"
+	sudo head -n 20 /etc/jibril/netpolicy.yaml || echo "No network policy file found"
+fi
 
-echo "New Jibril network policy:"
-sudo head -n 20 /etc/jibril/netpolicy.yaml || echo "No network policy file found"
+# Reload systemd and start Jibril service.
+if [ "$DEBUG" = "true" ]; then
+	echo "Reloading systemd and enabling Jibril service..."
+fi
 
-# Configure logging.
-echo "StandardError=append:/var/log/jibril.err" | sudo tee -a /etc/systemd/system/jibril.service
-echo "StandardOutput=append:/var/log/jibril.log" | sudo tee -a /etc/systemd/system/jibril.service
-
-# Start Jibril service.
-echo "Reloading systemd and enabling Jibril service:"
 sudo -E systemctl daemon-reload
 sudo -E systemctl enable jibril.service || true
 
-echo "Starting Jibril service:"
-sudo -E systemctl start jibril.service || sudo journalctl -xeu jibril.service
+if [ "$DEBUG" = "true" ]; then
+	echo "Starting Jibril service..."
+fi
+
+# Start Jibril service.
+sudo -E systemctl start jibril.service
+return_code=$?
+
+# Check journal logs for errors.
+if [ $return_code -ne 0 ]; then
+	if [ "$DEBUG" = "true" ]; then
+		sudo journalctl -xeu jibril.service
+	fi
+	exit 1
+fi
 
 sleep 5
 
-echo "Checking Jibril service status:"
-sudo -E systemctl status jibril.service --no-pager
+# Check Jibril service status.
+if [ "$DEBUG" = "true" ]; then
+	echo "Checking Jibril service status..."
+	sudo -E systemctl status jibril.service --no-pager
+fi
