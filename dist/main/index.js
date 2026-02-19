@@ -25946,12 +25946,12 @@ GITHUB_WORKSPACE=${getEnv("GITHUB_WORKSPACE")}
     core.info("Installing default environment file to /etc/default/jibril");
     await execSudo(["install", "-D", "-o", "root", "-m", "644", jibrilDefaultPath, "/etc/default/jibril"]);
 
-    // Verify default environment file.
+    // Verify default environment file (redacted for security).
     if (DEBUG === "true") {
       try {
         const defaultContent = readFileSafe("/etc/default/jibril");
         core.info("Default environment file:");
-        core.info(defaultContent || "No default environment file found");
+        core.info(redactSensitive(defaultContent || "No default environment file found"));
       } catch (_) {}
     }
 
@@ -26045,6 +26045,16 @@ StandardOutput=append:/var/log/jibril.log
       await execSudo(["systemctl", "status", "jibril.service", "--no-pager"], {
         ignoreReturnCode: true,
       });
+
+      core.info("Jibril systemd unit (systemctl cat):");
+      try {
+        const catOutput = await execCapture("sudo", ["systemctl", "cat", "jibril.service"], {
+          ignoreReturnCode: true,
+        });
+        core.info(redactSensitive(catOutput) || "(empty or failed)");
+      } catch (_) {
+        core.info("(systemctl cat failed)");
+      }
     }
 
     core.info("Jibril service started successfully");
@@ -26185,6 +26195,15 @@ function readdirRecursiveSafe(dirPath) {
   } catch (_) {
     return [];
   }
+}
+
+// Redacts sensitive env vars from debug output (tokens, API keys).
+function redactSensitive(text) {
+  if (!text || typeof text !== "string") return text;
+  return text
+    .replace(/\bGITHUB_TOKEN=[^\s\n]*/gi, "GITHUB_TOKEN=***")
+    .replace(/\bGARNET_API_TOKEN=[^\s\n]*/gi, "GARNET_API_TOKEN=***")
+    .replace(/\bGARNET_AGENT_TOKEN=[^\s\n]*/gi, "GARNET_AGENT_TOKEN=***");
 }
 
 // This function ensures the repository is checked out so jibril can find workflow files.
