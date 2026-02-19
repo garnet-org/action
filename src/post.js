@@ -68,9 +68,9 @@ async function uploadJibrilArtifacts() {
   fs.mkdirSync(artifactDir, { recursive: true });
 
   const logFiles = [
-    ["/var/log/jibril.log", "jibril-stdout.log"],
-    ["/var/log/jibril.err", "jibril-stderr.log"],
-    ["/var/log/jibril.out", "jibril-events.log"],
+    ["/var/log/jibril.log", "jibril.log"],
+    ["/var/log/jibril.err", "jibril.err"],
+    ["/var/log/jibril.out", "jibril.out"],
   ];
 
   const uploaded = [];
@@ -97,7 +97,12 @@ async function uploadJibrilArtifacts() {
     await artifactClient.uploadArtifact("jibril-debug-logs", uploaded, artifactDir);
     core.info(`Uploaded jibril artifacts: ${uploaded.join(", ")}`);
   } catch (err) {
-    core.warning(`Failed to upload jibril artifacts: ${err.message}`);
+    const msg = err.message || String(err);
+    if (msg.includes("ACTIONS_RUNTIME_TOKEN") || msg.includes("AUTH_TOKEN") || msg.includes("token")) {
+      core.warning(`Jibril artifact upload skipped (auth unavailable): ${msg}`);
+    } else {
+      core.warning(`Failed to upload jibril artifacts: ${msg}`);
+    }
   } finally {
     fs.rmSync(artifactDir, { recursive: true, force: true });
   }

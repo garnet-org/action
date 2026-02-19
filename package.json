@@ -4,7 +4,7 @@
   "description": "GarnetAI GitHub Action",
   "private": true,
   "scripts": {
-    "build": "ncc build src/main.js -o dist/main --license licenses.txt && ncc build src/post.js -o dist/post --license licenses.txt"
+    "build": "ncc build src/main.js -o dist/main --license licenses.txt && ncc build src/post.js -o dist/post --license licenses.txt && sed -i \"s/\\r$//\" dist/main/index.js dist/post/index.js"
   },
   "dependencies": {
     "@actions/core": "^1.10.1",

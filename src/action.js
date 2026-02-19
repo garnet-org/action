@@ -26,6 +26,11 @@ async function run() {
     fail(1, "API token is required");
   }
 
+  const workspace = getEnv("GITHUB_WORKSPACE");
+  if (!workspace || !fs.existsSync(path.join(workspace, ".git"))) {
+    fail(1, "Repository checkout required. Add 'actions/checkout@v4' before this action.");
+  }
+
   const platform = os.platform();
   const arch = os.arch();
 
@@ -438,9 +443,7 @@ function getWorkflowFilePath() {
 
   const pathPart = workflowRef.split("@")[0];
   const repoPrefix = `${repository}/`;
-  const relativePath = pathPart.startsWith(repoPrefix)
-    ? pathPart.slice(repoPrefix.length)
-    : pathPart;
+  const relativePath = pathPart.startsWith(repoPrefix) ? pathPart.slice(repoPrefix.length) : pathPart;
 
   return path.join(workspace, relativePath);
 }
