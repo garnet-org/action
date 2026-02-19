@@ -1,77 +1,80 @@
-# 🛡️ Garnet Runtime Security
+# Garnet Runtime Security
 
-> **Protect your workflows with real-time runtime security monitoring** ⚡
+> Protect your workflows with real-time runtime security monitoring
 
-The **Garnet Runtime Security** Action integrates the [Jibril security scanner](https://jibril.garnet.ai) and both [Garnet Backend and Dashboard](https://dashboard.garnet.ai) to provide comprehensive runtime threat detection directly in your GitHub Actions workflows. Detect suspicious activity, network connections, and potential security threats as your workflow runs.
+The **Garnet Runtime Security** action integrates the [Jibril security scanner](https://jibril.garnet.ai) with the [Garnet Dashboard](https://dashboard.garnet.ai) to provide runtime threat detection in your GitHub Actions workflows. Detect suspicious activity, network connections, and potential security threats as your workflow runs.
 
-## ✨ Features
+## Features
 
-- 🚀 **Seamless Integration** - Easy to add to any workflow
-- 🔭 **Runtime Detection** - Monitors your workflow as it executes
-- 🔍 **Extensive Monitoring** - File access, execution, and network analysis
-- 🌐 **Network Policy Enforcement** - Block suspicious connections automatically
-- 📋 **Detailed Logging** - View comprehensive security information
+- **Seamless integration** — Add to any workflow with a single step
+- **Runtime detection** — Monitors your workflow as it executes
+- **Extensive monitoring** — File access, execution, and network analysis
+- **Network policy enforcement** — Block suspicious connections automatically
+- **Job summary** — Security profile markdown appended to the workflow job summary
 
-## 🚀 Getting Started
+## Getting Started
 
-### 1️⃣ Create API Token
+### 1. Create an API token
 
-Before using this action, you need to obtain a Garnet API token:
+1. Register or log in at [Garnet](https://app.garnet.ai/)
+2. Go to your account settings
+3. Create a new API token
+4. Save it for the next step
 
-1. Register or log in to [Garnet](https://app.garnet.ai/)
-2. Navigate to your account settings
-3. Create a new API token with appropriate permissions
-4. Save this token for the next step
+### 2. Add the token as a repository secret
 
-### 2️⃣ Add Token to Repository Secrets
+1. In your repository: **Settings → Secrets and variables → Actions**
+2. Click **New repository secret**
+3. Name: `GARNET_API_TOKEN`
+4. Value: your Garnet API token
+5. Click **Add secret**
 
-Store your Garnet API token as a repository secret:
+## Usage
 
-1. Go to your repository on GitHub
-2. Navigate to **Settings > Secrets and variables > Actions**
-3. Click "New repository secret"
-4. Name: `GARNET_API_TOKEN`
-5. Value: Your Garnet API token from step 1
-6. Click "Add secret"
-
-## 📋 Usage
-
-### Basic Usage
-
-Add the following to your workflow file (e.g., `.github/workflows/security-scan.yml`):
+Add the action to your workflow (e.g. `.github/workflows/security.yaml`):
 
 ```yaml
 name: Security Monitoring
 
 on:
   push:
-    branches: [ main ]
+    branches: [main]
   pull_request:
-    branches: [ main ]
+    branches: [main]
 
 jobs:
   monitor:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
       - name: Garnet Runtime Security
-        uses: garnet-org/action@v1
+        uses: garnet-org/action@v0
         with:
           api_token: ${{ secrets.GARNET_API_TOKEN }}
 ```
 
-## ⚙️ Configuration Options
+Pin to a release tag (e.g. `@v1.0.0`) or use `@main` for the latest.
 
-| Name | Description | Required | Default |
-|------|-------------|----------|---------|
-| `api_token` | API token for GarnetAI service | Yes | N/A |
-| `api_url` | API URL for GarnetAI service | No | `https://api.garnet.ai` |
-| `garnetctl_version` | Version of garnetctl CLI to download | No | `latest` |
-| `jibril_version` | Jibril release version (without v prefix) | No | `2.9.1` |
-| `debug` | Enable detailed debug output | No | `false` |
+## Configuration
 
-## 📜 License
+| Input | Description | Required | Default |
+|-------|-------------|----------|---------|
+| `api_token` | Garnet API token | Yes | — |
+| `api_url` | Garnet API base URL | No | `https://api.garnet.ai` |
+| `garnetctl_version` | Garnet CLI version | No | `latest` |
+| `jibril_version` | Jibril version | No | `0.0` |
+| `debug` | Enable debug output | No | `false` |
+
+## Examples
+
+The [`examples/`](examples/) directory contains reference workflows. Copy them into your repo’s `.github/workflows/` as needed.
+
+- **workflow-example.yaml** — Minimal workflow for push/PR to `main` and manual trigger. Copy to `.github/workflows/` (e.g. as `garnet-security.yaml`), add the `GARNET_API_TOKEN` secret, and optionally override `api_url`, `garnetctl_version`, `jibril_version`, or `debug`.
+
+The action runs a **main** step (install and start Jibril) and a **post** step that runs at the end of the job (even if the main step fails). The post step stops Jibril and appends the security profile markdown to the job summary.
+
+## License
 
 MIT
 
@@ -81,7 +84,5 @@ MIT
   <a href="https://garnet.ai">
     <img src="https://garnet.ai/wp-content/uploads/2023/06/logo_dark.svg" alt="Garnet" width="200" height="40">
   </a>
-  <p>
-    <sub>Made with ❤️ by the Garnet team</sub>
-  </p>
+  <p><sub>Made with ❤️ by the Garnet team</sub></p>
 </div>

@@ -1,0 +1,40 @@
+# CI: build the action bundles and verify dist/ is committed and up to date.
+#
+# This repo ships pre-built dist/ (ncc bundles) so consumers don't need to build.
+# If you change src/, run `npm run build` and commit the updated dist/ — this
+# workflow fails when dist/ is out of sync with a fresh build.
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build-and-verify:
+    name: Build and verify dist/
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      - name: Verify dist/ is up to date
+        run: |
+          if ! git diff --exit-code dist/; then
+            echo "::error::dist/ is out of date. Run 'npm run build' and commit the changes."
+            exit 1
+          fi
