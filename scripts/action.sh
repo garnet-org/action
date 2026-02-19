@@ -205,7 +205,9 @@ if [ ! -f "$NETPOLICY_PATH" ]; then
 fi
 
 echo "Network policy saved to $NETPOLICY_PATH"
-head -n 20 "$NETPOLICY_PATH" || true
+if [[ "$DEBUG" = "true" ]]; then
+	head -n 20 "$NETPOLICY_PATH" || true
+fi
 
 echo "Installing obtained network policy to /etc/jibril/netpolicy.yaml"
 
@@ -266,7 +268,7 @@ echo "Installing default environment file to /etc/default/jibril"
 sudo -E install -D -o root -m 644 "$TMP_DIR/jibril.default" /etc/default/jibril
 
 # Verify default environment file.
-if [ "$DEBUG" = "true" ]; then
+if [[ "$DEBUG" = "true" ]]; then
 	echo "Default environment file:"
 	sudo cat /etc/default/jibril || echo "No default environment file found"
 fi
@@ -276,46 +278,46 @@ sudo -E "$INSTPATH/jibril" --systemd install
 
 # Configure logging using a systemd drop-in override.
 sudo mkdir -p /etc/systemd/system/jibril.service.d
-cat <<EOF | sudo tee /etc/systemd/system/jibril.service.d/logging.conf
+cat <<EOF | sudo tee /etc/systemd/system/jibril.service.d/logging.conf >/dev/null
 [Service]
 StandardError=append:/var/log/jibril.err
 StandardOutput=append:/var/log/jibril.log
 EOF
 
 # Verify installed files.
-if [ "$DEBUG" = "true" ]; then
+if [[ "$DEBUG" = "true" ]]; then
 	echo "Jibril installed files:"
 	sudo find /etc/jibril/ || echo "No files found in /etc/jibril/"
 fi
 
 # Verify configuration.
-if [ "$DEBUG" = "true" ]; then
+if [[ "$DEBUG" = "true" ]]; then
 	echo "Jibril configuration:"
 	sudo cat /etc/jibril/config.yaml || echo "No configuration file found"
 fi
 
 # Verify network policy.
-if [ "$DEBUG" = "true" ]; then
+if [[ "$DEBUG" = "true" ]]; then
 	echo "Jibril default network policy:"
 	sudo head -n 20 /etc/jibril/netpolicy.yaml || echo "No network policy file found"
 fi
 
 # Replace network policy with fetched one.
 sudo cp -v "$NETPOLICY_PATH" /etc/jibril/netpolicy.yaml
-if [ "$DEBUG" = "true" ]; then
+if [[ "$DEBUG" = "true" ]]; then
 	echo "Replaced Jibril network policy:"
 	sudo head -n 20 /etc/jibril/netpolicy.yaml || echo "No network policy file found"
 fi
 
 # Reload systemd and start Jibril service.
-if [ "$DEBUG" = "true" ]; then
+if [[ "$DEBUG" = "true" ]]; then
 	echo "Reloading systemd and enabling Jibril service..."
 fi
 
 sudo -E systemctl daemon-reload
 sudo -E systemctl enable jibril.service || true
 
-if [ "$DEBUG" = "true" ]; then
+if [[ "$DEBUG" = "true" ]]; then
 	echo "Starting Jibril service..."
 fi
 
@@ -325,7 +327,7 @@ return_code=$?
 
 # Check journal logs for errors.
 if [ $return_code -ne 0 ]; then
-	if [ "$DEBUG" = "true" ]; then
+	if [[ "$DEBUG" = "true" ]]; then
 		sudo journalctl -xeu jibril.service
 	fi
 	exit 1
@@ -334,7 +336,7 @@ fi
 sleep 5
 
 # Check Jibril service status.
-if [ "$DEBUG" = "true" ]; then
+if [[ "$DEBUG" = "true" ]]; then
 	echo "Checking Jibril service status..."
 	sudo -E systemctl status jibril.service --no-pager
 fi
