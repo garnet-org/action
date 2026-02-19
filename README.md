@@ -6,11 +6,11 @@ The **Garnet Runtime Security** action integrates the [Jibril security scanner](
 
 ## Features
 
-- **Seamless integration** — Add to any workflow with a single step
-- **Runtime detection** — Monitors your workflow as it executes
-- **Extensive monitoring** — File access, execution, and network analysis
-- **Network policy enforcement** — Block suspicious connections automatically
-- **Job summary** — Security profile markdown appended to the workflow job summary
+- **Seamless integration** - Add to any workflow with a single step
+- **Runtime detection** - Monitors your workflow as it executes
+- **Extensive monitoring** - File access, execution, and network analysis
+- **Network policy enforcement** - Block suspicious connections automatically
+- **Job summary** - Security profile markdown appended to the workflow job summary
 
 ## Getting Started
 
@@ -35,44 +35,65 @@ Add the action to your workflow (e.g. `.github/workflows/security.yaml`):
 
 ```yaml
 name: Security Monitoring
-
 on:
   push:
-    branches: [main]
   pull_request:
-    branches: [main]
-
+  workflow_dispatch:
 jobs:
   monitor:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
       - name: Garnet Runtime Security
         uses: garnet-org/action@v0
         with:
           api_token: ${{ secrets.GARNET_API_TOKEN }}
+          # Optional (defaults shown):
+          # api_url: "https://api.garnet.ai"
+          # garnetctl_version: "latest"
+          # jibril_version: "latest"
+          # debug: "false"
 ```
-
-Pin to a release tag (e.g. `@v1.0.0`) or use `@main` for the latest.
 
 ## Configuration
 
-| Input | Description | Required | Default |
-|-------|-------------|----------|---------|
-| `api_token` | Garnet API token | Yes | — |
-| `api_url` | Garnet API base URL | No | `https://api.garnet.ai` |
-| `garnetctl_version` | Garnet CLI version | No | `latest` |
-| `jibril_version` | Jibril version | No | `0.0` |
-| `debug` | Enable debug output | No | `false` |
+| Input               | Description          | Required | Default                |
+|---------------------|----------------------|----------|------------------------|
+| `api_token`         | Garnet API token     | Yes      | -                      |
+| `api_url`           | Garnet API base URL  | No       | `https://api.garnet.ai`|
+| `garnetctl_version` | Garnet CLI version   | No       | `latest`               |
+| `jibril_version`    | Jibril version       | No       | `0.0`                  |
+| `debug`             | Enable debug output  | No       | `false`                |
 
 ## Examples
 
-The [`examples/`](examples/) directory contains reference workflows. Copy them into your repo’s `.github/workflows/` as needed.
+The [`examples/`](examples/) directory contains reference workflows you can use as starting points.
 
-- **workflow-example.yaml** — Minimal workflow for push/PR to `main` and manual trigger. Copy to `.github/workflows/` (e.g. as `garnet-security.yaml`), add the `GARNET_API_TOKEN` secret, and optionally override `api_url`, `garnetctl_version`, `jibril_version`, or `debug`.
+### Available Examples
 
-The action runs a **main** step (install and start Jibril) and a **post** step that runs at the end of the job (even if the main step fails). The post step stops Jibril and appends the security profile markdown to the job summary.
+| File | Description |
+|------|-------------|
+| `workflow-example.yaml` | Minimal workflow for push/PR to `main` with manual trigger support |
+
+### Quick Start
+
+1. Copy the example to your repo:
+
+   ```bash
+   cp examples/workflow-example.yaml .github/workflows/garnet-security.yaml
+   ```
+
+2. Add the `GARNET_API_TOKEN` secret to your repository
+3. (Optional) Override inputs: `api_url`, `garnetctl_version`, `jibril_version`, or `debug`
+
+### How It Works
+
+The action consists of two steps:
+
+- **Main step** — Installs and starts Jibril for runtime security monitoring
+- **Post step** — Runs at job completion (even on failure), stops Jibril, and appends the security profile to the job summary
 
 ## License
 
