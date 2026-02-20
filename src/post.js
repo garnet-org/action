@@ -22,10 +22,9 @@ async function run() {
       await uploadJibrilArtifacts();
     }
 
-    const profiler4fun = core.getInput("profiler_4fun") === "true";
-    const profilerFile = profiler4fun
-      ? "/var/log/jibril.profiler4fun.out"
-      : (core.getState("profilerFile") || process.env.JIBRIL_PROFILER_FILE || "/var/log/jibril.profiler.out");
+    // Get the profiler file from the environment variable.
+    const profiler4fun = core.getState("profiler4fun");
+    const profilerFile = profiler4fun ? "/var/log/jibril.profiler4fun.out" : "/var/log/jibril.profiler.out";
 
     // Read the profiler markdown from the file.
     let content;
