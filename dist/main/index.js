@@ -28232,6 +28232,7 @@ async function main() {
 
     // Set inputs as environment variables for the action
     process.env.GARNET_API_TOKEN = core.getInput("api_token");
+
     // Ensure Jibril has a GitHub token even when the repo isn't checked out.
     process.env.GITHUB_TOKEN = process.env.GITHUB_TOKEN;
     process.env.GARNET_API_URL = core.getInput("api_url");
