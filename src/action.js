@@ -27,8 +27,13 @@ async function run() {
   }
 
   const workspace = getEnv("GITHUB_WORKSPACE");
-  if (!workspace || !fs.existsSync(path.join(workspace, ".git"))) {
-    fail(1, "Repository checkout required. Add 'actions/checkout@v4' before this action.");
+  if (!workspace) {
+    core.warning("GITHUB_WORKSPACE is not set. Jibril workflow-file resolution may be limited.");
+  } else if (!fs.existsSync(path.join(workspace, ".git"))) {
+    core.warning(
+      "Repository checkout not detected. Jibril will rely on the GitHub API to fetch the running workflow file; " +
+        "if that fails, add 'actions/checkout@v4' before this action as a fallback.",
+    );
   }
 
   const platform = os.platform();

@@ -25675,8 +25675,13 @@ async function run() {
   }
 
   const workspace = getEnv("GITHUB_WORKSPACE");
-  if (!workspace || !fs.existsSync(path.join(workspace, ".git"))) {
-    fail(1, "Repository checkout required. Add 'actions/checkout@v4' before this action.");
+  if (!workspace) {
+    core.warning("GITHUB_WORKSPACE is not set. Jibril workflow-file resolution may be limited.");
+  } else if (!fs.existsSync(path.join(workspace, ".git"))) {
+    core.warning(
+      "Repository checkout not detected. Jibril will rely on the GitHub API to fetch the running workflow file; " +
+        "if that fails, add 'actions/checkout@v4' before this action as a fallback.",
+    );
   }
 
   const platform = os.platform();
@@ -28223,6 +28228,9 @@ async function main() {
 
     // Set inputs as environment variables for the action
     process.env.GARNET_API_TOKEN = core.getInput('api_token');
+    // Ensure Jibril has a GitHub token even when the repo isn't checked out.
+    // Users should pass `with: github_token: ${{ github.token }}` (or a PAT with contents read).
+    process.env.GITHUB_TOKEN = core.getInput('github_token') || process.env.GITHUB_TOKEN;
     process.env.GARNET_API_URL = core.getInput('api_url');
     process.env.GARNETCTL_VERSION = core.getInput('garnetctl_version');
     process.env.JIBRIL_VERSION = core.getInput('jibril_version');
