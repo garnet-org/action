@@ -28214,8 +28214,10 @@ async function main() {
     // Daemon writes profiler markdown to a stable path; post step reads it
     // and appends to the real GITHUB_STEP_SUMMARY. The daemon runs until the
     // job ends, so the main step's summary file is not the same as post's.
-    const profilerFile = process.env.JIBRIL_PROFILER_FILE
-      || '/var/log/jibril.profiler.out';
+    const profiler4fun = core.getInput('profiler_4fun') === 'true';
+    const profilerFile = profiler4fun
+      ? '/var/log/jibril.profiler4fun.out'
+      : (process.env.JIBRIL_PROFILER_FILE || '/var/log/jibril.profiler.out');
     core.saveState('profilerFile', profilerFile);
     core.saveState('debug', core.getInput('debug'));
 

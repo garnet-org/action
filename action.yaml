@@ -19,6 +19,10 @@ inputs:
     description: "Jibril version (1.2.3, or 0.0)"
     required: false
     default: "0.0"
+  profiler_4fun:
+    description: "Enable profiler 4 fun mode"
+    required: false
+    default: "false"
   debug:
     description: "Enable debug mode"
     required: false
