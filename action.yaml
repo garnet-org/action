@@ -16,9 +16,9 @@ inputs:
     required: false
     default: "latest"
   jibril_version:
-    description: "Jibril version (1.2.3, or 0.0)"
+    description: "Jibril version (2.10, or 0.0)"
     required: false
-    default: "0.0"
+    default: "2.10"
   profiler_4fun:
     description: "Enable profiler 4 fun mode"
     required: false
