@@ -80,7 +80,7 @@ jobs:
 | `api_token` | Garnet API token | Yes | - |
 | `api_url` | Garnet API base URL | No | `https://api.garnet.ai` |
 | `garnetctl_version` | `garnetctl` version (`1.2.3` or `latest`) | No | `latest` |
-| `jibril_version` | Jibril version (`2.10` or `latest`) | No | `2.10` |
+| `jibril_version` | Jibril version (`v2.10.1` or `latest`) | No | `v2.10.1` |
 | `profiler_4fun` | Enable profiler “4 fun” mode | No | `false` |
 | `debug` | Enable debug output + upload Jibril logs as artifacts | No | `false` |
 
