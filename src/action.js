@@ -267,8 +267,9 @@ AI_TEMPERATURE=${getEnv("AI_TEMPERATURE", "0.3")}
 # Runner information
 RUNNER_ARCH=${getEnv("RUNNER_ARCH")}
 RUNNER_OS=${getEnv("RUNNER_OS")}
-# Jibril writes profile markdown to this file
-JIBRIL_PROFILER_FILE=${getEnv("GITHUB_STEP_SUMMARY")}
+# Jibril writes profile markdown to these files (one per printer)
+JIBRIL_PROFILER_FILE=${getEnv("JIBRIL_PROFILER_FILE")}
+JIBRIL_PROFILER4FUN_FILE=${getEnv("JIBRIL_PROFILER4FUN_FILE")}
 # GitHub context
 GITHUB_ACTION=${getEnv("GITHUB_ACTION", "__run")}
 GITHUB_ACTOR_ID=${getEnv("GITHUB_ACTOR_ID")}

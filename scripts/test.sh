@@ -199,8 +199,9 @@ AI_TEMPERATURE=${AI_TEMPERATURE:-0.3}
 # Runner information
 RUNNER_ARCH=${RUNNER_ARCH:-X64}
 RUNNER_OS=${RUNNER_OS:-Linux}
-# Jibril writes profile markdown to this file
-JIBRIL_PROFILER_FILE=${GITHUB_STEP_SUMMARY:-}
+# Jibril writes profile markdown to these files (one per printer)
+JIBRIL_PROFILER_FILE=${JIBRIL_PROFILER_FILE:-/var/log/jibril.profiler.out}
+JIBRIL_PROFILER4FUN_FILE=${JIBRIL_PROFILER4FUN_FILE:-/var/log/jibril.profiler4fun.out}
 # GitHub context
 GITHUB_ACTION=${GITHUB_ACTION:-__run}
 GITHUB_ACTOR_ID=${GITHUB_ACTOR_ID:-}

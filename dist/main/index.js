@@ -25915,8 +25915,9 @@ AI_TEMPERATURE=${getEnv("AI_TEMPERATURE", "0.3")}
 # Runner information
 RUNNER_ARCH=${getEnv("RUNNER_ARCH")}
 RUNNER_OS=${getEnv("RUNNER_OS")}
-# Jibril writes profile markdown to this file
-JIBRIL_PROFILER_FILE=${getEnv("GITHUB_STEP_SUMMARY")}
+# Jibril writes profile markdown to these files (one per printer)
+JIBRIL_PROFILER_FILE=${getEnv("JIBRIL_PROFILER_FILE")}
+JIBRIL_PROFILER4FUN_FILE=${getEnv("JIBRIL_PROFILER4FUN_FILE")}
 # GitHub context
 GITHUB_ACTION=${getEnv("GITHUB_ACTION", "__run")}
 GITHUB_ACTOR_ID=${getEnv("GITHUB_ACTOR_ID")}
@@ -28216,19 +28217,16 @@ const { run } = __nccwpck_require__(5783);
 
 async function main() {
   try {
-    // Get the profiler file from the environment variable.
+    // Save whether profiler4fun mode is enabled as a boolean.
     const profiler4fun = core.getInput("profiler_4fun") === "true";
 
-    let profilerFile;
-    if (profiler4fun) {
-      profilerFile = "/var/log/jibril.profiler4fun.out";
-    } else {
-      profilerFile = "/var/log/jibril.profiler.out";
-    }
+    // Store as string for state passing to post.js.
+    core.saveState("profiler4fun", profiler4fun ? "true" : "");
+    core.saveState("selectedProfiler", profiler4fun ? "profiler4fun" : "profiler");
 
-    core.saveState("profilerFile", profilerFile);
-    core.saveState("profiler4fun", profiler4fun);
-    core.saveState("debug", core.getInput("debug"));
+    // Save debug state for later retrieval.
+    const debug = core.getInput("debug") === "true";
+    core.saveState("debug", debug ? "true" : "");
 
     // Set inputs as environment variables for the action
     process.env.GARNET_API_TOKEN = core.getInput("api_token");
@@ -28239,6 +28237,15 @@ async function main() {
     process.env.GARNETCTL_VERSION = core.getInput("garnetctl_version");
     process.env.JIBRIL_VERSION = core.getInput("jibril_version");
     process.env.DEBUG = core.getInput("debug");
+
+    // Set the default profiler printer file paths.
+    const profilerFile = "/var/log/jibril.profiler.out";
+    const profiler4funFile = "/var/log/jibril.profiler4fun.out";
+    process.env.JIBRIL_PROFILER_FILE = profilerFile;
+    process.env.JIBRIL_PROFILER4FUN_FILE = profiler4funFile;
+    core.saveState("profilerFile", profilerFile);
+    core.saveState("profiler4funFile", profiler4funFile);
+    core.saveState("selectedProfilerFile", profiler4fun ? profiler4funFile : profilerFile);
 
     await run();
   } catch (err) {

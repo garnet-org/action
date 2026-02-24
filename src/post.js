@@ -17,18 +17,35 @@ async function run() {
     await exec.exec("sudo", ["systemctl", "stop", "jibril.service"], { ignoreReturnCode: true });
 
     // Upload jibril logs as artifacts when debug is enabled (only after service stops).
+    // Get the debug state from the main.js.
     const debug = core.getState("debug");
     if (debug === "true") {
       await uploadJibrilArtifacts();
     }
 
-    // Get the profiler file from the environment variable.
-    const profiler4fun = core.getState("profiler4fun");
-    const profilerFile = profiler4fun ? "/var/log/jibril.profiler4fun.out" : "/var/log/jibril.profiler.out";
+    const selectedProfiler =
+      core.getState("selectedProfiler") || (core.getState("profiler4fun") === "true" ? "profiler4fun" : "profiler");
+
+    // Prefer the file path passed via state, then fall back to env/defaults.
+    let profilerFile = core.getState("selectedProfilerFile");
+    if (!profilerFile) {
+      if (selectedProfiler === "profiler4fun") {
+        profilerFile =
+          core.getState("profiler4funFile") || process.env.JIBRIL_PROFILER4FUN_FILE || "/var/log/jibril.profiler4fun.out";
+      } else {
+        profilerFile = core.getState("profilerFile") || process.env.JIBRIL_PROFILER_FILE || "/var/log/jibril.profiler.out";
+      }
+    }
+
+    core.info(`using profiler printer: ${selectedProfiler}`);
 
     // Read the profiler markdown from the file.
     let content;
     try {
+      if (!profilerFile) {
+        core.warning("profiler output file is not set, skipping summary");
+        return;
+      }
       const result = await exec.getExecOutput("sudo", ["cat", profilerFile], {
         silent: true,
         ignoreReturnCode: true,
