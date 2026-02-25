@@ -1,0 +1,25 @@
+### Garnet · Runtime Report
+
+#### EGRESS SUMMARY
+| Destination | Lineage | Status |
+| :--- | :--- | :--- |
+{{- range .egress }}
+| `{{ .destination }}` | {{ lineage .process_lineage }} | {{ if .flagged }}🔴{{ else }}✅{{ end }} |
+{{- end }}
+
+#### ASSERTIONS
+{{- range .assertions }}
+{{- if eq .outcome "FAIL" }}
+> **❌ {{ .name }}**
+> {{ .summary }}
+{{- else }}
+> **✅ {{ .name }}**
+> {{ .summary }}
+{{- end }}
+{{ end }}
+
+---
+<div align="right">
+  <sub>{{ .stats.unique_domains }} unique domains · {{ .stats.flagged_domains }} flagged · {{ .stats.total_connections }} connections · Run #{{ .run_id }}</sub><br>
+  <b>Powered by Garnet</b> · <a href="{{ .dashboard_url }}/dashboard/runs/{{ .run_id }}">View full report ↗</a>
+</div>
