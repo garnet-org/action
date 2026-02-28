@@ -25667,7 +25667,7 @@ async function run() {
   const TOKEN = getEnv("GARNET_API_TOKEN");
   const API = getEnv("GARNET_API_URL", "https://api.garnet.ai");
   let GARNETVER = getEnv("GARNETCTL_VERSION", "latest");
-  let JIBRILVER = getEnv("JIBRIL_VERSION", "latest");
+  let JIBRILVER = resolveJibrilVersion(getEnv("JIBRIL_VERSION", ""), getEnv("GITHUB_ACTION_REF", ""));
   const DEBUG = getEnv("DEBUG", "false");
 
   if (TOKEN === "") {
@@ -26082,6 +26082,25 @@ function fail(code, message) {
 // This function gets an environment variable with a default value.
 function getEnv(name, def = "") {
   return process.env[name] ?? def;
+}
+
+function resolveJibrilVersion(inputVersion, actionRef) {
+  const v = String(inputVersion || "").trim();
+  if (v) return v;
+
+  const ref = String(actionRef || "")
+    .trim()
+    .replace(/^refs\/tags\//, "");
+  // Keep tag behavior stable:
+  // - action@v0 -> daily builds (v0.0)
+  // - action@v2 -> official Jibril v10.2.5
+  // - action@v1 stays pinned (do not change)
+  if (ref === "v0") return "v0.0";
+  if (ref === "v1") return "v10.2.4";
+  if (ref === "v2") return "v10.2.5";
+
+  // Default for other refs (branch/SHA/etc).
+  return "v10.2.5";
 }
 
 // Derives the full path to the workflow file from GITHUB_WORKFLOW_REF.
