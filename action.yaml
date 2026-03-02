@@ -16,7 +16,7 @@ inputs:
     required: false
     default: "latest"
   jibril_version:
-    description: "Jibril version (v10.2.5, v0.0, or 'latest')"
+    description: "Jibril version (v2.10.5, v0.0, or 'latest')"
     required: false
     default: ""
   profiler_4fun:

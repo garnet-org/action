@@ -26093,14 +26093,14 @@ function resolveJibrilVersion(inputVersion, actionRef) {
     .replace(/^refs\/tags\//, "");
   // Keep tag behavior stable:
   // - action@v0 -> daily builds (v0.0)
-  // - action@v2 -> official Jibril v10.2.5
+  // - action@v2 -> official Jibril v2.10.5
   // - action@v1 stays pinned (do not change)
   if (ref === "v0") return "v0.0";
-  if (ref === "v1") return "v10.2.4";
-  if (ref === "v2") return "v10.2.5";
+  if (ref === "v1") return "v2.10.4";
+  if (ref === "v2") return "v2.10.5";
 
   // Default for other refs (branch/SHA/etc).
-  return "v10.2.5";
+  return "v2.10.5";
 }
 
 // Derives the full path to the workflow file from GITHUB_WORKFLOW_REF.
