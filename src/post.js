@@ -85,14 +85,19 @@ async function uploadJibrilArtifacts() {
   const artifactDir = path.join(os.tmpdir(), "garnet-jibril-artifacts");
   fs.mkdirSync(artifactDir, { recursive: true });
 
-  const logFiles = [
+  const runtimeConfigDir = path.join(artifactDir, "runtime-config");
+  fs.mkdirSync(runtimeConfigDir, { recursive: true });
+
+  const uploadedFiles = [
     ["/var/log/jibril.log", "jibril.log"],
     ["/var/log/jibril.err", "jibril.err"],
     ["/var/log/jibril.out", "jibril.out"],
+    ["/etc/jibril/netpolicy.yaml", "runtime-config/netpolicy.yaml"],
   ];
 
   const uploaded = [];
-  for (const [src, destName] of logFiles) {
+
+  for (const [src, destName] of uploadedFiles) {
     try {
       const destPath = path.join(artifactDir, destName);
       const cpResult = await exec.getExecOutput("sudo", ["cp", src, destPath], {
@@ -107,11 +112,11 @@ async function uploadJibrilArtifacts() {
       if (fs.existsSync(destPath)) {
         uploaded.push(destName);
       }
-    } catch (_) {}
+    } catch (_) { }
   }
 
   if (uploaded.length === 0) {
-    core.info("No jibril log files to upload");
+    core.info("No jibril debug files to upload");
     return;
   }
 
