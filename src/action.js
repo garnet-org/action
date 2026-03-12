@@ -454,11 +454,11 @@ function resolveJibrilVersion(inputVersion, actionRef) {
     .replace(/^refs\/tags\//, "");
   // Keep tag behavior stable:
   // - action@v0 -> daily builds (v0.0)
-  // - action@v2 -> latest stable release (via GitHub releases 'latest')
+  // - action@v2 -> stable release (pinned)
   // - action@v1 stays pinned (do not change)
   if (ref === "v0") return "v0.0";
   if (ref === "v1") return "v2.10.4";
-  if (ref === "v2") return "latest";
+  if (ref === "v2") return "v2.10.8";
 
   // Default for other refs (branch/SHA/etc).
   return "latest";

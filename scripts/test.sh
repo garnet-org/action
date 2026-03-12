@@ -10,7 +10,7 @@ set -euo pipefail
 TOKEN="${GARNET_API_TOKEN:-${API_TOKEN:-}}"
 API="${GARNET_API_URL:-${API_URL:-https://dev-api.garnet.ai}}"
 GARNETVER="${GARNETCTL_VERSION:-latest}"
-JIBRILVER="${JIBRIL_VERSION:-latest}"
+JIBRILVER="${JIBRIL_VERSION:-v2.10.8}"
 DEBUG="${DEBUG:-false}"
 
 if [ "$DEBUG" = "true" ]; then
