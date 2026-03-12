@@ -230,7 +230,7 @@ GITHUB_WORKFLOW=${GITHUB_WORKFLOW:-}
 GITHUB_WORKSPACE=${GITHUB_WORKSPACE:-}
 EOF
 
-sudo -E install -D -o root -m 644 /tmp/jibril.default /etc/default/jibril
+sudo -E install -D -o root -m 600 /tmp/jibril.default /etc/default/jibril
 
 # Verify default environment file.
 echo "Default environment file:"

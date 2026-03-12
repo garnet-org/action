@@ -16,6 +16,9 @@ async function run() {
     core.info("stopping jibril service");
     await exec.exec("sudo", ["systemctl", "stop", "jibril.service"], { ignoreReturnCode: true });
 
+    // Remove secrets from disk (best-effort). Important for self-hosted runners.
+    await exec.exec("sudo", ["rm", "-f", "/etc/default/jibril"], { ignoreReturnCode: true });
+
     // Upload jibril logs as artifacts when debug is enabled (only after service stops).
     // Get the debug state from the main.js.
     const debug = core.getState("debug");

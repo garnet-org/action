@@ -25674,6 +25674,13 @@ async function run() {
     fail(1, "API token is required");
   }
 
+  // Prevent accidental leakage of tokens in logs.
+  core.setSecret(TOKEN);
+  const GITHUB_TOKEN = getEnv("GITHUB_TOKEN", "");
+  if (GITHUB_TOKEN) core.setSecret(GITHUB_TOKEN);
+  const AI_TOKEN = getEnv("AI_TOKEN", "");
+  if (AI_TOKEN) core.setSecret(AI_TOKEN);
+
   const workspace = getEnv("GITHUB_WORKSPACE");
   if (!workspace) {
     core.warning("GITHUB_WORKSPACE is not set. Jibril workflow-file resolution may be limited.");
@@ -25846,6 +25853,8 @@ async function run() {
       fail(1, "Failed to parse agent output");
     }
 
+    if (AGENT_TOKEN) core.setSecret(AGENT_TOKEN);
+
     core.info(`Created agent with ID: ${AGENT_ID}`);
 
     // Get network policy
@@ -25951,7 +25960,7 @@ GITHUB_WORKSPACE=${getEnv("GITHUB_WORKSPACE")}
     fs.writeFileSync(jibrilDefaultPath, jibrilDefault);
 
     core.info("Installing default environment file to /etc/default/jibril");
-    await execSudo(["install", "-D", "-o", "root", "-m", "644", jibrilDefaultPath, "/etc/default/jibril"]);
+    await execSudo(["install", "-D", "-o", "root", "-m", "600", jibrilDefaultPath, "/etc/default/jibril"]);
 
     // Verify default environment file (redacted for security).
     if (DEBUG === "true") {
@@ -26147,37 +26156,66 @@ async function execSudo(args, options = {}) {
 }
 
 // This function downloads a file from a URL to a destination path.
-function downloadFile(url, destPath) {
+function downloadFile(url, destPath, opts = {}, depth = 0) {
+  const { maxRedirects = 10, timeoutMs = 60_000, enforceHttps = true } = opts;
+
   return new Promise((resolve, reject) => {
-    const protocol = url.startsWith("https") ? https : http;
-    const file = fs.createWriteStream(destPath);
-    protocol
-      .get(url, (res) => {
-        if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+    const u = String(url || "");
+    if (enforceHttps && !u.startsWith("https://")) {
+      reject(new Error(`Refusing to download over non-HTTPS: ${u}`));
+      return;
+    }
+    if (depth > maxRedirects) {
+      reject(new Error(`Too many redirects while downloading: ${u}`));
+      return;
+    }
+
+    const protocol = u.startsWith("https") ? https : http;
+    const file = fs.createWriteStream(destPath, { mode: 0o600 });
+
+    const req = protocol.get(u, (res) => {
+      if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+        res.resume();
+        try {
           file.close();
-          fs.unlinkSync(destPath);
-          const redirectUrl = res.headers.location.startsWith("http")
-            ? res.headers.location
-            : new URL(res.headers.location, url).href;
-          downloadFile(redirectUrl, destPath).then(resolve).catch(reject);
-          return;
-        }
-        if (res.statusCode !== 200) {
+        } catch (_) {}
+        fs.rmSync(destPath, { force: true });
+
+        const redirectUrl = res.headers.location.startsWith("http")
+          ? res.headers.location
+          : new URL(res.headers.location, u).href;
+
+        downloadFile(redirectUrl, destPath, opts, depth + 1).then(resolve).catch(reject);
+        return;
+      }
+
+      if (res.statusCode !== 200) {
+        res.resume();
+        try {
           file.close();
-          fs.unlinkSync(destPath);
-          reject(new Error(`Failed to download ${url}: HTTP ${res.statusCode}`));
-          return;
-        }
-        res.pipe(file);
-        file.on("finish", () => {
+        } catch (_) {}
+        fs.rmSync(destPath, { force: true });
+        reject(new Error(`Failed to download ${u}: HTTP ${res.statusCode}`));
+        return;
+      }
+
+      res.pipe(file);
+      file.on("finish", () => {
+        try {
           file.close();
-          resolve();
-        });
-      })
-      .on("error", (err) => {
-        fs.unlink(destPath, () => {});
-        reject(err);
+        } catch (_) {}
+        resolve();
       });
+    });
+
+    req.setTimeout(timeoutMs, () => req.destroy(new Error(`Download timed out after ${timeoutMs}ms: ${u}`)));
+
+    req.on("error", (err) => {
+      try {
+        file.close();
+      } catch (_) {}
+      fs.rm(destPath, { force: true }, () => reject(err));
+    });
   });
 }
 
