@@ -20,7 +20,7 @@
     "node": ">=24"
   },
   "scripts": {
-    "typecheck": "tsc -p jsconfig.json --noEmit",
+    "typecheck": "npx tsc -p jsconfig.json --noEmit",
     "build": "ncc build src/main.js -o dist/main --license licenses.txt && ncc build src/post.js -o dist/post --license licenses.txt && perl -pi -e 's/\\r$//' dist/main/index.js dist/post/index.js",
     "validate": "npm run typecheck && npm run build"
   },
