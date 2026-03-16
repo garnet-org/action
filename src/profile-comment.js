@@ -77,7 +77,7 @@ const PROFILE_RESULT_SCHEMA = z
 
 const PROC_TREE_SCHEMA = z
   .object({
-    ancestry: z.array(z.string()).catch([]),
+    ancestry: z.array(z.string()),
   })
   .passthrough()
   .transform((procTree) => ({
@@ -86,7 +86,7 @@ const PROC_TREE_SCHEMA = z
 
 const ASSERTION_SCHEMA = z
   .object({
-    id: z.string().catch("no_bad_egress_domain"),
+    id: z.string(),
     result: PROFILE_RESULT_SCHEMA,
   })
   .passthrough()
@@ -94,8 +94,8 @@ const ASSERTION_SCHEMA = z
 const PEER_SCHEMA = z
   .object({
     result: PROFILE_RESULT_SCHEMA,
-    remote_names: z.array(z.string()).catch([]),
-    proc_trees: z.array(PROC_TREE_SCHEMA).catch([]),
+    remote_names: z.array(z.string()),
+    proc_trees: z.array(PROC_TREE_SCHEMA),
   })
   .passthrough()
   .transform((peer) => ({
@@ -106,22 +106,13 @@ const PEER_SCHEMA = z
 
 const GITHUB_SCENARIO_SCHEMA = z
   .object({
-    workflow: z.string().catch(""),
-    repository: z.string().catch(""),
-    ref: z.string().catch(""),
-    sha: z.string().catch(""),
-    actor: z.string().catch(""),
-    run_id: z.string().catch(""),
-    job: z.string().catch(""),
-  })
-  .catch({
-    workflow: "",
-    repository: "",
-    ref: "",
-    sha: "",
-    actor: "",
-    run_id: "",
-    job: "",
+    workflow: z.string(),
+    repository: z.string(),
+    ref: z.string(),
+    sha: z.string(),
+    actor: z.string(),
+    run_id: z.string(),
+    job: z.string(),
   })
 
 const NORMALIZED_PROFILE_SCHEMA = z.object({
@@ -147,38 +138,24 @@ const COMMENT_STATE_SCHEMA = z.object({
 
 const PROFILE_JSON_SCHEMA = z
   .object({
-    timestamp: z.string().catch(""),
-    scenarios: z
-      .object({
-        github: GITHUB_SCENARIO_SCHEMA,
-      })
-      .catch({ github: GITHUB_SCENARIO_SCHEMA.parse({}) }),
-    assertions: z.array(ASSERTION_SCHEMA).catch([]),
-    network: z
-      .object({
-        egress: z
-          .object({
-            peers: z.array(PEER_SCHEMA).catch([]),
-          })
-          .catch({ peers: [] }),
-      })
-      .catch({ egress: { peers: [] } }),
-    telemetry: z
-      .object({
-        network: z
-          .object({
-            egress: z
-              .object({
-                total_domains: z.number().catch(0),
-                total_connections: z.number().catch(0),
-              })
-              .catch({ total_domains: 0, total_connections: 0 }),
-          })
-          .catch({ egress: { total_domains: 0, total_connections: 0 } }),
-      })
-      .catch({
-        network: { egress: { total_domains: 0, total_connections: 0 } },
+    timestamp: z.string(),
+    scenarios: z.object({
+      github: GITHUB_SCENARIO_SCHEMA,
+    }),
+    assertions: z.array(ASSERTION_SCHEMA),
+    network: z.object({
+      egress: z.object({
+        peers: z.array(PEER_SCHEMA),
       }),
+    }),
+    telemetry: z.object({
+      network: z.object({
+        egress: z.object({
+          total_domains: z.number(),
+          total_connections: z.number(),
+        }),
+      }),
+    }),
   })
   .passthrough()
   .transform((profile) => ({
@@ -223,7 +200,17 @@ export async function readProfileFromJsonFile(filePath) {
  * @returns {NormalizedProfile}
  */
 export function parseProfileJson(content) {
-  return PROFILE_JSON_SCHEMA.parse(JSON.parse(content))
+  const parsedContent = JSON.parse(content)
+  const result = PROFILE_JSON_SCHEMA.safeParse(parsedContent)
+  if (result.success) {
+    return result.data
+  }
+
+  const issues = result.error.issues.map((issue) => {
+    const path = issue.path.length > 0 ? issue.path.join(".") : "<root>"
+    return `${path}: ${issue.message}`
+  })
+  throw new Error(`Invalid profile JSON: ${issues.join("; ")}`)
 }
 
 /**
