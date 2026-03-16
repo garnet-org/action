@@ -86,6 +86,7 @@ async function appendProfilerSummary(profilerFile) {
 }
 
 async function publishProfilerComment() {
+  const debug = core.getState("debug")
   const eventPath = getEnvString("GITHUB_EVENT_PATH")
   if (eventPath === "") {
     core.info("GITHUB_EVENT_PATH is not set, skipping PR comment")
@@ -127,6 +128,12 @@ async function publishProfilerComment() {
       )
       return
     }
+
+    if (debug === "true") {
+      core.info(`${JSON_PROFILE_LABEL} contents:`)
+      core.info(jsonProfile)
+    }
+
     profile = parseProfileJson(jsonProfile)
   } catch (error) {
     core.warning(
