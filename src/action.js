@@ -3,11 +3,12 @@
 
 import * as core from "@actions/core"
 import * as exec from "@actions/exec"
-import * as fs from "node:fs"
+import { HttpClient } from "@actions/http-client"
+import { createWriteStream } from "node:fs"
+import * as fs from "node:fs/promises"
 import * as os from "node:os"
 import * as path from "node:path"
-import * as https from "node:https"
-import * as http from "node:http"
+import { pipeline } from "node:stream/promises"
 import * as tar from "tar"
 
 /**
@@ -51,7 +52,7 @@ export async function run() {
     core.warning(
       "GITHUB_WORKSPACE is not set. Jibril workflow-file resolution may be limited.",
     )
-  } else if (!fs.existsSync(path.join(workspace, ".git"))) {
+  } else if (!(await pathExists(path.join(workspace, ".git")))) {
     core.warning(
       "Repository checkout not detected. Jibril will rely on the GitHub API to fetch the running workflow file; " +
         "if that fails, add 'actions/checkout@v4' before this action as a fallback.",
@@ -94,7 +95,7 @@ export async function run() {
   core.info(`Jibril Version: ${JIBRILVER}`)
 
   // Create a temporary directory for the script to use.
-  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "garnet-"))
+  const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "garnet-"))
   _tmpDirForCleanup = tmpDir
 
   // Download garnetctl.
@@ -113,7 +114,7 @@ export async function run() {
     await extractTarGz(garnetTarball, tmpDir)
 
     const garnetctlSrc = path.join(tmpDir, "garnetctl")
-    if (!fs.existsSync(garnetctlSrc)) {
+    if (!(await pathExists(garnetctlSrc))) {
       fail(1, "Failed to download garnetctl binary")
     }
 
@@ -161,8 +162,8 @@ export async function run() {
     let SYSTEM_MACHINE_ID = os.hostname()
     const machineIdPaths = ["/etc/machine-id", "/var/lib/dbus/machine-id"]
     for (const p of machineIdPaths) {
-      if (fs.existsSync(p)) {
-        SYSTEM_MACHINE_ID = fs.readFileSync(p, "utf8").trim()
+      if (await pathExists(p)) {
+        SYSTEM_MACHINE_ID = (await fs.readFile(p, "utf8")).trim()
         break
       }
     }
@@ -187,7 +188,10 @@ export async function run() {
       runner_arch: getEnv("RUNNER_ARCH"),
     }
     const githubContextPath = path.join(tmpDir, "github-context.json")
-    fs.writeFileSync(githubContextPath, JSON.stringify(githubContext, null, 2))
+    await fs.writeFile(
+      githubContextPath,
+      JSON.stringify(githubContext, null, 2),
+    )
 
     // Create agent
     core.info("Creating github agent")
@@ -278,14 +282,14 @@ export async function run() {
       fail(getExitCode(err) ?? 1, "Failed to fetch network policy")
     }
 
-    if (!fs.existsSync(NETPOLICY_PATH)) {
+    if (!(await pathExists(NETPOLICY_PATH))) {
       fail(1, "Network policy file was not created")
     }
 
     // Save the network policy to the file system.
     core.info(`Network policy saved to ${NETPOLICY_PATH}`)
     if (DEBUG === "true") {
-      const content = fs.readFileSync(NETPOLICY_PATH, "utf8")
+      const content = await fs.readFile(NETPOLICY_PATH, "utf8")
       core.info(content.split("\n").slice(0, 20).join("\n"))
     }
 
@@ -319,6 +323,7 @@ RUNNER_OS=${getEnv("RUNNER_OS")}
 # Jibril writes profile markdown to these files (one per printer)
 JIBRIL_PROFILER_FILE=${getEnv("JIBRIL_PROFILER_FILE")}
 JIBRIL_PROFILER4FUN_FILE=${getEnv("JIBRIL_PROFILER4FUN_FILE")}
+JIBRIL_JSONPROFILER_FILE=${getEnv("JIBRIL_JSONPROFILER_FILE")}
 # GitHub context
 GITHUB_ACTION=${getEnv("GITHUB_ACTION", "__run")}
 GITHUB_ACTOR_ID=${getEnv("GITHUB_ACTOR_ID")}
@@ -349,7 +354,7 @@ GITHUB_WORKSPACE=${getEnv("GITHUB_WORKSPACE")}
 `
 
     const jibrilDefaultPath = path.join(tmpDir, "jibril.default")
-    fs.writeFileSync(jibrilDefaultPath, jibrilDefault)
+    await fs.writeFile(jibrilDefaultPath, jibrilDefault)
 
     core.info("Installing default environment file to /etc/default/jibril")
     await execSudo([
@@ -366,7 +371,7 @@ GITHUB_WORKSPACE=${getEnv("GITHUB_WORKSPACE")}
     // Verify default environment file (redacted for security).
     if (DEBUG === "true") {
       try {
-        const defaultContent = readFileSafe("/etc/default/jibril")
+        const defaultContent = await readFileSafe("/etc/default/jibril")
         core.info("Default environment file:")
         core.info(
           redactSensitive(defaultContent) ??
@@ -388,7 +393,7 @@ StandardOutput=append:/var/log/jibril.log
 
     // Configure logging using a systemd drop-in override.
     const loggingConfPath = path.join(tmpDir, "logging.conf")
-    fs.writeFileSync(loggingConfPath, loggingConf)
+    await fs.writeFile(loggingConfPath, loggingConf)
     await execSudo([
       "cp",
       loggingConfPath,
@@ -398,7 +403,7 @@ StandardOutput=append:/var/log/jibril.log
     // Verify installed files.
     if (DEBUG === "true") {
       try {
-        const entries = readdirRecursiveSafe("/etc/jibril")
+        const entries = await readdirRecursiveSafe("/etc/jibril")
         core.info("Jibril installed files:")
         core.info(
           entries.length > 0
@@ -407,12 +412,12 @@ StandardOutput=append:/var/log/jibril.log
         )
       } catch (_) {}
       try {
-        const configOutput = readFileSafe("/etc/jibril/config.yaml")
+        const configOutput = await readFileSafe("/etc/jibril/config.yaml")
         core.info("Jibril configuration:")
         core.info(configOutput || "No configuration file found")
       } catch (_) {}
       try {
-        const policyContent = readFileSafe("/etc/jibril/netpolicy.yaml")
+        const policyContent = await readFileSafe("/etc/jibril/netpolicy.yaml")
         core.info("Jibril default network policy:")
         core.info(
           policyContent
@@ -428,7 +433,7 @@ StandardOutput=append:/var/log/jibril.log
     // Verify replaced network policy.
     if (DEBUG === "true") {
       try {
-        const replacedContent = readFileSafe("/etc/jibril/netpolicy.yaml")
+        const replacedContent = await readFileSafe("/etc/jibril/netpolicy.yaml")
         core.info("Replaced Jibril network policy:")
         core.info(
           replacedContent
@@ -495,7 +500,7 @@ StandardOutput=append:/var/log/jibril.log
     core.info("Jibril service started successfully")
   } finally {
     // Clean up the temporary directory.
-    fs.rmSync(tmpDir, { recursive: true, force: true })
+    await fs.rm(tmpDir, { recursive: true, force: true })
   }
 }
 
@@ -506,10 +511,10 @@ StandardOutput=append:/var/log/jibril.log
  * @returns {never}
  */
 function fail(code, message) {
-  if (_tmpDirForCleanup && fs.existsSync(_tmpDirForCleanup)) {
-    try {
-      fs.rmSync(_tmpDirForCleanup, { recursive: true, force: true })
-    } catch (_) {}
+  if (_tmpDirForCleanup) {
+    void fs
+      .rm(_tmpDirForCleanup, { recursive: true, force: true })
+      .catch(() => {})
   }
   core.error(message || "Error")
   process.exit(code ?? 1)
@@ -628,76 +633,39 @@ async function execSudo(args, options = {}) {
  * @param {string} url
  * @param {string} destPath
  * @param {DownloadOptions=} opts
- * @param {number=} depth
  * @returns {Promise<void>}
  */
-function downloadFile(url, destPath, opts = {}, depth = 0) {
+async function downloadFile(url, destPath, opts = {}) {
   const { maxRedirects = 10, timeoutMs = 60_000, enforceHttps = true } = opts
+  const requestUrl = String(url || "")
 
-  return new Promise((resolve, reject) => {
-    const u = String(url || "")
-    if (enforceHttps && !u.startsWith("https://")) {
-      reject(new Error(`Refusing to download over non-HTTPS: ${u}`))
-      return
-    }
-    if (depth > maxRedirects) {
-      reject(new Error(`Too many redirects while downloading: ${u}`))
-      return
-    }
+  if (enforceHttps && !requestUrl.startsWith("https://")) {
+    throw new Error(`Refusing to download over non-HTTPS: ${requestUrl}`)
+  }
 
-    const protocol = u.startsWith("https") ? https : http
-    const file = fs.createWriteStream(destPath, { mode: 0o600 })
-
-    const req = protocol.get(u, (res) => {
-      const statusCode = res.statusCode ?? 0
-
-      if (statusCode >= 300 && statusCode < 400 && res.headers.location) {
-        res.resume()
-        try {
-          file.close()
-        } catch (_) {}
-        fs.rmSync(destPath, { force: true })
-
-        const redirectUrl = res.headers.location.startsWith("http")
-          ? res.headers.location
-          : new URL(res.headers.location, u).href
-
-        downloadFile(redirectUrl, destPath, opts, depth + 1)
-          .then(resolve)
-          .catch(reject)
-        return
-      }
-
-      if (statusCode !== 200) {
-        res.resume()
-        try {
-          file.close()
-        } catch (_) {}
-        fs.rmSync(destPath, { force: true })
-        reject(new Error(`Failed to download ${u}: HTTP ${statusCode}`))
-        return
-      }
-
-      res.pipe(file)
-      file.on("finish", () => {
-        try {
-          file.close()
-        } catch (_) {}
-        resolve(undefined)
-      })
-    })
-
-    req.setTimeout(timeoutMs, () =>
-      req.destroy(new Error(`Download timed out after ${timeoutMs}ms: ${u}`)),
-    )
-
-    req.on("error", (err) => {
-      try {
-        file.close()
-      } catch (_) {}
-      fs.rm(destPath, { force: true }, () => reject(err))
-    })
+  const client = new HttpClient("garnet-action", undefined, {
+    allowRedirects: true,
+    maxRedirects,
+    socketTimeout: timeoutMs,
   })
+
+  try {
+    const response = await client.get(requestUrl)
+    const statusCode = response.message.statusCode ?? 0
+
+    if (statusCode !== 200) {
+      response.message.resume()
+      throw new Error(`Failed to download ${requestUrl}: HTTP ${statusCode}`)
+    }
+
+    await pipeline(
+      response.message,
+      createWriteStream(destPath, { mode: 0o600 }),
+    )
+  } catch (error) {
+    await fs.rm(destPath, { force: true }).catch(() => {})
+    throw error
+  }
 }
 
 /**
@@ -729,9 +697,9 @@ function getFirstIpv4() {
  * Reads a file, returns null on permission error or missing file.
  * @param {string} filePath
  */
-function readFileSafe(filePath) {
+async function readFileSafe(filePath) {
   try {
-    return fs.readFileSync(filePath, "utf8").trim()
+    return (await fs.readFile(filePath, "utf8")).trim()
   } catch (_) {
     return null
   }
@@ -741,12 +709,25 @@ function readFileSafe(filePath) {
  * Recursively lists files under a directory. Returns [] on error.
  * @param {string} dirPath
  */
-function readdirRecursiveSafe(dirPath) {
+async function readdirRecursiveSafe(dirPath) {
   try {
-    const entries = fs.readdirSync(dirPath, { recursive: true })
+    const entries = await fs.readdir(dirPath, { recursive: true })
     return Array.isArray(entries) ? entries : []
   } catch (_) {
     return []
+  }
+}
+
+/**
+ * @param {string} filePath
+ * @returns {Promise<boolean>}
+ */
+async function pathExists(filePath) {
+  try {
+    await fs.access(filePath)
+    return true
+  } catch {
+    return false
   }
 }
 

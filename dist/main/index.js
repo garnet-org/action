@@ -4,7 +4,7 @@
 /***/ 770:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
-/* unused reexport */ __nccwpck_require__(218);
+module.exports = __nccwpck_require__(218);
 
 
 /***/ }),
@@ -25,10 +25,10 @@ var assert = __nccwpck_require__(2613);
 var util = __nccwpck_require__(9023);
 
 
-__webpack_unused_export__ = httpOverHttp;
-__webpack_unused_export__ = httpsOverHttp;
-__webpack_unused_export__ = httpOverHttps;
-__webpack_unused_export__ = httpsOverHttps;
+exports.httpOverHttp = httpOverHttp;
+exports.httpsOverHttp = httpsOverHttp;
+exports.httpOverHttps = httpOverHttps;
+exports.httpsOverHttps = httpsOverHttps;
 
 
 function httpOverHttp(options) {
@@ -319,7 +319,7 @@ __webpack_unused_export__ = Client
 __webpack_unused_export__ = Pool
 __webpack_unused_export__ = BalancedPool
 __webpack_unused_export__ = Agent
-__webpack_unused_export__ = ProxyAgent
+module.exports.kT = ProxyAgent
 __webpack_unused_export__ = EnvHttpProxyAgent
 __webpack_unused_export__ = RetryAgent
 __webpack_unused_export__ = RetryHandler
@@ -28272,8 +28272,10 @@ function file_command_prepareKeyValueMessage(key, value) {
 const external_path_namespaceObject = require("path");
 // EXTERNAL MODULE: external "http"
 var external_http_ = __nccwpck_require__(8611);
+var external_http_namespaceObject = /*#__PURE__*/__nccwpck_require__.t(external_http_, 2);
 // EXTERNAL MODULE: external "https"
 var external_https_ = __nccwpck_require__(5692);
+var external_https_namespaceObject = /*#__PURE__*/__nccwpck_require__.t(external_https_, 2);
 ;// CONCATENATED MODULE: ./node_modules/@actions/http-client/lib/proxy.js
 function getProxyUrl(reqUrl) {
     const usingSsl = reqUrl.protocol === 'https:';
@@ -28366,7 +28368,7 @@ class DecodedURL extends URL {
 }
 //# sourceMappingURL=proxy.js.map
 // EXTERNAL MODULE: ./node_modules/tunnel/index.js
-var node_modules_tunnel = __nccwpck_require__(770);
+var tunnel = __nccwpck_require__(770);
 // EXTERNAL MODULE: ./node_modules/undici/index.js
 var undici = __nccwpck_require__(6752);
 ;// CONCATENATED MODULE: ./node_modules/@actions/http-client/lib/index.js
@@ -28444,7 +28446,7 @@ const HttpResponseRetryCodes = [
     HttpCodes.ServiceUnavailable,
     HttpCodes.GatewayTimeout
 ];
-const RetryableHttpVerbs = (/* unused pure expression or super */ null && (['OPTIONS', 'GET', 'DELETE', 'HEAD']));
+const RetryableHttpVerbs = ['OPTIONS', 'GET', 'DELETE', 'HEAD'];
 const ExponentialBackoffCeiling = 10;
 const ExponentialBackoffTimeSlice = 5;
 class HttpClientError extends Error {
@@ -28793,7 +28795,7 @@ class lib_HttpClient {
     }
     getAgentDispatcher(serverUrl) {
         const parsedUrl = new URL(serverUrl);
-        const proxyUrl = pm.getProxyUrl(parsedUrl);
+        const proxyUrl = getProxyUrl(parsedUrl);
         const useProxy = proxyUrl && proxyUrl.hostname;
         if (!useProxy) {
             return;
@@ -28804,7 +28806,7 @@ class lib_HttpClient {
         const info = {};
         info.parsedUrl = requestUrl;
         const usingSsl = info.parsedUrl.protocol === 'https:';
-        info.httpModule = usingSsl ? https : http;
+        info.httpModule = usingSsl ? external_https_namespaceObject : external_http_namespaceObject;
         const defaultPort = usingSsl ? 443 : 80;
         info.options = {};
         info.options.host = info.parsedUrl.hostname;
@@ -28903,7 +28905,7 @@ class lib_HttpClient {
     }
     _getAgent(parsedUrl) {
         let agent;
-        const proxyUrl = pm.getProxyUrl(parsedUrl);
+        const proxyUrl = getProxyUrl(parsedUrl);
         const useProxy = proxyUrl && proxyUrl.hostname;
         if (this._keepAlive && useProxy) {
             agent = this._proxyAgent;
@@ -28918,7 +28920,7 @@ class lib_HttpClient {
         const usingSsl = parsedUrl.protocol === 'https:';
         let maxSockets = 100;
         if (this.requestOptions) {
-            maxSockets = this.requestOptions.maxSockets || http.globalAgent.maxSockets;
+            maxSockets = this.requestOptions.maxSockets || external_http_.globalAgent.maxSockets;
         }
         // This is `useProxy` again, but we need to check `proxyURl` directly for TypeScripts's flow analysis.
         if (proxyUrl && proxyUrl.hostname) {
@@ -28943,7 +28945,7 @@ class lib_HttpClient {
         // if tunneling agent isn't assigned create a new agent
         if (!agent) {
             const options = { keepAlive: this._keepAlive, maxSockets };
-            agent = usingSsl ? new https.Agent(options) : new http.Agent(options);
+            agent = usingSsl ? new external_https_.Agent(options) : new external_http_.Agent(options);
             this._agent = agent;
         }
         if (usingSsl && this._ignoreSslError) {
@@ -28966,7 +28968,7 @@ class lib_HttpClient {
             return proxyAgent;
         }
         const usingSsl = parsedUrl.protocol === 'https:';
-        proxyAgent = new ProxyAgent(Object.assign({ uri: proxyUrl.href, pipelining: !this._keepAlive ? 0 : 1 }, ((proxyUrl.username || proxyUrl.password) && {
+        proxyAgent = new undici/* ProxyAgent */.kT(Object.assign({ uri: proxyUrl.href, pipelining: !this._keepAlive ? 0 : 1 }, ((proxyUrl.username || proxyUrl.password) && {
             token: `Basic ${Buffer.from(`${proxyUrl.username}:${proxyUrl.password}`).toString('base64')}`
         })));
         this._proxyAgentDispatcher = proxyAgent;
@@ -31046,14 +31048,14 @@ function getIDToken(aud) {
 //# sourceMappingURL=core.js.map
 ;// CONCATENATED MODULE: external "node:fs"
 const external_node_fs_namespaceObject = require("node:fs");
+;// CONCATENATED MODULE: external "node:fs/promises"
+const promises_namespaceObject = require("node:fs/promises");
 ;// CONCATENATED MODULE: external "node:os"
 const external_node_os_namespaceObject = require("node:os");
 ;// CONCATENATED MODULE: external "node:path"
 const external_node_path_namespaceObject = require("node:path");
-;// CONCATENATED MODULE: external "node:https"
-const external_node_https_namespaceObject = require("node:https");
-// EXTERNAL MODULE: external "node:http"
-var external_node_http_ = __nccwpck_require__(7067);
+;// CONCATENATED MODULE: external "node:stream/promises"
+const external_node_stream_promises_namespaceObject = require("node:stream/promises");
 // EXTERNAL MODULE: external "node:events"
 var external_node_events_ = __nccwpck_require__(8474);
 // EXTERNAL MODULE: external "node:stream"
@@ -31069,8 +31071,6 @@ var external_zlib_namespaceObject_0 = /*#__PURE__*/__nccwpck_require__.t(externa
 var external_node_assert_ = __nccwpck_require__(4589);
 // EXTERNAL MODULE: external "node:crypto"
 var external_node_crypto_ = __nccwpck_require__(7598);
-;// CONCATENATED MODULE: external "node:fs/promises"
-const promises_namespaceObject = require("node:fs/promises");
 ;// CONCATENATED MODULE: ./node_modules/tar/dist/esm/index.min.js
 var Dr=Object.defineProperty;var Ar=(s,t)=>{for(var e in t)Dr(s,e,{get:t[e],enumerable:!0})};var Ts=typeof process=="object"&&process?process:{stdout:null,stderr:null},Cr=s=>!!s&&typeof s=="object"&&(s instanceof A||s instanceof external_node_stream_||Fr(s)||kr(s)),Fr=s=>!!s&&typeof s=="object"&&s instanceof external_node_events_.EventEmitter&&typeof s.pipe=="function"&&s.pipe!==external_node_stream_.Writable.prototype.pipe,kr=s=>!!s&&typeof s=="object"&&s instanceof external_node_events_.EventEmitter&&typeof s.write=="function"&&typeof s.end=="function",q=Symbol("EOF"),j=Symbol("maybeEmitEnd"),rt=Symbol("emittedEnd"),xe=Symbol("emittingEnd"),jt=Symbol("emittedError"),Le=Symbol("closed"),xs=Symbol("read"),Ne=Symbol("flush"),Ls=Symbol("flushChunk"),z=Symbol("encoding"),Mt=Symbol("decoder"),b=Symbol("flowing"),Qt=Symbol("paused"),Bt=Symbol("resume"),g=Symbol("buffer"),D=Symbol("pipes"),_=Symbol("bufferLength"),Si=Symbol("bufferPush"),De=Symbol("bufferShift"),L=Symbol("objectMode"),w=Symbol("destroyed"),yi=Symbol("error"),Ri=Symbol("emitData"),Ns=Symbol("emitEnd"),bi=Symbol("emitEnd2"),Z=Symbol("async"),gi=Symbol("abort"),Ae=Symbol("aborted"),Jt=Symbol("signal"),yt=Symbol("dataListeners"),C=Symbol("discarded"),te=s=>Promise.resolve().then(s),vr=s=>s(),Mr=s=>s==="end"||s==="finish"||s==="prefinish",Br=s=>s instanceof ArrayBuffer||!!s&&typeof s=="object"&&s.constructor&&s.constructor.name==="ArrayBuffer"&&s.byteLength>=0,Pr=s=>!Buffer.isBuffer(s)&&ArrayBuffer.isView(s),Ie=class{src;dest;opts;ondrain;constructor(t,e,i){this.src=t,this.dest=e,this.opts=i,this.ondrain=()=>t[Bt](),this.dest.on("drain",this.ondrain)}unpipe(){this.dest.removeListener("drain",this.ondrain)}proxyErrors(t){}end(){this.unpipe(),this.opts.end&&this.dest.end()}},_i=class extends Ie{unpipe(){this.src.removeListener("error",this.proxyErrors),super.unpipe()}constructor(t,e,i){super(t,e,i),this.proxyErrors=r=>this.dest.emit("error",r),t.on("error",this.proxyErrors)}},zr=s=>!!s.objectMode,Ur=s=>!s.objectMode&&!!s.encoding&&s.encoding!=="buffer",A=class extends external_node_events_.EventEmitter{[b]=!1;[Qt]=!1;[D]=[];[g]=[];[L];[z];[Z];[Mt];[q]=!1;[rt]=!1;[xe]=!1;[Le]=!1;[jt]=null;[_]=0;[w]=!1;[Jt];[Ae]=!1;[yt]=0;[C]=!1;writable=!0;readable=!0;constructor(...t){let e=t[0]||{};if(super(),e.objectMode&&typeof e.encoding=="string")throw new TypeError("Encoding and objectMode may not be used together");zr(e)?(this[L]=!0,this[z]=null):Ur(e)?(this[z]=e.encoding,this[L]=!1):(this[L]=!1,this[z]=null),this[Z]=!!e.async,this[Mt]=this[z]?new external_node_string_decoder_namespaceObject.StringDecoder(this[z]):null,e&&e.debugExposeBuffer===!0&&Object.defineProperty(this,"buffer",{get:()=>this[g]}),e&&e.debugExposePipes===!0&&Object.defineProperty(this,"pipes",{get:()=>this[D]});let{signal:i}=e;i&&(this[Jt]=i,i.aborted?this[gi]():i.addEventListener("abort",()=>this[gi]()))}get bufferLength(){return this[_]}get encoding(){return this[z]}set encoding(t){throw new Error("Encoding must be set at instantiation time")}setEncoding(t){throw new Error("Encoding must be set at instantiation time")}get objectMode(){return this[L]}set objectMode(t){throw new Error("objectMode must be set at instantiation time")}get async(){return this[Z]}set async(t){this[Z]=this[Z]||!!t}[gi](){this[Ae]=!0,this.emit("abort",this[Jt]?.reason),this.destroy(this[Jt]?.reason)}get aborted(){return this[Ae]}set aborted(t){}write(t,e,i){if(this[Ae])return!1;if(this[q])throw new Error("write after end");if(this[w])return this.emit("error",Object.assign(new Error("Cannot call write after a stream was destroyed"),{code:"ERR_STREAM_DESTROYED"})),!0;typeof e=="function"&&(i=e,e="utf8"),e||(e="utf8");let r=this[Z]?te:vr;if(!this[L]&&!Buffer.isBuffer(t)){if(Pr(t))t=Buffer.from(t.buffer,t.byteOffset,t.byteLength);else if(Br(t))t=Buffer.from(t);else if(typeof t!="string")throw new Error("Non-contiguous data written to non-objectMode stream")}return this[L]?(this[b]&&this[_]!==0&&this[Ne](!0),this[b]?this.emit("data",t):this[Si](t),this[_]!==0&&this.emit("readable"),i&&r(i),this[b]):t.length?(typeof t=="string"&&!(e===this[z]&&!this[Mt]?.lastNeed)&&(t=Buffer.from(t,e)),Buffer.isBuffer(t)&&this[z]&&(t=this[Mt].write(t)),this[b]&&this[_]!==0&&this[Ne](!0),this[b]?this.emit("data",t):this[Si](t),this[_]!==0&&this.emit("readable"),i&&r(i),this[b]):(this[_]!==0&&this.emit("readable"),i&&r(i),this[b])}read(t){if(this[w])return null;if(this[C]=!1,this[_]===0||t===0||t&&t>this[_])return this[j](),null;this[L]&&(t=null),this[g].length>1&&!this[L]&&(this[g]=[this[z]?this[g].join(""):Buffer.concat(this[g],this[_])]);let e=this[xs](t||null,this[g][0]);return this[j](),e}[xs](t,e){if(this[L])this[De]();else{let i=e;t===i.length||t===null?this[De]():typeof i=="string"?(this[g][0]=i.slice(t),e=i.slice(0,t),this[_]-=t):(this[g][0]=i.subarray(t),e=i.subarray(0,t),this[_]-=t)}return this.emit("data",e),!this[g].length&&!this[q]&&this.emit("drain"),e}end(t,e,i){return typeof t=="function"&&(i=t,t=void 0),typeof e=="function"&&(i=e,e="utf8"),t!==void 0&&this.write(t,e),i&&this.once("end",i),this[q]=!0,this.writable=!1,(this[b]||!this[Qt])&&this[j](),this}[Bt](){this[w]||(!this[yt]&&!this[D].length&&(this[C]=!0),this[Qt]=!1,this[b]=!0,this.emit("resume"),this[g].length?this[Ne]():this[q]?this[j]():this.emit("drain"))}resume(){return this[Bt]()}pause(){this[b]=!1,this[Qt]=!0,this[C]=!1}get destroyed(){return this[w]}get flowing(){return this[b]}get paused(){return this[Qt]}[Si](t){this[L]?this[_]+=1:this[_]+=t.length,this[g].push(t)}[De](){return this[L]?this[_]-=1:this[_]-=this[g][0].length,this[g].shift()}[Ne](t=!1){do;while(this[Ls](this[De]())&&this[g].length);!t&&!this[g].length&&!this[q]&&this.emit("drain")}[Ls](t){return this.emit("data",t),this[b]}pipe(t,e){if(this[w])return t;this[C]=!1;let i=this[rt];return e=e||{},t===Ts.stdout||t===Ts.stderr?e.end=!1:e.end=e.end!==!1,e.proxyErrors=!!e.proxyErrors,i?e.end&&t.end():(this[D].push(e.proxyErrors?new _i(this,t,e):new Ie(this,t,e)),this[Z]?te(()=>this[Bt]()):this[Bt]()),t}unpipe(t){let e=this[D].find(i=>i.dest===t);e&&(this[D].length===1?(this[b]&&this[yt]===0&&(this[b]=!1),this[D]=[]):this[D].splice(this[D].indexOf(e),1),e.unpipe())}addListener(t,e){return this.on(t,e)}on(t,e){let i=super.on(t,e);if(t==="data")this[C]=!1,this[yt]++,!this[D].length&&!this[b]&&this[Bt]();else if(t==="readable"&&this[_]!==0)super.emit("readable");else if(Mr(t)&&this[rt])super.emit(t),this.removeAllListeners(t);else if(t==="error"&&this[jt]){let r=e;this[Z]?te(()=>r.call(this,this[jt])):r.call(this,this[jt])}return i}removeListener(t,e){return this.off(t,e)}off(t,e){let i=super.off(t,e);return t==="data"&&(this[yt]=this.listeners("data").length,this[yt]===0&&!this[C]&&!this[D].length&&(this[b]=!1)),i}removeAllListeners(t){let e=super.removeAllListeners(t);return(t==="data"||t===void 0)&&(this[yt]=0,!this[C]&&!this[D].length&&(this[b]=!1)),e}get emittedEnd(){return this[rt]}[j](){!this[xe]&&!this[rt]&&!this[w]&&this[g].length===0&&this[q]&&(this[xe]=!0,this.emit("end"),this.emit("prefinish"),this.emit("finish"),this[Le]&&this.emit("close"),this[xe]=!1)}emit(t,...e){let i=e[0];if(t!=="error"&&t!=="close"&&t!==w&&this[w])return!1;if(t==="data")return!this[L]&&!i?!1:this[Z]?(te(()=>this[Ri](i)),!0):this[Ri](i);if(t==="end")return this[Ns]();if(t==="close"){if(this[Le]=!0,!this[rt]&&!this[w])return!1;let n=super.emit("close");return this.removeAllListeners("close"),n}else if(t==="error"){this[jt]=i,super.emit(yi,i);let n=!this[Jt]||this.listeners("error").length?super.emit("error",i):!1;return this[j](),n}else if(t==="resume"){let n=super.emit("resume");return this[j](),n}else if(t==="finish"||t==="prefinish"){let n=super.emit(t);return this.removeAllListeners(t),n}let r=super.emit(t,...e);return this[j](),r}[Ri](t){for(let i of this[D])i.dest.write(t)===!1&&this.pause();let e=this[C]?!1:super.emit("data",t);return this[j](),e}[Ns](){return this[rt]?!1:(this[rt]=!0,this.readable=!1,this[Z]?(te(()=>this[bi]()),!0):this[bi]())}[bi](){if(this[Mt]){let e=this[Mt].end();if(e){for(let i of this[D])i.dest.write(e);this[C]||super.emit("data",e)}}for(let e of this[D])e.end();let t=super.emit("end");return this.removeAllListeners("end"),t}async collect(){let t=Object.assign([],{dataLength:0});this[L]||(t.dataLength=0);let e=this.promise();return this.on("data",i=>{t.push(i),this[L]||(t.dataLength+=i.length)}),await e,t}async concat(){if(this[L])throw new Error("cannot concat in objectMode");let t=await this.collect();return this[z]?t.join(""):Buffer.concat(t,t.dataLength)}async promise(){return new Promise((t,e)=>{this.on(w,()=>e(new Error("stream destroyed"))),this.on("error",i=>e(i)),this.on("end",()=>t())})}[Symbol.asyncIterator](){this[C]=!1;let t=!1,e=async()=>(this.pause(),t=!0,{value:void 0,done:!0});return{next:()=>{if(t)return e();let r=this.read();if(r!==null)return Promise.resolve({done:!1,value:r});if(this[q])return e();let n,o,h=d=>{this.off("data",a),this.off("end",l),this.off(w,c),e(),o(d)},a=d=>{this.off("error",h),this.off("end",l),this.off(w,c),this.pause(),n({value:d,done:!!this[q]})},l=()=>{this.off("error",h),this.off("data",a),this.off(w,c),e(),n({done:!0,value:void 0})},c=()=>h(new Error("stream destroyed"));return new Promise((d,S)=>{o=S,n=d,this.once(w,c),this.once("error",h),this.once("end",l),this.once("data",a)})},throw:e,return:e,[Symbol.asyncIterator](){return this},[Symbol.asyncDispose]:async()=>{}}}[Symbol.iterator](){this[C]=!1;let t=!1,e=()=>(this.pause(),this.off(yi,e),this.off(w,e),this.off("end",e),t=!0,{done:!0,value:void 0}),i=()=>{if(t)return e();let r=this.read();return r===null?e():{done:!1,value:r}};return this.once("end",e),this.once(yi,e),this.once(w,e),{next:i,throw:e,return:e,[Symbol.iterator](){return this},[Symbol.dispose]:()=>{}}}destroy(t){if(this[w])return t?this.emit("error",t):this.emit(w),this;this[w]=!0,this[C]=!0,this[g].length=0,this[_]=0;let e=this;return typeof e.close=="function"&&!this[Le]&&e.close(),t?this.emit("error",t):this.emit(w),this}static get isStream(){return Cr}};var Wr=external_fs_namespaceObject.writev,ot=Symbol("_autoClose"),H=Symbol("_close"),ee=Symbol("_ended"),m=Symbol("_fd"),Ti=Symbol("_finished"),J=Symbol("_flags"),xi=Symbol("_flush"),Ai=Symbol("_handleChunk"),Ii=Symbol("_makeBuf"),se=Symbol("_mode"),Ce=Symbol("_needDrain"),Ut=Symbol("_onerror"),Ht=Symbol("_onopen"),Li=Symbol("_onread"),Pt=Symbol("_onwrite"),ht=Symbol("_open"),U=Symbol("_path"),nt=Symbol("_pos"),Y=Symbol("_queue"),zt=Symbol("_read"),Ni=Symbol("_readSize"),Q=Symbol("_reading"),ie=Symbol("_remain"),Di=Symbol("_size"),Fe=Symbol("_write"),Rt=Symbol("_writing"),ke=Symbol("_defaultFlag"),bt=Symbol("_errored"),gt=class extends A{[bt]=!1;[m];[U];[Ni];[Q]=!1;[Di];[ie];[ot];constructor(t,e){if(e=e||{},super(e),this.readable=!0,this.writable=!1,typeof t!="string")throw new TypeError("path must be a string");this[bt]=!1,this[m]=typeof e.fd=="number"?e.fd:void 0,this[U]=t,this[Ni]=e.readSize||16*1024*1024,this[Q]=!1,this[Di]=typeof e.size=="number"?e.size:1/0,this[ie]=this[Di],this[ot]=typeof e.autoClose=="boolean"?e.autoClose:!0,typeof this[m]=="number"?this[zt]():this[ht]()}get fd(){return this[m]}get path(){return this[U]}write(){throw new TypeError("this is a readable stream")}end(){throw new TypeError("this is a readable stream")}[ht](){external_fs_namespaceObject.open(this[U],"r",(t,e)=>this[Ht](t,e))}[Ht](t,e){t?this[Ut](t):(this[m]=e,this.emit("open",e),this[zt]())}[Ii](){return Buffer.allocUnsafe(Math.min(this[Ni],this[ie]))}[zt](){if(!this[Q]){this[Q]=!0;let t=this[Ii]();if(t.length===0)return process.nextTick(()=>this[Li](null,0,t));external_fs_namespaceObject.read(this[m],t,0,t.length,null,(e,i,r)=>this[Li](e,i,r))}}[Li](t,e,i){this[Q]=!1,t?this[Ut](t):this[Ai](e,i)&&this[zt]()}[H](){if(this[ot]&&typeof this[m]=="number"){let t=this[m];this[m]=void 0,external_fs_namespaceObject.close(t,e=>e?this.emit("error",e):this.emit("close"))}}[Ut](t){this[Q]=!0,this[H](),this.emit("error",t)}[Ai](t,e){let i=!1;return this[ie]-=t,t>0&&(i=super.write(t<e.length?e.subarray(0,t):e)),(t===0||this[ie]<=0)&&(i=!1,this[H](),super.end()),i}emit(t,...e){switch(t){case"prefinish":case"finish":return!1;case"drain":return typeof this[m]=="number"&&this[zt](),!1;case"error":return this[bt]?!1:(this[bt]=!0,super.emit(t,...e));default:return super.emit(t,...e)}}},ve=class extends gt{[ht](){let t=!0;try{this[Ht](null,external_fs_namespaceObject.openSync(this[U],"r")),t=!1}finally{t&&this[H]()}}[zt](){let t=!0;try{if(!this[Q]){this[Q]=!0;do{let e=this[Ii](),i=e.length===0?0:external_fs_namespaceObject.readSync(this[m],e,0,e.length,null);if(!this[Ai](i,e))break}while(!0);this[Q]=!1}t=!1}finally{t&&this[H]()}}[H](){if(this[ot]&&typeof this[m]=="number"){let t=this[m];this[m]=void 0,external_fs_namespaceObject.closeSync(t),this.emit("close")}}},tt=class extends external_events_{readable=!1;writable=!0;[bt]=!1;[Rt]=!1;[ee]=!1;[Y]=[];[Ce]=!1;[U];[se];[ot];[m];[ke];[J];[Ti]=!1;[nt];constructor(t,e){e=e||{},super(e),this[U]=t,this[m]=typeof e.fd=="number"?e.fd:void 0,this[se]=e.mode===void 0?438:e.mode,this[nt]=typeof e.start=="number"?e.start:void 0,this[ot]=typeof e.autoClose=="boolean"?e.autoClose:!0;let i=this[nt]!==void 0?"r+":"w";this[ke]=e.flags===void 0,this[J]=e.flags===void 0?i:e.flags,this[m]===void 0&&this[ht]()}emit(t,...e){if(t==="error"){if(this[bt])return!1;this[bt]=!0}return super.emit(t,...e)}get fd(){return this[m]}get path(){return this[U]}[Ut](t){this[H](),this[Rt]=!0,this.emit("error",t)}[ht](){external_fs_namespaceObject.open(this[U],this[J],this[se],(t,e)=>this[Ht](t,e))}[Ht](t,e){this[ke]&&this[J]==="r+"&&t&&t.code==="ENOENT"?(this[J]="w",this[ht]()):t?this[Ut](t):(this[m]=e,this.emit("open",e),this[Rt]||this[xi]())}end(t,e){return t&&this.write(t,e),this[ee]=!0,!this[Rt]&&!this[Y].length&&typeof this[m]=="number"&&this[Pt](null,0),this}write(t,e){return typeof t=="string"&&(t=Buffer.from(t,e)),this[ee]?(this.emit("error",new Error("write() after end()")),!1):this[m]===void 0||this[Rt]||this[Y].length?(this[Y].push(t),this[Ce]=!0,!1):(this[Rt]=!0,this[Fe](t),!0)}[Fe](t){external_fs_namespaceObject.write(this[m],t,0,t.length,this[nt],(e,i)=>this[Pt](e,i))}[Pt](t,e){t?this[Ut](t):(this[nt]!==void 0&&typeof e=="number"&&(this[nt]+=e),this[Y].length?this[xi]():(this[Rt]=!1,this[ee]&&!this[Ti]?(this[Ti]=!0,this[H](),this.emit("finish")):this[Ce]&&(this[Ce]=!1,this.emit("drain"))))}[xi](){if(this[Y].length===0)this[ee]&&this[Pt](null,0);else if(this[Y].length===1)this[Fe](this[Y].pop());else{let t=this[Y];this[Y]=[],Wr(this[m],t,this[nt],(e,i)=>this[Pt](e,i))}}[H](){if(this[ot]&&typeof this[m]=="number"){let t=this[m];this[m]=void 0,external_fs_namespaceObject.close(t,e=>e?this.emit("error",e):this.emit("close"))}}},Wt=class extends tt{[ht](){let t;if(this[ke]&&this[J]==="r+")try{t=external_fs_namespaceObject.openSync(this[U],this[J],this[se])}catch(e){if(e?.code==="ENOENT")return this[J]="w",this[ht]();throw e}else t=external_fs_namespaceObject.openSync(this[U],this[J],this[se]);this[Ht](null,t)}[H](){if(this[ot]&&typeof this[m]=="number"){let t=this[m];this[m]=void 0,external_fs_namespaceObject.closeSync(t),this.emit("close")}}[Fe](t){let e=!0;try{this[Pt](null,external_fs_namespaceObject.writeSync(this[m],t,0,t.length,this[nt])),e=!1}finally{if(e)try{this[H]()}catch{}}}};var Gr=new Map([["C","cwd"],["f","file"],["z","gzip"],["P","preservePaths"],["U","unlink"],["strip-components","strip"],["stripComponents","strip"],["keep-newer","newer"],["keepNewer","newer"],["keep-newer-files","newer"],["keepNewerFiles","newer"],["k","keep"],["keep-existing","keep"],["keepExisting","keep"],["m","noMtime"],["no-mtime","noMtime"],["p","preserveOwner"],["L","follow"],["h","follow"],["onentry","onReadEntry"]]),As=s=>!!s.sync&&!!s.file,Is=s=>!s.sync&&!!s.file,Cs=s=>!!s.sync&&!s.file,Fs=s=>!s.sync&&!s.file;var ks=s=>!!s.file;var Zr=s=>{let t=Gr.get(s);return t||s},re=(s={})=>{if(!s)return{};let t={};for(let[e,i]of Object.entries(s)){let r=Zr(e);t[r]=i}return t.chmod===void 0&&t.noChmod===!1&&(t.chmod=!0),delete t.noChmod,t};var K=(s,t,e,i,r)=>Object.assign((n=[],o,h)=>{Array.isArray(n)&&(o=n,n={}),typeof o=="function"&&(h=o,o=void 0),o?o=Array.from(o):o=[];let a=re(n);if(r?.(a,o),As(a)){if(typeof h=="function")throw new TypeError("callback not supported for sync tar functions");return s(a,o)}else if(Is(a)){let l=t(a,o),c=h||void 0;return c?l.then(()=>c(),c):l}else if(Cs(a)){if(typeof h=="function")throw new TypeError("callback not supported for sync tar functions");return e(a,o)}else if(Fs(a)){if(typeof h=="function")throw new TypeError("callback only supported with file option");return i(a,o)}else throw new Error("impossible options??")},{syncFile:s,asyncFile:t,syncNoFile:e,asyncNoFile:i,validate:r});var Kr=external_zlib_namespaceObject.constants||{ZLIB_VERNUM:4736},M=Object.freeze(Object.assign(Object.create(null),{Z_NO_FLUSH:0,Z_PARTIAL_FLUSH:1,Z_SYNC_FLUSH:2,Z_FULL_FLUSH:3,Z_FINISH:4,Z_BLOCK:5,Z_OK:0,Z_STREAM_END:1,Z_NEED_DICT:2,Z_ERRNO:-1,Z_STREAM_ERROR:-2,Z_DATA_ERROR:-3,Z_MEM_ERROR:-4,Z_BUF_ERROR:-5,Z_VERSION_ERROR:-6,Z_NO_COMPRESSION:0,Z_BEST_SPEED:1,Z_BEST_COMPRESSION:9,Z_DEFAULT_COMPRESSION:-1,Z_FILTERED:1,Z_HUFFMAN_ONLY:2,Z_RLE:3,Z_FIXED:4,Z_DEFAULT_STRATEGY:0,DEFLATE:1,INFLATE:2,GZIP:3,GUNZIP:4,DEFLATERAW:5,INFLATERAW:6,UNZIP:7,BROTLI_DECODE:8,BROTLI_ENCODE:9,Z_MIN_WINDOWBITS:8,Z_MAX_WINDOWBITS:15,Z_DEFAULT_WINDOWBITS:15,Z_MIN_CHUNK:64,Z_MAX_CHUNK:1/0,Z_DEFAULT_CHUNK:16384,Z_MIN_MEMLEVEL:1,Z_MAX_MEMLEVEL:9,Z_DEFAULT_MEMLEVEL:8,Z_MIN_LEVEL:-1,Z_MAX_LEVEL:9,Z_DEFAULT_LEVEL:-1,BROTLI_OPERATION_PROCESS:0,BROTLI_OPERATION_FLUSH:1,BROTLI_OPERATION_FINISH:2,BROTLI_OPERATION_EMIT_METADATA:3,BROTLI_MODE_GENERIC:0,BROTLI_MODE_TEXT:1,BROTLI_MODE_FONT:2,BROTLI_DEFAULT_MODE:0,BROTLI_MIN_QUALITY:0,BROTLI_MAX_QUALITY:11,BROTLI_DEFAULT_QUALITY:11,BROTLI_MIN_WINDOW_BITS:10,BROTLI_MAX_WINDOW_BITS:24,BROTLI_LARGE_MAX_WINDOW_BITS:30,BROTLI_DEFAULT_WINDOW:22,BROTLI_MIN_INPUT_BLOCK_BITS:16,BROTLI_MAX_INPUT_BLOCK_BITS:24,BROTLI_PARAM_MODE:0,BROTLI_PARAM_QUALITY:1,BROTLI_PARAM_LGWIN:2,BROTLI_PARAM_LGBLOCK:3,BROTLI_PARAM_DISABLE_LITERAL_CONTEXT_MODELING:4,BROTLI_PARAM_SIZE_HINT:5,BROTLI_PARAM_LARGE_WINDOW:6,BROTLI_PARAM_NPOSTFIX:7,BROTLI_PARAM_NDIRECT:8,BROTLI_DECODER_RESULT_ERROR:0,BROTLI_DECODER_RESULT_SUCCESS:1,BROTLI_DECODER_RESULT_NEEDS_MORE_INPUT:2,BROTLI_DECODER_RESULT_NEEDS_MORE_OUTPUT:3,BROTLI_DECODER_PARAM_DISABLE_RING_BUFFER_REALLOCATION:0,BROTLI_DECODER_PARAM_LARGE_WINDOW:1,BROTLI_DECODER_NO_ERROR:0,BROTLI_DECODER_SUCCESS:1,BROTLI_DECODER_NEEDS_MORE_INPUT:2,BROTLI_DECODER_NEEDS_MORE_OUTPUT:3,BROTLI_DECODER_ERROR_FORMAT_EXUBERANT_NIBBLE:-1,BROTLI_DECODER_ERROR_FORMAT_RESERVED:-2,BROTLI_DECODER_ERROR_FORMAT_EXUBERANT_META_NIBBLE:-3,BROTLI_DECODER_ERROR_FORMAT_SIMPLE_HUFFMAN_ALPHABET:-4,BROTLI_DECODER_ERROR_FORMAT_SIMPLE_HUFFMAN_SAME:-5,BROTLI_DECODER_ERROR_FORMAT_CL_SPACE:-6,BROTLI_DECODER_ERROR_FORMAT_HUFFMAN_SPACE:-7,BROTLI_DECODER_ERROR_FORMAT_CONTEXT_MAP_REPEAT:-8,BROTLI_DECODER_ERROR_FORMAT_BLOCK_LENGTH_1:-9,BROTLI_DECODER_ERROR_FORMAT_BLOCK_LENGTH_2:-10,BROTLI_DECODER_ERROR_FORMAT_TRANSFORM:-11,BROTLI_DECODER_ERROR_FORMAT_DICTIONARY:-12,BROTLI_DECODER_ERROR_FORMAT_WINDOW_BITS:-13,BROTLI_DECODER_ERROR_FORMAT_PADDING_1:-14,BROTLI_DECODER_ERROR_FORMAT_PADDING_2:-15,BROTLI_DECODER_ERROR_FORMAT_DISTANCE:-16,BROTLI_DECODER_ERROR_DICTIONARY_NOT_SET:-19,BROTLI_DECODER_ERROR_INVALID_ARGUMENTS:-20,BROTLI_DECODER_ERROR_ALLOC_CONTEXT_MODES:-21,BROTLI_DECODER_ERROR_ALLOC_TREE_GROUPS:-22,BROTLI_DECODER_ERROR_ALLOC_CONTEXT_MAP:-25,BROTLI_DECODER_ERROR_ALLOC_RING_BUFFER_1:-26,BROTLI_DECODER_ERROR_ALLOC_RING_BUFFER_2:-27,BROTLI_DECODER_ERROR_ALLOC_BLOCK_TYPE_TREES:-30,BROTLI_DECODER_ERROR_UNREACHABLE:-31},Kr));var Vr=external_buffer_namespaceObject.Buffer.concat,Ms=Object.getOwnPropertyDescriptor(external_buffer_namespaceObject.Buffer,"concat"),$r=s=>s,Fi=Ms?.writable===!0||Ms?.set!==void 0?s=>{external_buffer_namespaceObject.Buffer.concat=s?$r:Vr}:s=>{},Ot=Symbol("_superWrite"),Gt=class extends Error{code;errno;constructor(t,e){super("zlib: "+t.message,{cause:t}),this.code=t.code,this.errno=t.errno,this.code||(this.code="ZLIB_ERROR"),this.message="zlib: "+t.message,Error.captureStackTrace(this,e??this.constructor)}get name(){return"ZlibError"}},ki=Symbol("flushFlag"),ne=class extends A{#t=!1;#i=!1;#s;#n;#r;#e;#o;get sawError(){return this.#t}get handle(){return this.#e}get flushFlag(){return this.#s}constructor(t,e){if(!t||typeof t!="object")throw new TypeError("invalid options for ZlibBase constructor");if(super(t),this.#s=t.flush??0,this.#n=t.finishFlush??0,this.#r=t.fullFlushFlag??0,typeof external_zlib_namespaceObject_0[e]!="function")throw new TypeError("Compression method not supported: "+e);try{this.#e=new external_zlib_namespaceObject_0[e](t)}catch(i){throw new Gt(i,this.constructor)}this.#o=i=>{this.#t||(this.#t=!0,this.close(),this.emit("error",i))},this.#e?.on("error",i=>this.#o(new Gt(i))),this.once("end",()=>this.close)}close(){this.#e&&(this.#e.close(),this.#e=void 0,this.emit("close"))}reset(){if(!this.#t)return external_assert_(this.#e,"zlib binding closed"),this.#e.reset?.()}flush(t){this.ended||(typeof t!="number"&&(t=this.#r),this.write(Object.assign(external_buffer_namespaceObject.Buffer.alloc(0),{[ki]:t})))}end(t,e,i){return typeof t=="function"&&(i=t,e=void 0,t=void 0),typeof e=="function"&&(i=e,e=void 0),t&&(e?this.write(t,e):this.write(t)),this.flush(this.#n),this.#i=!0,super.end(i)}get ended(){return this.#i}[Ot](t){return super.write(t)}write(t,e,i){if(typeof e=="function"&&(i=e,e="utf8"),typeof t=="string"&&(t=external_buffer_namespaceObject.Buffer.from(t,e)),this.#t)return;external_assert_(this.#e,"zlib binding closed");let r=this.#e._handle,n=r.close;r.close=()=>{};let o=this.#e.close;this.#e.close=()=>{},Fi(!0);let h;try{let l=typeof t[ki]=="number"?t[ki]:this.#s;h=this.#e._processChunk(t,l),Fi(!1)}catch(l){Fi(!1),this.#o(new Gt(l,this.write))}finally{this.#e&&(this.#e._handle=r,r.close=n,this.#e.close=o,this.#e.removeAllListeners("error"))}this.#e&&this.#e.on("error",l=>this.#o(new Gt(l,this.write)));let a;if(h)if(Array.isArray(h)&&h.length>0){let l=h[0];a=this[Ot](external_buffer_namespaceObject.Buffer.from(l));for(let c=1;c<h.length;c++)a=this[Ot](h[c])}else a=this[Ot](external_buffer_namespaceObject.Buffer.from(h));return i&&i(),a}},Me=class extends ne{#t;#i;constructor(t,e){t=t||{},t.flush=t.flush||M.Z_NO_FLUSH,t.finishFlush=t.finishFlush||M.Z_FINISH,t.fullFlushFlag=M.Z_FULL_FLUSH,super(t,e),this.#t=t.level,this.#i=t.strategy}params(t,e){if(!this.sawError){if(!this.handle)throw new Error("cannot switch params when binding is closed");if(!this.handle.params)throw new Error("not supported in this implementation");if(this.#t!==t||this.#i!==e){this.flush(M.Z_SYNC_FLUSH),external_assert_(this.handle,"zlib binding closed");let i=this.handle.flush;this.handle.flush=(r,n)=>{typeof r=="function"&&(n=r,r=this.flushFlag),this.flush(r),n?.()};try{this.handle.params(t,e)}finally{this.handle.flush=i}this.handle&&(this.#t=t,this.#i=e)}}}};var Be=class extends Me{#t;constructor(t){super(t,"Gzip"),this.#t=t&&!!t.portable}[Ot](t){return this.#t?(this.#t=!1,t[9]=255,super[Ot](t)):super[Ot](t)}};var Pe=class extends Me{constructor(t){super(t,"Unzip")}},ze=class extends ne{constructor(t,e){t=t||{},t.flush=t.flush||M.BROTLI_OPERATION_PROCESS,t.finishFlush=t.finishFlush||M.BROTLI_OPERATION_FINISH,t.fullFlushFlag=M.BROTLI_OPERATION_FLUSH,super(t,e)}},Ue=class extends ze{constructor(t){super(t,"BrotliCompress")}},He=class extends ze{constructor(t){super(t,"BrotliDecompress")}},We=class extends ne{constructor(t,e){t=t||{},t.flush=t.flush||M.ZSTD_e_continue,t.finishFlush=t.finishFlush||M.ZSTD_e_end,t.fullFlushFlag=M.ZSTD_e_flush,super(t,e)}},Ge=class extends We{constructor(t){super(t,"ZstdCompress")}},Ze=class extends We{constructor(t){super(t,"ZstdDecompress")}};var Bs=(s,t)=>{if(Number.isSafeInteger(s))s<0?jr(s,t):qr(s,t);else throw Error("cannot encode number outside of javascript safe integer range");return t},qr=(s,t)=>{t[0]=128;for(var e=t.length;e>1;e--)t[e-1]=s&255,s=Math.floor(s/256)},jr=(s,t)=>{t[0]=255;var e=!1;s=s*-1;for(var i=t.length;i>1;i--){var r=s&255;s=Math.floor(s/256),e?t[i-1]=zs(r):r===0?t[i-1]=0:(e=!0,t[i-1]=Us(r))}},Ps=s=>{let t=s[0],e=t===128?Jr(s.subarray(1,s.length)):t===255?Qr(s):null;if(e===null)throw Error("invalid base256 encoding");if(!Number.isSafeInteger(e))throw Error("parsed number outside of javascript safe integer range");return e},Qr=s=>{for(var t=s.length,e=0,i=!1,r=t-1;r>-1;r--){var n=Number(s[r]),o;i?o=zs(n):n===0?o=n:(i=!0,o=Us(n)),o!==0&&(e-=o*Math.pow(256,t-r-1))}return e},Jr=s=>{for(var t=s.length,e=0,i=t-1;i>-1;i--){var r=Number(s[i]);r!==0&&(e+=r*Math.pow(256,t-i-1))}return e},zs=s=>(255^s)&255,Us=s=>(255^s)+1&255;var Mi={};Ar(Mi,{code:()=>Ye,isCode:()=>oe,isName:()=>en,name:()=>he});var oe=s=>he.has(s),en=s=>Ye.has(s),he=new Map([["0","File"],["","OldFile"],["1","Link"],["2","SymbolicLink"],["3","CharacterDevice"],["4","BlockDevice"],["5","Directory"],["6","FIFO"],["7","ContiguousFile"],["g","GlobalExtendedHeader"],["x","ExtendedHeader"],["A","SolarisACL"],["D","GNUDumpDir"],["I","Inode"],["K","NextFileHasLongLinkpath"],["L","NextFileHasLongPath"],["M","ContinuationFile"],["N","OldGnuLongPath"],["S","SparseFile"],["V","TapeVolumeHeader"],["X","OldExtendedHeader"]]),Ye=new Map(Array.from(he).map(s=>[s[1],s[0]]));var F=class{cksumValid=!1;needPax=!1;nullBlock=!1;block;path;mode;uid;gid;size;cksum;#t="Unsupported";linkpath;uname;gname;devmaj=0;devmin=0;atime;ctime;mtime;charset;comment;constructor(t,e=0,i,r){Buffer.isBuffer(t)?this.decode(t,e||0,i,r):t&&this.#i(t)}decode(t,e,i,r){if(e||(e=0),!t||!(t.length>=e+512))throw new Error("need 512 bytes for header");this.path=i?.path??Tt(t,e,100),this.mode=i?.mode??r?.mode??at(t,e+100,8),this.uid=i?.uid??r?.uid??at(t,e+108,8),this.gid=i?.gid??r?.gid??at(t,e+116,8),this.size=i?.size??r?.size??at(t,e+124,12),this.mtime=i?.mtime??r?.mtime??Bi(t,e+136,12),this.cksum=at(t,e+148,12),r&&this.#i(r,!0),i&&this.#i(i);let n=Tt(t,e+156,1);if(oe(n)&&(this.#t=n||"0"),this.#t==="0"&&this.path.slice(-1)==="/"&&(this.#t="5"),this.#t==="5"&&(this.size=0),this.linkpath=Tt(t,e+157,100),t.subarray(e+257,e+265).toString()==="ustar\x0000")if(this.uname=i?.uname??r?.uname??Tt(t,e+265,32),this.gname=i?.gname??r?.gname??Tt(t,e+297,32),this.devmaj=i?.devmaj??r?.devmaj??at(t,e+329,8)??0,this.devmin=i?.devmin??r?.devmin??at(t,e+337,8)??0,t[e+475]!==0){let h=Tt(t,e+345,155);this.path=h+"/"+this.path}else{let h=Tt(t,e+345,130);h&&(this.path=h+"/"+this.path),this.atime=i?.atime??r?.atime??Bi(t,e+476,12),this.ctime=i?.ctime??r?.ctime??Bi(t,e+488,12)}let o=256;for(let h=e;h<e+148;h++)o+=t[h];for(let h=e+156;h<e+512;h++)o+=t[h];this.cksumValid=o===this.cksum,this.cksum===void 0&&o===256&&(this.nullBlock=!0)}#i(t,e=!1){Object.assign(this,Object.fromEntries(Object.entries(t).filter(([i,r])=>!(r==null||i==="path"&&e||i==="linkpath"&&e||i==="global"))))}encode(t,e=0){if(t||(t=this.block=Buffer.alloc(512)),this.#t==="Unsupported"&&(this.#t="0"),!(t.length>=e+512))throw new Error("need 512 bytes for header");let i=this.ctime||this.atime?130:155,r=sn(this.path||"",i),n=r[0],o=r[1];this.needPax=!!r[2],this.needPax=xt(t,e,100,n)||this.needPax,this.needPax=lt(t,e+100,8,this.mode)||this.needPax,this.needPax=lt(t,e+108,8,this.uid)||this.needPax,this.needPax=lt(t,e+116,8,this.gid)||this.needPax,this.needPax=lt(t,e+124,12,this.size)||this.needPax,this.needPax=Pi(t,e+136,12,this.mtime)||this.needPax,t[e+156]=this.#t.charCodeAt(0),this.needPax=xt(t,e+157,100,this.linkpath)||this.needPax,t.write("ustar\x0000",e+257,8),this.needPax=xt(t,e+265,32,this.uname)||this.needPax,this.needPax=xt(t,e+297,32,this.gname)||this.needPax,this.needPax=lt(t,e+329,8,this.devmaj)||this.needPax,this.needPax=lt(t,e+337,8,this.devmin)||this.needPax,this.needPax=xt(t,e+345,i,o)||this.needPax,t[e+475]!==0?this.needPax=xt(t,e+345,155,o)||this.needPax:(this.needPax=xt(t,e+345,130,o)||this.needPax,this.needPax=Pi(t,e+476,12,this.atime)||this.needPax,this.needPax=Pi(t,e+488,12,this.ctime)||this.needPax);let h=256;for(let a=e;a<e+148;a++)h+=t[a];for(let a=e+156;a<e+512;a++)h+=t[a];return this.cksum=h,lt(t,e+148,8,this.cksum),this.cksumValid=!0,this.needPax}get type(){return this.#t==="Unsupported"?this.#t:he.get(this.#t)}get typeKey(){return this.#t}set type(t){let e=String(Ye.get(t));if(oe(e)||e==="Unsupported")this.#t=e;else if(oe(t))this.#t=t;else throw new TypeError("invalid entry type: "+t)}},sn=(s,t)=>{let i=s,r="",n,o=external_node_path_namespaceObject.posix.parse(s).root||".";if(Buffer.byteLength(i)<100)n=[i,r,!1];else{r=external_node_path_namespaceObject.posix.dirname(i),i=external_node_path_namespaceObject.posix.basename(i);do Buffer.byteLength(i)<=100&&Buffer.byteLength(r)<=t?n=[i,r,!1]:Buffer.byteLength(i)>100&&Buffer.byteLength(r)<=t?n=[i.slice(0,99),r,!0]:(i=external_node_path_namespaceObject.posix.join(external_node_path_namespaceObject.posix.basename(r),i),r=external_node_path_namespaceObject.posix.dirname(r));while(r!==o&&n===void 0);n||(n=[s.slice(0,99),"",!0])}return n},Tt=(s,t,e)=>s.subarray(t,t+e).toString("utf8").replace(/\0.*/,""),Bi=(s,t,e)=>rn(at(s,t,e)),rn=s=>s===void 0?void 0:new Date(s*1e3),at=(s,t,e)=>Number(s[t])&128?Ps(s.subarray(t,t+e)):on(s,t,e),nn=s=>isNaN(s)?void 0:s,on=(s,t,e)=>nn(parseInt(s.subarray(t,t+e).toString("utf8").replace(/\0.*$/,"").trim(),8)),hn={12:8589934591,8:2097151},lt=(s,t,e,i)=>i===void 0?!1:i>hn[e]||i<0?(Bs(i,s.subarray(t,t+e)),!0):(an(s,t,e,i),!1),an=(s,t,e,i)=>s.write(ln(i,e),t,e,"ascii"),ln=(s,t)=>cn(Math.floor(s).toString(8),t),cn=(s,t)=>(s.length===t-1?s:new Array(t-s.length-1).join("0")+s+" ")+"\0",Pi=(s,t,e,i)=>i===void 0?!1:lt(s,t,e,i.getTime()/1e3),fn=new Array(156).join("\0"),xt=(s,t,e,i)=>i===void 0?!1:(s.write(i+fn,t,e,"utf8"),i.length!==Buffer.byteLength(i)||i.length>e);var ct=class s{atime;mtime;ctime;charset;comment;gid;uid;gname;uname;linkpath;dev;ino;nlink;path;size;mode;global;constructor(t,e=!1){this.atime=t.atime,this.charset=t.charset,this.comment=t.comment,this.ctime=t.ctime,this.dev=t.dev,this.gid=t.gid,this.global=e,this.gname=t.gname,this.ino=t.ino,this.linkpath=t.linkpath,this.mtime=t.mtime,this.nlink=t.nlink,this.path=t.path,this.size=t.size,this.uid=t.uid,this.uname=t.uname}encode(){let t=this.encodeBody();if(t==="")return Buffer.allocUnsafe(0);let e=Buffer.byteLength(t),i=512*Math.ceil(1+e/512),r=Buffer.allocUnsafe(i);for(let n=0;n<512;n++)r[n]=0;new F({path:("PaxHeader/"+(0,external_node_path_namespaceObject.basename)(this.path??"")).slice(0,99),mode:this.mode||420,uid:this.uid,gid:this.gid,size:e,mtime:this.mtime,type:this.global?"GlobalExtendedHeader":"ExtendedHeader",linkpath:"",uname:this.uname||"",gname:this.gname||"",devmaj:0,devmin:0,atime:this.atime,ctime:this.ctime}).encode(r),r.write(t,512,e,"utf8");for(let n=e+512;n<r.length;n++)r[n]=0;return r}encodeBody(){return this.encodeField("path")+this.encodeField("ctime")+this.encodeField("atime")+this.encodeField("dev")+this.encodeField("ino")+this.encodeField("nlink")+this.encodeField("charset")+this.encodeField("comment")+this.encodeField("gid")+this.encodeField("gname")+this.encodeField("linkpath")+this.encodeField("mtime")+this.encodeField("size")+this.encodeField("uid")+this.encodeField("uname")}encodeField(t){if(this[t]===void 0)return"";let e=this[t],i=e instanceof Date?e.getTime()/1e3:e,r=" "+(t==="dev"||t==="ino"||t==="nlink"?"SCHILY.":"")+t+"="+i+`
 `,n=Buffer.byteLength(r),o=Math.floor(Math.log(n)/Math.log(10))+1;return n+o>=Math.pow(10,o)&&(o+=1),o+n+r}static parse(t,e,i=!1){return new s(un(mn(t),e),i)}},un=(s,t)=>t?Object.assign({},t,s):s,mn=s=>s.replace(/\n$/,"").split(`
@@ -31080,6 +31080,7 @@ var Dr=Object.defineProperty;var Ar=(s,t)=>{for(var e in t)Dr(s,e,{get:t[e],enum
 ;// CONCATENATED MODULE: ./src/action.js
 // This script installs garnetctl and jibril, configures them, creates the
 // agent, fetches network policy, and sets up Jibril as a systemd service.
+
 
 
 
@@ -31131,7 +31132,7 @@ async function run() {
     warning(
       "GITHUB_WORKSPACE is not set. Jibril workflow-file resolution may be limited.",
     )
-  } else if (!external_node_fs_namespaceObject.existsSync(external_node_path_namespaceObject.join(workspace, ".git"))) {
+  } else if (!(await pathExists(external_node_path_namespaceObject.join(workspace, ".git")))) {
     warning(
       "Repository checkout not detected. Jibril will rely on the GitHub API to fetch the running workflow file; " +
         "if that fails, add 'actions/checkout@v4' before this action as a fallback.",
@@ -31142,7 +31143,7 @@ async function run() {
   const arch = external_node_os_namespaceObject.arch()
 
   // Sanitize the OS and architecture.
-  let GARNET_OS
+  let GARNET_OS = ""
   if (platform === "linux") {
     GARNET_OS = "linux"
   } else if (platform === "darwin") {
@@ -31152,7 +31153,7 @@ async function run() {
   }
 
   // Sanitize the architecture.
-  let ALTARCH
+  let ALTARCH = ""
   const archStr = String(arch)
   if (archStr === "x64" || archStr === "x86_64") {
     ALTARCH = "x86_64"
@@ -31174,7 +31175,7 @@ async function run() {
   info(`Jibril Version: ${JIBRILVER}`)
 
   // Create a temporary directory for the script to use.
-  const tmpDir = external_node_fs_namespaceObject.mkdtempSync(external_node_path_namespaceObject.join(external_node_os_namespaceObject.tmpdir(), "garnet-"))
+  const tmpDir = await promises_namespaceObject.mkdtemp(external_node_path_namespaceObject.join(external_node_os_namespaceObject.tmpdir(), "garnet-"))
   _tmpDirForCleanup = tmpDir
 
   // Download garnetctl.
@@ -31193,7 +31194,7 @@ async function run() {
     await extractTarGz(garnetTarball, tmpDir)
 
     const garnetctlSrc = external_node_path_namespaceObject.join(tmpDir, "garnetctl")
-    if (!external_node_fs_namespaceObject.existsSync(garnetctlSrc)) {
+    if (!(await pathExists(garnetctlSrc))) {
       fail(1, "Failed to download garnetctl binary")
     }
 
@@ -31241,8 +31242,8 @@ async function run() {
     let SYSTEM_MACHINE_ID = external_node_os_namespaceObject.hostname()
     const machineIdPaths = ["/etc/machine-id", "/var/lib/dbus/machine-id"]
     for (const p of machineIdPaths) {
-      if (external_node_fs_namespaceObject.existsSync(p)) {
-        SYSTEM_MACHINE_ID = external_node_fs_namespaceObject.readFileSync(p, "utf8").trim()
+      if (await pathExists(p)) {
+        SYSTEM_MACHINE_ID = (await promises_namespaceObject.readFile(p, "utf8")).trim()
         break
       }
     }
@@ -31267,7 +31268,10 @@ async function run() {
       runner_arch: getEnv("RUNNER_ARCH"),
     }
     const githubContextPath = external_node_path_namespaceObject.join(tmpDir, "github-context.json")
-    external_node_fs_namespaceObject.writeFileSync(githubContextPath, JSON.stringify(githubContext, null, 2))
+    await promises_namespaceObject.writeFile(
+      githubContextPath,
+      JSON.stringify(githubContext, null, 2),
+    )
 
     // Create agent
     info("Creating github agent")
@@ -31298,9 +31302,24 @@ async function run() {
     }
 
     // Parse the agent output.
-    let AGENT_ID, AGENT_TOKEN
+    let AGENT_ID = ""
+    let AGENT_TOKEN = ""
     try {
       const agentInfo = JSON.parse(agentOutput)
+      if (typeof agentInfo !== "object" || agentInfo === null) {
+        throw new Error("Agent output is not a JSON object")
+      }
+
+      if (typeof agentInfo.id !== "string") {
+        throw new Error("Agent output does not contain a valid 'id' field")
+      }
+
+      if (typeof agentInfo.agent_token !== "string") {
+        throw new Error(
+          "Agent output does not contain a valid 'agent_token' field",
+        )
+      }
+
       AGENT_ID = agentInfo.id
       AGENT_TOKEN = agentInfo.agent_token
     } catch (_) {
@@ -31343,14 +31362,14 @@ async function run() {
       fail(getExitCode(err) ?? 1, "Failed to fetch network policy")
     }
 
-    if (!external_node_fs_namespaceObject.existsSync(NETPOLICY_PATH)) {
+    if (!(await pathExists(NETPOLICY_PATH))) {
       fail(1, "Network policy file was not created")
     }
 
     // Save the network policy to the file system.
     info(`Network policy saved to ${NETPOLICY_PATH}`)
     if (DEBUG === "true") {
-      const content = external_node_fs_namespaceObject.readFileSync(NETPOLICY_PATH, "utf8")
+      const content = await promises_namespaceObject.readFile(NETPOLICY_PATH, "utf8")
       info(content.split("\n").slice(0, 20).join("\n"))
     }
 
@@ -31384,6 +31403,7 @@ RUNNER_OS=${getEnv("RUNNER_OS")}
 # Jibril writes profile markdown to these files (one per printer)
 JIBRIL_PROFILER_FILE=${getEnv("JIBRIL_PROFILER_FILE")}
 JIBRIL_PROFILER4FUN_FILE=${getEnv("JIBRIL_PROFILER4FUN_FILE")}
+JIBRIL_JSONPROFILER_FILE=${getEnv("JIBRIL_JSONPROFILER_FILE")}
 # GitHub context
 GITHUB_ACTION=${getEnv("GITHUB_ACTION", "__run")}
 GITHUB_ACTOR_ID=${getEnv("GITHUB_ACTOR_ID")}
@@ -31414,7 +31434,7 @@ GITHUB_WORKSPACE=${getEnv("GITHUB_WORKSPACE")}
 `
 
     const jibrilDefaultPath = external_node_path_namespaceObject.join(tmpDir, "jibril.default")
-    external_node_fs_namespaceObject.writeFileSync(jibrilDefaultPath, jibrilDefault)
+    await promises_namespaceObject.writeFile(jibrilDefaultPath, jibrilDefault)
 
     info("Installing default environment file to /etc/default/jibril")
     await execSudo([
@@ -31431,7 +31451,7 @@ GITHUB_WORKSPACE=${getEnv("GITHUB_WORKSPACE")}
     // Verify default environment file (redacted for security).
     if (DEBUG === "true") {
       try {
-        const defaultContent = readFileSafe("/etc/default/jibril")
+        const defaultContent = await readFileSafe("/etc/default/jibril")
         info("Default environment file:")
         info(
           redactSensitive(defaultContent) ??
@@ -31453,7 +31473,7 @@ StandardOutput=append:/var/log/jibril.log
 
     // Configure logging using a systemd drop-in override.
     const loggingConfPath = external_node_path_namespaceObject.join(tmpDir, "logging.conf")
-    external_node_fs_namespaceObject.writeFileSync(loggingConfPath, loggingConf)
+    await promises_namespaceObject.writeFile(loggingConfPath, loggingConf)
     await execSudo([
       "cp",
       loggingConfPath,
@@ -31463,7 +31483,7 @@ StandardOutput=append:/var/log/jibril.log
     // Verify installed files.
     if (DEBUG === "true") {
       try {
-        const entries = readdirRecursiveSafe("/etc/jibril")
+        const entries = await readdirRecursiveSafe("/etc/jibril")
         info("Jibril installed files:")
         info(
           entries.length > 0
@@ -31472,12 +31492,12 @@ StandardOutput=append:/var/log/jibril.log
         )
       } catch (_) {}
       try {
-        const configOutput = readFileSafe("/etc/jibril/config.yaml")
+        const configOutput = await readFileSafe("/etc/jibril/config.yaml")
         info("Jibril configuration:")
         info(configOutput || "No configuration file found")
       } catch (_) {}
       try {
-        const policyContent = readFileSafe("/etc/jibril/netpolicy.yaml")
+        const policyContent = await readFileSafe("/etc/jibril/netpolicy.yaml")
         info("Jibril default network policy:")
         info(
           policyContent
@@ -31493,7 +31513,7 @@ StandardOutput=append:/var/log/jibril.log
     // Verify replaced network policy.
     if (DEBUG === "true") {
       try {
-        const replacedContent = readFileSafe("/etc/jibril/netpolicy.yaml")
+        const replacedContent = await readFileSafe("/etc/jibril/netpolicy.yaml")
         info("Replaced Jibril network policy:")
         info(
           replacedContent
@@ -31560,7 +31580,7 @@ StandardOutput=append:/var/log/jibril.log
     info("Jibril service started successfully")
   } finally {
     // Clean up the temporary directory.
-    external_node_fs_namespaceObject.rmSync(tmpDir, { recursive: true, force: true })
+    await promises_namespaceObject.rm(tmpDir, { recursive: true, force: true })
   }
 }
 
@@ -31571,10 +31591,9 @@ StandardOutput=append:/var/log/jibril.log
  * @returns {never}
  */
 function fail(code, message) {
-  if (_tmpDirForCleanup && external_node_fs_namespaceObject.existsSync(_tmpDirForCleanup)) {
-    try {
-      external_node_fs_namespaceObject.rmSync(_tmpDirForCleanup, { recursive: true, force: true })
-    } catch (_) {}
+  if (_tmpDirForCleanup) {
+    void promises_namespaceObject.rm(_tmpDirForCleanup, { recursive: true, force: true })
+      .catch(() => {})
   }
   error(message || "Error")
   process.exit(code ?? 1)
@@ -31693,76 +31712,39 @@ async function execSudo(args, options = {}) {
  * @param {string} url
  * @param {string} destPath
  * @param {DownloadOptions=} opts
- * @param {number=} depth
  * @returns {Promise<void>}
  */
-function downloadFile(url, destPath, opts = {}, depth = 0) {
+async function downloadFile(url, destPath, opts = {}) {
   const { maxRedirects = 10, timeoutMs = 60_000, enforceHttps = true } = opts
+  const requestUrl = String(url || "")
 
-  return new Promise((resolve, reject) => {
-    const u = String(url || "")
-    if (enforceHttps && !u.startsWith("https://")) {
-      reject(new Error(`Refusing to download over non-HTTPS: ${u}`))
-      return
-    }
-    if (depth > maxRedirects) {
-      reject(new Error(`Too many redirects while downloading: ${u}`))
-      return
-    }
+  if (enforceHttps && !requestUrl.startsWith("https://")) {
+    throw new Error(`Refusing to download over non-HTTPS: ${requestUrl}`)
+  }
 
-    const protocol = u.startsWith("https") ? external_node_https_namespaceObject : external_node_http_
-    const file = external_node_fs_namespaceObject.createWriteStream(destPath, { mode: 0o600 })
-
-    const req = protocol.get(u, (res) => {
-      const statusCode = res.statusCode ?? 0
-
-      if (statusCode >= 300 && statusCode < 400 && res.headers.location) {
-        res.resume()
-        try {
-          file.close()
-        } catch (_) {}
-        external_node_fs_namespaceObject.rmSync(destPath, { force: true })
-
-        const redirectUrl = res.headers.location.startsWith("http")
-          ? res.headers.location
-          : new URL(res.headers.location, u).href
-
-        downloadFile(redirectUrl, destPath, opts, depth + 1)
-          .then(resolve)
-          .catch(reject)
-        return
-      }
-
-      if (statusCode !== 200) {
-        res.resume()
-        try {
-          file.close()
-        } catch (_) {}
-        external_node_fs_namespaceObject.rmSync(destPath, { force: true })
-        reject(new Error(`Failed to download ${u}: HTTP ${statusCode}`))
-        return
-      }
-
-      res.pipe(file)
-      file.on("finish", () => {
-        try {
-          file.close()
-        } catch (_) {}
-        resolve(undefined)
-      })
-    })
-
-    req.setTimeout(timeoutMs, () =>
-      req.destroy(new Error(`Download timed out after ${timeoutMs}ms: ${u}`)),
-    )
-
-    req.on("error", (err) => {
-      try {
-        file.close()
-      } catch (_) {}
-      external_node_fs_namespaceObject.rm(destPath, { force: true }, () => reject(err))
-    })
+  const client = new lib_HttpClient("garnet-action", undefined, {
+    allowRedirects: true,
+    maxRedirects,
+    socketTimeout: timeoutMs,
   })
+
+  try {
+    const response = await client.get(requestUrl)
+    const statusCode = response.message.statusCode ?? 0
+
+    if (statusCode !== 200) {
+      response.message.resume()
+      throw new Error(`Failed to download ${requestUrl}: HTTP ${statusCode}`)
+    }
+
+    await (0,external_node_stream_promises_namespaceObject.pipeline)(
+      response.message,
+      (0,external_node_fs_namespaceObject.createWriteStream)(destPath, { mode: 0o600 }),
+    )
+  } catch (error) {
+    await promises_namespaceObject.rm(destPath, { force: true }).catch(() => {})
+    throw error
+  }
 }
 
 /**
@@ -31794,9 +31776,9 @@ function getFirstIpv4() {
  * Reads a file, returns null on permission error or missing file.
  * @param {string} filePath
  */
-function readFileSafe(filePath) {
+async function readFileSafe(filePath) {
   try {
-    return external_node_fs_namespaceObject.readFileSync(filePath, "utf8").trim()
+    return (await promises_namespaceObject.readFile(filePath, "utf8")).trim()
   } catch (_) {
     return null
   }
@@ -31806,12 +31788,25 @@ function readFileSafe(filePath) {
  * Recursively lists files under a directory. Returns [] on error.
  * @param {string} dirPath
  */
-function readdirRecursiveSafe(dirPath) {
+async function readdirRecursiveSafe(dirPath) {
   try {
-    const entries = external_node_fs_namespaceObject.readdirSync(dirPath, { recursive: true })
+    const entries = await promises_namespaceObject.readdir(dirPath, { recursive: true })
     return Array.isArray(entries) ? entries : []
   } catch (_) {
     return []
+  }
+}
+
+/**
+ * @param {string} filePath
+ * @returns {Promise<boolean>}
+ */
+async function pathExists(filePath) {
+  try {
+    await promises_namespaceObject.access(filePath)
+    return true
+  } catch {
+    return false
   }
 }
 
@@ -31904,12 +31899,18 @@ async function main() {
     process.env.DEBUG = getInput("debug")
 
     // Set the default profiler printer file paths.
-    const profilerFile = "/var/log/jibril.profiler.out"
-    const profiler4funFile = "/var/log/jibril.profiler4fun.out"
+    const profilerFile =
+      process.env.JIBRIL_PROFILER_FILE || "/var/log/jibril.profiler.out"
+    const profiler4funFile =
+      process.env.JIBRIL_PROFILER4FUN_FILE || "/var/log/jibril.profiler4fun.out"
+    const jsonProfilerFile =
+      process.env.JIBRIL_JSONPROFILER_FILE || "/var/log/jibril.profile.json"
     process.env.JIBRIL_PROFILER_FILE = profilerFile
     process.env.JIBRIL_PROFILER4FUN_FILE = profiler4funFile
+    process.env.JIBRIL_JSONPROFILER_FILE = jsonProfilerFile
     saveState("profilerFile", profilerFile)
     saveState("profiler4funFile", profiler4funFile)
+    saveState("jsonProfilerFile", jsonProfilerFile)
     saveState(
       "selectedProfilerFile",
       profiler4fun ? profiler4funFile : profilerFile,
