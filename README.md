@@ -85,6 +85,11 @@ To let the action write PR comments, grant the workflow token write access to pu
 permissions:
   contents: read
   pull-requests: write
+
+steps:
+  - uses: garnet-org/action@v0
+    with:
+      api_token: ${{ secrets.GARNET_API_TOKEN }}
 ```
 
 ## Inputs
@@ -92,6 +97,7 @@ permissions:
 | Input | Description | Required | Default |
 |------|-------------|----------|---------|
 | `api_token` | Garnet API token | Yes | - |
+| `github_token` | GitHub token used to publish pull request comments | No | `${{ github.token }}` |
 | `api_url` | Garnet API base URL | No | `https://api.garnet.ai` |
 | `garnetctl_version` | `garnetctl` version (`1.2.3` or `latest`) | No | `latest` |
 | `jibril_version` | Jibril version (`v2.10.8`, `v0.0`, or `latest`) | No | `v0.0` (action@`v0`) / `v2.10.4` (action@`v1`) / `v2.10.8` (action@`v2`) |

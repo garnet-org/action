@@ -7,6 +7,10 @@ inputs:
   api_token:
     description: "Garnet API token"
     required: true
+  github_token:
+    description: "GitHub token used for pull request comments"
+    required: false
+    default: ${{ github.token }}
   api_url:
     description: "Garnet API URL"
     required: false

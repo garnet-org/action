@@ -23,11 +23,14 @@ async function main() {
     const debug = core.getInput("debug") === "true"
     core.saveState("debug", debug ? "true" : "")
 
+    const githubToken = core.getInput("github_token")
+    core.saveState("githubToken", githubToken)
+
     // Set inputs as environment variables for the action
     process.env.GARNET_API_TOKEN = core.getInput("api_token")
 
-    // Ensure Jibril has a GitHub token even when the repo isn't checked out.
-    process.env.GITHUB_TOKEN = process.env.GITHUB_TOKEN
+    // Make the token available to both the main and post steps when provided.
+    process.env.GITHUB_TOKEN = githubToken
     process.env.GARNET_API_URL = core.getInput("api_url")
     process.env.GARNETCTL_VERSION = core.getInput("garnetctl_version")
     process.env.JIBRIL_VERSION = core.getInput("jibril_version")

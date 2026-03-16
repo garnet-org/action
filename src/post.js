@@ -19,6 +19,7 @@ const DEFAULT_PROFILER_FILE = "/var/log/jibril.profiler.out"
 const DEFAULT_PROFILER4FUN_FILE = "/var/log/jibril.profiler4fun.out"
 const DEBUG_ARTIFACT_NAME = "jibril-debug-logs"
 const JSON_PROFILE_LABEL = "JSON profile"
+const DEFAULT_RUN_ATTEMPT = "1"
 /** @type {[string, string][]} */
 const JIBRIL_LOG_FILES = [
   ["/var/log/jibril.log", "jibril.log"],
@@ -97,9 +98,12 @@ async function publishProfilerComment() {
     return
   }
 
-  const token = getEnvString("GITHUB_TOKEN")
+  const token = firstNonEmptyString([
+    core.getState("githubToken"),
+    getEnvString("GITHUB_TOKEN"),
+  ])
   if (token === "") {
-    core.warning("GITHUB_TOKEN is not set, skipping PR comment")
+    core.warning("github_token is not set, skipping PR comment")
     return
   }
 
@@ -221,7 +225,7 @@ async function uploadJibrilArtifacts() {
     )
 
     await artifactClient.uploadArtifact(
-      DEBUG_ARTIFACT_NAME,
+      getDebugArtifactName(),
       absolutePaths,
       artifactDir,
     )
@@ -380,6 +384,34 @@ function getEnvString(name) {
 function parseRunAttempt(value) {
   const parsedValue = Number.parseInt(value, 10)
   return Number.isSafeInteger(parsedValue) ? parsedValue : 1
+}
+
+/**
+ * @returns {string}
+ */
+function getDebugArtifactName() {
+  const jobName = getEnvString("GITHUB_JOB")
+  const runAttempt = getEnvString("GITHUB_RUN_ATTEMPT")
+
+  const artifactNameParts = [DEBUG_ARTIFACT_NAME]
+  if (jobName !== "") {
+    artifactNameParts.push(sanitizeArtifactNamePart(jobName))
+  }
+
+  const parsedRunAttempt = parseRunAttempt(
+    runAttempt === "" ? DEFAULT_RUN_ATTEMPT : runAttempt,
+  )
+  artifactNameParts.push(`attempt-${parsedRunAttempt}`)
+
+  return artifactNameParts.join("-")
+}
+
+/**
+ * @param {string} value
+ * @returns {string}
+ */
+function sanitizeArtifactNamePart(value) {
+  return value.replace(/[^A-Za-z0-9._-]+/g, "-")
 }
 
 /**
