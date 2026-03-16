@@ -104,16 +104,15 @@ const PEER_SCHEMA = z
     result: peer.result,
   }))
 
-const GITHUB_SCENARIO_SCHEMA = z
-  .object({
-    workflow: z.string(),
-    repository: z.string(),
-    ref: z.string(),
-    sha: z.string(),
-    actor: z.string(),
-    run_id: z.string(),
-    job: z.string(),
-  })
+const GITHUB_SCENARIO_SCHEMA = z.object({
+  workflow: z.string(),
+  repository: z.string(),
+  ref: z.string(),
+  sha: z.string(),
+  actor: z.string(),
+  run_id: z.string(),
+  job: z.string(),
+})
 
 const NORMALIZED_PROFILE_SCHEMA = z.object({
   timestamp: z.string(),
