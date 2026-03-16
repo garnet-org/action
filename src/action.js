@@ -55,7 +55,7 @@ export async function run() {
   } else if (!(await pathExists(path.join(workspace, ".git")))) {
     core.warning(
       "Repository checkout not detected. Jibril will rely on the GitHub API to fetch the running workflow file; " +
-        "if that fails, add 'actions/checkout@v4' before this action as a fallback.",
+        "if that fails, add 'actions/checkout@v6' before this action as a fallback.",
     )
   }
 
