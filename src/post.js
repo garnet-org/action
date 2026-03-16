@@ -1,9 +1,9 @@
-const core = require("@actions/core");
-const exec = require("@actions/exec");
-const fs = require("fs");
-const path = require("path");
-const os = require("os");
-const artifactClient = require("@actions/artifact").default;
+import * as core from "@actions/core"
+import * as exec from "@actions/exec"
+import * as fs from "node:fs"
+import * as path from "node:path"
+import * as os from "node:os"
+import { default as artifactClient } from "@actions/artifact"
 
 // This is the post step for the action. It is called by the GitHub Actions
 // runtime. It stops the Jibril service so the daemon flushes all pending events
@@ -13,128 +13,165 @@ const artifactClient = require("@actions/artifact").default;
 async function run() {
   try {
     // Stop the Jibril service so the daemon flushes all pending events.
-    core.info("stopping jibril service");
-    await exec.exec("sudo", ["systemctl", "stop", "jibril.service"], { ignoreReturnCode: true });
+    core.info("stopping jibril service")
+    await exec.exec("sudo", ["systemctl", "stop", "jibril.service"], {
+      ignoreReturnCode: true,
+    })
 
     // Remove secrets from disk (best-effort). Important for self-hosted runners.
-    await exec.exec("sudo", ["rm", "-f", "/etc/default/jibril"], { ignoreReturnCode: true });
+    await exec.exec("sudo", ["rm", "-f", "/etc/default/jibril"], {
+      ignoreReturnCode: true,
+    })
 
     // Upload jibril logs as artifacts when debug is enabled (only after service stops).
     // Get the debug state from the main.js.
-    const debug = core.getState("debug");
+    const debug = core.getState("debug")
     if (debug === "true") {
-      await uploadJibrilArtifacts();
+      await uploadJibrilArtifacts()
     }
 
     const selectedProfiler =
-      core.getState("selectedProfiler") || (core.getState("profiler4fun") === "true" ? "profiler4fun" : "profiler");
+      core.getState("selectedProfiler") ||
+      (core.getState("profiler4fun") === "true" ? "profiler4fun" : "profiler")
 
     // Prefer the file path passed via state, then fall back to env/defaults.
-    let profilerFile = core.getState("selectedProfilerFile");
+    let profilerFile = core.getState("selectedProfilerFile")
     if (!profilerFile) {
       if (selectedProfiler === "profiler4fun") {
         profilerFile =
-          core.getState("profiler4funFile") || process.env.JIBRIL_PROFILER4FUN_FILE || "/var/log/jibril.profiler4fun.out";
+          core.getState("profiler4funFile") ||
+          process.env.JIBRIL_PROFILER4FUN_FILE ||
+          "/var/log/jibril.profiler4fun.out"
       } else {
-        profilerFile = core.getState("profilerFile") || process.env.JIBRIL_PROFILER_FILE || "/var/log/jibril.profiler.out";
+        profilerFile =
+          core.getState("profilerFile") ||
+          process.env.JIBRIL_PROFILER_FILE ||
+          "/var/log/jibril.profiler.out"
       }
     }
 
-    core.info(`using profiler printer: ${selectedProfiler}`);
+    core.info(`using profiler printer: ${selectedProfiler}`)
 
     // Read the profiler markdown from the file.
-    let content;
+    let content = ""
     try {
       if (!profilerFile) {
-        core.warning("profiler output file is not set, skipping summary");
-        return;
+        core.warning("profiler output file is not set, skipping summary")
+        return
       }
       const result = await exec.getExecOutput("sudo", ["cat", profilerFile], {
         silent: true,
         ignoreReturnCode: true,
-      });
+      })
       if (result.exitCode !== 0) {
-        core.warning(`profiler output not found or unreadable: ${profilerFile}`);
-        return;
+        core.warning(`profiler output not found or unreadable: ${profilerFile}`)
+        return
       }
-      content = (result.stdout || "").trim();
+      content = (result.stdout || "").trim()
     } catch (e) {
-      core.warning(`failed to read profiler file: ${e.message}`);
-      return;
+      core.warning(`failed to read profiler file: ${getErrorMessage(e)}`)
+      return
     }
-    if (!content) {
-      core.warning("profiler output is empty, skipping summary");
-      return;
+    if (content === "") {
+      core.warning("profiler output is empty, skipping summary")
+      return
     }
 
     // Get the summary file from the environment variable.
-    const summaryFile = process.env.GITHUB_STEP_SUMMARY;
+    const summaryFile = process.env.GITHUB_STEP_SUMMARY
     if (!summaryFile) {
-      core.warning("GITHUB_STEP_SUMMARY is not set, cannot write summary");
-      return;
+      core.warning("GITHUB_STEP_SUMMARY is not set, cannot write summary")
+      return
     }
 
     // Append the profiler markdown to the job summary file.
-    fs.appendFileSync(summaryFile, "\n" + content + "\n");
+    fs.appendFileSync(summaryFile, "\n" + content + "\n")
 
-    core.info("profiler markdown written to job summary");
+    core.info("profiler markdown written to job summary")
   } catch (err) {
     // Never fail the job because of the profiler step.
-    core.warning(`failed to write summary: ${err.message}`);
+    core.warning(`failed to write summary: ${getErrorMessage(err)}`)
   }
 }
 
-async function uploadJibrilArtifacts() {
-  const artifactDir = path.join(os.tmpdir(), "garnet-jibril-artifacts");
-  fs.mkdirSync(artifactDir, { recursive: true });
+/**
+ * @param {unknown} err
+ * @returns {string}
+ */
+function getErrorMessage(err) {
+  if (err instanceof Error) {
+    return err.message
+  }
 
+  return String(err)
+}
+
+async function uploadJibrilArtifacts() {
+  const artifactDir = path.join(os.tmpdir(), "garnet-jibril-artifacts")
+  fs.mkdirSync(artifactDir, { recursive: true })
+
+  /** @type {[string, string][]} */
   const logFiles = [
     ["/var/log/jibril.log", "jibril.log"],
     ["/var/log/jibril.err", "jibril.err"],
     ["/var/log/jibril.out", "jibril.out"],
-  ];
+  ]
 
-  const uploaded = [];
+  const uploaded = []
   for (const [src, destName] of logFiles) {
     try {
-      const destPath = path.join(artifactDir, destName);
+      const destPath = path.join(artifactDir, destName)
       const cpResult = await exec.getExecOutput("sudo", ["cp", src, destPath], {
         ignoreReturnCode: true,
         silent: true,
-      });
+      })
       if (cpResult.exitCode !== 0) {
-        core.debug(`Skipping ${destName}: source may not exist (cp exit ${cpResult.exitCode})`);
-        continue;
+        core.debug(
+          `Skipping ${destName}: source may not exist (cp exit ${cpResult.exitCode})`,
+        )
+        continue
       }
-      await exec.exec("sudo", ["chmod", "a+r", destPath], { ignoreReturnCode: true });
+      await exec.exec("sudo", ["chmod", "a+r", destPath], {
+        ignoreReturnCode: true,
+      })
       if (fs.existsSync(destPath)) {
-        uploaded.push(destName);
+        uploaded.push(destName)
       }
     } catch (_) {}
   }
 
   if (uploaded.length === 0) {
-    core.info("No jibril log files to upload");
-    return;
+    core.info("No jibril log files to upload")
+    return
   }
 
   // Re-verify files exist before upload; pass absolute paths (artifact client resolves relative paths from CWD, not rootDirectory)
-  const existing = uploaded.filter((f) => fs.existsSync(path.join(artifactDir, f)));
-  const absolutePaths = existing.map((f) => path.resolve(artifactDir, f));
+  const existing = uploaded.filter((f) =>
+    fs.existsSync(path.join(artifactDir, f)),
+  )
+  const absolutePaths = existing.map((f) => path.resolve(artifactDir, f))
 
   try {
-    await artifactClient.uploadArtifact("jibril-debug-logs", absolutePaths, artifactDir);
-    core.info(`Uploaded jibril artifacts: ${existing.join(", ")}`);
+    await artifactClient.uploadArtifact(
+      "jibril-debug-logs",
+      absolutePaths,
+      artifactDir,
+    )
+    core.info(`Uploaded jibril artifacts: ${existing.join(", ")}`)
   } catch (err) {
-    const msg = err.message || String(err);
-    if (msg.includes("ACTIONS_RUNTIME_TOKEN") || msg.includes("AUTH_TOKEN") || msg.includes("token")) {
-      core.warning(`Jibril artifact upload skipped (auth unavailable): ${msg}`);
+    const msg = getErrorMessage(err)
+    if (
+      msg.includes("ACTIONS_RUNTIME_TOKEN") ||
+      msg.includes("AUTH_TOKEN") ||
+      msg.includes("token")
+    ) {
+      core.warning(`Jibril artifact upload skipped (auth unavailable): ${msg}`)
     } else {
-      core.warning(`Failed to upload jibril artifacts: ${msg}`);
+      core.warning(`Failed to upload jibril artifacts: ${msg}`)
     }
   } finally {
-    fs.rmSync(artifactDir, { recursive: true, force: true });
+    fs.rmSync(artifactDir, { recursive: true, force: true })
   }
 }
 
-run();
+run()
