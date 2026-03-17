@@ -2,8 +2,6 @@ name: PR Comment Smoke Test C
 
 on:
   pull_request:
-    branches:
-      - main
 
 permissions:
   contents: read
