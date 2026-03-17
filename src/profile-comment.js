@@ -68,8 +68,7 @@ export const COMMENT_MARKER = "garnet-runtime-visibility"
  */
 
 const DEFAULT_JSON_PROFILE_FILE = "/var/log/jibril.profile.json"
-const DASHBOARD_BASE_URL = "https://app.garnet.ai/dashboard"
-const DASHBOARD_RUNS_BASE_URL = `${DASHBOARD_BASE_URL}/runs`
+const DEFAULT_APP_BASE_URL = "https://app.garnet.ai"
 
 const PROFILE_RESULT_SCHEMA = z
   .unknown()
@@ -598,19 +597,71 @@ function encodeCommentState(state) {
  * @returns {string}
  */
 function buildReportLink(values) {
-  if (values.repository === "" || values.run_id === "") {
-    return `${DASHBOARD_BASE_URL}/`
+  const baseURL = resolveAppBaseUrl()
+  if (values.run_id === "") {
+    return baseURL
   }
 
-  const [owner, repo] = values.repository.split("/")
-  if (owner === undefined || owner === "") {
-    return `${DASHBOARD_BASE_URL}/`
-  }
-  if (repo === undefined || repo === "") {
-    return `${DASHBOARD_BASE_URL}/`
+  // TODO: Switch back to the full repository/job route once the dashboard
+  // supports /dashboard/runs/{org}/{repo}/{runID}/{job}.
+  return `${baseURL}/dashboard/runs/${encodeURIComponent(values.run_id)}`
+}
+
+/**
+ * @returns {string}
+ */
+function resolveAppBaseUrl() {
+  const apiUrl = getConfiguredApiUrl()
+  if (apiUrl === "") {
+    return DEFAULT_APP_BASE_URL
   }
 
-  return `${DASHBOARD_RUNS_BASE_URL}/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/${encodeURIComponent(values.run_id)}/${encodeURIComponent(values.job)}`
+  try {
+    const url = new URL(apiUrl)
+    const appHost = mapApiHostToAppHost(url.host)
+    return `${url.protocol}//${appHost}`
+  } catch {
+    return DEFAULT_APP_BASE_URL
+  }
+}
+
+/**
+ * @returns {string}
+ */
+function getConfiguredApiUrl() {
+  if (
+    typeof process.env.GARNET_API_URL === "string" &&
+    process.env.GARNET_API_URL !== ""
+  ) {
+    return process.env.GARNET_API_URL
+  }
+
+  if (
+    typeof process.env.INPUT_API_URL === "string" &&
+    process.env.INPUT_API_URL !== ""
+  ) {
+    return process.env.INPUT_API_URL
+  }
+
+  return ""
+}
+
+/**
+ * @param {string} host
+ * @returns {string}
+ */
+function mapApiHostToAppHost(host) {
+  if (host === "dev-api.garnet.ai") {
+    return "dev-app.garnet.ai"
+  }
+  if (host === "staging-api.garnet.ai") {
+    return "staging-app.garnet.ai"
+  }
+  if (host === "api.garnet.ai") {
+    return "app.garnet.ai"
+  }
+
+  return host
 }
 
 /**
