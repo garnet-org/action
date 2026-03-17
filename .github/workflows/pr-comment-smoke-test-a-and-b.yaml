@@ -12,7 +12,7 @@ jobs:
     name: Smoke A
     uses: ./.github/workflows/pr-comment-smoke-test-reusable.yaml
     with:
-      job_name: Smoke A
+      job_name: Smoke Not A
     secrets: inherit
 
   smoke-b:
