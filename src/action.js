@@ -169,13 +169,15 @@ export async function run() {
     }
 
     const MACHINE_ID = SYSTEM_MACHINE_ID
-    const HOSTNAME = `${os.hostname()}-${getEnv("GITHUB_RUN_ID")}-${getEnv("GITHUB_JOB")}`
+    const profileJob = getProfileJobName()
+    const profileWorkflow = getProfileWorkflowName()
+    const HOSTNAME = `${os.hostname()}-${getEnv("GITHUB_RUN_ID")}-${profileJob}`
 
     // Create the github context.
     const githubContext = {
-      job: getEnv("GITHUB_JOB"),
+      job: profileJob,
       run_id: getEnv("GITHUB_RUN_ID"),
-      workflow: getEnv("GITHUB_WORKFLOW"),
+      workflow: profileWorkflow,
       repository: getEnv("GITHUB_REPOSITORY"),
       repository_id: getEnv("GITHUB_REPOSITORY_ID"),
       repository_owner: getEnv("GITHUB_REPOSITORY_OWNER"),
@@ -542,6 +544,20 @@ function getExitCode(err) {
  */
 function getEnv(name, def = "") {
   return process.env[name] ?? def
+}
+
+/**
+ * @returns {string}
+ */
+function getProfileJobName() {
+  return getEnv("GARNET_PROFILE_JOB", getEnv("GITHUB_JOB"))
+}
+
+/**
+ * @returns {string}
+ */
+function getProfileWorkflowName() {
+  return getEnv("GARNET_PROFILE_WORKFLOW", getEnv("GITHUB_WORKFLOW"))
 }
 
 /**

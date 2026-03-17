@@ -58,11 +58,23 @@ export const COMMENT_MARKER = "garnet-runtime-visibility"
 
 /**
  * @typedef {{
+ *   run_id: string
+ *   run_attempt: number
+ * }} WorkflowRun
+ */
+
+/**
+ * @typedef {{
  *   version: 1
- *   latest_run: {
- *     run_id: string
- *     run_attempt: number
- *   }
+ *   latest_run: WorkflowRun
+ *   profiles: NormalizedProfile[]
+ * }} LegacyCommentState
+ */
+
+/**
+ * @typedef {{
+ *   version: 2
+ *   workflow_runs: Record<string, WorkflowRun>
  *   profiles: NormalizedProfile[]
  * }} CommentState
  */
@@ -125,12 +137,24 @@ const NORMALIZED_PROFILE_SCHEMA = z.object({
   report_link: z.string(),
 })
 
-const COMMENT_STATE_SCHEMA = z.object({
+const LEGACY_COMMENT_STATE_SCHEMA = z.object({
   version: z.literal(1),
   latest_run: z.object({
     run_id: z.string(),
     run_attempt: z.number(),
   }),
+  profiles: z.array(NORMALIZED_PROFILE_SCHEMA),
+})
+
+const COMMENT_STATE_SCHEMA = z.object({
+  version: z.literal(2),
+  workflow_runs: z.record(
+    z.string(),
+    z.object({
+      run_id: z.string(),
+      run_attempt: z.number(),
+    }),
+  ),
   profiles: z.array(NORMALIZED_PROFILE_SCHEMA),
 })
 
@@ -220,6 +244,7 @@ export function parseProfileJson(content) {
 export function mergeCommentState(existingState, incomingProfile, runAttempt) {
   const incomingRunId = incomingProfile.github.run_id
   const incomingRunAttempt = Number.isSafeInteger(runAttempt) ? runAttempt : 1
+  const workflowKey = getWorkflowKey(incomingProfile)
 
   if (incomingRunId === "") {
     throw new Error("profile JSON is missing the GitHub run id")
@@ -229,20 +254,26 @@ export function mergeCommentState(existingState, incomingProfile, runAttempt) {
     return {
       kind: "updated",
       state: {
-        version: 1,
-        latest_run: {
-          run_id: incomingRunId,
-          run_attempt: incomingRunAttempt,
+        version: 2,
+        workflow_runs: {
+          [workflowKey]: {
+            run_id: incomingRunId,
+            run_attempt: incomingRunAttempt,
+          },
         },
         profiles: [incomingProfile],
       },
     }
   }
 
-  const comparison = compareRuns(existingState.latest_run, {
-    run_id: incomingRunId,
-    run_attempt: incomingRunAttempt,
-  })
+  const latestRun = existingState.workflow_runs[workflowKey] ?? null
+  const comparison =
+    latestRun === null
+      ? -1
+      : compareRuns(latestRun, {
+          run_id: incomingRunId,
+          run_attempt: incomingRunAttempt,
+        })
 
   if (comparison > 0) {
     return { kind: "stale" }
@@ -252,31 +283,87 @@ export function mergeCommentState(existingState, incomingProfile, runAttempt) {
     return {
       kind: "updated",
       state: {
-        version: 1,
-        latest_run: {
-          run_id: incomingRunId,
-          run_attempt: incomingRunAttempt,
+        version: 2,
+        workflow_runs: {
+          ...existingState.workflow_runs,
+          [workflowKey]: {
+            run_id: incomingRunId,
+            run_attempt: incomingRunAttempt,
+          },
         },
-        profiles: [incomingProfile],
+        profiles: [
+          ...existingState.profiles.filter(
+            (profile) => getWorkflowKey(profile) !== workflowKey,
+          ),
+          incomingProfile,
+        ].sort(compareProfiles),
       },
     }
   }
 
   const profiles = existingState.profiles.filter(
-    (profile) => profile.github.job !== incomingProfile.github.job,
+    (profile) => getProfileKey(profile) !== getProfileKey(incomingProfile),
   )
   profiles.push(incomingProfile)
-  profiles.sort((left, right) =>
-    left.github.job.localeCompare(right.github.job),
-  )
+  profiles.sort(compareProfiles)
 
   return {
     kind: "updated",
     state: {
-      version: 1,
-      latest_run: existingState.latest_run,
+      version: 2,
+      workflow_runs: existingState.workflow_runs,
       profiles,
     },
+  }
+}
+
+/**
+ * @param {CommentState[]} states
+ * @returns {CommentState | null}
+ */
+export function mergeCommentStates(states) {
+  if (states.length === 0) {
+    return null
+  }
+
+  /** @type {Record<string, WorkflowRun>} */
+  const workflowRuns = {}
+
+  for (const state of states) {
+    for (const [workflowKey, workflowRun] of Object.entries(
+      state.workflow_runs,
+    )) {
+      const existingRun = workflowRuns[workflowKey] ?? null
+      if (existingRun === null || compareRuns(existingRun, workflowRun) < 0) {
+        workflowRuns[workflowKey] = workflowRun
+      }
+    }
+  }
+
+  /** @type {Map<string, NormalizedProfile>} */
+  const profiles = new Map()
+
+  for (const state of states) {
+    for (const profile of state.profiles) {
+      const workflowKey = getWorkflowKey(profile)
+      const workflowRun = state.workflow_runs[workflowKey] ?? null
+      const latestRun = workflowRuns[workflowKey] ?? null
+      if (
+        workflowRun === null ||
+        latestRun === null ||
+        compareRuns(workflowRun, latestRun) !== 0
+      ) {
+        continue
+      }
+
+      profiles.set(getProfileKey(profile), profile)
+    }
+  }
+
+  return {
+    version: 2,
+    workflow_runs: workflowRuns,
+    profiles: [...profiles.values()].sort(compareProfiles),
   }
 }
 
@@ -286,9 +373,7 @@ export function mergeCommentState(existingState, incomingProfile, runAttempt) {
  */
 export function renderCommentBody(state) {
   const metadata = encodeCommentState(state)
-  const profiles = [...state.profiles].sort((left, right) =>
-    left.github.job.localeCompare(right.github.job),
-  )
+  const profiles = [...state.profiles].sort(compareProfiles)
   const headline = renderHeadline(profiles)
   const summaryTable = renderSummaryTable(profiles)
   const sections = profiles
@@ -326,8 +411,16 @@ export function parseCommentState(body) {
   const encoded = body.slice(start + marker.length, end).trim()
   try {
     const json = Buffer.from(encoded, "base64url").toString("utf8")
-    const result = COMMENT_STATE_SCHEMA.safeParse(JSON.parse(json))
-    return result.success ? result.data : null
+    const parsed = JSON.parse(json)
+    const result = COMMENT_STATE_SCHEMA.safeParse(parsed)
+    if (result.success) {
+      return result.data
+    }
+
+    const legacyResult = LEGACY_COMMENT_STATE_SCHEMA.safeParse(parsed)
+    return legacyResult.success
+      ? upgradeLegacyCommentState(legacyResult.data)
+      : null
   } catch {
     return null
   }
@@ -342,12 +435,15 @@ function renderHeadline(profiles) {
     (profile) => getAssertionState(profile) === "failed",
   ).length
   const passedJobs = profiles.length - failedJobs
+  const workflowCount = new Set(
+    profiles.map((profile) => getWorkflowKey(profile)),
+  ).size
 
   if (failedJobs > 0) {
-    return `🔴 ${failedJobs} job${failedJobs === 1 ? "" : "s"} failed assertions · ${passedJobs} passed`
+    return `🔴 ${failedJobs} job${failedJobs === 1 ? "" : "s"} failed assertions · ${passedJobs} passed across ${workflowCount} workflow${workflowCount === 1 ? "" : "s"}`
   }
 
-  return `✅ ${passedJobs} job${passedJobs === 1 ? "" : "s"} passed assertions`
+  return `✅ ${passedJobs} job${passedJobs === 1 ? "" : "s"} passed assertions across ${workflowCount} workflow${workflowCount === 1 ? "" : "s"}`
 }
 
 /**
@@ -356,6 +452,9 @@ function renderHeadline(profiles) {
  */
 function renderSummaryTable(profiles) {
   const rows = profiles.map((profile) => {
+    const workflowLabel = escapeMarkdown(
+      getDisplayValue(profile.github.workflow, "unknown"),
+    )
     const runLabel =
       profile.github.run_id !== ""
         ? `#${escapeMarkdown(profile.github.run_id)}`
@@ -369,12 +468,12 @@ function renderSummaryTable(profiles) {
         ? `[View ↗](${escapeMarkdownLink(profile.report_link)})`
         : "-"
 
-    return `| ${runLabel} | ${jobLabel} | ${assertionLabel} | ${linkLabel} |`
+    return `| ${workflowLabel} | ${runLabel} | ${jobLabel} | ${assertionLabel} | ${linkLabel} |`
   })
 
   return [
-    "| Run | Job | Assertions | Profile |",
-    "| --- | --- | --- | --- |",
+    "| Workflow | Run | Job | Assertions | Profile |",
+    "| --- | --- | --- | --- | --- |",
     ...rows,
   ].join("\n")
 }
@@ -384,7 +483,9 @@ function renderSummaryTable(profiles) {
  * @returns {string}
  */
 function renderProfileSection(profile) {
-  const title = escapeHtml(getDisplayValue(profile.github.job, "Unknown job"))
+  const title = escapeHtml(
+    formatWorkflowJob(profile.github.workflow, profile.github.job),
+  )
   const assertionBadge = escapeHtml(getAssertionBadge(profile))
   const workloadTable = renderKeyValueTable([
     ["Workflow", profile.github.workflow],
@@ -509,7 +610,7 @@ function renderProfileFooter(profile) {
   }
   if (profile.github.run_id.length > 0 || profile.github.job.length > 0) {
     footerParts.push(
-      `Workflow Run #${escapeHtml(getDisplayValue(profile.github.run_id, "-"))} - Job ${escapeHtml(getDisplayValue(profile.github.job, "-"))}`,
+      `Workflow ${escapeHtml(getDisplayValue(profile.github.workflow, "-"))} - Run #${escapeHtml(getDisplayValue(profile.github.run_id, "-"))} - Job ${escapeHtml(getDisplayValue(profile.github.job, "-"))}`,
     )
   }
   if (profile.timestamp.length > 0) {
@@ -733,6 +834,62 @@ function compareRuns(left, right) {
   }
 
   return 0
+}
+
+/**
+ * @param {LegacyCommentState} state
+ * @returns {CommentState}
+ */
+function upgradeLegacyCommentState(state) {
+  return {
+    version: 2,
+    workflow_runs: state.profiles.reduce((accumulator, profile) => {
+      accumulator[getWorkflowKey(profile)] = state.latest_run
+      return accumulator
+    }, /** @type {Record<string, WorkflowRun>} */ ({})),
+    profiles: [...state.profiles].sort(compareProfiles),
+  }
+}
+
+/**
+ * @param {NormalizedProfile} profile
+ * @returns {string}
+ */
+function getWorkflowKey(profile) {
+  return getDisplayValue(profile.github.workflow, "unknown-workflow")
+}
+
+/**
+ * @param {NormalizedProfile} profile
+ * @returns {string}
+ */
+function getProfileKey(profile) {
+  return `${getWorkflowKey(profile)}\u0000${getDisplayValue(profile.github.job, "unknown-job")}`
+}
+
+/**
+ * @param {NormalizedProfile} left
+ * @param {NormalizedProfile} right
+ * @returns {number}
+ */
+function compareProfiles(left, right) {
+  const workflowCompare = getWorkflowKey(left).localeCompare(
+    getWorkflowKey(right),
+  )
+  if (workflowCompare !== 0) {
+    return workflowCompare
+  }
+
+  return left.github.job.localeCompare(right.github.job)
+}
+
+/**
+ * @param {string} workflow
+ * @param {string} job
+ * @returns {string}
+ */
+function formatWorkflowJob(workflow, job) {
+  return `${getDisplayValue(workflow, "Unknown workflow")} / ${getDisplayValue(job, "Unknown job")}`
 }
 
 /**

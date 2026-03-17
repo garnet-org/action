@@ -3,6 +3,7 @@ import * as github from "@actions/github"
 import {
   COMMENT_MARKER,
   mergeCommentState,
+  mergeCommentStates,
   parseCommentState,
   renderCommentBody,
 } from "./profile-comment.js"
@@ -46,8 +47,11 @@ export async function publishPullRequestComment(options) {
     .sort((left, right) => left.comment.id - right.comment.id)
 
   const primary = matchingComments.at(-1) ?? null
+  const existingState = mergeCommentStates(
+    matchingComments.map((entry) => entry.state).filter(isPresent),
+  )
   const mergeResult = mergeCommentState(
-    primary?.state ?? null,
+    existingState,
     options.profile,
     options.runAttempt,
   )
@@ -226,4 +230,13 @@ function isRecord(value) {
  */
 function getOptionalRecord(value) {
   return isRecord(value) ? value : null
+}
+
+/**
+ * @template T
+ * @param {T | null | undefined} value
+ * @returns {value is T}
+ */
+function isPresent(value) {
+  return value !== null && value !== undefined
 }

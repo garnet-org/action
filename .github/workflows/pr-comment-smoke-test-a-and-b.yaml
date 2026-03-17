@@ -1,0 +1,25 @@
+name: PR Comment Smoke Test
+
+on:
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  smoke-a:
+    name: Smoke A
+    uses: ./.github/workflows/reusable-smoke-test.yaml
+    with:
+      job_name: smoke-a
+    secrets: inherit
+
+  smoke-b:
+    name: Smoke B
+    uses: ./.github/workflows/reusable-smoke-test.yaml
+    with:
+      job_name: smoke-b
+    secrets: inherit
