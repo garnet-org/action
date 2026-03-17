@@ -25,8 +25,14 @@ jobs:
         with:
           node-version: "24"
 
+      - name: Remove dangling tsc
+        run: |-
+          npm uninstall tsc -g --force || true
+          npm uninstall typescript -g --force || true
+
       - name: Install dependencies
-        run: npm ci --include=dev
+        run: |-
+          npm ci --include=dev
 
       - name: Typecheck
         run: npm run typecheck
