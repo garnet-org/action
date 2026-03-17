@@ -576,7 +576,7 @@ function renderTable(headers, rows) {
  */
 function renderKeyValueTable(rows) {
   return renderTable(
-    ["", ""],
+    ["Field", "Value"],
     rows.map(([key, value]) => [
       escapeMarkdown(key),
       escapeMarkdown(getDisplayValue(value, "-")),
