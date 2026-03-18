@@ -42,8 +42,10 @@ all the way down to the exact binary that opened the connection.
 Results appear as a step summary, PR comment: a summary table per job with assertion
 results (pass / fail) and an egress table with process lineage inline. A permalink takes you to the Garnet UI for detailed investigation.
 
-Assertions are a general framework and will expand over time. The first shipped
-assertion family is `known_bad_egress`.
+Assertions are a general framework and will expand over time. Think of them as
+unit tests for runtime behavior based on invariants. The first shipped assertion
+family is `known_bad_egress`, and future assertion families can cover invariants
+like hidden ELF binary execution and other suspicious execution patterns.
 
 **Lineage-first evidence.**
 When something unexpected runs, you don't get a domain name — you get
@@ -106,7 +108,10 @@ jobs:
 
 ## What assertions mean
 
-Current status labels reflect the first shipped assertion family (`known_bad_egress`).
+Assertions act like unit tests for runtime behavior:
+- Each assertion checks an invariant about what should or should not happen.
+- Current status labels reflect the first shipped assertion family (`known_bad_egress`).
+- Additional assertion families can cover invariants like hidden ELF binary execution.
 
 | Status | Meaning |
 |--------|---------|
