@@ -11,8 +11,14 @@
     <a href="https://app.garnet.ai">Get an API token</a>
   </p>
 
-[![MIT License](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
-[![GitHub Marketplace](https://img.shields.io/badge/marketplace-Garnet-purple?logo=github)](https://github.com/marketplace/actions/garnet)
+<p>
+  <a href="../../releases">
+    <img alt="Release" src="https://img.shields.io/github/v/release/garnet-org/action?display_name=tag&sort=semver" />
+  </a>
+  <a href="./LICENSE">
+    <img alt="License" src="https://img.shields.io/badge/license-MIT-blue.svg" />
+  </a>
+</p>
 </div>
 
 Garnet profiles every workflow run using Jibril, an eBPF sensor that attaches
