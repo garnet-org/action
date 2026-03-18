@@ -1,4 +1,3 @@
-import * as fs from "node:fs/promises"
 import { z } from "zod"
 
 export const COMMENT_MARKER = "garnet-runtime-visibility"
@@ -212,15 +211,6 @@ export function getDefaultJsonProfileFile() {
   }
 
   return DEFAULT_JSON_PROFILE_FILE
-}
-
-/**
- * @param {string} filePath
- * @returns {Promise<NormalizedProfile>}
- */
-export async function readProfileFromJsonFile(filePath) {
-  const content = await fs.readFile(filePath, "utf8")
-  return parseProfileJson(content)
 }
 
 /**

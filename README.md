@@ -67,17 +67,17 @@ jobs:
 ## What you’ll see
 
 - **GitHub job summary**: a Markdown “security profile” appended at the end of the job (runs even if the job fails).
-- **Pull request comment**: on pull request workflows, a sticky Garnet comment is created or updated with the latest run and merged job profiles.
+- **Pull request comment**: on pull request workflows, Garnet creates one comment per push and keeps that push's jobs and workflows merged into the same comment.
 - **Garnet dashboard**: runtime events and policy evaluation for the workflow run.
 
 ## How it works
 
 - **Main step**: downloads `garnetctl` + `jibril`, creates a Garnet “agent” for the run, fetches your merged network policy, and starts Jibril as a `systemd` service on the runner.
-- **Post step (always)**: stops Jibril so it flushes events, appends the generated profile to `GITHUB_STEP_SUMMARY`, and updates a sticky pull request comment when the workflow runs for a PR. When `debug=true`, it also uploads Jibril logs as build artifacts.
+- **Post step (always)**: stops Jibril so it flushes events, appends the generated profile to `GITHUB_STEP_SUMMARY`, and creates or updates the pull request comment for the current push when the workflow runs for a PR. When `debug=true`, it also uploads Jibril logs as build artifacts.
 
 ## Pull request comments
 
-For PR workflows, the action reads Jibril's JSON profile and rebuilds the markdown into a single sticky comment for the latest workflow run. Multiple jobs from the same run are merged into that one comment so the PR stays readable.
+For PR workflows, the action reads Jibril's JSON profile and rebuilds the markdown into one comment per push. Multiple jobs and workflows from the same push are merged into that comment so the PR stays readable while preserving history across pushes.
 
 To let the action write PR comments, grant the workflow token write access to pull requests or issue comments. For example:
 

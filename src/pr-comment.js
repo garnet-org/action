@@ -18,6 +18,21 @@ import {
 
 /**
  * @typedef {{
+ *   kind: "create"
+ *   body: string
+ *   duplicateCommentIds: number[]
+ * } | {
+ *   kind: "update"
+ *   comment: PullRequestComment
+ *   body: string
+ *   duplicateCommentIds: number[]
+ * } | {
+ *   kind: "stale"
+ * }} PublishCommentPlan
+ */
+
+/**
+ * @typedef {{
  *   repository: string
  *   pullRequestNumber: number
  *   token: string
@@ -37,41 +52,66 @@ export async function publishPullRequestComment(options) {
     options.token,
   )
 
-  const comments = await client.listComments()
-  const matchingComments = comments
-    .map((comment) => ({
-      comment,
-      state: parseCommentState(comment.body),
-    }))
-    .filter((entry) => entry.state !== null)
-    .sort((left, right) => left.comment.id - right.comment.id)
-
-  const primary = matchingComments.at(-1) ?? null
-  const existingState = mergeCommentStates(
-    matchingComments.map((entry) => entry.state).filter(isPresent),
-  )
-  const mergeResult = mergeCommentState(
-    existingState,
+  const plan = planPullRequestComment(
+    await client.listComments(),
     options.profile,
     options.runAttempt,
   )
 
-  if (mergeResult.kind === "stale") {
+  if (plan.kind === "stale") {
     return "skipped-stale"
   }
 
-  const body = renderCommentBody(mergeResult.state)
-
-  if (primary === null) {
-    await client.createComment(body)
+  if (plan.kind === "create") {
+    await client.createComment(plan.body)
     return "created"
   }
 
-  if (primary.comment.body !== body) {
-    await client.updateComment(primary.comment.id, body)
+  if (plan.comment.body !== plan.body) {
+    await client.updateComment(plan.comment.id, plan.body)
   }
-  await deleteDuplicateComments(client, matchingComments.slice(0, -1))
+  await deleteComments(client, plan.duplicateCommentIds)
   return "updated"
+}
+
+/**
+ * @param {PullRequestComment[]} comments
+ * @param {NormalizedProfile} profile
+ * @param {number} runAttempt
+ * @returns {PublishCommentPlan}
+ */
+function planPullRequestComment(comments, profile, runAttempt) {
+  const threadKey = getProfileThreadKey(profile)
+  const matchingComments = getManagedCommentsForThread(comments, threadKey)
+  const primary = matchingComments.at(-1) ?? null
+  const existingState = mergeCommentStates(
+    matchingComments.map((entry) => entry.state),
+  )
+  const mergeResult = mergeCommentState(existingState, profile, runAttempt)
+
+  if (mergeResult.kind === "stale") {
+    return { kind: "stale" }
+  }
+
+  const duplicateCommentIds = matchingComments
+    .slice(0, -1)
+    .map((entry) => entry.comment.id)
+  const body = renderCommentBody(mergeResult.state)
+
+  if (primary === null) {
+    return {
+      kind: "create",
+      body,
+      duplicateCommentIds,
+    }
+  }
+
+  return {
+    kind: "update",
+    comment: primary.comment,
+    body,
+    duplicateCommentIds,
+  }
 }
 
 /**
@@ -182,7 +222,6 @@ class GitHubIssueCommentClient {
       comment_id: commentId,
     })
   }
-
   /**
    * @returns {{ owner: string, repo: string }}
    */
@@ -192,13 +231,58 @@ class GitHubIssueCommentClient {
 }
 
 /**
+ * @param {PullRequestComment[]} comments
+ * @param {string} threadKey
+ * @returns {{ comment: PullRequestComment, state: import("./profile-comment.js").CommentState }[]}
+ */
+function getManagedCommentsForThread(comments, threadKey) {
+  return comments
+    .map((comment) => {
+      const state = parseCommentState(comment.body)
+      if (state === null) {
+        return null
+      }
+
+      return isMatchingThread(state, threadKey) ? { comment, state } : null
+    })
+    .filter(isPresent)
+    .toSorted((left, right) => left.comment.id - right.comment.id)
+}
+
+/**
+ * @param {NormalizedProfile} profile
+ * @returns {string}
+ */
+function getProfileThreadKey(profile) {
+  if (profile.github.sha === "") {
+    throw new Error("profile JSON is missing the GitHub commit sha")
+  }
+
+  return profile.github.sha
+}
+
+/**
+ * @param {import("./profile-comment.js").CommentState} state
+ * @param {string} threadKey
+ * @returns {boolean}
+ */
+function isMatchingThread(state, threadKey) {
+  const firstProfile = state.profiles[0]
+  if (firstProfile === undefined || firstProfile.github.sha !== threadKey) {
+    return false
+  }
+
+  return state.profiles.every((profile) => profile.github.sha === threadKey)
+}
+
+/**
  * @param {GitHubIssueCommentClient} client
- * @param {{ comment: PullRequestComment }[]} duplicates
+ * @param {number[]} commentIds
  * @returns {Promise<void>}
  */
-async function deleteDuplicateComments(client, duplicates) {
-  for (const duplicate of duplicates) {
-    await client.deleteComment(duplicate.comment.id)
+async function deleteComments(client, commentIds) {
+  for (const commentId of commentIds) {
+    await client.deleteComment(commentId)
   }
 }
 

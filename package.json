@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "description": "GarnetAI GitHub Action",
   "private": true,
+  "type": "module",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/garnet-org/action.git"
