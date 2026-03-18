@@ -1,132 +1,371 @@
-# Garnet Runtime Security
+# Garnet — Runtime Visibility for GitHub Actions
 
 <div align="center">
   <a href="https://garnet.ai">
-    <img src="brand/garnet-logo.png" alt="Garnet" width="160" />
+    <img src="https://garnet.ai/wp-content/uploads/2023/06/logo_dark.svg" alt="Garnet" width="200" height="40">
   </a>
-
-  <p><strong>Runtime threat detection for your GitHub Actions jobs.</strong></p>
-
+  <p><strong>Runtime visibility for your GitHub Workflows.</strong></p>
   <p>
-    <a href="https://dashboard.garnet.ai">Dashboard</a> ·
+    <a href="https://app.garnet.ai">Dashboard</a> ·
     <a href="https://jibril.garnet.ai">Jibril</a> ·
     <a href="https://app.garnet.ai">Get an API token</a>
   </p>
 
-  <p>
-    <a href="../../releases">
-      <img alt="Release" src="https://img.shields.io/github/v/release/garnet-org/action?display_name=tag&sort=semver" />
-    </a>
-    <a href="../../issues">
-      <img alt="Issues" src="https://img.shields.io/github/issues/garnet-org/action" />
-    </a>
-    <a href="./LICENSE">
-      <img alt="License" src="https://img.shields.io/badge/license-MIT-blue.svg" />
-    </a>
-  </p>
+[![MIT License](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
+[![GitHub Marketplace](https://img.shields.io/badge/marketplace-Garnet-purple?logo=github)](https://github.com/marketplace/actions/garnet)
 </div>
 
-Protect your CI/CD from inside the runner. This action installs and runs **Jibril** during your job to observe process, filesystem, and network activity, enforce **Garnet network policies**, and publish a **security profile** to the job summary and pull requests.
+Garnet profiles every workflow run using Jibril, an eBPF sensor that attaches
+to your CI runner. Every process spawn and outbound connection is captured with
+full process lineage and surfaced in-line with pass / fail status of assertions, just like unit tests, but for runtime behavior.
 
-## Why this action
-
-- **Catch suspicious behavior at runtime**: alerts when workflows behave like malware (unexpected execs, file access, outbound connections).
-- **Enforce network policy**: block or flag connections that violate your org’s policy.
-- **Ship with low friction**: one step in your workflow; results land in GitHub (job summary) and in Garnet (dashboard).
-
-## Quickstart
-
-### 1) Create a token
-
-Create an API token in the Garnet app at `https://app.garnet.ai`, then add it as a repo secret named `GARNET_API_TOKEN`.
-
-### 2) Add the action to your workflow
+One YAML step. No code changes. Works on `ubuntu-latest`.
 
 ```yaml
-name: Garnet Runtime Security
-on:
-  push:
-  pull_request:
-  workflow_dispatch:
-
-jobs:
-  monitor:
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-    steps:
-      - name: Checkout (recommended)
-        uses: actions/checkout@v6
-
-      - name: Garnet Runtime Security
-        uses: garnet-org/action@v0
-        with:
-          api_token: ${{ secrets.GARNET_API_TOKEN }}
+- uses: garnet-org/action@v2
+  with:
+    api_token: ${{ secrets.GARNET_API_TOKEN }}
 ```
 
-## What you’ll see
-
-- **GitHub job summary**: a Markdown “security profile” appended at the end of the job (runs even if the job fails).
-- **Pull request comment**: on pull request workflows, Garnet creates one comment per push and keeps that push's jobs and workflows merged into the same comment.
-- **Garnet dashboard**: runtime events and policy evaluation for the workflow run.
-
-## How it works
-
-- **Main step**: downloads `garnetctl` + `jibril`, creates a Garnet “agent” for the run, fetches your merged network policy, and starts Jibril as a `systemd` service on the runner.
-- **Post step (always)**: stops Jibril so it flushes events, appends the generated profile to `GITHUB_STEP_SUMMARY`, and creates or updates the pull request comment for the current push when the workflow runs for a PR. When `debug=true`, it also uploads Jibril logs as build artifacts.
-
-## Pull request comments
-
-For PR workflows, the action reads Jibril's JSON profile and rebuilds the markdown into one comment per push. Multiple jobs and workflows from the same push are merged into that comment so the PR stays readable while preserving history across pushes.
-
-To let the action write PR comments, grant the workflow token write access to pull requests or issue comments. For example:
-
-```yaml
-permissions:
-  contents: read
-  pull-requests: write
-
-steps:
-  - uses: garnet-org/action@v0
-    with:
-      api_token: ${{ secrets.GARNET_API_TOKEN }}
-```
-
-## Inputs
-
-| Input | Description | Required | Default |
-|------|-------------|----------|---------|
-| `api_token` | Garnet API token | Yes | - |
-| `github_token` | GitHub token used to publish pull request comments | No | `${{ github.token }}` |
-| `api_url` | Garnet API base URL | No | `https://api.garnet.ai` |
-| `garnetctl_version` | `garnetctl` version (`1.2.3` or `latest`) | No | `latest` |
-| `jibril_version` | Jibril version (`v2.10.8`, `v0.0`, or `latest`) | No | `v0.0` (action@`v0`) / `v2.10.4` (action@`v1`) / `v2.10.8` (action@`v2`) |
-| `profiler_4fun` | Enable profiler “4 fun” mode | No | `false` |
-| `debug` | Enable debug output + upload Jibril logs as artifacts | No | `false` |
-
-## Requirements & compatibility
-
-- **Runner**: Linux with `systemd` (recommended: `ubuntu-latest`).
-- **Privileges**: the action uses `sudo` to install binaries and configure the Jibril service.
-- **Checkout**: `actions/checkout@v4` is recommended. If your repo isn’t checked out, Jibril may need to fetch the workflow file via the GitHub API instead.
-
-## Troubleshooting
-
-- **“API token is required”**: make sure `api_token` is set and the `GARNET_API_TOKEN` secret exists.
-- **No summary output**: enable `debug: "true"` to upload Jibril logs as artifacts, then inspect `jibril.log` / `jibril.err`.
-- **Restrictive permissions**: this action typically works with `permissions: contents: read`. If your workflow hardens permissions aggressively, ensure the job can read repository contents.
-
-## Development
-
-- Running `npm install` or `npm ci` configures a repo-local git hook path at `.githooks`.
-- The pre-commit hook runs `npm run build` and stages `dist/` when staged changes can affect the bundles, so commits do not miss generated artifacts.
-
-## License
-
-MIT
+Get your API token at [app.garnet.ai](https://app.garnet.ai)
 
 ---
 
+## What you get
+
+**A behavioral profile of every run.**
+Jibril captures every process spawn and outbound connection during your
+workflow — with full lineage tracing which parent spawned which child,
+all the way down to the exact binary that opened the connection.
+
+**Runtime assertions in your PR.**
+Results appear as a step summary, PR comment: a summary table per job with assertion
+results (pass / fail) and an egress table with process lineage inline. A permalink takes you to the Garnet UI for detailed investigation.
+
+Assertions are a general framework and will expand over time. The first shipped
+assertion family is `known_bad_egress`.
+
+**Lineage-first evidence.**
+When something unexpected runs, you don't get a domain name — you get
+the full chain:
+
+```
+npm install → dep@1.2.3 postinstall → bash → curl → unknown-domain.com
+```
+
+---
+
+## Quickstart
+
+1. Create an account at [app.garnet.ai](https://app.garnet.ai)
+2. Generate an API token
+3. Add `GARNET_API_TOKEN` to your repository secrets
+4. Add Garnet as a step in any workflow:
+
+```yaml
+name: CI
+on: [push, pull_request]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: garnet-org/action@v2
+        with:
+          api_token: ${{ secrets.GARNET_API_TOKEN }}
+
+      - name: Your existing steps
+        run: npm test
+```
+
+---
+
+## Configuration
+
+| Input | Required | Default | Description |
+|-------|----------|---------|-------------|
+| `api_token` | Yes | — | Your Garnet API token from app.garnet.ai |
+| `github_token` | No | `${{ github.token }}` | GitHub token used for pull request comments |
+| `api_url` | No | `https://api.garnet.ai` | Garnet API base URL |
+| `garnetctl_version` | No | `latest` | Garnet CLI version (`1.2.3` or `latest`) |
+| `jibril_version` | No | `""` (auto) | Jibril version (`v2.10.8`, `v0.0`, or `latest`) |
+| `profiler_4fun` | No | `false` | Enable profiler 4 fun mode |
+| `debug` | No | `false` | Enable debug mode and upload logs as artifacts |
+
+## Outputs
+
+| Output | Description |
+|--------|-------------|
+| `profile_result` | Assertion result: `pass` or `fail` |
+| `report_url` | Full run report on app.garnet.ai |
+| `agent_id` | Jibril sensor instance identifier |
+
+---
+
+## What assertions mean
+
+Current status labels reflect the first shipped assertion family (`known_bad_egress`).
+
+| Status | Meaning |
+|--------|---------|
+| ✅ pass | No known-bad domains detected |
+| 🔴 fail | Connection to known-bad domain — full lineage attached |
+
+[Understanding your PR comment →](https://docs.garnet.ai)
+
+---
+
+## Why runtime visibility matters
+
+Your team reviews the code. Your CI runs it. Between `git push` and
+production, dependencies execute postinstall scripts, AI-generated functions
+spawn processes, and build steps make outbound connections — none of which
+appear in a static scan.
+
+Garnet tells you what your pipeline actually did-the ground truth for execution.
+
+---
+
+## Real incidents this catches
+
+**Shai-Hulud** — 800+ npm packages with a second-stage payload. Postinstall
+hook bootstrapped Bun, ran TruffleHog to harvest runner secrets, then
+registered a rogue GitHub runner. Caught exclusively at runtime.
+[See the breakdown →](https://www.garnet.ai/resources/shai-hulud-2)
+
+**Clinejection** — LLM agent prompt injection via a malicious GitHub Issue
+triggered code execution, poisoned the Actions cache, and exposed an npm
+publish token. 4,000+ developers received a backdoored package within 8 hours.
+
+**tj-actions/changed-files** — Supply chain compromise in a widely-pinned
+Action injected a memory scraper that printed runner secrets to public workflow
+logs across 23,000 repos.
+
+---
+
+## Requirements
+
+- `runs-on: ubuntu-latest` (Ubuntu runner with systemd)
+- Repository secret: `GARNET_API_TOKEN`
+- Garnet account: [app.garnet.ai](https://app.garnet.ai)
+
+---
+
+## Troubleshooting
+
+**Jibril fails to start**
+Confirm your `GARNET_API_TOKEN` secret is set and valid. Tokens are
+created at app.garnet.ai under Settings -> API Tokens.
+
+**No PR comment appearing**
+The action posts a comment only on `pull_request` events. Confirm your
+workflow triggers on `pull_request`.
+
+**Permission error on runner**
+The runner requires systemd access. Docker-based or non-systemd runners
+need additional configuration — open an issue and we'll help.
+
+---
+
+## Security
+
+See [SECURITY.md](./SECURITY.md) for our vulnerability disclosure policy.
+Report vulnerabilities to **security@garnet.ai** or via
+[GitHub Security Advisories](../../security/advisories/new).
+
+---
+
+## License
+
+MIT — see [LICENSE](./LICENSE)
+
+---
+
+[app.garnet.ai](https://app.garnet.ai) ·
+[docs.garnet.ai](https://docs.garnet.ai) ·
+[garnet.ai](https://garnet.ai)
+# Garnet — Runtime Visibility for GitHub Actions
+
 <div align="center">
-  <p><sub>Built by the Garnet team · <a href="https://garnet.ai">garnet.ai</a></sub></p>
+  <a href="https://garnet.ai">
+    <img src="https://garnet.ai/wp-content/uploads/2023/06/logo_dark.svg" alt="Garnet" width="200" height="40">
+  </a>
+  <p><strong>Runtime visibility for your GitHub Workflows.</strong></p>
+  <p>
+    <a href="https://app.garnet.ai">Dashboard</a> ·
+    <a href="https://jibril.garnet.ai">Jibril</a> ·
+    <a href="https://app.garnet.ai">Get an API token</a>
+  </p>
+
+[![MIT License](https://img.shields.io/badge/license-MIT-blue.svg)](./LICENSE)
+[![GitHub Marketplace](https://img.shields.io/badge/marketplace-Garnet-purple?logo=github)](https://github.com/marketplace/actions/garnet)
 </div>
+
+Garnet profiles every workflow run using Jibril, an eBPF sensor that attaches
+to your CI runner. Every process spawn and outbound connection is captured with
+full process lineage and surfaced in-line with pass / fail status of assertions, just like unit tests, but for runtime behavior.
+
+One YAML step. No code changes. Works on `ubuntu-latest`.
+
+```yaml
+- uses: garnet-org/action@v2
+  with:
+    api_token: ${{ secrets.GARNET_API_TOKEN }}
+```
+
+Get your API token at [app.garnet.ai](https://app.garnet.ai)
+
+---
+
+## What you get
+
+**A behavioral profile of every run.**
+Jibril captures every process spawn and outbound connection during your
+workflow — with full lineage tracing which parent spawned which child,
+all the way down to the exact binary that opened the connection.
+
+**Runtime assertions in your PR.**
+Results appear as a step summary, PR comment: a summary table per job with assertion
+results (pass / fail) and an egress table with process lineage inline. A permalink takes you to the Garnet UI for detailed investigation.
+
+**Lineage-first evidence.**
+When something unexpected runs, you don't get a domain name — you get
+the full chain:
+
+```
+npm install → dep@1.2.3 postinstall → bash → curl → unknown-domain.com
+```
+
+---
+
+## Quickstart
+
+1. Create an account at [app.garnet.ai](https://app.garnet.ai)
+2. Generate an API token
+3. Add `GARNET_API_TOKEN` to your repository secrets
+4. Add Garnet as a step in any workflow:
+
+```yaml
+name: CI
+on: [push, pull_request]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: garnet-org/action@v2
+        with:
+          api_token: ${{ secrets.GARNET_API_TOKEN }}
+
+      - name: Your existing steps
+        run: npm test
+```
+
+---
+
+## Configuration
+
+| Input | Required | Default | Description |
+|-------|----------|---------|-------------|
+| `api_token` | Yes | — | Your Garnet API token from app.garnet.ai |
+| `github_token` | No | `${{ github.token }}` | GitHub token used for pull request comments |
+| `api_url` | No | `https://api.garnet.ai` | Garnet API base URL |
+| `garnetctl_version` | No | `latest` | Garnet CLI version (`1.2.3` or `latest`) |
+| `jibril_version` | No | `""` (auto) | Jibril version (`v2.10.8`, `v0.0`, or `latest`) |
+| `profiler_4fun` | No | `false` | Enable profiler 4 fun mode |
+| `debug` | No | `false` | Enable debug mode and upload logs as artifacts |
+
+## Outputs
+
+| Output | Description |
+|--------|-------------|
+| `profile_result` | Assertion result: `pass` or `fail` |
+| `report_url` | Full run report on app.garnet.ai |
+| `agent_id` | Jibril sensor instance identifier |
+
+---
+
+## What assertions mean
+
+| Status | Meaning |
+|--------|---------|
+| ✅ pass | No known-bad domains detected |
+| 🔴 fail | Connection to known-bad domain — full lineage attached |
+
+[Understanding your PR comment →](https://docs.garnet.ai)
+
+---
+
+## Why runtime visibility matters
+
+Your team reviews the code. Your CI runs it. Between `git push` and
+production, dependencies execute postinstall scripts, AI-generated functions
+spawn processes, and build steps make outbound connections — none of which
+appear in a static scan.
+
+Garnet tells you what your pipeline actually did–the ground truth for execution. 
+
+---
+
+## Real incidents this catches
+
+**Shai-Hulud** — 800+ npm packages with a second-stage payload. Postinstall
+hook bootstrapped Bun, ran TruffleHog to harvest runner secrets, then
+registered a rogue GitHub runner. Caught exclusively at runtime.
+[See the breakdown →](https://www.garnet.ai/resources/shai-hulud-2)
+
+**Clinejection** — LLM agent prompt injection via a malicious GitHub Issue
+triggered code execution, poisoned the Actions cache, and exposed an npm
+publish token. 4,000+ developers received a backdoored package within 8 hours.
+
+**tj-actions/changed-files** — Supply chain compromise in a widely-pinned
+Action injected a memory scraper that printed runner secrets to public workflow
+logs across 23,000 repos.
+
+---
+
+## Requirements
+
+- `runs-on: ubuntu-latest` (Ubuntu runner with systemd)
+- Repository secret: `GARNET_API_TOKEN`
+- Garnet account: [app.garnet.ai](https://app.garnet.ai)
+
+---
+
+## Troubleshooting
+
+**Jibril fails to start**
+Confirm your `GARNET_API_TOKEN` secret is set and valid. Tokens are
+created at app.garnet.ai under Settings → API Tokens.
+
+**No PR comment appearing**
+The action posts a comment only on `pull_request` events. Confirm your
+workflow triggers on `pull_request`.
+
+**Permission error on runner**
+The runner requires systemd access. Docker-based or non-systemd runners
+need additional configuration — open an issue and we'll help.
+
+---
+
+## Security
+
+See [SECURITY.md](./SECURITY.md) for our vulnerability disclosure policy.
+Report vulnerabilities to **security@garnet.ai** or via
+[GitHub Security Advisories](../../security/advisories/new).
+
+---
+
+## License
+
+MIT — see [LICENSE](./LICENSE)
+
+---
+
+[app.garnet.ai](https://app.garnet.ai) ·
+[docs.garnet.ai](https://docs.garnet.ai) ·
+[garnet.ai](https://garnet.ai)

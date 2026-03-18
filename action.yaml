@@ -1,11 +1,11 @@
-name: "Garnet Runtime Security"
-description: "Protect your workflows with real-time runtime security monitoring"
+name: 'Garnet'
+description: 'Runtime visibility for GitHub Actions. See every process spawn and outbound connection your CI makes — with full process lineage.'
 branding:
-  icon: "shield"
-  color: "blue"
+  icon: 'activity'
+  color: 'purple'
 inputs:
   api_token:
-    description: "Garnet API token"
+    description: 'Your Garnet API token from app.garnet.ai'
     required: true
   github_token:
     description: "GitHub token used for pull request comments"
@@ -31,6 +31,13 @@ inputs:
     description: "Enable debug mode"
     required: false
     default: "false"
+outputs:
+  profile_result:
+    description: 'Assertion result for this run: pass or fail'
+  report_url:
+    description: 'Link to the full run report on app.garnet.ai'
+  agent_id:
+    description: 'Identifier for the Jibril sensor instance that ran'
 runs:
   using: "node24"
   main: "dist/main/index.js"
