@@ -2,7 +2,7 @@
 
 <div align="center">
   <a href="https://garnet.ai">
-    <img src="https://garnet.ai/wp-content/uploads/2023/06/logo_dark.svg" alt="Garnet" width="200" height="40">
+    <img src="brand/garnet-logo.png" alt="Garnet" width="160" />
   </a>
   <p><strong>Runtime visibility for your GitHub Workflows.</strong></p>
   <p>
@@ -125,7 +125,7 @@ Garnet tells you what your pipeline actually did-the ground truth for execution.
 
 **Shai-Hulud** — 800+ npm packages with a second-stage payload. Postinstall
 hook bootstrapped Bun, ran TruffleHog to harvest runner secrets, then
-registered a rogue GitHub runner. Caught exclusively at runtime.
+registered a rogue GitHub runner.
 [See the breakdown →](https://www.garnet.ai/resources/shai-hulud-2)
 
 **Clinejection** — LLM agent prompt injection via a malicious GitHub Issue
