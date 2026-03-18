@@ -18,11 +18,11 @@
 </p>
 </div>
 
-Garnet profiles every workflow run using Jibril, an eBPF sensor that attaches
+Garnet provides runtime visibility and behavioral assertions for your GitHub workflows. It profiles every workflow run using Jibril, an eBPF sensor that attaches
 to your CI runner. Every process spawn and outbound connection is captured with
-full process lineage and surfaced in-line with pass / fail status of assertions.
+full process lineage and surfaced in-line with pass / fail status.
 
-One YAML step. No code changes. Works on `ubuntu-latest`.
+One YAML step in your workflow file, No code changes.
 
 ```yaml
 - uses: garnet-org/action@v2
@@ -130,10 +130,6 @@ Garnet tells you what your pipeline actually did-the ground truth for execution.
 hook bootstrapped Bun, ran TruffleHog to harvest runner secrets, then
 registered a rogue GitHub runner.
 [See the breakdown →](https://www.garnet.ai/resources/shai-hulud-2)
-
-**Clinejection** — LLM agent prompt injection via a malicious GitHub Issue
-triggered code execution, poisoned the Actions cache, and exposed an npm
-publish token. 4,000+ developers received a backdoored package within 8 hours.
 
 **tj-actions/changed-files** — Supply chain compromise in a widely-pinned
 Action injected a memory scraper that printed runner secrets to public workflow
