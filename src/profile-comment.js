@@ -1,4 +1,5 @@
 import { z } from "zod"
+import { getOptionalRecord, isRecord } from "./shared.js"
 
 export const COMMENT_MARKER = "garnet-runtime-visibility"
 
@@ -961,22 +962,6 @@ function normalizeResult(value) {
     return normalized
   }
   return "unknown"
-}
-
-/**
- * @param {unknown} value
- * @returns {value is Record<string, unknown>}
- */
-function isRecord(value) {
-  return typeof value === "object" && value !== null
-}
-
-/**
- * @param {unknown} value
- * @returns {Record<string, unknown> | null}
- */
-function getOptionalRecord(value) {
-  return isRecord(value) ? value : null
 }
 
 /**
