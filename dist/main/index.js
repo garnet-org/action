@@ -1,5 +1,5 @@
-/******/ (() => { // webpackBootstrap
-/******/ 	var __webpack_modules__ = ({
+import { createRequire as __WEBPACK_EXTERNAL_createRequire } from "module";
+/******/ var __webpack_modules__ = ({
 
 /***/ 770:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
@@ -12,7 +12,6 @@ module.exports = __nccwpck_require__(218);
 /***/ 218:
 /***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
 
-"use strict";
 var __webpack_unused_export__;
 
 
@@ -285,7 +284,6 @@ __webpack_unused_export__ = debug; // for test
 /***/ 6752:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
-"use strict";
 var __webpack_unused_export__;
 
 
@@ -527,7 +525,6 @@ module.exports = {
 /***/ 2279:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
-"use strict";
 
 
 const assert = __nccwpck_require__(4589)
@@ -643,7 +640,6 @@ module.exports = connect
 /***/ 6862:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
-"use strict";
 
 
 const {
@@ -902,7 +898,6 @@ module.exports = pipeline
 /***/ 4043:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
-"use strict";
 
 
 const assert = __nccwpck_require__(4589)
@@ -1124,7 +1119,6 @@ module.exports.RequestHandler = RequestHandler
 /***/ 3560:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
-"use strict";
 
 
 const assert = __nccwpck_require__(4589)
@@ -1352,7 +1346,6 @@ module.exports = stream
 /***/ 1882:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
-"use strict";
 
 
 const { InvalidArgumentError, SocketError } = __nccwpck_require__(8707)
@@ -1468,7 +1461,6 @@ module.exports = upgrade
 /***/ 6615:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
-"use strict";
 
 
 module.exports.request = __nccwpck_require__(4043)
@@ -1483,7 +1475,6 @@ module.exports.connect = __nccwpck_require__(2279)
 /***/ 9927:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
-"use strict";
 // Ported from https://github.com/nodejs/undici/pull/907
 
 
@@ -1976,7 +1967,6 @@ module.exports = {
 /***/ 9136:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
-"use strict";
 
 
 const net = __nccwpck_require__(7030)
@@ -2224,7 +2214,6 @@ module.exports = buildConnector
 /***/ 735:
 /***/ ((module) => {
 
-"use strict";
 
 
 /** @type {Record<string, string | undefined>} */
@@ -2350,7 +2339,6 @@ module.exports = {
 /***/ 2414:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
-"use strict";
 
 const diagnosticsChannel = __nccwpck_require__(3053)
 const util = __nccwpck_require__(7975)
@@ -2560,7 +2548,6 @@ module.exports = {
 /***/ 8707:
 /***/ ((module) => {
 
-"use strict";
 
 
 const kUndiciError = Symbol.for('undici.error.UND_ERR')
@@ -2993,7 +2980,6 @@ module.exports = {
 /***/ 4655:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
-"use strict";
 
 
 const {
@@ -3480,7 +3466,6 @@ module.exports = {
 /***/ 7752:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
-"use strict";
 
 
 const {
@@ -3640,7 +3625,6 @@ module.exports = {
 /***/ 3440:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
-"use strict";
 
 
 const assert = __nccwpck_require__(4589)
@@ -4367,7 +4351,6 @@ module.exports = {
 /***/ 7405:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
-"use strict";
 
 
 const { InvalidArgumentError } = __nccwpck_require__(8707)
@@ -4504,7 +4487,6 @@ module.exports = Agent
 /***/ 837:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
-"use strict";
 
 
 const {
@@ -4721,7 +4703,6 @@ module.exports = BalancedPool
 /***/ 637:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
-"use strict";
 
 
 /* global WebAssembly */
@@ -6099,7 +6080,6 @@ module.exports = connectH1
 /***/ 8788:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
-"use strict";
 
 
 const assert = __nccwpck_require__(4589)
@@ -6851,7 +6831,6 @@ module.exports = connectH2
 /***/ 3701:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
-"use strict";
 // @ts-check
 
 
@@ -7481,7 +7460,6 @@ module.exports = Client
 /***/ 1841:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
-"use strict";
 
 
 const Dispatcher = __nccwpck_require__(883)
@@ -7679,7 +7657,6 @@ module.exports = DispatcherBase
 /***/ 883:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
-"use strict";
 
 const EventEmitter = __nccwpck_require__(8474)
 
@@ -7752,7 +7729,6 @@ module.exports = Dispatcher
 /***/ 3137:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
-"use strict";
 
 
 const DispatcherBase = __nccwpck_require__(1841)
@@ -7920,7 +7896,6 @@ module.exports = EnvHttpProxyAgent
 /***/ 4660:
 /***/ ((module) => {
 
-"use strict";
 /* eslint-disable */
 
 
@@ -8045,7 +8020,6 @@ module.exports = class FixedQueue {
 /***/ 2128:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
-"use strict";
 
 
 const DispatcherBase = __nccwpck_require__(1841)
@@ -8288,7 +8262,6 @@ module.exports = PoolStats
 /***/ 628:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
-"use strict";
 
 
 const {
@@ -8403,7 +8376,6 @@ module.exports = Pool
 /***/ 6672:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
-"use strict";
 
 
 const { kProxy, kClose, kDestroy, kDispatch, kInterceptors } = __nccwpck_require__(6443)
@@ -8685,7 +8657,6 @@ module.exports = ProxyAgent
 /***/ 50:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
-"use strict";
 
 
 const Dispatcher = __nccwpck_require__(883)
@@ -8728,7 +8699,6 @@ module.exports = RetryAgent
 /***/ 2581:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
-"use strict";
 
 
 // We include a version number for the Dispatcher API. In case of breaking changes,
@@ -8768,7 +8738,6 @@ module.exports = {
 /***/ 8155:
 /***/ ((module) => {
 
-"use strict";
 
 
 module.exports = class DecoratorHandler {
@@ -8820,7 +8789,6 @@ module.exports = class DecoratorHandler {
 /***/ 8754:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
-"use strict";
 
 
 const util = __nccwpck_require__(3440)
@@ -9060,7 +9028,6 @@ module.exports = RedirectHandler
 /***/ 7816:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
-"use strict";
 
 const assert = __nccwpck_require__(4589)
 
@@ -9442,7 +9409,6 @@ module.exports = RetryHandler
 /***/ 379:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
-"use strict";
 
 const { isIP } = __nccwpck_require__(7030)
 const { lookup } = __nccwpck_require__(610)
@@ -9825,7 +9791,6 @@ module.exports = interceptorOpts => {
 /***/ 8060:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
-"use strict";
 
 
 const util = __nccwpck_require__(3440)
@@ -9956,7 +9921,6 @@ module.exports = createDumpInterceptor
 /***/ 5092:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
-"use strict";
 
 
 const RedirectHandler = __nccwpck_require__(8754)
@@ -9985,7 +9949,6 @@ module.exports = createRedirectInterceptor
 /***/ 1514:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
-"use strict";
 
 const RedirectHandler = __nccwpck_require__(8754)
 
@@ -10017,7 +9980,6 @@ module.exports = opts => {
 /***/ 2026:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
-"use strict";
 
 const RetryHandler = __nccwpck_require__(7816)
 
@@ -10044,7 +10006,6 @@ module.exports = globalOpts => {
 /***/ 2824:
 /***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
 
-"use strict";
 
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.SPECIAL_HEADERS = exports.HEADER_STATE = exports.MINOR = exports.MAJOR = exports.CONNECTION_TOKEN_CHARS = exports.HEADER_CHARS = exports.TOKEN = exports.STRICT_TOKEN = exports.HEX = exports.URL_CHAR = exports.STRICT_URL_CHAR = exports.USERINFO_CHARS = exports.MARK = exports.ALPHANUM = exports.NUM = exports.HEX_MAP = exports.NUM_MAP = exports.ALPHA = exports.FINISH = exports.H_METHOD_MAP = exports.METHOD_MAP = exports.METHODS_RTSP = exports.METHODS_ICE = exports.METHODS_HTTP = exports.METHODS = exports.LENIENT_FLAGS = exports.FLAGS = exports.TYPE = exports.ERROR = void 0;
@@ -10329,7 +10290,6 @@ exports.SPECIAL_HEADERS = {
 /***/ 3870:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
-"use strict";
 
 
 const { Buffer } = __nccwpck_require__(4573)
@@ -10342,7 +10302,6 @@ module.exports = Buffer.from('AGFzbQEAAAABJwdgAX8Bf2ADf39/AX9gAX8AYAJ/fwBgBH9/f3
 /***/ 3434:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
-"use strict";
 
 
 const { Buffer } = __nccwpck_require__(4573)
@@ -10355,7 +10314,6 @@ module.exports = Buffer.from('AGFzbQEAAAABJwdgAX8Bf2ADf39/AX9gAX8AYAJ/fwBgBH9/f3
 /***/ 172:
 /***/ ((__unused_webpack_module, exports) => {
 
-"use strict";
 
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.enumToMap = void 0;
@@ -10377,7 +10335,6 @@ exports.enumToMap = enumToMap;
 /***/ 7501:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
-"use strict";
 
 
 const { kClients } = __nccwpck_require__(6443)
@@ -10545,7 +10502,6 @@ module.exports = MockAgent
 /***/ 7365:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
-"use strict";
 
 
 const { promisify } = __nccwpck_require__(7975)
@@ -10612,7 +10568,6 @@ module.exports = MockClient
 /***/ 2429:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
-"use strict";
 
 
 const { UndiciError } = __nccwpck_require__(8707)
@@ -10648,7 +10603,6 @@ module.exports = {
 /***/ 1511:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
-"use strict";
 
 
 const { getResponseData, buildKey, addMockDispatch } = __nccwpck_require__(3397)
@@ -10863,7 +10817,6 @@ module.exports.MockScope = MockScope
 /***/ 4004:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
-"use strict";
 
 
 const { promisify } = __nccwpck_require__(7975)
@@ -10930,7 +10883,6 @@ module.exports = MockPool
 /***/ 1117:
 /***/ ((module) => {
 
-"use strict";
 
 
 module.exports = {
@@ -10961,7 +10913,6 @@ module.exports = {
 /***/ 3397:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
-"use strict";
 
 
 const { MockNotMatchedError } = __nccwpck_require__(2429)
@@ -11336,7 +11287,6 @@ module.exports = {
 /***/ 6142:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
-"use strict";
 
 
 const { Transform } = __nccwpck_require__(7075)
@@ -11387,7 +11337,6 @@ module.exports = class PendingInterceptorsFormatter {
 /***/ 1529:
 /***/ ((module) => {
 
-"use strict";
 
 
 const singulars = {
@@ -11424,7 +11373,6 @@ module.exports = class Pluralizer {
 /***/ 6603:
 /***/ ((module) => {
 
-"use strict";
 
 
 /**
@@ -11855,7 +11803,6 @@ module.exports = {
 /***/ 9634:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
-"use strict";
 
 
 const { kConstruct } = __nccwpck_require__(109)
@@ -12722,7 +12669,6 @@ module.exports = {
 /***/ 3245:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
-"use strict";
 
 
 const { kConstruct } = __nccwpck_require__(109)
@@ -12882,7 +12828,6 @@ module.exports = {
 /***/ 109:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
-"use strict";
 
 
 module.exports = {
@@ -12895,7 +12840,6 @@ module.exports = {
 /***/ 6798:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
-"use strict";
 
 
 const assert = __nccwpck_require__(4589)
@@ -12948,7 +12892,6 @@ module.exports = {
 /***/ 1276:
 /***/ ((module) => {
 
-"use strict";
 
 
 // https://wicg.github.io/cookie-store/#cookie-maximum-attribute-value-size
@@ -12968,7 +12911,6 @@ module.exports = {
 /***/ 9061:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
-"use strict";
 
 
 const { parseSetCookie } = __nccwpck_require__(1978)
@@ -13160,7 +13102,6 @@ module.exports = {
 /***/ 1978:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
-"use strict";
 
 
 const { maxNameValuePairSize, maxAttributeValueSize } = __nccwpck_require__(1276)
@@ -13485,7 +13426,6 @@ module.exports = {
 /***/ 7797:
 /***/ ((module) => {
 
-"use strict";
 
 
 /**
@@ -13775,7 +13715,6 @@ module.exports = {
 /***/ 4031:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
-"use strict";
 
 const { Transform } = __nccwpck_require__(7075)
 const { isASCIINumber, isValidLastEventId } = __nccwpck_require__(4811)
@@ -14181,7 +14120,6 @@ module.exports = {
 /***/ 1238:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
-"use strict";
 
 
 const { pipeline } = __nccwpck_require__(7075)
@@ -14669,7 +14607,6 @@ module.exports = {
 /***/ 4811:
 /***/ ((module) => {
 
-"use strict";
 
 
 /**
@@ -14714,7 +14651,6 @@ module.exports = {
 /***/ 4492:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
-"use strict";
 
 
 const util = __nccwpck_require__(3440)
@@ -15251,7 +15187,6 @@ module.exports = {
 /***/ 4495:
 /***/ ((module) => {
 
-"use strict";
 
 
 const corsSafeListedMethods = /** @type {const} */ (['GET', 'HEAD', 'POST'])
@@ -15383,7 +15318,6 @@ module.exports = {
 /***/ 1900:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
-"use strict";
 
 
 const assert = __nccwpck_require__(4589)
@@ -16135,7 +16069,6 @@ module.exports = {
 /***/ 6653:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
-"use strict";
 
 
 const { kConnected, kSize } = __nccwpck_require__(6443)
@@ -16189,7 +16122,6 @@ module.exports = function () {
 /***/ 7114:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
-"use strict";
 
 
 const { Blob, File } = __nccwpck_require__(4573)
@@ -16323,7 +16255,6 @@ module.exports = { FileLike, isFileLike }
 /***/ 116:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
-"use strict";
 
 
 const { isUSVString, bufferToLowerCasedHeaderName } = __nccwpck_require__(3440)
@@ -16805,7 +16736,6 @@ module.exports = {
 /***/ 5910:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
-"use strict";
 
 
 const { isBlobLike, iteratorMixin } = __nccwpck_require__(3168)
@@ -17065,7 +16995,6 @@ module.exports = { FormData, makeEntry }
 /***/ 1059:
 /***/ ((module) => {
 
-"use strict";
 
 
 // In case of breaking changes, increase the version
@@ -17113,7 +17042,6 @@ module.exports = {
 /***/ 660:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
-"use strict";
 // https://github.com/Ethan-Arrowood/undici-fetch
 
 
@@ -17808,7 +17736,6 @@ module.exports = {
 /***/ 4398:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
-"use strict";
 // https://github.com/Ethan-Arrowood/undici-fetch
 
 
@@ -20088,7 +20015,6 @@ module.exports = {
 /***/ 9967:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
-"use strict";
 /* globals AbortController */
 
 
@@ -21133,7 +21059,6 @@ module.exports = { Request, makeRequest, fromInnerRequest, cloneRequest }
 /***/ 9051:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
-"use strict";
 
 
 const { Headers, HeadersList, fill, getHeadersGuard, setHeadersGuard, setHeadersList } = __nccwpck_require__(660)
@@ -21751,7 +21676,6 @@ module.exports = {
 /***/ 3627:
 /***/ ((module) => {
 
-"use strict";
 
 
 module.exports = {
@@ -21768,7 +21692,6 @@ module.exports = {
 /***/ 3168:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
-"use strict";
 
 
 const { Transform } = __nccwpck_require__(7075)
@@ -23408,7 +23331,6 @@ module.exports = {
 /***/ 5893:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
-"use strict";
 
 
 const { types, inspect } = __nccwpck_require__(7975)
@@ -24111,7 +24033,6 @@ module.exports = {
 /***/ 2607:
 /***/ ((module) => {
 
-"use strict";
 
 
 /**
@@ -24409,7 +24330,6 @@ module.exports = {
 /***/ 8355:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
-"use strict";
 
 
 const {
@@ -24761,7 +24681,6 @@ module.exports = {
 /***/ 8573:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
-"use strict";
 
 
 const { webidl } = __nccwpck_require__(5893)
@@ -24847,7 +24766,6 @@ module.exports = {
 /***/ 961:
 /***/ ((module) => {
 
-"use strict";
 
 
 module.exports = {
@@ -24865,7 +24783,6 @@ module.exports = {
 /***/ 3610:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
-"use strict";
 
 
 const {
@@ -25264,7 +25181,6 @@ module.exports = {
 /***/ 6897:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
-"use strict";
 
 
 const { uid, states, sentCloseFrameState, emptyBuffer, opcodes } = __nccwpck_require__(736)
@@ -25643,7 +25559,6 @@ module.exports = {
 /***/ 736:
 /***/ ((module) => {
 
-"use strict";
 
 
 // This is a Globally Unique Identifier unique used
@@ -25717,7 +25632,6 @@ module.exports = {
 /***/ 5188:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
-"use strict";
 
 
 const { webidl } = __nccwpck_require__(5893)
@@ -26054,7 +25968,6 @@ module.exports = {
 /***/ 3264:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
-"use strict";
 
 
 const { maxUnsigned16Bit } = __nccwpck_require__(736)
@@ -26158,7 +26071,6 @@ module.exports = {
 /***/ 9469:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
-"use strict";
 
 
 const { createInflateRaw, Z_DEFAULT_WINDOWBITS } = __nccwpck_require__(8522)
@@ -26284,7 +26196,6 @@ module.exports = { PerMessageDeflate }
 /***/ 1652:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
-"use strict";
 
 
 const { Writable } = __nccwpck_require__(7075)
@@ -26719,7 +26630,6 @@ module.exports = {
 /***/ 3900:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
-"use strict";
 
 
 const { WebsocketFrameSend } = __nccwpck_require__(3264)
@@ -26831,7 +26741,6 @@ module.exports = { SendQueue }
 /***/ 1216:
 /***/ ((module) => {
 
-"use strict";
 
 
 module.exports = {
@@ -26851,7 +26760,6 @@ module.exports = {
 /***/ 8625:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
-"use strict";
 
 
 const { kReadyState, kController, kResponse, kBinaryType, kWebSocketURL } = __nccwpck_require__(1216)
@@ -27181,7 +27089,6 @@ module.exports = {
 /***/ 3726:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
-"use strict";
 
 
 const { webidl } = __nccwpck_require__(5893)
@@ -27777,330 +27684,299 @@ module.exports = {
 /***/ 2613:
 /***/ ((module) => {
 
-"use strict";
-module.exports = require("assert");
+module.exports = __WEBPACK_EXTERNAL_createRequire(import.meta.url)("assert");
 
 /***/ }),
 
 /***/ 4434:
 /***/ ((module) => {
 
-"use strict";
-module.exports = require("events");
+module.exports = __WEBPACK_EXTERNAL_createRequire(import.meta.url)("events");
 
 /***/ }),
 
 /***/ 8611:
 /***/ ((module) => {
 
-"use strict";
-module.exports = require("http");
+module.exports = __WEBPACK_EXTERNAL_createRequire(import.meta.url)("http");
 
 /***/ }),
 
 /***/ 5692:
 /***/ ((module) => {
 
-"use strict";
-module.exports = require("https");
+module.exports = __WEBPACK_EXTERNAL_createRequire(import.meta.url)("https");
 
 /***/ }),
 
 /***/ 9278:
 /***/ ((module) => {
 
-"use strict";
-module.exports = require("net");
+module.exports = __WEBPACK_EXTERNAL_createRequire(import.meta.url)("net");
 
 /***/ }),
 
 /***/ 4589:
 /***/ ((module) => {
 
-"use strict";
-module.exports = require("node:assert");
+module.exports = __WEBPACK_EXTERNAL_createRequire(import.meta.url)("node:assert");
 
 /***/ }),
 
 /***/ 6698:
 /***/ ((module) => {
 
-"use strict";
-module.exports = require("node:async_hooks");
+module.exports = __WEBPACK_EXTERNAL_createRequire(import.meta.url)("node:async_hooks");
 
 /***/ }),
 
 /***/ 4573:
 /***/ ((module) => {
 
-"use strict";
-module.exports = require("node:buffer");
+module.exports = __WEBPACK_EXTERNAL_createRequire(import.meta.url)("node:buffer");
 
 /***/ }),
 
 /***/ 7540:
 /***/ ((module) => {
 
-"use strict";
-module.exports = require("node:console");
+module.exports = __WEBPACK_EXTERNAL_createRequire(import.meta.url)("node:console");
 
 /***/ }),
 
 /***/ 7598:
 /***/ ((module) => {
 
-"use strict";
-module.exports = require("node:crypto");
+module.exports = __WEBPACK_EXTERNAL_createRequire(import.meta.url)("node:crypto");
 
 /***/ }),
 
 /***/ 3053:
 /***/ ((module) => {
 
-"use strict";
-module.exports = require("node:diagnostics_channel");
+module.exports = __WEBPACK_EXTERNAL_createRequire(import.meta.url)("node:diagnostics_channel");
 
 /***/ }),
 
 /***/ 610:
 /***/ ((module) => {
 
-"use strict";
-module.exports = require("node:dns");
+module.exports = __WEBPACK_EXTERNAL_createRequire(import.meta.url)("node:dns");
 
 /***/ }),
 
 /***/ 8474:
 /***/ ((module) => {
 
-"use strict";
-module.exports = require("node:events");
+module.exports = __WEBPACK_EXTERNAL_createRequire(import.meta.url)("node:events");
 
 /***/ }),
 
 /***/ 7067:
 /***/ ((module) => {
 
-"use strict";
-module.exports = require("node:http");
+module.exports = __WEBPACK_EXTERNAL_createRequire(import.meta.url)("node:http");
 
 /***/ }),
 
 /***/ 2467:
 /***/ ((module) => {
 
-"use strict";
-module.exports = require("node:http2");
+module.exports = __WEBPACK_EXTERNAL_createRequire(import.meta.url)("node:http2");
 
 /***/ }),
 
 /***/ 7030:
 /***/ ((module) => {
 
-"use strict";
-module.exports = require("node:net");
+module.exports = __WEBPACK_EXTERNAL_createRequire(import.meta.url)("node:net");
 
 /***/ }),
 
 /***/ 643:
 /***/ ((module) => {
 
-"use strict";
-module.exports = require("node:perf_hooks");
+module.exports = __WEBPACK_EXTERNAL_createRequire(import.meta.url)("node:perf_hooks");
 
 /***/ }),
 
 /***/ 1792:
 /***/ ((module) => {
 
-"use strict";
-module.exports = require("node:querystring");
+module.exports = __WEBPACK_EXTERNAL_createRequire(import.meta.url)("node:querystring");
 
 /***/ }),
 
 /***/ 7075:
 /***/ ((module) => {
 
-"use strict";
-module.exports = require("node:stream");
+module.exports = __WEBPACK_EXTERNAL_createRequire(import.meta.url)("node:stream");
 
 /***/ }),
 
 /***/ 1692:
 /***/ ((module) => {
 
-"use strict";
-module.exports = require("node:tls");
+module.exports = __WEBPACK_EXTERNAL_createRequire(import.meta.url)("node:tls");
 
 /***/ }),
 
 /***/ 3136:
 /***/ ((module) => {
 
-"use strict";
-module.exports = require("node:url");
+module.exports = __WEBPACK_EXTERNAL_createRequire(import.meta.url)("node:url");
 
 /***/ }),
 
 /***/ 7975:
 /***/ ((module) => {
 
-"use strict";
-module.exports = require("node:util");
+module.exports = __WEBPACK_EXTERNAL_createRequire(import.meta.url)("node:util");
 
 /***/ }),
 
 /***/ 3429:
 /***/ ((module) => {
 
-"use strict";
-module.exports = require("node:util/types");
+module.exports = __WEBPACK_EXTERNAL_createRequire(import.meta.url)("node:util/types");
 
 /***/ }),
 
 /***/ 5919:
 /***/ ((module) => {
 
-"use strict";
-module.exports = require("node:worker_threads");
+module.exports = __WEBPACK_EXTERNAL_createRequire(import.meta.url)("node:worker_threads");
 
 /***/ }),
 
 /***/ 8522:
 /***/ ((module) => {
 
-"use strict";
-module.exports = require("node:zlib");
+module.exports = __WEBPACK_EXTERNAL_createRequire(import.meta.url)("node:zlib");
 
 /***/ }),
 
 /***/ 3193:
 /***/ ((module) => {
 
-"use strict";
-module.exports = require("string_decoder");
+module.exports = __WEBPACK_EXTERNAL_createRequire(import.meta.url)("string_decoder");
 
 /***/ }),
 
 /***/ 4756:
 /***/ ((module) => {
 
-"use strict";
-module.exports = require("tls");
+module.exports = __WEBPACK_EXTERNAL_createRequire(import.meta.url)("tls");
 
 /***/ }),
 
 /***/ 9023:
 /***/ ((module) => {
 
-"use strict";
-module.exports = require("util");
+module.exports = __WEBPACK_EXTERNAL_createRequire(import.meta.url)("util");
 
 /***/ })
 
-/******/ 	});
+/******/ });
 /************************************************************************/
-/******/ 	// The module cache
-/******/ 	var __webpack_module_cache__ = {};
-/******/ 	
-/******/ 	// The require function
-/******/ 	function __nccwpck_require__(moduleId) {
-/******/ 		// Check if module is in cache
-/******/ 		var cachedModule = __webpack_module_cache__[moduleId];
-/******/ 		if (cachedModule !== undefined) {
-/******/ 			return cachedModule.exports;
-/******/ 		}
-/******/ 		// Create a new module (and put it into the cache)
-/******/ 		var module = __webpack_module_cache__[moduleId] = {
-/******/ 			// no module.id needed
-/******/ 			// no module.loaded needed
-/******/ 			exports: {}
-/******/ 		};
-/******/ 	
-/******/ 		// Execute the module function
-/******/ 		var threw = true;
-/******/ 		try {
-/******/ 			__webpack_modules__[moduleId](module, module.exports, __nccwpck_require__);
-/******/ 			threw = false;
-/******/ 		} finally {
-/******/ 			if(threw) delete __webpack_module_cache__[moduleId];
-/******/ 		}
-/******/ 	
-/******/ 		// Return the exports of the module
-/******/ 		return module.exports;
+/******/ // The module cache
+/******/ var __webpack_module_cache__ = {};
+/******/ 
+/******/ // The require function
+/******/ function __nccwpck_require__(moduleId) {
+/******/ 	// Check if module is in cache
+/******/ 	var cachedModule = __webpack_module_cache__[moduleId];
+/******/ 	if (cachedModule !== undefined) {
+/******/ 		return cachedModule.exports;
 /******/ 	}
-/******/ 	
+/******/ 	// Create a new module (and put it into the cache)
+/******/ 	var module = __webpack_module_cache__[moduleId] = {
+/******/ 		// no module.id needed
+/******/ 		// no module.loaded needed
+/******/ 		exports: {}
+/******/ 	};
+/******/ 
+/******/ 	// Execute the module function
+/******/ 	var threw = true;
+/******/ 	try {
+/******/ 		__webpack_modules__[moduleId](module, module.exports, __nccwpck_require__);
+/******/ 		threw = false;
+/******/ 	} finally {
+/******/ 		if(threw) delete __webpack_module_cache__[moduleId];
+/******/ 	}
+/******/ 
+/******/ 	// Return the exports of the module
+/******/ 	return module.exports;
+/******/ }
+/******/ 
 /************************************************************************/
-/******/ 	/* webpack/runtime/create fake namespace object */
-/******/ 	(() => {
-/******/ 		var getProto = Object.getPrototypeOf ? (obj) => (Object.getPrototypeOf(obj)) : (obj) => (obj.__proto__);
-/******/ 		var leafPrototypes;
-/******/ 		// create a fake namespace object
-/******/ 		// mode & 1: value is a module id, require it
-/******/ 		// mode & 2: merge all properties of value into the ns
-/******/ 		// mode & 4: return value when already ns object
-/******/ 		// mode & 16: return value when it's Promise-like
-/******/ 		// mode & 8|1: behave like require
-/******/ 		__nccwpck_require__.t = function(value, mode) {
-/******/ 			if(mode & 1) value = this(value);
-/******/ 			if(mode & 8) return value;
-/******/ 			if(typeof value === 'object' && value) {
-/******/ 				if((mode & 4) && value.__esModule) return value;
-/******/ 				if((mode & 16) && typeof value.then === 'function') return value;
+/******/ /* webpack/runtime/create fake namespace object */
+/******/ (() => {
+/******/ 	var getProto = Object.getPrototypeOf ? (obj) => (Object.getPrototypeOf(obj)) : (obj) => (obj.__proto__);
+/******/ 	var leafPrototypes;
+/******/ 	// create a fake namespace object
+/******/ 	// mode & 1: value is a module id, require it
+/******/ 	// mode & 2: merge all properties of value into the ns
+/******/ 	// mode & 4: return value when already ns object
+/******/ 	// mode & 16: return value when it's Promise-like
+/******/ 	// mode & 8|1: behave like require
+/******/ 	__nccwpck_require__.t = function(value, mode) {
+/******/ 		if(mode & 1) value = this(value);
+/******/ 		if(mode & 8) return value;
+/******/ 		if(typeof value === 'object' && value) {
+/******/ 			if((mode & 4) && value.__esModule) return value;
+/******/ 			if((mode & 16) && typeof value.then === 'function') return value;
+/******/ 		}
+/******/ 		var ns = Object.create(null);
+/******/ 		__nccwpck_require__.r(ns);
+/******/ 		var def = {};
+/******/ 		leafPrototypes = leafPrototypes || [null, getProto({}), getProto([]), getProto(getProto)];
+/******/ 		for(var current = mode & 2 && value; typeof current == 'object' && !~leafPrototypes.indexOf(current); current = getProto(current)) {
+/******/ 			Object.getOwnPropertyNames(current).forEach((key) => (def[key] = () => (value[key])));
+/******/ 		}
+/******/ 		def['default'] = () => (value);
+/******/ 		__nccwpck_require__.d(ns, def);
+/******/ 		return ns;
+/******/ 	};
+/******/ })();
+/******/ 
+/******/ /* webpack/runtime/define property getters */
+/******/ (() => {
+/******/ 	// define getter functions for harmony exports
+/******/ 	__nccwpck_require__.d = (exports, definition) => {
+/******/ 		for(var key in definition) {
+/******/ 			if(__nccwpck_require__.o(definition, key) && !__nccwpck_require__.o(exports, key)) {
+/******/ 				Object.defineProperty(exports, key, { enumerable: true, get: definition[key] });
 /******/ 			}
-/******/ 			var ns = Object.create(null);
-/******/ 			__nccwpck_require__.r(ns);
-/******/ 			var def = {};
-/******/ 			leafPrototypes = leafPrototypes || [null, getProto({}), getProto([]), getProto(getProto)];
-/******/ 			for(var current = mode & 2 && value; typeof current == 'object' && !~leafPrototypes.indexOf(current); current = getProto(current)) {
-/******/ 				Object.getOwnPropertyNames(current).forEach((key) => (def[key] = () => (value[key])));
-/******/ 			}
-/******/ 			def['default'] = () => (value);
-/******/ 			__nccwpck_require__.d(ns, def);
-/******/ 			return ns;
-/******/ 		};
-/******/ 	})();
-/******/ 	
-/******/ 	/* webpack/runtime/define property getters */
-/******/ 	(() => {
-/******/ 		// define getter functions for harmony exports
-/******/ 		__nccwpck_require__.d = (exports, definition) => {
-/******/ 			for(var key in definition) {
-/******/ 				if(__nccwpck_require__.o(definition, key) && !__nccwpck_require__.o(exports, key)) {
-/******/ 					Object.defineProperty(exports, key, { enumerable: true, get: definition[key] });
-/******/ 				}
-/******/ 			}
-/******/ 		};
-/******/ 	})();
-/******/ 	
-/******/ 	/* webpack/runtime/hasOwnProperty shorthand */
-/******/ 	(() => {
-/******/ 		__nccwpck_require__.o = (obj, prop) => (Object.prototype.hasOwnProperty.call(obj, prop))
-/******/ 	})();
-/******/ 	
-/******/ 	/* webpack/runtime/make namespace object */
-/******/ 	(() => {
-/******/ 		// define __esModule on exports
-/******/ 		__nccwpck_require__.r = (exports) => {
-/******/ 			if(typeof Symbol !== 'undefined' && Symbol.toStringTag) {
-/******/ 				Object.defineProperty(exports, Symbol.toStringTag, { value: 'Module' });
-/******/ 			}
-/******/ 			Object.defineProperty(exports, '__esModule', { value: true });
-/******/ 		};
-/******/ 	})();
-/******/ 	
-/******/ 	/* webpack/runtime/compat */
-/******/ 	
-/******/ 	if (typeof __nccwpck_require__ !== 'undefined') __nccwpck_require__.ab = __dirname + "/";
-/******/ 	
+/******/ 		}
+/******/ 	};
+/******/ })();
+/******/ 
+/******/ /* webpack/runtime/hasOwnProperty shorthand */
+/******/ (() => {
+/******/ 	__nccwpck_require__.o = (obj, prop) => (Object.prototype.hasOwnProperty.call(obj, prop))
+/******/ })();
+/******/ 
+/******/ /* webpack/runtime/make namespace object */
+/******/ (() => {
+/******/ 	// define __esModule on exports
+/******/ 	__nccwpck_require__.r = (exports) => {
+/******/ 		if(typeof Symbol !== 'undefined' && Symbol.toStringTag) {
+/******/ 			Object.defineProperty(exports, Symbol.toStringTag, { value: 'Module' });
+/******/ 		}
+/******/ 		Object.defineProperty(exports, '__esModule', { value: true });
+/******/ 	};
+/******/ })();
+/******/ 
+/******/ /* webpack/runtime/compat */
+/******/ 
+/******/ if (typeof __nccwpck_require__ !== 'undefined') __nccwpck_require__.ab = new URL('.', import.meta.url).pathname.slice(import.meta.url.match(/^file:\/\/\/\w:/) ? 1 : 0, -1) + "/";
+/******/ 
 /************************************************************************/
 var __webpack_exports__ = {};
-// This entry need to be wrapped in an IIFE because it need to be in strict mode.
-(() => {
-"use strict";
 
 ;// CONCATENATED MODULE: external "os"
-const external_os_namespaceObject = require("os");
+const external_os_namespaceObject = __WEBPACK_EXTERNAL_createRequire(import.meta.url)("os");
 ;// CONCATENATED MODULE: ./node_modules/@actions/core/lib/utils.js
 // We use any as a valid input type
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -28230,9 +28106,9 @@ function escapeProperty(s) {
 }
 //# sourceMappingURL=command.js.map
 ;// CONCATENATED MODULE: external "crypto"
-const external_crypto_namespaceObject = require("crypto");
+const external_crypto_namespaceObject = __WEBPACK_EXTERNAL_createRequire(import.meta.url)("crypto");
 ;// CONCATENATED MODULE: external "fs"
-const external_fs_namespaceObject = require("fs");
+const external_fs_namespaceObject = __WEBPACK_EXTERNAL_createRequire(import.meta.url)("fs");
 ;// CONCATENATED MODULE: ./node_modules/@actions/core/lib/file-command.js
 // For internal use, subject to change.
 // We use any as a valid input type
@@ -28269,7 +28145,7 @@ function file_command_prepareKeyValueMessage(key, value) {
 }
 //# sourceMappingURL=file-command.js.map
 ;// CONCATENATED MODULE: external "path"
-const external_path_namespaceObject = require("path");
+const external_path_namespaceObject = __WEBPACK_EXTERNAL_createRequire(import.meta.url)("path");
 // EXTERNAL MODULE: external "http"
 var external_http_ = __nccwpck_require__(8611);
 var external_http_namespaceObject = /*#__PURE__*/__nccwpck_require__.t(external_http_, 2);
@@ -29538,7 +29414,7 @@ var external_string_decoder_ = __nccwpck_require__(3193);
 // EXTERNAL MODULE: external "events"
 var external_events_ = __nccwpck_require__(4434);
 ;// CONCATENATED MODULE: external "child_process"
-const external_child_process_namespaceObject = require("child_process");
+const external_child_process_namespaceObject = __WEBPACK_EXTERNAL_createRequire(import.meta.url)("child_process");
 // EXTERNAL MODULE: external "assert"
 var external_assert_ = __nccwpck_require__(2613);
 ;// CONCATENATED MODULE: ./node_modules/@actions/io/lib/io-util.js
@@ -29994,7 +29870,7 @@ function io_copyFile(srcFile, destFile, force) {
 }
 //# sourceMappingURL=io.js.map
 ;// CONCATENATED MODULE: external "timers"
-const external_timers_namespaceObject = require("timers");
+const external_timers_namespaceObject = __WEBPACK_EXTERNAL_createRequire(import.meta.url)("timers");
 ;// CONCATENATED MODULE: ./node_modules/@actions/exec/lib/toolrunner.js
 var toolrunner_awaiter = (undefined && undefined.__awaiter) || function (thisArg, _arguments, P, generator) {
     function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
@@ -31047,25 +30923,25 @@ function getIDToken(aud) {
 
 //# sourceMappingURL=core.js.map
 ;// CONCATENATED MODULE: external "node:fs"
-const external_node_fs_namespaceObject = require("node:fs");
+const external_node_fs_namespaceObject = __WEBPACK_EXTERNAL_createRequire(import.meta.url)("node:fs");
 ;// CONCATENATED MODULE: external "node:fs/promises"
-const promises_namespaceObject = require("node:fs/promises");
+const promises_namespaceObject = __WEBPACK_EXTERNAL_createRequire(import.meta.url)("node:fs/promises");
 ;// CONCATENATED MODULE: external "node:os"
-const external_node_os_namespaceObject = require("node:os");
+const external_node_os_namespaceObject = __WEBPACK_EXTERNAL_createRequire(import.meta.url)("node:os");
 ;// CONCATENATED MODULE: external "node:path"
-const external_node_path_namespaceObject = require("node:path");
+const external_node_path_namespaceObject = __WEBPACK_EXTERNAL_createRequire(import.meta.url)("node:path");
 ;// CONCATENATED MODULE: external "node:stream/promises"
-const external_node_stream_promises_namespaceObject = require("node:stream/promises");
+const external_node_stream_promises_namespaceObject = __WEBPACK_EXTERNAL_createRequire(import.meta.url)("node:stream/promises");
 // EXTERNAL MODULE: external "node:events"
 var external_node_events_ = __nccwpck_require__(8474);
 // EXTERNAL MODULE: external "node:stream"
 var external_node_stream_ = __nccwpck_require__(7075);
 ;// CONCATENATED MODULE: external "node:string_decoder"
-const external_node_string_decoder_namespaceObject = require("node:string_decoder");
+const external_node_string_decoder_namespaceObject = __WEBPACK_EXTERNAL_createRequire(import.meta.url)("node:string_decoder");
 ;// CONCATENATED MODULE: external "buffer"
-const external_buffer_namespaceObject = require("buffer");
+const external_buffer_namespaceObject = __WEBPACK_EXTERNAL_createRequire(import.meta.url)("buffer");
 ;// CONCATENATED MODULE: external "zlib"
-const external_zlib_namespaceObject = require("zlib");
+const external_zlib_namespaceObject = __WEBPACK_EXTERNAL_createRequire(import.meta.url)("zlib");
 var external_zlib_namespaceObject_0 = /*#__PURE__*/__nccwpck_require__.t(external_zlib_namespaceObject, 2);
 // EXTERNAL MODULE: external "node:assert"
 var external_node_assert_ = __nccwpck_require__(4589);
@@ -31077,9 +30953,208 @@ var Dr=Object.defineProperty;var Ar=(s,t)=>{for(var e in t)Dr(s,e,{get:t[e],enum
 `).reduce(pn,Object.create(null)),pn=(s,t)=>{let e=parseInt(t,10);if(e!==Buffer.byteLength(t)+1)return s;t=t.slice((e+" ").length);let i=t.split("="),r=i.shift();if(!r)return s;let n=r.replace(/^SCHILY\.(dev|ino|nlink)/,"$1"),o=i.join("=");return s[n]=/^([A-Z]+\.)?([mac]|birth|creation)time$/.test(n)?new Date(Number(o)*1e3):/^[0-9]+$/.test(o)?+o:o,s};var En=process.env.TESTING_TAR_FAKE_PLATFORM||process.platform,f=En!=="win32"?s=>s:s=>s&&s.replace(/\\/g,"/");var Yt=class extends A{extended;globalExtended;header;startBlockSize;blockRemain;remain;type;meta=!1;ignore=!1;path;mode;uid;gid;uname;gname;size=0;mtime;atime;ctime;linkpath;dev;ino;nlink;invalid=!1;absolute;unsupported=!1;constructor(t,e,i){switch(super({}),this.pause(),this.extended=e,this.globalExtended=i,this.header=t,this.remain=t.size??0,this.startBlockSize=512*Math.ceil(this.remain/512),this.blockRemain=this.startBlockSize,this.type=t.type,this.type){case"File":case"OldFile":case"Link":case"SymbolicLink":case"CharacterDevice":case"BlockDevice":case"Directory":case"FIFO":case"ContiguousFile":case"GNUDumpDir":break;case"NextFileHasLongLinkpath":case"NextFileHasLongPath":case"OldGnuLongPath":case"GlobalExtendedHeader":case"ExtendedHeader":case"OldExtendedHeader":this.meta=!0;break;default:this.ignore=!0}if(!t.path)throw new Error("no path provided for tar.ReadEntry");this.path=f(t.path),this.mode=t.mode,this.mode&&(this.mode=this.mode&4095),this.uid=t.uid,this.gid=t.gid,this.uname=t.uname,this.gname=t.gname,this.size=this.remain,this.mtime=t.mtime,this.atime=t.atime,this.ctime=t.ctime,this.linkpath=t.linkpath?f(t.linkpath):void 0,this.uname=t.uname,this.gname=t.gname,e&&this.#t(e),i&&this.#t(i,!0)}write(t){let e=t.length;if(e>this.blockRemain)throw new Error("writing more to entry than is appropriate");let i=this.remain,r=this.blockRemain;return this.remain=Math.max(0,i-e),this.blockRemain=Math.max(0,r-e),this.ignore?!0:i>=e?super.write(t):super.write(t.subarray(0,i))}#t(t,e=!1){t.path&&(t.path=f(t.path)),t.linkpath&&(t.linkpath=f(t.linkpath)),Object.assign(this,Object.fromEntries(Object.entries(t).filter(([i,r])=>!(r==null||i==="path"&&e))))}};var Lt=(s,t,e,i={})=>{s.file&&(i.file=s.file),s.cwd&&(i.cwd=s.cwd),i.code=e instanceof Error&&e.code||t,i.tarCode=t,!s.strict&&i.recoverable!==!1?(e instanceof Error&&(i=Object.assign(e,i),e=e.message),s.emit("warn",t,e,i)):e instanceof Error?s.emit("error",Object.assign(e,i)):s.emit("error",Object.assign(new Error(`${t}: ${e}`),i))};var Sn=1024*1024,Gi=Buffer.from([31,139]),Zi=Buffer.from([40,181,47,253]),yn=Math.max(Gi.length,Zi.length),B=Symbol("state"),Nt=Symbol("writeEntry"),et=Symbol("readEntry"),zi=Symbol("nextEntry"),Hs=Symbol("processEntry"),V=Symbol("extendedHeader"),ae=Symbol("globalExtendedHeader"),ft=Symbol("meta"),Ws=Symbol("emitMeta"),p=Symbol("buffer"),it=Symbol("queue"),dt=Symbol("ended"),Ui=Symbol("emittedEnd"),Dt=Symbol("emit"),y=Symbol("unzip"),Ke=Symbol("consumeChunk"),Ve=Symbol("consumeChunkSub"),Hi=Symbol("consumeBody"),Gs=Symbol("consumeMeta"),Zs=Symbol("consumeHeader"),le=Symbol("consuming"),Wi=Symbol("bufferConcat"),$e=Symbol("maybeEnd"),Kt=Symbol("writing"),ut=Symbol("aborted"),Xe=Symbol("onDone"),At=Symbol("sawValidEntry"),qe=Symbol("sawNullBlock"),je=Symbol("sawEOF"),Ys=Symbol("closeStream"),Rn=()=>!0,st=class extends external_events_.EventEmitter{file;strict;maxMetaEntrySize;filter;brotli;zstd;writable=!0;readable=!1;[it]=[];[p];[et];[Nt];[B]="begin";[ft]="";[V];[ae];[dt]=!1;[y];[ut]=!1;[At];[qe]=!1;[je]=!1;[Kt]=!1;[le]=!1;[Ui]=!1;constructor(t={}){super(),this.file=t.file||"",this.on(Xe,()=>{(this[B]==="begin"||this[At]===!1)&&this.warn("TAR_BAD_ARCHIVE","Unrecognized archive format")}),t.ondone?this.on(Xe,t.ondone):this.on(Xe,()=>{this.emit("prefinish"),this.emit("finish"),this.emit("end")}),this.strict=!!t.strict,this.maxMetaEntrySize=t.maxMetaEntrySize||Sn,this.filter=typeof t.filter=="function"?t.filter:Rn;let e=t.file&&(t.file.endsWith(".tar.br")||t.file.endsWith(".tbr"));this.brotli=!(t.gzip||t.zstd)&&t.brotli!==void 0?t.brotli:e?void 0:!1;let i=t.file&&(t.file.endsWith(".tar.zst")||t.file.endsWith(".tzst"));this.zstd=!(t.gzip||t.brotli)&&t.zstd!==void 0?t.zstd:i?!0:void 0,this.on("end",()=>this[Ys]()),typeof t.onwarn=="function"&&this.on("warn",t.onwarn),typeof t.onReadEntry=="function"&&this.on("entry",t.onReadEntry)}warn(t,e,i={}){Lt(this,t,e,i)}[Zs](t,e){this[At]===void 0&&(this[At]=!1);let i;try{i=new F(t,e,this[V],this[ae])}catch(r){return this.warn("TAR_ENTRY_INVALID",r)}if(i.nullBlock)this[qe]?(this[je]=!0,this[B]==="begin"&&(this[B]="header"),this[Dt]("eof")):(this[qe]=!0,this[Dt]("nullBlock"));else if(this[qe]=!1,!i.cksumValid)this.warn("TAR_ENTRY_INVALID","checksum failure",{header:i});else if(!i.path)this.warn("TAR_ENTRY_INVALID","path is required",{header:i});else{let r=i.type;if(/^(Symbolic)?Link$/.test(r)&&!i.linkpath)this.warn("TAR_ENTRY_INVALID","linkpath required",{header:i});else if(!/^(Symbolic)?Link$/.test(r)&&!/^(Global)?ExtendedHeader$/.test(r)&&i.linkpath)this.warn("TAR_ENTRY_INVALID","linkpath forbidden",{header:i});else{let n=this[Nt]=new Yt(i,this[V],this[ae]);if(!this[At])if(n.remain){let o=()=>{n.invalid||(this[At]=!0)};n.on("end",o)}else this[At]=!0;n.meta?n.size>this.maxMetaEntrySize?(n.ignore=!0,this[Dt]("ignoredEntry",n),this[B]="ignore",n.resume()):n.size>0&&(this[ft]="",n.on("data",o=>this[ft]+=o),this[B]="meta"):(this[V]=void 0,n.ignore=n.ignore||!this.filter(n.path,n),n.ignore?(this[Dt]("ignoredEntry",n),this[B]=n.remain?"ignore":"header",n.resume()):(n.remain?this[B]="body":(this[B]="header",n.end()),this[et]?this[it].push(n):(this[it].push(n),this[zi]())))}}}[Ys](){queueMicrotask(()=>this.emit("close"))}[Hs](t){let e=!0;if(!t)this[et]=void 0,e=!1;else if(Array.isArray(t)){let[i,...r]=t;this.emit(i,...r)}else this[et]=t,this.emit("entry",t),t.emittedEnd||(t.on("end",()=>this[zi]()),e=!1);return e}[zi](){do;while(this[Hs](this[it].shift()));if(!this[it].length){let t=this[et];!t||t.flowing||t.size===t.remain?this[Kt]||this.emit("drain"):t.once("drain",()=>this.emit("drain"))}}[Hi](t,e){let i=this[Nt];if(!i)throw new Error("attempt to consume body without entry??");let r=i.blockRemain??0,n=r>=t.length&&e===0?t:t.subarray(e,e+r);return i.write(n),i.blockRemain||(this[B]="header",this[Nt]=void 0,i.end()),n.length}[Gs](t,e){let i=this[Nt],r=this[Hi](t,e);return!this[Nt]&&i&&this[Ws](i),r}[Dt](t,e,i){!this[it].length&&!this[et]?this.emit(t,e,i):this[it].push([t,e,i])}[Ws](t){switch(this[Dt]("meta",this[ft]),t.type){case"ExtendedHeader":case"OldExtendedHeader":this[V]=ct.parse(this[ft],this[V],!1);break;case"GlobalExtendedHeader":this[ae]=ct.parse(this[ft],this[ae],!0);break;case"NextFileHasLongPath":case"OldGnuLongPath":{let e=this[V]??Object.create(null);this[V]=e,e.path=this[ft].replace(/\0.*/,"");break}case"NextFileHasLongLinkpath":{let e=this[V]||Object.create(null);this[V]=e,e.linkpath=this[ft].replace(/\0.*/,"");break}default:throw new Error("unknown meta: "+t.type)}}abort(t){this[ut]=!0,this.emit("abort",t),this.warn("TAR_ABORT",t,{recoverable:!1})}write(t,e,i){if(typeof e=="function"&&(i=e,e=void 0),typeof t=="string"&&(t=Buffer.from(t,typeof e=="string"?e:"utf8")),this[ut])return i?.(),!1;if((this[y]===void 0||this.brotli===void 0&&this[y]===!1)&&t){if(this[p]&&(t=Buffer.concat([this[p],t]),this[p]=void 0),t.length<yn)return this[p]=t,i?.(),!0;for(let a=0;this[y]===void 0&&a<Gi.length;a++)t[a]!==Gi[a]&&(this[y]=!1);let o=!1;if(this[y]===!1&&this.zstd!==!1){o=!0;for(let a=0;a<Zi.length;a++)if(t[a]!==Zi[a]){o=!1;break}}let h=this.brotli===void 0&&!o;if(this[y]===!1&&h)if(t.length<512)if(this[dt])this.brotli=!0;else return this[p]=t,i?.(),!0;else try{new F(t.subarray(0,512)),this.brotli=!1}catch{this.brotli=!0}if(this[y]===void 0||this[y]===!1&&(this.brotli||o)){let a=this[dt];this[dt]=!1,this[y]=this[y]===void 0?new Pe({}):o?new Ze({}):new He({}),this[y].on("data",c=>this[Ke](c)),this[y].on("error",c=>this.abort(c)),this[y].on("end",()=>{this[dt]=!0,this[Ke]()}),this[Kt]=!0;let l=!!this[y][a?"end":"write"](t);return this[Kt]=!1,i?.(),l}}this[Kt]=!0,this[y]?this[y].write(t):this[Ke](t),this[Kt]=!1;let n=this[it].length?!1:this[et]?this[et].flowing:!0;return!n&&!this[it].length&&this[et]?.once("drain",()=>this.emit("drain")),i?.(),n}[Wi](t){t&&!this[ut]&&(this[p]=this[p]?Buffer.concat([this[p],t]):t)}[$e](){if(this[dt]&&!this[Ui]&&!this[ut]&&!this[le]){this[Ui]=!0;let t=this[Nt];if(t&&t.blockRemain){let e=this[p]?this[p].length:0;this.warn("TAR_BAD_ARCHIVE",`Truncated input (needed ${t.blockRemain} more bytes, only ${e} available)`,{entry:t}),this[p]&&t.write(this[p]),t.end()}this[Dt](Xe)}}[Ke](t){if(this[le]&&t)this[Wi](t);else if(!t&&!this[p])this[$e]();else if(t){if(this[le]=!0,this[p]){this[Wi](t);let e=this[p];this[p]=void 0,this[Ve](e)}else this[Ve](t);for(;this[p]&&this[p]?.length>=512&&!this[ut]&&!this[je];){let e=this[p];this[p]=void 0,this[Ve](e)}this[le]=!1}(!this[p]||this[dt])&&this[$e]()}[Ve](t){let e=0,i=t.length;for(;e+512<=i&&!this[ut]&&!this[je];)switch(this[B]){case"begin":case"header":this[Zs](t,e),e+=512;break;case"ignore":case"body":e+=this[Hi](t,e);break;case"meta":e+=this[Gs](t,e);break;default:throw new Error("invalid state: "+this[B])}e<i&&(this[p]?this[p]=Buffer.concat([t.subarray(e),this[p]]):this[p]=t.subarray(e))}end(t,e,i){return typeof t=="function"&&(i=t,e=void 0,t=void 0),typeof e=="function"&&(i=e,e=void 0),typeof t=="string"&&(t=Buffer.from(t,e)),i&&this.once("finish",i),this[ut]||(this[y]?(t&&this[y].write(t),this[y].end()):(this[dt]=!0,(this.brotli===void 0||this.zstd===void 0)&&(t=t||Buffer.alloc(0)),t&&this.write(t),this[$e]())),this}};var mt=s=>{let t=s.length-1,e=-1;for(;t>-1&&s.charAt(t)==="/";)e=t,t--;return e===-1?s:s.slice(0,e)};var _n=s=>{let t=s.onReadEntry;s.onReadEntry=t?e=>{t(e),e.resume()}:e=>e.resume()},Yi=(s,t)=>{let e=new Map(t.map(n=>[mt(n),!0])),i=s.filter,r=(n,o="")=>{let h=o||(0,external_path_namespaceObject.parse)(n).root||".",a;if(n===h)a=!1;else{let l=e.get(n);l!==void 0?a=l:a=r((0,external_path_namespaceObject.dirname)(n),h)}return e.set(n,a),a};s.filter=i?(n,o)=>i(n,o)&&r(mt(n)):n=>r(mt(n))},On=s=>{let t=new st(s),e=s.file,i;try{i=external_node_fs_namespaceObject.openSync(e,"r");let r=external_node_fs_namespaceObject.fstatSync(i),n=s.maxReadSize||16*1024*1024;if(r.size<n){let o=Buffer.allocUnsafe(r.size),h=external_node_fs_namespaceObject.readSync(i,o,0,r.size,0);t.end(h===o.byteLength?o:o.subarray(0,h))}else{let o=0,h=Buffer.allocUnsafe(n);for(;o<r.size;){let a=external_node_fs_namespaceObject.readSync(i,h,0,n,o);if(a===0)break;o+=a,t.write(h.subarray(0,a))}t.end()}}finally{if(typeof i=="number")try{external_node_fs_namespaceObject.closeSync(i)}catch{}}},Tn=(s,t)=>{let e=new st(s),i=s.maxReadSize||16*1024*1024,r=s.file;return new Promise((o,h)=>{e.on("error",h),e.on("end",o),external_node_fs_namespaceObject.stat(r,(a,l)=>{if(a)h(a);else{let c=new gt(r,{readSize:i,size:l.size});c.on("error",h),c.pipe(e)}})})},It=K(On,Tn,s=>new st(s),s=>new st(s),(s,t)=>{t?.length&&Yi(s,t),s.noResume||_n(s)});var Ki=(s,t,e)=>(s&=4095,e&&(s=(s|384)&-19),t&&(s&256&&(s|=64),s&32&&(s|=8),s&4&&(s|=1)),s);var{isAbsolute:Ln,parse:Ks}=external_node_path_namespaceObject.win32,ce=s=>{let t="",e=Ks(s);for(;Ln(s)||e.root;){let i=s.charAt(0)==="/"&&s.slice(0,4)!=="//?/"?"/":e.root;s=s.slice(i.length),t+=i,e=Ks(s)}return[t,s]};var Qe=["|","<",">","?",":"],Vi=Qe.map(s=>String.fromCharCode(61440+s.charCodeAt(0))),Nn=new Map(Qe.map((s,t)=>[s,Vi[t]])),Dn=new Map(Vi.map((s,t)=>[s,Qe[t]])),$i=s=>Qe.reduce((t,e)=>t.split(e).join(Nn.get(e)),s),Vs=s=>Vi.reduce((t,e)=>t.split(e).join(Dn.get(e)),s);var tr=(s,t)=>t?(s=f(s).replace(/^\.(\/|$)/,""),mt(t)+"/"+s):f(s),An=16*1024*1024,qs=Symbol("process"),js=Symbol("file"),Qs=Symbol("directory"),qi=Symbol("symlink"),Js=Symbol("hardlink"),fe=Symbol("header"),Je=Symbol("read"),ji=Symbol("lstat"),ti=Symbol("onlstat"),Qi=Symbol("onread"),Ji=Symbol("onreadlink"),ts=Symbol("openfile"),es=Symbol("onopenfile"),pt=Symbol("close"),ei=Symbol("mode"),is=Symbol("awaitDrain"),Xi=Symbol("ondrain"),X=Symbol("prefix"),de=class extends A{path;portable;myuid=process.getuid&&process.getuid()||0;myuser=process.env.USER||"";maxReadSize;linkCache;statCache;preservePaths;cwd;strict;mtime;noPax;noMtime;prefix;fd;blockLen=0;blockRemain=0;buf;pos=0;remain=0;length=0;offset=0;win32;absolute;header;type;linkpath;stat;onWriteEntry;#t=!1;constructor(t,e={}){let i=re(e);super(),this.path=f(t),this.portable=!!i.portable,this.maxReadSize=i.maxReadSize||An,this.linkCache=i.linkCache||new Map,this.statCache=i.statCache||new Map,this.preservePaths=!!i.preservePaths,this.cwd=f(i.cwd||process.cwd()),this.strict=!!i.strict,this.noPax=!!i.noPax,this.noMtime=!!i.noMtime,this.mtime=i.mtime,this.prefix=i.prefix?f(i.prefix):void 0,this.onWriteEntry=i.onWriteEntry,typeof i.onwarn=="function"&&this.on("warn",i.onwarn);let r=!1;if(!this.preservePaths){let[o,h]=ce(this.path);o&&typeof h=="string"&&(this.path=h,r=o)}this.win32=!!i.win32||process.platform==="win32",this.win32&&(this.path=Vs(this.path.replace(/\\/g,"/")),t=t.replace(/\\/g,"/")),this.absolute=f(i.absolute||external_path_namespaceObject.resolve(this.cwd,t)),this.path===""&&(this.path="./"),r&&this.warn("TAR_ENTRY_INFO",`stripping ${r} from absolute path`,{entry:this,path:r+this.path});let n=this.statCache.get(this.absolute);n?this[ti](n):this[ji]()}warn(t,e,i={}){return Lt(this,t,e,i)}emit(t,...e){return t==="error"&&(this.#t=!0),super.emit(t,...e)}[ji](){external_fs_namespaceObject.lstat(this.absolute,(t,e)=>{if(t)return this.emit("error",t);this[ti](e)})}[ti](t){this.statCache.set(this.absolute,t),this.stat=t,t.isFile()||(t.size=0),this.type=In(t),this.emit("stat",t),this[qs]()}[qs](){switch(this.type){case"File":return this[js]();case"Directory":return this[Qs]();case"SymbolicLink":return this[qi]();default:return this.end()}}[ei](t){return Ki(t,this.type==="Directory",this.portable)}[X](t){return tr(t,this.prefix)}[fe](){if(!this.stat)throw new Error("cannot write header before stat");this.type==="Directory"&&this.portable&&(this.noMtime=!0),this.onWriteEntry?.(this),this.header=new F({path:this[X](this.path),linkpath:this.type==="Link"&&this.linkpath!==void 0?this[X](this.linkpath):this.linkpath,mode:this[ei](this.stat.mode),uid:this.portable?void 0:this.stat.uid,gid:this.portable?void 0:this.stat.gid,size:this.stat.size,mtime:this.noMtime?void 0:this.mtime||this.stat.mtime,type:this.type==="Unsupported"?void 0:this.type,uname:this.portable?void 0:this.stat.uid===this.myuid?this.myuser:"",atime:this.portable?void 0:this.stat.atime,ctime:this.portable?void 0:this.stat.ctime}),this.header.encode()&&!this.noPax&&super.write(new ct({atime:this.portable?void 0:this.header.atime,ctime:this.portable?void 0:this.header.ctime,gid:this.portable?void 0:this.header.gid,mtime:this.noMtime?void 0:this.mtime||this.header.mtime,path:this[X](this.path),linkpath:this.type==="Link"&&this.linkpath!==void 0?this[X](this.linkpath):this.linkpath,size:this.header.size,uid:this.portable?void 0:this.header.uid,uname:this.portable?void 0:this.header.uname,dev:this.portable?void 0:this.stat.dev,ino:this.portable?void 0:this.stat.ino,nlink:this.portable?void 0:this.stat.nlink}).encode());let t=this.header?.block;if(!t)throw new Error("failed to encode header");super.write(t)}[Qs](){if(!this.stat)throw new Error("cannot create directory entry without stat");this.path.slice(-1)!=="/"&&(this.path+="/"),this.stat.size=0,this[fe](),this.end()}[qi](){external_fs_namespaceObject.readlink(this.absolute,(t,e)=>{if(t)return this.emit("error",t);this[Ji](e)})}[Ji](t){this.linkpath=f(t),this[fe](),this.end()}[Js](t){if(!this.stat)throw new Error("cannot create link entry without stat");this.type="Link",this.linkpath=f(external_path_namespaceObject.relative(this.cwd,t)),this.stat.size=0,this[fe](),this.end()}[js](){if(!this.stat)throw new Error("cannot create file entry without stat");if(this.stat.nlink>1){let t=`${this.stat.dev}:${this.stat.ino}`,e=this.linkCache.get(t);if(e?.indexOf(this.cwd)===0)return this[Js](e);this.linkCache.set(t,this.absolute)}if(this[fe](),this.stat.size===0)return this.end();this[ts]()}[ts](){external_fs_namespaceObject.open(this.absolute,"r",(t,e)=>{if(t)return this.emit("error",t);this[es](e)})}[es](t){if(this.fd=t,this.#t)return this[pt]();if(!this.stat)throw new Error("should stat before calling onopenfile");this.blockLen=512*Math.ceil(this.stat.size/512),this.blockRemain=this.blockLen;let e=Math.min(this.blockLen,this.maxReadSize);this.buf=Buffer.allocUnsafe(e),this.offset=0,this.pos=0,this.remain=this.stat.size,this.length=this.buf.length,this[Je]()}[Je](){let{fd:t,buf:e,offset:i,length:r,pos:n}=this;if(t===void 0||e===void 0)throw new Error("cannot read file without first opening");external_fs_namespaceObject.read(t,e,i,r,n,(o,h)=>{if(o)return this[pt](()=>this.emit("error",o));this[Qi](h)})}[pt](t=()=>{}){this.fd!==void 0&&external_fs_namespaceObject.close(this.fd,t)}[Qi](t){if(t<=0&&this.remain>0){let r=Object.assign(new Error("encountered unexpected EOF"),{path:this.absolute,syscall:"read",code:"EOF"});return this[pt](()=>this.emit("error",r))}if(t>this.remain){let r=Object.assign(new Error("did not encounter expected EOF"),{path:this.absolute,syscall:"read",code:"EOF"});return this[pt](()=>this.emit("error",r))}if(!this.buf)throw new Error("should have created buffer prior to reading");if(t===this.remain)for(let r=t;r<this.length&&t<this.blockRemain;r++)this.buf[r+this.offset]=0,t++,this.remain++;let e=this.offset===0&&t===this.buf.length?this.buf:this.buf.subarray(this.offset,this.offset+t);this.write(e)?this[Xi]():this[is](()=>this[Xi]())}[is](t){this.once("drain",t)}write(t,e,i){if(typeof e=="function"&&(i=e,e=void 0),typeof t=="string"&&(t=Buffer.from(t,typeof e=="string"?e:"utf8")),this.blockRemain<t.length){let r=Object.assign(new Error("writing more data than expected"),{path:this.absolute});return this.emit("error",r)}return this.remain-=t.length,this.blockRemain-=t.length,this.pos+=t.length,this.offset+=t.length,super.write(t,null,i)}[Xi](){if(!this.remain)return this.blockRemain&&super.write(Buffer.alloc(this.blockRemain)),this[pt](t=>t?this.emit("error",t):this.end());if(!this.buf)throw new Error("buffer lost somehow in ONDRAIN");this.offset>=this.length&&(this.buf=Buffer.allocUnsafe(Math.min(this.blockRemain,this.buf.length)),this.offset=0),this.length=this.buf.length-this.offset,this[Je]()}},ii=class extends de{sync=!0;[ji](){this[ti](external_fs_namespaceObject.lstatSync(this.absolute))}[qi](){this[Ji](external_fs_namespaceObject.readlinkSync(this.absolute))}[ts](){this[es](external_fs_namespaceObject.openSync(this.absolute,"r"))}[Je](){let t=!0;try{let{fd:e,buf:i,offset:r,length:n,pos:o}=this;if(e===void 0||i===void 0)throw new Error("fd and buf must be set in READ method");let h=external_fs_namespaceObject.readSync(e,i,r,n,o);this[Qi](h),t=!1}finally{if(t)try{this[pt](()=>{})}catch{}}}[is](t){t()}[pt](t=()=>{}){this.fd!==void 0&&external_fs_namespaceObject.closeSync(this.fd),t()}},si=class extends A{blockLen=0;blockRemain=0;buf=0;pos=0;remain=0;length=0;preservePaths;portable;strict;noPax;noMtime;readEntry;type;prefix;path;mode;uid;gid;uname;gname;header;mtime;atime;ctime;linkpath;size;onWriteEntry;warn(t,e,i={}){return Lt(this,t,e,i)}constructor(t,e={}){let i=re(e);super(),this.preservePaths=!!i.preservePaths,this.portable=!!i.portable,this.strict=!!i.strict,this.noPax=!!i.noPax,this.noMtime=!!i.noMtime,this.onWriteEntry=i.onWriteEntry,this.readEntry=t;let{type:r}=t;if(r==="Unsupported")throw new Error("writing entry that should be ignored");this.type=r,this.type==="Directory"&&this.portable&&(this.noMtime=!0),this.prefix=i.prefix,this.path=f(t.path),this.mode=t.mode!==void 0?this[ei](t.mode):void 0,this.uid=this.portable?void 0:t.uid,this.gid=this.portable?void 0:t.gid,this.uname=this.portable?void 0:t.uname,this.gname=this.portable?void 0:t.gname,this.size=t.size,this.mtime=this.noMtime?void 0:i.mtime||t.mtime,this.atime=this.portable?void 0:t.atime,this.ctime=this.portable?void 0:t.ctime,this.linkpath=t.linkpath!==void 0?f(t.linkpath):void 0,typeof i.onwarn=="function"&&this.on("warn",i.onwarn);let n=!1;if(!this.preservePaths){let[h,a]=ce(this.path);h&&typeof a=="string"&&(this.path=a,n=h)}this.remain=t.size,this.blockRemain=t.startBlockSize,this.onWriteEntry?.(this),this.header=new F({path:this[X](this.path),linkpath:this.type==="Link"&&this.linkpath!==void 0?this[X](this.linkpath):this.linkpath,mode:this.mode,uid:this.portable?void 0:this.uid,gid:this.portable?void 0:this.gid,size:this.size,mtime:this.noMtime?void 0:this.mtime,type:this.type,uname:this.portable?void 0:this.uname,atime:this.portable?void 0:this.atime,ctime:this.portable?void 0:this.ctime}),n&&this.warn("TAR_ENTRY_INFO",`stripping ${n} from absolute path`,{entry:this,path:n+this.path}),this.header.encode()&&!this.noPax&&super.write(new ct({atime:this.portable?void 0:this.atime,ctime:this.portable?void 0:this.ctime,gid:this.portable?void 0:this.gid,mtime:this.noMtime?void 0:this.mtime,path:this[X](this.path),linkpath:this.type==="Link"&&this.linkpath!==void 0?this[X](this.linkpath):this.linkpath,size:this.size,uid:this.portable?void 0:this.uid,uname:this.portable?void 0:this.uname,dev:this.portable?void 0:this.readEntry.dev,ino:this.portable?void 0:this.readEntry.ino,nlink:this.portable?void 0:this.readEntry.nlink}).encode());let o=this.header?.block;if(!o)throw new Error("failed to encode header");super.write(o),t.pipe(this)}[X](t){return tr(t,this.prefix)}[ei](t){return Ki(t,this.type==="Directory",this.portable)}write(t,e,i){typeof e=="function"&&(i=e,e=void 0),typeof t=="string"&&(t=Buffer.from(t,typeof e=="string"?e:"utf8"));let r=t.length;if(r>this.blockRemain)throw new Error("writing more to entry than is appropriate");return this.blockRemain-=r,super.write(t,i)}end(t,e,i){return this.blockRemain&&super.write(Buffer.alloc(this.blockRemain)),typeof t=="function"&&(i=t,e=void 0,t=void 0),typeof e=="function"&&(i=e,e=void 0),typeof t=="string"&&(t=Buffer.from(t,e??"utf8")),i&&this.once("finish",i),t?super.end(t,i):super.end(i),this}},In=s=>s.isFile()?"File":s.isDirectory()?"Directory":s.isSymbolicLink()?"SymbolicLink":"Unsupported";var ri=class s{tail;head;length=0;static create(t=[]){return new s(t)}constructor(t=[]){for(let e of t)this.push(e)}*[Symbol.iterator](){for(let t=this.head;t;t=t.next)yield t.value}removeNode(t){if(t.list!==this)throw new Error("removing node which does not belong to this list");let e=t.next,i=t.prev;return e&&(e.prev=i),i&&(i.next=e),t===this.head&&(this.head=e),t===this.tail&&(this.tail=i),this.length--,t.next=void 0,t.prev=void 0,t.list=void 0,e}unshiftNode(t){if(t===this.head)return;t.list&&t.list.removeNode(t);let e=this.head;t.list=this,t.next=e,e&&(e.prev=t),this.head=t,this.tail||(this.tail=t),this.length++}pushNode(t){if(t===this.tail)return;t.list&&t.list.removeNode(t);let e=this.tail;t.list=this,t.prev=e,e&&(e.next=t),this.tail=t,this.head||(this.head=t),this.length++}push(...t){for(let e=0,i=t.length;e<i;e++)Fn(this,t[e]);return this.length}unshift(...t){for(var e=0,i=t.length;e<i;e++)kn(this,t[e]);return this.length}pop(){if(!this.tail)return;let t=this.tail.value,e=this.tail;return this.tail=this.tail.prev,this.tail?this.tail.next=void 0:this.head=void 0,e.list=void 0,this.length--,t}shift(){if(!this.head)return;let t=this.head.value,e=this.head;return this.head=this.head.next,this.head?this.head.prev=void 0:this.tail=void 0,e.list=void 0,this.length--,t}forEach(t,e){e=e||this;for(let i=this.head,r=0;i;r++)t.call(e,i.value,r,this),i=i.next}forEachReverse(t,e){e=e||this;for(let i=this.tail,r=this.length-1;i;r--)t.call(e,i.value,r,this),i=i.prev}get(t){let e=0,i=this.head;for(;i&&e<t;e++)i=i.next;if(e===t&&i)return i.value}getReverse(t){let e=0,i=this.tail;for(;i&&e<t;e++)i=i.prev;if(e===t&&i)return i.value}map(t,e){e=e||this;let i=new s;for(let r=this.head;r;)i.push(t.call(e,r.value,this)),r=r.next;return i}mapReverse(t,e){e=e||this;var i=new s;for(let r=this.tail;r;)i.push(t.call(e,r.value,this)),r=r.prev;return i}reduce(t,e){let i,r=this.head;if(arguments.length>1)i=e;else if(this.head)r=this.head.next,i=this.head.value;else throw new TypeError("Reduce of empty list with no initial value");for(var n=0;r;n++)i=t(i,r.value,n),r=r.next;return i}reduceReverse(t,e){let i,r=this.tail;if(arguments.length>1)i=e;else if(this.tail)r=this.tail.prev,i=this.tail.value;else throw new TypeError("Reduce of empty list with no initial value");for(let n=this.length-1;r;n--)i=t(i,r.value,n),r=r.prev;return i}toArray(){let t=new Array(this.length);for(let e=0,i=this.head;i;e++)t[e]=i.value,i=i.next;return t}toArrayReverse(){let t=new Array(this.length);for(let e=0,i=this.tail;i;e++)t[e]=i.value,i=i.prev;return t}slice(t=0,e=this.length){e<0&&(e+=this.length),t<0&&(t+=this.length);let i=new s;if(e<t||e<0)return i;t<0&&(t=0),e>this.length&&(e=this.length);let r=this.head,n=0;for(n=0;r&&n<t;n++)r=r.next;for(;r&&n<e;n++,r=r.next)i.push(r.value);return i}sliceReverse(t=0,e=this.length){e<0&&(e+=this.length),t<0&&(t+=this.length);let i=new s;if(e<t||e<0)return i;t<0&&(t=0),e>this.length&&(e=this.length);let r=this.length,n=this.tail;for(;n&&r>e;r--)n=n.prev;for(;n&&r>t;r--,n=n.prev)i.push(n.value);return i}splice(t,e=0,...i){t>this.length&&(t=this.length-1),t<0&&(t=this.length+t);let r=this.head;for(let o=0;r&&o<t;o++)r=r.next;let n=[];for(let o=0;r&&o<e;o++)n.push(r.value),r=this.removeNode(r);r?r!==this.tail&&(r=r.prev):r=this.tail;for(let o of i)r=Cn(this,r,o);return n}reverse(){let t=this.head,e=this.tail;for(let i=t;i;i=i.prev){let r=i.prev;i.prev=i.next,i.next=r}return this.head=e,this.tail=t,this}};function Cn(s,t,e){let i=t,r=t?t.next:s.head,n=new ue(e,i,r,s);return n.next===void 0&&(s.tail=n),n.prev===void 0&&(s.head=n),s.length++,n}function Fn(s,t){s.tail=new ue(t,s.tail,void 0,s),s.head||(s.head=s.tail),s.length++}function kn(s,t){s.head=new ue(t,void 0,s.head,s),s.tail||(s.tail=s.head),s.length++}var ue=class{list;next;prev;value;constructor(t,e,i,r){this.list=r,this.value=t,e?(e.next=this,this.prev=e):this.prev=void 0,i?(i.prev=this,this.next=i):this.next=void 0}};var fi=class{path;absolute;entry;stat;readdir;pending=!1;ignore=!1;piped=!1;constructor(t,e){this.path=t||"./",this.absolute=e}},er=Buffer.alloc(1024),ni=Symbol("onStat"),me=Symbol("ended"),W=Symbol("queue"),Ct=Symbol("current"),Ft=Symbol("process"),pe=Symbol("processing"),ss=Symbol("processJob"),G=Symbol("jobs"),rs=Symbol("jobDone"),oi=Symbol("addFSEntry"),ir=Symbol("addTarEntry"),hs=Symbol("stat"),as=Symbol("readdir"),hi=Symbol("onreaddir"),ai=Symbol("pipe"),sr=Symbol("entry"),ns=Symbol("entryOpt"),li=Symbol("writeEntryClass"),nr=Symbol("write"),index_min_os=Symbol("ondrain"),Et=class extends A{sync=!1;opt;cwd;maxReadSize;preservePaths;strict;noPax;prefix;linkCache;statCache;file;portable;zip;readdirCache;noDirRecurse;follow;noMtime;mtime;filter;jobs;[li];onWriteEntry;[W];[G]=0;[pe]=!1;[me]=!1;constructor(t={}){if(super(),this.opt=t,this.file=t.file||"",this.cwd=t.cwd||process.cwd(),this.maxReadSize=t.maxReadSize,this.preservePaths=!!t.preservePaths,this.strict=!!t.strict,this.noPax=!!t.noPax,this.prefix=f(t.prefix||""),this.linkCache=t.linkCache||new Map,this.statCache=t.statCache||new Map,this.readdirCache=t.readdirCache||new Map,this.onWriteEntry=t.onWriteEntry,this[li]=de,typeof t.onwarn=="function"&&this.on("warn",t.onwarn),this.portable=!!t.portable,t.gzip||t.brotli||t.zstd){if((t.gzip?1:0)+(t.brotli?1:0)+(t.zstd?1:0)>1)throw new TypeError("gzip, brotli, zstd are mutually exclusive");if(t.gzip&&(typeof t.gzip!="object"&&(t.gzip={}),this.portable&&(t.gzip.portable=!0),this.zip=new Be(t.gzip)),t.brotli&&(typeof t.brotli!="object"&&(t.brotli={}),this.zip=new Ue(t.brotli)),t.zstd&&(typeof t.zstd!="object"&&(t.zstd={}),this.zip=new Ge(t.zstd)),!this.zip)throw new Error("impossible");let e=this.zip;e.on("data",i=>super.write(i)),e.on("end",()=>super.end()),e.on("drain",()=>this[index_min_os]()),this.on("resume",()=>e.resume())}else this.on("drain",this[index_min_os]);this.noDirRecurse=!!t.noDirRecurse,this.follow=!!t.follow,this.noMtime=!!t.noMtime,t.mtime&&(this.mtime=t.mtime),this.filter=typeof t.filter=="function"?t.filter:()=>!0,this[W]=new ri,this[G]=0,this.jobs=Number(t.jobs)||4,this[pe]=!1,this[me]=!1}[nr](t){return super.write(t)}add(t){return this.write(t),this}end(t,e,i){return typeof t=="function"&&(i=t,t=void 0),typeof e=="function"&&(i=e,e=void 0),t&&this.add(t),this[me]=!0,this[Ft](),i&&i(),this}write(t){if(this[me])throw new Error("write after end");return t instanceof Yt?this[ir](t):this[oi](t),this.flowing}[ir](t){let e=f(external_path_namespaceObject.resolve(this.cwd,t.path));if(!this.filter(t.path,t))t.resume();else{let i=new fi(t.path,e);i.entry=new si(t,this[ns](i)),i.entry.on("end",()=>this[rs](i)),this[G]+=1,this[W].push(i)}this[Ft]()}[oi](t){let e=f(external_path_namespaceObject.resolve(this.cwd,t));this[W].push(new fi(t,e)),this[Ft]()}[hs](t){t.pending=!0,this[G]+=1;let e=this.follow?"stat":"lstat";external_fs_namespaceObject[e](t.absolute,(i,r)=>{t.pending=!1,this[G]-=1,i?this.emit("error",i):this[ni](t,r)})}[ni](t,e){this.statCache.set(t.absolute,e),t.stat=e,this.filter(t.path,e)?e.isFile()&&e.nlink>1&&t===this[Ct]&&!this.linkCache.get(`${e.dev}:${e.ino}`)&&!this.sync&&this[ss](t):t.ignore=!0,this[Ft]()}[as](t){t.pending=!0,this[G]+=1,external_fs_namespaceObject.readdir(t.absolute,(e,i)=>{if(t.pending=!1,this[G]-=1,e)return this.emit("error",e);this[hi](t,i)})}[hi](t,e){this.readdirCache.set(t.absolute,e),t.readdir=e,this[Ft]()}[Ft](){if(!this[pe]){this[pe]=!0;for(let t=this[W].head;t&&this[G]<this.jobs;t=t.next)if(this[ss](t.value),t.value.ignore){let e=t.next;this[W].removeNode(t),t.next=e}this[pe]=!1,this[me]&&!this[W].length&&this[G]===0&&(this.zip?this.zip.end(er):(super.write(er),super.end()))}}get[Ct](){return this[W]&&this[W].head&&this[W].head.value}[rs](t){this[W].shift(),this[G]-=1,this[Ft]()}[ss](t){if(!t.pending){if(t.entry){t===this[Ct]&&!t.piped&&this[ai](t);return}if(!t.stat){let e=this.statCache.get(t.absolute);e?this[ni](t,e):this[hs](t)}if(t.stat&&!t.ignore){if(!this.noDirRecurse&&t.stat.isDirectory()&&!t.readdir){let e=this.readdirCache.get(t.absolute);if(e?this[hi](t,e):this[as](t),!t.readdir)return}if(t.entry=this[sr](t),!t.entry){t.ignore=!0;return}t===this[Ct]&&!t.piped&&this[ai](t)}}}[ns](t){return{onwarn:(e,i,r)=>this.warn(e,i,r),noPax:this.noPax,cwd:this.cwd,absolute:t.absolute,preservePaths:this.preservePaths,maxReadSize:this.maxReadSize,strict:this.strict,portable:this.portable,linkCache:this.linkCache,statCache:this.statCache,noMtime:this.noMtime,mtime:this.mtime,prefix:this.prefix,onWriteEntry:this.onWriteEntry}}[sr](t){this[G]+=1;try{return new this[li](t.path,this[ns](t)).on("end",()=>this[rs](t)).on("error",i=>this.emit("error",i))}catch(e){this.emit("error",e)}}[index_min_os](){this[Ct]&&this[Ct].entry&&this[Ct].entry.resume()}[ai](t){t.piped=!0,t.readdir&&t.readdir.forEach(r=>{let n=t.path,o=n==="./"?"":n.replace(/\/*$/,"/");this[oi](o+r)});let e=t.entry,i=this.zip;if(!e)throw new Error("cannot pipe without source");i?e.on("data",r=>{i.write(r)||e.pause()}):e.on("data",r=>{super.write(r)||e.pause()})}pause(){return this.zip&&this.zip.pause(),super.pause()}warn(t,e,i={}){Lt(this,t,e,i)}},kt=class extends Et{sync=!0;constructor(t){super(t),this[li]=ii}pause(){}resume(){}[hs](t){let e=this.follow?"statSync":"lstatSync";this[ni](t,external_fs_namespaceObject[e](t.absolute))}[as](t){this[hi](t,external_fs_namespaceObject.readdirSync(t.absolute))}[ai](t){let e=t.entry,i=this.zip;if(t.readdir&&t.readdir.forEach(r=>{let n=t.path,o=n==="./"?"":n.replace(/\/*$/,"/");this[oi](o+r)}),!e)throw new Error("Cannot pipe without source");i?e.on("data",r=>{i.write(r)}):e.on("data",r=>{super[nr](r)})}};var vn=(s,t)=>{let e=new kt(s),i=new Wt(s.file,{mode:s.mode||438});e.pipe(i),hr(e,t)},Mn=(s,t)=>{let e=new Et(s),i=new tt(s.file,{mode:s.mode||438});e.pipe(i);let r=new Promise((n,o)=>{i.on("error",o),i.on("close",n),e.on("error",o)});return ar(e,t),r},hr=(s,t)=>{t.forEach(e=>{e.charAt(0)==="@"?It({file:external_node_path_namespaceObject.resolve(s.cwd,e.slice(1)),sync:!0,noResume:!0,onReadEntry:i=>s.add(i)}):s.add(e)}),s.end()},ar=async(s,t)=>{for(let e=0;e<t.length;e++){let i=String(t[e]);i.charAt(0)==="@"?await It({file:external_node_path_namespaceObject.resolve(String(s.cwd),i.slice(1)),noResume:!0,onReadEntry:r=>{s.add(r)}}):s.add(i)}s.end()},Bn=(s,t)=>{let e=new kt(s);return hr(e,t),e},Pn=(s,t)=>{let e=new Et(s);return ar(e,t),e},zn=K(vn,Mn,Bn,Pn,(s,t)=>{if(!t?.length)throw new TypeError("no paths specified to add to archive")});var Un=process.env.__FAKE_PLATFORM__||process.platform,Hn=Un==="win32",{O_CREAT:Wn,O_TRUNC:Gn,O_WRONLY:Zn}=external_fs_namespaceObject.constants,cr=Number(process.env.__FAKE_FS_O_FILENAME__)||external_fs_namespaceObject.constants.UV_FS_O_FILEMAP||0,Yn=Hn&&!!cr,Kn=512*1024,Vn=cr|Gn|Wn|Zn,ls=Yn?s=>s<Kn?Vn:"w":()=>"w";var cs=(s,t,e)=>{try{return external_node_fs_namespaceObject.lchownSync(s,t,e)}catch(i){if(i?.code!=="ENOENT")throw i}},di=(s,t,e,i)=>{external_node_fs_namespaceObject.lchown(s,t,e,r=>{i(r&&r?.code!=="ENOENT"?r:null)})},$n=(s,t,e,i,r)=>{if(t.isDirectory())index_min_fs(external_node_path_namespaceObject.resolve(s,t.name),e,i,n=>{if(n)return r(n);let o=external_node_path_namespaceObject.resolve(s,t.name);di(o,e,i,r)});else{let n=external_node_path_namespaceObject.resolve(s,t.name);di(n,e,i,r)}},index_min_fs=(s,t,e,i)=>{external_node_fs_namespaceObject.readdir(s,{withFileTypes:!0},(r,n)=>{if(r){if(r.code==="ENOENT")return i();if(r.code!=="ENOTDIR"&&r.code!=="ENOTSUP")return i(r)}if(r||!n.length)return di(s,t,e,i);let o=n.length,h=null,a=l=>{if(!h){if(l)return i(h=l);if(--o===0)return di(s,t,e,i)}};for(let l of n)$n(s,l,t,e,a)})},Xn=(s,t,e,i)=>{t.isDirectory()&&ds(external_node_path_namespaceObject.resolve(s,t.name),e,i),cs(external_node_path_namespaceObject.resolve(s,t.name),e,i)},ds=(s,t,e)=>{let i;try{i=external_node_fs_namespaceObject.readdirSync(s,{withFileTypes:!0})}catch(r){let n=r;if(n?.code==="ENOENT")return;if(n?.code==="ENOTDIR"||n?.code==="ENOTSUP")return cs(s,t,e);throw n}for(let r of i)Xn(s,r,t,e);return cs(s,t,e)};var we=class extends Error{path;code;syscall="chdir";constructor(t,e){super(`${e}: Cannot cd into '${t}'`),this.path=t,this.code=e}get name(){return"CwdError"}};var wt=class extends Error{path;symlink;syscall="symlink";code="TAR_SYMLINK_ERROR";constructor(t,e){super("TAR_SYMLINK_ERROR: Cannot extract through symbolic link"),this.symlink=t,this.path=e}get name(){return"SymlinkError"}};var jn=(s,t)=>{external_node_fs_namespaceObject.stat(s,(e,i)=>{(e||!i.isDirectory())&&(e=new we(s,e?.code||"ENOTDIR")),t(e)})},fr=(s,t,e)=>{s=f(s);let i=t.umask??18,r=t.mode|448,n=(r&i)!==0,o=t.uid,h=t.gid,a=typeof o=="number"&&typeof h=="number"&&(o!==t.processUid||h!==t.processGid),l=t.preserve,c=t.unlink,d=f(t.cwd),S=(E,x)=>{E?e(E):x&&a?index_min_fs(x,o,h,_s=>S(_s)):n?external_node_fs_namespaceObject.chmod(s,r,e):e()};if(s===d)return jn(s,S);if(l)return promises_namespaceObject.mkdir(s,{mode:r,recursive:!0}).then(E=>S(null,E??void 0),S);let N=f(external_node_path_namespaceObject.relative(d,s)).split("/");us(d,N,r,c,d,void 0,S)},us=(s,t,e,i,r,n,o)=>{if(!t.length)return o(null,n);let h=t.shift(),a=f(external_node_path_namespaceObject.resolve(s+"/"+h));external_node_fs_namespaceObject.mkdir(a,e,dr(a,t,e,i,r,n,o))},dr=(s,t,e,i,r,n,o)=>h=>{h?external_node_fs_namespaceObject.lstat(s,(a,l)=>{if(a)a.path=a.path&&f(a.path),o(a);else if(l.isDirectory())us(s,t,e,i,r,n,o);else if(i)external_node_fs_namespaceObject.unlink(s,c=>{if(c)return o(c);external_node_fs_namespaceObject.mkdir(s,e,dr(s,t,e,i,r,n,o))});else{if(l.isSymbolicLink())return o(new wt(s,s+"/"+t.join("/")));o(h)}}):(n=n||s,us(s,t,e,i,r,n,o))},Qn=s=>{let t=!1,e;try{t=external_node_fs_namespaceObject.statSync(s).isDirectory()}catch(i){e=i?.code}finally{if(!t)throw new we(s,e??"ENOTDIR")}},ur=(s,t)=>{s=f(s);let e=t.umask??18,i=t.mode|448,r=(i&e)!==0,n=t.uid,o=t.gid,h=typeof n=="number"&&typeof o=="number"&&(n!==t.processUid||o!==t.processGid),a=t.preserve,l=t.unlink,c=f(t.cwd),d=E=>{E&&h&&ds(E,n,o),r&&external_node_fs_namespaceObject.chmodSync(s,i)};if(s===c)return Qn(c),d();if(a)return d(external_node_fs_namespaceObject.mkdirSync(s,{mode:i,recursive:!0})??void 0);let T=f(external_node_path_namespaceObject.relative(c,s)).split("/"),N;for(let E=T.shift(),x=c;E&&(x+="/"+E);E=T.shift()){x=f(external_node_path_namespaceObject.resolve(x));try{external_node_fs_namespaceObject.mkdirSync(x,i),N=N||x}catch{let Os=external_node_fs_namespaceObject.lstatSync(x);if(Os.isDirectory())continue;if(l){external_node_fs_namespaceObject.unlinkSync(x),external_node_fs_namespaceObject.mkdirSync(x,i),N=N||x;continue}else if(Os.isSymbolicLink())return new wt(x,x+"/"+T.join("/"))}}return d(N)};var ms=Object.create(null),mr=1e4,$t=new Set,pr=s=>{$t.has(s)?$t.delete(s):ms[s]=s.normalize("NFD").toLocaleLowerCase("en").toLocaleUpperCase("en"),$t.add(s);let t=ms[s],e=$t.size-mr;if(e>mr/10){for(let i of $t)if($t.delete(i),delete ms[i],--e<=0)break}return t};var Jn=process.env.TESTING_TAR_FAKE_PLATFORM||process.platform,to=Jn==="win32",eo=s=>s.split("/").slice(0,-1).reduce((e,i)=>{let r=e[e.length-1];return r!==void 0&&(i=(0,external_node_path_namespaceObject.join)(r,i)),e.push(i||"/"),e},[]),pi=class{#t=new Map;#i=new Map;#s=new Set;reserve(t,e){t=to?["win32 parallelization disabled"]:t.map(r=>mt((0,external_node_path_namespaceObject.join)(pr(r))));let i=new Set(t.map(r=>eo(r)).reduce((r,n)=>r.concat(n)));this.#i.set(e,{dirs:i,paths:t});for(let r of t){let n=this.#t.get(r);n?n.push(e):this.#t.set(r,[e])}for(let r of i){let n=this.#t.get(r);if(!n)this.#t.set(r,[new Set([e])]);else{let o=n[n.length-1];o instanceof Set?o.add(e):n.push(new Set([e]))}}return this.#r(e)}#n(t){let e=this.#i.get(t);if(!e)throw new Error("function does not have any path reservations");return{paths:e.paths.map(i=>this.#t.get(i)),dirs:[...e.dirs].map(i=>this.#t.get(i))}}check(t){let{paths:e,dirs:i}=this.#n(t);return e.every(r=>r&&r[0]===t)&&i.every(r=>r&&r[0]instanceof Set&&r[0].has(t))}#r(t){return this.#s.has(t)||!this.check(t)?!1:(this.#s.add(t),t(()=>this.#e(t)),!0)}#e(t){if(!this.#s.has(t))return!1;let e=this.#i.get(t);if(!e)throw new Error("invalid reservation");let{paths:i,dirs:r}=e,n=new Set;for(let o of i){let h=this.#t.get(o);if(!h||h?.[0]!==t)continue;let a=h[1];if(!a){this.#t.delete(o);continue}if(h.shift(),typeof a=="function")n.add(a);else for(let l of a)n.add(l)}for(let o of r){let h=this.#t.get(o),a=h?.[0];if(!(!h||!(a instanceof Set)))if(a.size===1&&h.length===1){this.#t.delete(o);continue}else if(a.size===1){h.shift();let l=h[0];typeof l=="function"&&n.add(l)}else a.delete(t)}return this.#s.delete(t),n.forEach(o=>this.#r(o)),!0}};var wr=()=>process.umask();var Sr=Symbol("onEntry"),Ss=Symbol("checkFs"),yr=Symbol("checkFs2"),ys=Symbol("isReusable"),P=Symbol("makeFs"),Rs=Symbol("file"),bs=Symbol("directory"),wi=Symbol("link"),Rr=Symbol("symlink"),br=Symbol("hardlink"),ye=Symbol("ensureNoSymlink"),gr=Symbol("unsupported"),_r=Symbol("checkPath"),ps=Symbol("stripAbsolutePath"),St=Symbol("mkdir"),O=Symbol("onError"),Ei=Symbol("pending"),Or=Symbol("pend"),Xt=Symbol("unpend"),Es=Symbol("ended"),ws=Symbol("maybeClose"),gs=Symbol("skip"),Re=Symbol("doChown"),be=Symbol("uid"),ge=Symbol("gid"),_e=Symbol("checkedCwd"),so=process.env.TESTING_TAR_FAKE_PLATFORM||process.platform,Oe=so==="win32",ro=1024,no=(s,t)=>{if(!Oe)return external_node_fs_namespaceObject.unlink(s,t);let e=s+".DELETE."+(0,external_node_crypto_.randomBytes)(16).toString("hex");external_node_fs_namespaceObject.rename(s,e,i=>{if(i)return t(i);external_node_fs_namespaceObject.unlink(e,t)})},oo=s=>{if(!Oe)return external_node_fs_namespaceObject.unlinkSync(s);let t=s+".DELETE."+(0,external_node_crypto_.randomBytes)(16).toString("hex");external_node_fs_namespaceObject.renameSync(s,t),external_node_fs_namespaceObject.unlinkSync(t)},Tr=(s,t,e)=>s!==void 0&&s===s>>>0?s:t!==void 0&&t===t>>>0?t:e,qt=class extends st{[Es]=!1;[_e]=!1;[Ei]=0;reservations=new pi;transform;writable=!0;readable=!1;uid;gid;setOwner;preserveOwner;processGid;processUid;maxDepth;forceChown;win32;newer;keep;noMtime;preservePaths;unlink;cwd;strip;processUmask;umask;dmode;fmode;chmod;constructor(t={}){if(t.ondone=()=>{this[Es]=!0,this[ws]()},super(t),this.transform=t.transform,this.chmod=!!t.chmod,typeof t.uid=="number"||typeof t.gid=="number"){if(typeof t.uid!="number"||typeof t.gid!="number")throw new TypeError("cannot set owner without number uid and gid");if(t.preserveOwner)throw new TypeError("cannot preserve owner in archive and also set owner explicitly");this.uid=t.uid,this.gid=t.gid,this.setOwner=!0}else this.uid=void 0,this.gid=void 0,this.setOwner=!1;t.preserveOwner===void 0&&typeof t.uid!="number"?this.preserveOwner=!!(process.getuid&&process.getuid()===0):this.preserveOwner=!!t.preserveOwner,this.processUid=(this.preserveOwner||this.setOwner)&&process.getuid?process.getuid():void 0,this.processGid=(this.preserveOwner||this.setOwner)&&process.getgid?process.getgid():void 0,this.maxDepth=typeof t.maxDepth=="number"?t.maxDepth:ro,this.forceChown=t.forceChown===!0,this.win32=!!t.win32||Oe,this.newer=!!t.newer,this.keep=!!t.keep,this.noMtime=!!t.noMtime,this.preservePaths=!!t.preservePaths,this.unlink=!!t.unlink,this.cwd=f(external_node_path_namespaceObject.resolve(t.cwd||process.cwd())),this.strip=Number(t.strip)||0,this.processUmask=this.chmod?typeof t.processUmask=="number"?t.processUmask:wr():0,this.umask=typeof t.umask=="number"?t.umask:this.processUmask,this.dmode=t.dmode||511&~this.umask,this.fmode=t.fmode||438&~this.umask,this.on("entry",e=>this[Sr](e))}warn(t,e,i={}){return(t==="TAR_BAD_ARCHIVE"||t==="TAR_ABORT")&&(i.recoverable=!1),super.warn(t,e,i)}[ws](){this[Es]&&this[Ei]===0&&(this.emit("prefinish"),this.emit("finish"),this.emit("end"))}[ps](t,e){let i=t[e],{type:r}=t;if(!i||this.preservePaths)return!0;let[n,o]=ce(i),h=o.replace(/\\/g,"/").split("/");if(h.includes("..")||Oe&&/^[a-z]:\.\.$/i.test(h[0]??"")){if(e==="path"||r==="Link")return this.warn("TAR_ENTRY_ERROR",`${e} contains '..'`,{entry:t,[e]:i}),!1;{let a=external_node_path_namespaceObject.posix.dirname(t.path),l=external_node_path_namespaceObject.posix.normalize(external_node_path_namespaceObject.posix.join(a,h.join("/")));if(l.startsWith("../")||l==="..")return this.warn("TAR_ENTRY_ERROR",`${e} escapes extraction directory`,{entry:t,[e]:i}),!1}}return n&&(t[e]=String(o),this.warn("TAR_ENTRY_INFO",`stripping ${n} from absolute ${e}`,{entry:t,[e]:i})),!0}[_r](t){let e=f(t.path),i=e.split("/");if(this.strip){if(i.length<this.strip)return!1;if(t.type==="Link"){let r=f(String(t.linkpath)).split("/");if(r.length>=this.strip)t.linkpath=r.slice(this.strip).join("/");else return!1}i.splice(0,this.strip),t.path=i.join("/")}if(isFinite(this.maxDepth)&&i.length>this.maxDepth)return this.warn("TAR_ENTRY_ERROR","path excessively deep",{entry:t,path:e,depth:i.length,maxDepth:this.maxDepth}),!1;if(!this[ps](t,"path")||!this[ps](t,"linkpath"))return!1;if(external_node_path_namespaceObject.isAbsolute(t.path)?t.absolute=f(external_node_path_namespaceObject.resolve(t.path)):t.absolute=f(external_node_path_namespaceObject.resolve(this.cwd,t.path)),!this.preservePaths&&typeof t.absolute=="string"&&t.absolute.indexOf(this.cwd+"/")!==0&&t.absolute!==this.cwd)return this.warn("TAR_ENTRY_ERROR","path escaped extraction target",{entry:t,path:f(t.path),resolvedPath:t.absolute,cwd:this.cwd}),!1;if(t.absolute===this.cwd&&t.type!=="Directory"&&t.type!=="GNUDumpDir")return!1;if(this.win32){let{root:r}=external_node_path_namespaceObject.win32.parse(String(t.absolute));t.absolute=r+$i(String(t.absolute).slice(r.length));let{root:n}=external_node_path_namespaceObject.win32.parse(t.path);t.path=n+$i(t.path.slice(n.length))}return!0}[Sr](t){if(!this[_r](t))return t.resume();switch(external_node_assert_.equal(typeof t.absolute,"string"),t.type){case"Directory":case"GNUDumpDir":t.mode&&(t.mode=t.mode|448);case"File":case"OldFile":case"ContiguousFile":case"Link":case"SymbolicLink":return this[Ss](t);default:return this[gr](t)}}[O](t,e){t.name==="CwdError"?this.emit("error",t):(this.warn("TAR_ENTRY_ERROR",t,{entry:e}),this[Xt](),e.resume())}[St](t,e,i){fr(f(t),{uid:this.uid,gid:this.gid,processUid:this.processUid,processGid:this.processGid,umask:this.processUmask,preserve:this.preservePaths,unlink:this.unlink,cwd:this.cwd,mode:e},i)}[Re](t){return this.forceChown||this.preserveOwner&&(typeof t.uid=="number"&&t.uid!==this.processUid||typeof t.gid=="number"&&t.gid!==this.processGid)||typeof this.uid=="number"&&this.uid!==this.processUid||typeof this.gid=="number"&&this.gid!==this.processGid}[be](t){return Tr(this.uid,t.uid,this.processUid)}[ge](t){return Tr(this.gid,t.gid,this.processGid)}[Rs](t,e){let i=typeof t.mode=="number"?t.mode&4095:this.fmode,r=new tt(String(t.absolute),{flags:ls(t.size),mode:i,autoClose:!1});r.on("error",a=>{r.fd&&external_node_fs_namespaceObject.close(r.fd,()=>{}),r.write=()=>!0,this[O](a,t),e()});let n=1,o=a=>{if(a){r.fd&&external_node_fs_namespaceObject.close(r.fd,()=>{}),this[O](a,t),e();return}--n===0&&r.fd!==void 0&&external_node_fs_namespaceObject.close(r.fd,l=>{l?this[O](l,t):this[Xt](),e()})};r.on("finish",()=>{let a=String(t.absolute),l=r.fd;if(typeof l=="number"&&t.mtime&&!this.noMtime){n++;let c=t.atime||new Date,d=t.mtime;external_node_fs_namespaceObject.futimes(l,c,d,S=>S?external_node_fs_namespaceObject.utimes(a,c,d,T=>o(T&&S)):o())}if(typeof l=="number"&&this[Re](t)){n++;let c=this[be](t),d=this[ge](t);typeof c=="number"&&typeof d=="number"&&external_node_fs_namespaceObject.fchown(l,c,d,S=>S?external_node_fs_namespaceObject.chown(a,c,d,T=>o(T&&S)):o())}o()});let h=this.transform&&this.transform(t)||t;h!==t&&(h.on("error",a=>{this[O](a,t),e()}),t.pipe(h)),h.pipe(r)}[bs](t,e){let i=typeof t.mode=="number"?t.mode&4095:this.dmode;this[St](String(t.absolute),i,r=>{if(r){this[O](r,t),e();return}let n=1,o=()=>{--n===0&&(e(),this[Xt](),t.resume())};t.mtime&&!this.noMtime&&(n++,external_node_fs_namespaceObject.utimes(String(t.absolute),t.atime||new Date,t.mtime,o)),this[Re](t)&&(n++,external_node_fs_namespaceObject.chown(String(t.absolute),Number(this[be](t)),Number(this[ge](t)),o)),o()})}[gr](t){t.unsupported=!0,this.warn("TAR_ENTRY_UNSUPPORTED",`unsupported entry type: ${t.type}`,{entry:t}),t.resume()}[Rr](t,e){let i=f(external_node_path_namespaceObject.relative(this.cwd,external_node_path_namespaceObject.resolve(external_node_path_namespaceObject.dirname(String(t.absolute)),String(t.linkpath)))).split("/");this[ye](t,this.cwd,i,()=>this[wi](t,String(t.linkpath),"symlink",e),r=>{this[O](r,t),e()})}[br](t,e){let i=f(external_node_path_namespaceObject.resolve(this.cwd,String(t.linkpath))),r=f(String(t.linkpath)).split("/");this[ye](t,this.cwd,r,()=>this[wi](t,i,"link",e),n=>{this[O](n,t),e()})}[ye](t,e,i,r,n){let o=i.shift();if(this.preservePaths||o===void 0)return r();let h=external_node_path_namespaceObject.resolve(e,o);external_node_fs_namespaceObject.lstat(h,(a,l)=>{if(a)return r();if(l?.isSymbolicLink())return n(new wt(h,external_node_path_namespaceObject.resolve(h,i.join("/"))));this[ye](t,h,i,r,n)})}[Or](){this[Ei]++}[Xt](){this[Ei]--,this[ws]()}[gs](t){this[Xt](),t.resume()}[ys](t,e){return t.type==="File"&&!this.unlink&&e.isFile()&&e.nlink<=1&&!Oe}[Ss](t){this[Or]();let e=[t.path];t.linkpath&&e.push(t.linkpath),this.reservations.reserve(e,i=>this[yr](t,i))}[yr](t,e){let i=h=>{e(h)},r=()=>{this[St](this.cwd,this.dmode,h=>{if(h){this[O](h,t),i();return}this[_e]=!0,n()})},n=()=>{if(t.absolute!==this.cwd){let h=f(external_node_path_namespaceObject.dirname(String(t.absolute)));if(h!==this.cwd)return this[St](h,this.dmode,a=>{if(a){this[O](a,t),i();return}o()})}o()},o=()=>{external_node_fs_namespaceObject.lstat(String(t.absolute),(h,a)=>{if(a&&(this.keep||this.newer&&a.mtime>(t.mtime??a.mtime))){this[gs](t),i();return}if(h||this[ys](t,a))return this[P](null,t,i);if(a.isDirectory()){if(t.type==="Directory"){let l=this.chmod&&t.mode&&(a.mode&4095)!==t.mode,c=d=>this[P](d??null,t,i);return l?external_node_fs_namespaceObject.chmod(String(t.absolute),Number(t.mode),c):c()}if(t.absolute!==this.cwd)return external_node_fs_namespaceObject.rmdir(String(t.absolute),l=>this[P](l??null,t,i))}if(t.absolute===this.cwd)return this[P](null,t,i);no(String(t.absolute),l=>this[P](l??null,t,i))})};this[_e]?n():r()}[P](t,e,i){if(t){this[O](t,e),i();return}switch(e.type){case"File":case"OldFile":case"ContiguousFile":return this[Rs](e,i);case"Link":return this[br](e,i);case"SymbolicLink":return this[Rr](e,i);case"Directory":case"GNUDumpDir":return this[bs](e,i)}}[wi](t,e,i,r){external_node_fs_namespaceObject[i](e,String(t.absolute),n=>{n?this[O](n,t):(this[Xt](),t.resume()),r()})}},Se=s=>{try{return[null,s()]}catch(t){return[t,null]}},Te=class extends qt{sync=!0;[P](t,e){return super[P](t,e,()=>{})}[Ss](t){if(!this[_e]){let n=this[St](this.cwd,this.dmode);if(n)return this[O](n,t);this[_e]=!0}if(t.absolute!==this.cwd){let n=f(external_node_path_namespaceObject.dirname(String(t.absolute)));if(n!==this.cwd){let o=this[St](n,this.dmode);if(o)return this[O](o,t)}}let[e,i]=Se(()=>external_node_fs_namespaceObject.lstatSync(String(t.absolute)));if(i&&(this.keep||this.newer&&i.mtime>(t.mtime??i.mtime)))return this[gs](t);if(e||this[ys](t,i))return this[P](null,t);if(i.isDirectory()){if(t.type==="Directory"){let o=this.chmod&&t.mode&&(i.mode&4095)!==t.mode,[h]=o?Se(()=>{external_node_fs_namespaceObject.chmodSync(String(t.absolute),Number(t.mode))}):[];return this[P](h,t)}let[n]=Se(()=>external_node_fs_namespaceObject.rmdirSync(String(t.absolute)));this[P](n,t)}let[r]=t.absolute===this.cwd?[]:Se(()=>oo(String(t.absolute)));this[P](r,t)}[Rs](t,e){let i=typeof t.mode=="number"?t.mode&4095:this.fmode,r=h=>{let a;try{external_node_fs_namespaceObject.closeSync(n)}catch(l){a=l}(h||a)&&this[O](h||a,t),e()},n;try{n=external_node_fs_namespaceObject.openSync(String(t.absolute),ls(t.size),i)}catch(h){return r(h)}let o=this.transform&&this.transform(t)||t;o!==t&&(o.on("error",h=>this[O](h,t)),t.pipe(o)),o.on("data",h=>{try{external_node_fs_namespaceObject.writeSync(n,h,0,h.length)}catch(a){r(a)}}),o.on("end",()=>{let h=null;if(t.mtime&&!this.noMtime){let a=t.atime||new Date,l=t.mtime;try{external_node_fs_namespaceObject.futimesSync(n,a,l)}catch(c){try{external_node_fs_namespaceObject.utimesSync(String(t.absolute),a,l)}catch{h=c}}}if(this[Re](t)){let a=this[be](t),l=this[ge](t);try{external_node_fs_namespaceObject.fchownSync(n,Number(a),Number(l))}catch(c){try{external_node_fs_namespaceObject.chownSync(String(t.absolute),Number(a),Number(l))}catch{h=h||c}}}r(h)})}[bs](t,e){let i=typeof t.mode=="number"?t.mode&4095:this.dmode,r=this[St](String(t.absolute),i);if(r){this[O](r,t),e();return}if(t.mtime&&!this.noMtime)try{external_node_fs_namespaceObject.utimesSync(String(t.absolute),t.atime||new Date,t.mtime)}catch{}if(this[Re](t))try{external_node_fs_namespaceObject.chownSync(String(t.absolute),Number(this[be](t)),Number(this[ge](t)))}catch{}e(),t.resume()}[St](t,e){try{return ur(f(t),{uid:this.uid,gid:this.gid,processUid:this.processUid,processGid:this.processGid,umask:this.processUmask,preserve:this.preservePaths,unlink:this.unlink,cwd:this.cwd,mode:e})}catch(i){return i}}[ye](t,e,i,r,n){if(this.preservePaths||!i.length)return r();let o=e;for(let h of i){o=external_node_path_namespaceObject.resolve(o,h);let[a,l]=Se(()=>external_node_fs_namespaceObject.lstatSync(o));if(a)return r();if(l.isSymbolicLink())return n(new wt(o,external_node_path_namespaceObject.resolve(e,i.join("/"))))}r()}[wi](t,e,i,r){let n=`${i}Sync`;try{external_node_fs_namespaceObject[n](e,String(t.absolute)),r(),t.resume()}catch(o){return this[O](o,t)}}};var ho=s=>{let t=new Te(s),e=s.file,i=external_node_fs_namespaceObject.statSync(e),r=s.maxReadSize||16*1024*1024;new ve(e,{readSize:r,size:i.size}).pipe(t)},ao=(s,t)=>{let e=new qt(s),i=s.maxReadSize||16*1024*1024,r=s.file;return new Promise((o,h)=>{e.on("error",h),e.on("close",o),external_node_fs_namespaceObject.stat(r,(a,l)=>{if(a)h(a);else{let c=new gt(r,{readSize:i,size:l.size});c.on("error",h),c.pipe(e)}})})},lo=K(ho,ao,s=>new Te(s),s=>new qt(s),(s,t)=>{t?.length&&Yi(s,t)});var co=(s,t)=>{let e=new kt(s),i=!0,r,n;try{try{r=external_node_fs_namespaceObject.openSync(s.file,"r+")}catch(a){if(a?.code==="ENOENT")r=external_node_fs_namespaceObject.openSync(s.file,"w+");else throw a}let o=external_node_fs_namespaceObject.fstatSync(r),h=Buffer.alloc(512);t:for(n=0;n<o.size;n+=512){for(let c=0,d=0;c<512;c+=d){if(d=external_node_fs_namespaceObject.readSync(r,h,c,h.length-c,n+c),n===0&&h[0]===31&&h[1]===139)throw new Error("cannot append to compressed archives");if(!d)break t}let a=new F(h);if(!a.cksumValid)break;let l=512*Math.ceil((a.size||0)/512);if(n+l+512>o.size)break;n+=l,s.mtimeCache&&a.mtime&&s.mtimeCache.set(String(a.path),a.mtime)}i=!1,fo(s,e,n,r,t)}finally{if(i)try{external_node_fs_namespaceObject.closeSync(r)}catch{}}},fo=(s,t,e,i,r)=>{let n=new Wt(s.file,{fd:i,start:e});t.pipe(n),mo(t,r)},uo=(s,t)=>{t=Array.from(t);let e=new Et(s),i=(n,o,h)=>{let a=(T,N)=>{T?external_node_fs_namespaceObject.close(n,E=>h(T)):h(null,N)},l=0;if(o===0)return a(null,0);let c=0,d=Buffer.alloc(512),S=(T,N)=>{if(T||typeof N>"u")return a(T);if(c+=N,c<512&&N)return external_node_fs_namespaceObject.read(n,d,c,d.length-c,l+c,S);if(l===0&&d[0]===31&&d[1]===139)return a(new Error("cannot append to compressed archives"));if(c<512)return a(null,l);let E=new F(d);if(!E.cksumValid)return a(null,l);let x=512*Math.ceil((E.size??0)/512);if(l+x+512>o||(l+=x+512,l>=o))return a(null,l);s.mtimeCache&&E.mtime&&s.mtimeCache.set(String(E.path),E.mtime),c=0,external_node_fs_namespaceObject.read(n,d,0,512,l,S)};external_node_fs_namespaceObject.read(n,d,0,512,l,S)};return new Promise((n,o)=>{e.on("error",o);let h="r+",a=(l,c)=>{if(l&&l.code==="ENOENT"&&h==="r+")return h="w+",external_node_fs_namespaceObject.open(s.file,h,a);if(l||!c)return o(l);external_node_fs_namespaceObject.fstat(c,(d,S)=>{if(d)return external_node_fs_namespaceObject.close(c,()=>o(d));i(c,S.size,(T,N)=>{if(T)return o(T);let E=new tt(s.file,{fd:c,start:N});e.pipe(E),E.on("error",o),E.on("close",n),po(e,t)})})};external_node_fs_namespaceObject.open(s.file,h,a)})},mo=(s,t)=>{t.forEach(e=>{e.charAt(0)==="@"?It({file:external_node_path_namespaceObject.resolve(s.cwd,e.slice(1)),sync:!0,noResume:!0,onReadEntry:i=>s.add(i)}):s.add(e)}),s.end()},po=async(s,t)=>{for(let e=0;e<t.length;e++){let i=String(t[e]);i.charAt(0)==="@"?await It({file:external_node_path_namespaceObject.resolve(String(s.cwd),i.slice(1)),noResume:!0,onReadEntry:r=>s.add(r)}):s.add(i)}s.end()},vt=K(co,uo,()=>{throw new TypeError("file is required")},()=>{throw new TypeError("file is required")},(s,t)=>{if(!ks(s))throw new TypeError("file is required");if(s.gzip||s.brotli||s.zstd||s.file.endsWith(".br")||s.file.endsWith(".tbr"))throw new TypeError("cannot append to compressed archives");if(!t?.length)throw new TypeError("no paths specified to add/replace")});var Eo=K(vt.syncFile,vt.asyncFile,vt.syncNoFile,vt.asyncNoFile,(s,t=[])=>{vt.validate?.(s,t),wo(s)}),wo=s=>{let t=s.filter;s.mtimeCache||(s.mtimeCache=new Map),s.filter=t?(e,i)=>t(e,i)&&!((s.mtimeCache?.get(e)??i.mtime??0)>(i.mtime??0)):(e,i)=>!((s.mtimeCache?.get(e)??i.mtime??0)>(i.mtime??0))};
 //# sourceMappingURL=index.min.js.map
 
+;// CONCATENATED MODULE: ./src/shared.js
+
+
+/**
+ * @param {string} name
+ * @param {string=} def
+ * @returns {string}
+ */
+function getEnv(name, def = "") {
+  return process.env[name] ?? def
+}
+
+/**
+ * @param {unknown} err
+ * @returns {string}
+ */
+function getErrorMessage(err) {
+  if (err instanceof Error) {
+    return err.message
+  }
+
+  return String(err)
+}
+
+/**
+ * @param {unknown} value
+ * @returns {value is Record<string, unknown>}
+ */
+function isRecord(value) {
+  return typeof value === "object" && value !== null
+}
+
+/**
+ * @param {unknown} value
+ * @returns {Record<string, unknown> | null}
+ */
+function shared_getOptionalRecord(value) {
+  return isRecord(value) ? value : null
+}
+
+/**
+ * @param {string} filePath
+ * @returns {Promise<boolean>}
+ */
+async function pathExists(filePath) {
+  try {
+    await promises_namespaceObject.access(filePath)
+    return true
+  } catch {
+    return false
+  }
+}
+
+/**
+ * @param {number} delayMs
+ * @returns {Promise<void>}
+ */
+function waitForDelay(delayMs) {
+  return new Promise((resolve) => {
+    setTimeout(resolve, delayMs)
+  })
+}
+
+;// CONCATENATED MODULE: ./src/github-event.js
+
+
+
+/**
+ * @param {string} eventPath
+ * @returns {Promise<number | null>}
+ */
+async function getPullRequestNumberFromEvent(eventPath) {
+  const payload = await readGitHubEventPayload(eventPath)
+  if (payload === null) {
+    return null
+  }
+
+  const pullRequest = getOptionalRecord(payload.pull_request)
+  if (pullRequest !== null && typeof pullRequest.number === "number") {
+    return pullRequest.number
+  }
+
+  const issue = getOptionalRecord(payload.issue)
+  if (
+    issue !== null &&
+    getOptionalRecord(issue.pull_request) !== null &&
+    typeof issue.number === "number"
+  ) {
+    return issue.number
+  }
+
+  return null
+}
+
+/**
+ * @param {string} eventPath
+ * @returns {Promise<string | null>}
+ */
+async function getPullRequestHeadShaFromEvent(eventPath) {
+  try {
+    const payload = await readGitHubEventPayload(eventPath)
+    if (payload === null) {
+      return null
+    }
+
+    const pullRequest = shared_getOptionalRecord(payload.pull_request)
+    const head = shared_getOptionalRecord(pullRequest?.head)
+    return typeof head?.sha === "string" && head.sha !== "" ? head.sha : null
+  } catch {
+    return null
+  }
+}
+
+/**
+ * @param {string} eventPath
+ * @returns {Promise<Record<string, unknown> | null>}
+ */
+async function readGitHubEventPayload(eventPath) {
+  const payload = JSON.parse(await promises_namespaceObject.readFile(eventPath, "utf8"))
+  return isRecord(payload) ? payload : null
+}
+
+;// CONCATENATED MODULE: ./src/github-context.js
+
+
+
+/**
+ * @returns {string}
+ */
+function getProfileJobName() {
+  return getEnv("GARNET_PROFILE_JOB", getEnv("GITHUB_JOB"))
+}
+
+/**
+ * @returns {Promise<Record<string, string>>}
+ */
+async function createGitHubContext() {
+  return {
+    job: getProfileJobName(),
+    run_id: getEnv("GITHUB_RUN_ID"),
+    workflow: getProfileWorkflowName(),
+    repository: getEnv("GITHUB_REPOSITORY"),
+    repository_id: getEnv("GITHUB_REPOSITORY_ID"),
+    repository_owner: getEnv("GITHUB_REPOSITORY_OWNER"),
+    repository_owner_id: getEnv("GITHUB_REPOSITORY_OWNER_ID"),
+    event_name: getEnv("GITHUB_EVENT_NAME"),
+    ref: getEnv("GITHUB_REF"),
+    sha: await getProfileSha(),
+    actor: getEnv("GITHUB_ACTOR"),
+    runner_os: getEnv("RUNNER_OS"),
+    runner_arch: getEnv("RUNNER_ARCH"),
+  }
+}
+
+/**
+ * @returns {string}
+ */
+function getWorkflowFilePath() {
+  const workspace = getEnv("GITHUB_WORKSPACE")
+  const workflowRef = getEnv("GITHUB_WORKFLOW_REF")
+  const repository = getEnv("GITHUB_REPOSITORY")
+
+  if (workspace === "" || workflowRef === "" || repository === "") {
+    return ""
+  }
+
+  const pathPart = workflowRef.split("@")[0] ?? ""
+  const repoPrefix = `${repository}/`
+  const relativePath = pathPart.startsWith(repoPrefix)
+    ? pathPart.slice(repoPrefix.length)
+    : pathPart
+
+  return `${workspace}/${relativePath}`
+}
+
+/**
+ * @returns {string}
+ */
+function getProfileWorkflowName() {
+  return getEnv("GARNET_PROFILE_WORKFLOW", getEnv("GITHUB_WORKFLOW"))
+}
+
+/**
+ * @returns {Promise<string>}
+ */
+async function getProfileSha() {
+  const eventPath = getEnv("GITHUB_EVENT_PATH")
+  if (eventPath !== "") {
+    const pullRequestHeadSha = await getPullRequestHeadShaFromEvent(eventPath)
+    if (pullRequestHeadSha !== null) {
+      return pullRequestHeadSha
+    }
+  }
+
+  return getEnv("GITHUB_SHA")
+}
+
 ;// CONCATENATED MODULE: ./src/action.js
 // This script installs garnetctl and jibril, configures them, creates the
 // agent, fetches network policy, and sets up Jibril as a systemd service.
+
+
 
 
 
@@ -31250,25 +31325,10 @@ async function run() {
 
     const MACHINE_ID = SYSTEM_MACHINE_ID
     const profileJob = getProfileJobName()
-    const profileWorkflow = getProfileWorkflowName()
     const HOSTNAME = `${external_node_os_namespaceObject.hostname()}-${getEnv("GITHUB_RUN_ID")}-${profileJob}`
 
     // Create the github context.
-    const githubContext = {
-      job: profileJob,
-      run_id: getEnv("GITHUB_RUN_ID"),
-      workflow: profileWorkflow,
-      repository: getEnv("GITHUB_REPOSITORY"),
-      repository_id: getEnv("GITHUB_REPOSITORY_ID"),
-      repository_owner: getEnv("GITHUB_REPOSITORY_OWNER"),
-      repository_owner_id: getEnv("GITHUB_REPOSITORY_OWNER_ID"),
-      event_name: getEnv("GITHUB_EVENT_NAME"),
-      ref: getEnv("GITHUB_REF"),
-      sha: getEnv("GITHUB_SHA"),
-      actor: getEnv("GITHUB_ACTOR"),
-      runner_os: getEnv("RUNNER_OS"),
-      runner_arch: getEnv("RUNNER_ARCH"),
-    }
+    const githubContext = await createGitHubContext()
     const githubContextPath = external_node_path_namespaceObject.join(tmpDir, "github-context.json")
     await promises_namespaceObject.writeFile(
       githubContextPath,
@@ -31617,29 +31677,6 @@ function getExitCode(err) {
 }
 
 /**
- * This function gets an environment variable with a default value.
- * @param {string} name
- * @param {string=} def
- */
-function getEnv(name, def = "") {
-  return process.env[name] ?? def
-}
-
-/**
- * @returns {string}
- */
-function getProfileJobName() {
-  return getEnv("GARNET_PROFILE_JOB", getEnv("GITHUB_JOB"))
-}
-
-/**
- * @returns {string}
- */
-function getProfileWorkflowName() {
-  return getEnv("GARNET_PROFILE_WORKFLOW", getEnv("GITHUB_WORKFLOW"))
-}
-
-/**
  * @param {string} inputVersion
  * @param {string} actionRef
  */
@@ -31660,26 +31697,6 @@ function resolveJibrilVersion(inputVersion, actionRef) {
 
   // Default for other refs (branch/SHA/etc).
   return "latest"
-}
-
-// Derives the full path to the workflow file from GITHUB_WORKFLOW_REF.
-// Format: owner/repo/.github/workflows/usage.yaml@refs/heads/main
-function getWorkflowFilePath() {
-  const workspace = getEnv("GITHUB_WORKSPACE")
-  const workflowRef = getEnv("GITHUB_WORKFLOW_REF")
-  const repository = getEnv("GITHUB_REPOSITORY")
-
-  if (!workspace || !workflowRef || !repository) {
-    return ""
-  }
-
-  const pathPart = workflowRef.split("@")[0] ?? ""
-  const repoPrefix = `${repository}/`
-  const relativePath = pathPart.startsWith(repoPrefix)
-    ? pathPart.slice(repoPrefix.length)
-    : pathPart
-
-  return external_node_path_namespaceObject.join(workspace, relativePath)
 }
 
 /**
@@ -31814,19 +31831,6 @@ async function readdirRecursiveSafe(dirPath) {
 }
 
 /**
- * @param {string} filePath
- * @returns {Promise<boolean>}
- */
-async function pathExists(filePath) {
-  try {
-    await promises_namespaceObject.access(filePath)
-    return true
-  } catch {
-    return false
-  }
-}
-
-/**
  * Redacts sensitive env vars from debug output (tokens, API keys).
  * @param {string|null} text
  */
@@ -31911,7 +31915,9 @@ async function main() {
     process.env.GARNET_API_TOKEN = getInput("api_token")
 
     // Make the token available to both the main and post steps when provided.
-    process.env.GITHUB_TOKEN = githubToken
+    if (githubToken !== "") {
+      process.env.GITHUB_TOKEN = githubToken
+    }
     process.env.GARNET_API_URL = getInput("api_url")
     process.env.GARNETCTL_VERSION = getInput("garnetctl_version")
     process.env.JIBRIL_VERSION = getInput("jibril_version")
@@ -31947,8 +31953,3 @@ async function main() {
 
 main()
 
-})();
-
-module.exports = __webpack_exports__;
-/******/ })()
-;

@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "description": "GarnetAI GitHub Action",
   "private": true,
+  "type": "module",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/garnet-org/action.git"
@@ -20,6 +21,7 @@
     "node": ">=24"
   },
   "scripts": {
+    "prepare": "node scripts/setup-git-hooks.js",
     "typecheck": "tsc -p jsconfig.json --noEmit",
     "build": "ncc build src/main.js -o dist/main --license licenses.txt && ncc build src/post.js -o dist/post --license licenses.txt && perl -pi -e 's/\\r$//' dist/main/index.js dist/post/index.js",
     "validate": "npm run typecheck && npm run build"

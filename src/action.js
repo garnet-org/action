@@ -10,6 +10,12 @@ import * as os from "node:os"
 import * as path from "node:path"
 import { pipeline } from "node:stream/promises"
 import * as tar from "tar"
+import {
+  createGitHubContext,
+  getProfileJobName,
+  getWorkflowFilePath,
+} from "./github-context.js"
+import { getEnv, getOptionalRecord, isRecord, pathExists } from "./shared.js"
 
 /**
  * @typedef {import("@actions/exec").ExecOptions} ExecOptions
@@ -170,25 +176,10 @@ export async function run() {
 
     const MACHINE_ID = SYSTEM_MACHINE_ID
     const profileJob = getProfileJobName()
-    const profileWorkflow = getProfileWorkflowName()
     const HOSTNAME = `${os.hostname()}-${getEnv("GITHUB_RUN_ID")}-${profileJob}`
 
     // Create the github context.
-    const githubContext = {
-      job: profileJob,
-      run_id: getEnv("GITHUB_RUN_ID"),
-      workflow: profileWorkflow,
-      repository: getEnv("GITHUB_REPOSITORY"),
-      repository_id: getEnv("GITHUB_REPOSITORY_ID"),
-      repository_owner: getEnv("GITHUB_REPOSITORY_OWNER"),
-      repository_owner_id: getEnv("GITHUB_REPOSITORY_OWNER_ID"),
-      event_name: getEnv("GITHUB_EVENT_NAME"),
-      ref: getEnv("GITHUB_REF"),
-      sha: getEnv("GITHUB_SHA"),
-      actor: getEnv("GITHUB_ACTOR"),
-      runner_os: getEnv("RUNNER_OS"),
-      runner_arch: getEnv("RUNNER_ARCH"),
-    }
+    const githubContext = await createGitHubContext()
     const githubContextPath = path.join(tmpDir, "github-context.json")
     await fs.writeFile(
       githubContextPath,
@@ -538,29 +529,6 @@ function getExitCode(err) {
 }
 
 /**
- * This function gets an environment variable with a default value.
- * @param {string} name
- * @param {string=} def
- */
-function getEnv(name, def = "") {
-  return process.env[name] ?? def
-}
-
-/**
- * @returns {string}
- */
-function getProfileJobName() {
-  return getEnv("GARNET_PROFILE_JOB", getEnv("GITHUB_JOB"))
-}
-
-/**
- * @returns {string}
- */
-function getProfileWorkflowName() {
-  return getEnv("GARNET_PROFILE_WORKFLOW", getEnv("GITHUB_WORKFLOW"))
-}
-
-/**
  * @param {string} inputVersion
  * @param {string} actionRef
  */
@@ -581,26 +549,6 @@ function resolveJibrilVersion(inputVersion, actionRef) {
 
   // Default for other refs (branch/SHA/etc).
   return "latest"
-}
-
-// Derives the full path to the workflow file from GITHUB_WORKFLOW_REF.
-// Format: owner/repo/.github/workflows/usage.yaml@refs/heads/main
-function getWorkflowFilePath() {
-  const workspace = getEnv("GITHUB_WORKSPACE")
-  const workflowRef = getEnv("GITHUB_WORKFLOW_REF")
-  const repository = getEnv("GITHUB_REPOSITORY")
-
-  if (!workspace || !workflowRef || !repository) {
-    return ""
-  }
-
-  const pathPart = workflowRef.split("@")[0] ?? ""
-  const repoPrefix = `${repository}/`
-  const relativePath = pathPart.startsWith(repoPrefix)
-    ? pathPart.slice(repoPrefix.length)
-    : pathPart
-
-  return path.join(workspace, relativePath)
 }
 
 /**
@@ -731,19 +679,6 @@ async function readdirRecursiveSafe(dirPath) {
     return Array.isArray(entries) ? entries : []
   } catch (_) {
     return []
-  }
-}
-
-/**
- * @param {string} filePath
- * @returns {Promise<boolean>}
- */
-async function pathExists(filePath) {
-  try {
-    await fs.access(filePath)
-    return true
-  } catch {
-    return false
   }
 }
 

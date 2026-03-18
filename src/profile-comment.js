@@ -1,5 +1,5 @@
-import * as fs from "node:fs/promises"
 import { z } from "zod"
+import { getOptionalRecord, isRecord } from "./shared.js"
 
 export const COMMENT_MARKER = "garnet-runtime-visibility"
 
@@ -87,28 +87,24 @@ const PROFILE_RESULT_SCHEMA = z
   .transform((value) => normalizeResult(value))
 
 const PROC_TREE_SCHEMA = z
-  .object({
+  .looseObject({
     ancestry: z.array(z.string()),
   })
-  .passthrough()
   .transform((procTree) => ({
     ancestry: procTree.ancestry.filter((entry) => entry.length > 0),
   }))
 
-const ASSERTION_SCHEMA = z
-  .object({
-    id: z.string(),
-    result: PROFILE_RESULT_SCHEMA,
-  })
-  .passthrough()
+const ASSERTION_SCHEMA = z.looseObject({
+  id: z.string(),
+  result: PROFILE_RESULT_SCHEMA,
+})
 
 const PEER_SCHEMA = z
-  .object({
+  .looseObject({
     result: PROFILE_RESULT_SCHEMA,
     remote_names: z.array(z.string()),
     proc_trees: z.array(PROC_TREE_SCHEMA),
   })
-  .passthrough()
   .transform((peer) => ({
     remote_names: peer.remote_names.filter((name) => name.length > 0),
     proc_trees: peer.proc_trees,
@@ -124,6 +120,31 @@ const GITHUB_SCENARIO_SCHEMA = z.object({
   run_id: z.string(),
   job: z.string(),
 })
+
+const PROFILE_NETWORK_SCHEMA = z
+  .object({
+    egress: z
+      .object({
+        peers: z.array(PEER_SCHEMA).optional(),
+      })
+      .optional(),
+  })
+  .optional()
+
+const PROFILE_NETWORK_TELEMETRY_SCHEMA = z
+  .object({
+    network: z
+      .object({
+        egress: z
+          .object({
+            total_domains: z.number().optional(),
+            total_connections: z.number().optional(),
+          })
+          .optional(),
+      })
+      .optional(),
+  })
+  .optional()
 
 const NORMALIZED_PROFILE_SCHEMA = z.object({
   timestamp: z.string(),
@@ -159,36 +180,21 @@ const COMMENT_STATE_SCHEMA = z.object({
 })
 
 const PROFILE_JSON_SCHEMA = z
-  .object({
+  .looseObject({
     timestamp: z.string(),
     scenarios: z.object({
       github: GITHUB_SCENARIO_SCHEMA,
     }),
     assertions: z.array(ASSERTION_SCHEMA),
-    network: z.object({
-      egress: z.object({
-        peers: z.array(PEER_SCHEMA),
-      }),
-    }),
-    telemetry: z.object({
-      network: z.object({
-        egress: z.object({
-          total_domains: z.number(),
-          total_connections: z.number(),
-        }),
-      }),
-    }),
+    network: PROFILE_NETWORK_SCHEMA,
+    telemetry: PROFILE_NETWORK_TELEMETRY_SCHEMA,
   })
-  .passthrough()
   .transform((profile) => ({
     timestamp: profile.timestamp,
     github: profile.scenarios.github,
     assertions: profile.assertions,
-    egress_peers: profile.network.egress.peers,
-    telemetry: {
-      total_domains: profile.telemetry.network.egress.total_domains,
-      total_connections: profile.telemetry.network.egress.total_connections,
-    },
+    egress_peers: getProfileNetworkPeers(profile),
+    telemetry: getProfileNetworkTelemetry(profile),
     report_link: buildReportLink({
       repository: profile.scenarios.github.repository,
       run_id: profile.scenarios.github.run_id,
@@ -206,15 +212,6 @@ export function getDefaultJsonProfileFile() {
   }
 
   return DEFAULT_JSON_PROFILE_FILE
-}
-
-/**
- * @param {string} filePath
- * @returns {Promise<NormalizedProfile>}
- */
-export async function readProfileFromJsonFile(filePath) {
-  const content = await fs.readFile(filePath, "utf8")
-  return parseProfileJson(content)
 }
 
 /**
@@ -532,6 +529,16 @@ function renderProfileSection(profile) {
  * @returns {string}
  */
 function renderNetworkSection(profile) {
+  if (!hasNetworkData(profile)) {
+    return [
+      "#### Network Egress Summary",
+      "",
+      "Duplicate egress destinations including their process tree are omitted.",
+      "",
+      "No network information available.",
+    ].join("\n")
+  }
+
   const rows = []
   const seen = new Set()
   let skippedRemoteNames = 0
@@ -611,14 +618,9 @@ function renderAssertionSection(profile) {
 function renderProfileFooter(profile) {
   /** @type {string[]} */
   const footerParts = []
-  if (
-    profile.telemetry.total_domains > 0 ||
-    profile.telemetry.total_connections > 0
-  ) {
-    footerParts.push(
-      `${profile.telemetry.total_domains} unique domains · ${profile.telemetry.total_connections} connections`,
-    )
-  }
+  footerParts.push(
+    `${profile.telemetry.total_domains} unique domains · ${profile.telemetry.total_connections} connections`,
+  )
   if (profile.github.run_id.length > 0 || profile.github.job.length > 0) {
     footerParts.push(
       `Workflow ${escapeHtml(getDisplayValue(profile.github.workflow, "-"))} - Run #${escapeHtml(getDisplayValue(profile.github.run_id, "-"))} - Job ${escapeHtml(getDisplayValue(profile.github.job, "-"))}`,
@@ -814,6 +816,18 @@ function getAssertionBadge(profile) {
 }
 
 /**
+ * @param {NormalizedProfile} profile
+ * @returns {boolean}
+ */
+function hasNetworkData(profile) {
+  return (
+    profile.egress_peers.length > 0 ||
+    profile.telemetry.total_domains > 0 ||
+    profile.telemetry.total_connections > 0
+  )
+}
+
+/**
  * @param {ProfileResult} result
  * @returns {string}
  */
@@ -952,18 +966,37 @@ function normalizeResult(value) {
 
 /**
  * @param {unknown} value
- * @returns {value is Record<string, unknown>}
+ * @returns {number}
  */
-function isRecord(value) {
-  return typeof value === "object" && value !== null
+function getNumber(value) {
+  return typeof value === "number" ? value : 0
 }
 
 /**
- * @param {unknown} value
- * @returns {Record<string, unknown> | null}
+ * @param {unknown} profile
+ * @returns {EgressPeer[]}
  */
-function getOptionalRecord(value) {
-  return isRecord(value) ? value : null
+function getProfileNetworkPeers(profile) {
+  const root = getOptionalRecord(profile)
+  const network = getOptionalRecord(root?.network)
+  const egress = getOptionalRecord(network?.egress)
+  return Array.isArray(egress?.peers) ? egress.peers : []
+}
+
+/**
+ * @param {unknown} profile
+ * @returns {NetworkTelemetry}
+ */
+function getProfileNetworkTelemetry(profile) {
+  const root = getOptionalRecord(profile)
+  const telemetry = getOptionalRecord(root?.telemetry)
+  const network = getOptionalRecord(telemetry?.network)
+  const egress = getOptionalRecord(network?.egress)
+
+  return {
+    total_domains: getNumber(egress?.total_domains),
+    total_connections: getNumber(egress?.total_connections),
+  }
 }
 
 /**

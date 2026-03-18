@@ -1,20 +1,17 @@
-import * as fs from "node:fs/promises"
-import * as github from "@actions/github"
-import {
-  COMMENT_MARKER,
-  mergeCommentState,
-  mergeCommentStates,
-  parseCommentState,
-  renderCommentBody,
-} from "./profile-comment.js"
+import { GitHubIssueCommentClient } from "./github-issue-comment-client.js"
+import { planPullRequestComment } from "./pr-comment-plan.js"
+import { waitForDelay } from "./shared.js"
 
 /**
  * @typedef {import("./profile-comment.js").NormalizedProfile} NormalizedProfile
  */
 
 /**
- * @typedef {{ id: number, body: string }} PullRequestComment
+ * @typedef {import("./github-issue-comment-client.js").PullRequestComment} PullRequestComment
  */
+
+const CREATE_RECHECK_MIN_DELAY_MS = 750
+const CREATE_RECHECK_SPREAD_MS = 1500
 
 /**
  * @typedef {{
@@ -24,6 +21,19 @@ import {
  *   profile: NormalizedProfile
  *   runAttempt: number
  * }} PublishCommentOptions
+ */
+
+/**
+ * @typedef {{
+ *   listComments(): Promise<PullRequestComment[]>
+ *   createComment(body: string): Promise<PullRequestComment>
+ *   updateComment(commentId: number, body: string): Promise<void>
+ *   deleteComment(commentId: number): Promise<void>
+ * }} PublishCommentClient
+ */
+
+/**
+ * @typedef {{ wait?: (delayMs: number) => Promise<void> }} PublishWithClientOptions
  */
 
 /**
@@ -37,206 +47,143 @@ export async function publishPullRequestComment(options) {
     options.token,
   )
 
-  const comments = await client.listComments()
-  const matchingComments = comments
-    .map((comment) => ({
-      comment,
-      state: parseCommentState(comment.body),
-    }))
-    .filter((entry) => entry.state !== null)
-    .sort((left, right) => left.comment.id - right.comment.id)
-
-  const primary = matchingComments.at(-1) ?? null
-  const existingState = mergeCommentStates(
-    matchingComments.map((entry) => entry.state).filter(isPresent),
-  )
-  const mergeResult = mergeCommentState(
-    existingState,
+  return publishPullRequestCommentWithClient(
+    client,
     options.profile,
     options.runAttempt,
   )
+}
 
-  if (mergeResult.kind === "stale") {
+/**
+ * @param {PublishCommentClient} client
+ * @param {NormalizedProfile} profile
+ * @param {number} runAttempt
+ * @param {PublishWithClientOptions} [options]
+ * @returns {Promise<"created" | "updated" | "skipped-stale">}
+ */
+export async function publishPullRequestCommentWithClient(
+  client,
+  profile,
+  runAttempt,
+  options = {},
+) {
+  const initialPlan = planPullRequestComment(
+    await client.listComments(),
+    profile,
+    runAttempt,
+  )
+
+  if (initialPlan.kind !== "create") {
+    return applyPublishPlan(client, initialPlan)
+  }
+
+  const wait = options.wait ?? waitForDelay
+  await wait(getCreateRecheckDelayMs(profile))
+
+  const plan = planPullRequestComment(
+    await client.listComments(),
+    profile,
+    runAttempt,
+  )
+
+  if (plan.kind === "create") {
+    const createdComment = await client.createComment(plan.body)
+    return reconcilePublishedComment(
+      client,
+      profile,
+      runAttempt,
+      createdComment.id,
+    )
+  }
+
+  return applyPublishPlan(client, plan)
+}
+
+/**
+ * @param {PublishCommentClient} client
+ * @param {import("./pr-comment-plan.js").PublishCommentPlan} plan
+ * @returns {Promise<"created" | "updated" | "skipped-stale">}
+ */
+async function applyPublishPlan(client, plan) {
+  if (plan.kind === "stale") {
     return "skipped-stale"
   }
 
-  const body = renderCommentBody(mergeResult.state)
-
-  if (primary === null) {
-    await client.createComment(body)
+  if (plan.kind === "create") {
+    await client.createComment(plan.body)
     return "created"
   }
 
-  if (primary.comment.body !== body) {
-    await client.updateComment(primary.comment.id, body)
-  }
-  await deleteDuplicateComments(client, matchingComments.slice(0, -1))
+  await applyUpdatePlan(client, plan)
   return "updated"
 }
 
 /**
- * @param {string} eventPath
- * @returns {Promise<number | null>}
+ * @param {PublishCommentClient} client
+ * @param {NormalizedProfile} profile
+ * @param {number} runAttempt
+ * @param {number} createdCommentId
+ * @returns {Promise<"created" | "updated" | "skipped-stale">}
  */
-export async function getPullRequestNumberFromEvent(eventPath) {
-  const payload = JSON.parse(await fs.readFile(eventPath, "utf8"))
-  if (!isRecord(payload)) {
-    return null
+async function reconcilePublishedComment(
+  client,
+  profile,
+  runAttempt,
+  createdCommentId,
+) {
+  const plan = planPullRequestComment(
+    await client.listComments(),
+    profile,
+    runAttempt,
+  )
+
+  if (plan.kind === "create") {
+    return "created"
   }
 
-  const pullRequest = getOptionalRecord(payload.pull_request)
-  if (pullRequest !== null && typeof pullRequest.number === "number") {
-    return pullRequest.number
+  if (plan.kind === "stale") {
+    return "skipped-stale"
   }
 
-  const issue = getOptionalRecord(payload.issue)
-  if (
-    issue !== null &&
-    getOptionalRecord(issue.pull_request) !== null &&
-    typeof issue.number === "number"
-  ) {
-    return issue.number
-  }
-
-  return null
+  await applyUpdatePlan(client, plan)
+  return plan.comment.id === createdCommentId ? "created" : "updated"
 }
 
 /**
- * @param {string} repository
- * @returns {{ owner: string, repo: string }}
- */
-function splitRepository(repository) {
-  const [owner, repo] = repository.split("/")
-  if (owner === undefined || owner === "") {
-    throw new Error(`invalid GITHUB_REPOSITORY value: ${repository}`)
-  }
-  if (repo === undefined || repo === "") {
-    throw new Error(`invalid GITHUB_REPOSITORY value: ${repository}`)
-  }
-  return { owner, repo }
-}
-
-class GitHubIssueCommentClient {
-  /**
-   * @param {string} repository
-   * @param {number} pullRequestNumber
-   * @param {string} token
-   */
-  constructor(repository, pullRequestNumber, token) {
-    this.repository = repository
-    this.pullRequestNumber = pullRequestNumber
-    this.octokit = github.getOctokit(token)
-  }
-
-  /**
-   * @returns {Promise<PullRequestComment[]>}
-   */
-  async listComments() {
-    const comments = await this.octokit.paginate(
-      this.octokit.rest.issues.listComments,
-      {
-        ...this.repo,
-        issue_number: this.pullRequestNumber,
-        per_page: 100,
-      },
-    )
-
-    return comments
-      .map((value) => normalizeComment(value))
-      .filter((value) => value !== null)
-      .filter((comment) => comment.body.includes(COMMENT_MARKER))
-  }
-
-  /**
-   * @param {string} body
-   * @returns {Promise<void>}
-   */
-  async createComment(body) {
-    await this.octokit.rest.issues.createComment({
-      ...this.repo,
-      issue_number: this.pullRequestNumber,
-      body,
-    })
-  }
-
-  /**
-   * @param {number} commentId
-   * @param {string} body
-   * @returns {Promise<void>}
-   */
-  async updateComment(commentId, body) {
-    await this.octokit.rest.issues.updateComment({
-      ...this.repo,
-      comment_id: commentId,
-      body,
-    })
-  }
-
-  /**
-   * @param {number} commentId
-   * @returns {Promise<void>}
-   */
-  async deleteComment(commentId) {
-    await this.octokit.rest.issues.deleteComment({
-      ...this.repo,
-      comment_id: commentId,
-    })
-  }
-
-  /**
-   * @returns {{ owner: string, repo: string }}
-   */
-  get repo() {
-    return splitRepository(this.repository)
-  }
-}
-
-/**
- * @param {GitHubIssueCommentClient} client
- * @param {{ comment: PullRequestComment }[]} duplicates
+ * @param {PublishCommentClient} client
+ * @param {{ kind: "update", comment: PullRequestComment, body: string, duplicateCommentIds: number[] }} plan
  * @returns {Promise<void>}
  */
-async function deleteDuplicateComments(client, duplicates) {
-  for (const duplicate of duplicates) {
-    await client.deleteComment(duplicate.comment.id)
+async function applyUpdatePlan(client, plan) {
+  if (plan.comment.body !== plan.body) {
+    await client.updateComment(plan.comment.id, plan.body)
+  }
+
+  await deleteComments(client, plan.duplicateCommentIds)
+}
+
+/**
+ * @param {{ deleteComment(commentId: number): Promise<void> }} client
+ * @param {number[]} commentIds
+ * @returns {Promise<void>}
+ */
+async function deleteComments(client, commentIds) {
+  for (const commentId of commentIds) {
+    await client.deleteComment(commentId)
   }
 }
 
 /**
- * @param {unknown} value
- * @returns {PullRequestComment | null}
+ * @param {NormalizedProfile} profile
+ * @returns {number}
  */
-function normalizeComment(value) {
-  if (!isRecord(value)) {
-    return null
+function getCreateRecheckDelayMs(profile) {
+  const seed = `${profile.github.workflow}\u0000${profile.github.job}`
+  let hash = 0
+
+  for (const character of seed) {
+    hash = (hash * 31 + character.charCodeAt(0)) >>> 0
   }
 
-  return typeof value.id === "number" && typeof value.body === "string"
-    ? { id: value.id, body: value.body }
-    : null
-}
-
-/**
- * @param {unknown} value
- * @returns {value is Record<string, unknown>}
- */
-function isRecord(value) {
-  return typeof value === "object" && value !== null
-}
-
-/**
- * @param {unknown} value
- * @returns {Record<string, unknown> | null}
- */
-function getOptionalRecord(value) {
-  return isRecord(value) ? value : null
-}
-
-/**
- * @template T
- * @param {T | null | undefined} value
- * @returns {value is T}
- */
-function isPresent(value) {
-  return value !== null && value !== undefined
+  return CREATE_RECHECK_MIN_DELAY_MS + (hash % CREATE_RECHECK_SPREAD_MS)
 }
