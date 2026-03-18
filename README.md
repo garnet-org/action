@@ -113,11 +113,6 @@ Assertions act like unit tests for runtime behavior:
 - Current status labels reflect the first shipped assertion family (`known_bad_egress`).
 - Additional assertion families can cover invariants like hidden ELF binary execution.
 
-| Status | Meaning |
-|--------|---------|
-| ✅ pass | No known-bad domains detected |
-| 🔴 fail | Connection to known-bad domain — full lineage attached |
-
 [Understanding your PR comment →](https://docs.garnet.ai)
 
 ---
