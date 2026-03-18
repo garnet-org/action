@@ -1,10 +1,8 @@
-# Garnet — Runtime Visibility for GitHub Actions
-
 <div align="center">
   <a href="https://garnet.ai">
     <img src="brand/garnet-logo.png" alt="Garnet" width="160" />
   </a>
-  <p><strong>Runtime visibility for your GitHub Workflows.</strong></p>
+  <p><strong>Runtime visibility for GitHub Workflows.</strong></p>
   <p>
     <a href="https://jibril.garnet.ai">Jibril</a> ·
     <a href="https://app.garnet.ai">Get an API token</a>
