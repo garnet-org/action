@@ -90,7 +90,7 @@ jobs:
 | `github_token` | No | `${{ github.token }}` | GitHub token used for pull request comments |
 | `api_url` | No | `https://api.garnet.ai` | Garnet API base URL |
 | `garnetctl_version` | No | `latest` | Garnet CLI version (`1.2.3` or `latest`) |
-| `jibril_version` | No | `""` (auto) | Jibril version (`v2.10.8`, `v0.0`, or `latest`) |
+| `jibril_version` | No | `""` (auto) | Jibril version (`v2.10.8` or `latest`) |
 | `profiler_4fun` | No | `false` | Enable profiler 4 fun mode |
 | `debug` | No | `false` | Enable debug mode and upload logs as artifacts |
 
@@ -147,25 +147,22 @@ logs across 23,000 repos.
 
 ## Requirements
 
-- `runs-on: ubuntu-latest` (Ubuntu runner with systemd)
-- Repository secret: `GARNET_API_TOKEN`
-- Garnet account: [app.garnet.ai](https://app.garnet.ai)
+- **Runner**: Linux with `systemd` (recommended: `ubuntu-latest`).
+- **Privileges**: the action uses `sudo` to install binaries and configure the Jibril service.
+- **Checkout**: `actions/checkout@v4` is recommended. If your repo isn't checked out, Jibril may need to fetch the workflow file via the GitHub API instead.
 
 ---
 
 ## Troubleshooting
 
-**Jibril fails to start**
-Confirm your `GARNET_API_TOKEN` secret is set and valid. Tokens are
-created at app.garnet.ai under Settings -> API Tokens.
+- **"API token is required"**: make sure `api_token` is set and the `GARNET_API_TOKEN` secret exists.
+- **No summary output**: enable `debug: "true"` to upload Jibril logs as artifacts, then inspect `jibril.log` / `jibril.err`.
+- **Restrictive permissions**: this action typically works with `permissions: contents: read`. If your workflow hardens permissions aggressively, ensure the job can read repository contents.
 
-**No PR comment appearing**
-The action posts a comment only on `pull_request` events. Confirm your
-workflow triggers on `pull_request`.
+## Development
 
-**Permission error on runner**
-The runner requires systemd access. Docker-based or non-systemd runners
-need additional configuration — open an issue and we'll help.
+- Running `npm install` or `npm ci` configures a repo-local git hook path at `.githooks`.
+- The pre-commit hook runs `npm run build` and stages `dist/` when staged changes can affect the bundles, so commits do not miss generated artifacts.
 
 ---
 
