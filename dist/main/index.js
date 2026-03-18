@@ -31787,7 +31787,9 @@ async function main() {
     process.env.GARNET_API_TOKEN = getInput("api_token")
 
     // Make the token available to both the main and post steps when provided.
-    process.env.GITHUB_TOKEN = githubToken
+    if (githubToken !== "") {
+      process.env.GITHUB_TOKEN = githubToken
+    }
     process.env.GARNET_API_URL = getInput("api_url")
     process.env.GARNETCTL_VERSION = getInput("garnetctl_version")
     process.env.JIBRIL_VERSION = getInput("jibril_version")
