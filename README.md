@@ -6,7 +6,6 @@
   </a>
   <p><strong>Runtime visibility for your GitHub Workflows.</strong></p>
   <p>
-    <a href="https://app.garnet.ai">Dashboard</a> ·
     <a href="https://jibril.garnet.ai">Jibril</a> ·
     <a href="https://app.garnet.ai">Get an API token</a>
   </p>
