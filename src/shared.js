@@ -49,3 +49,13 @@ export async function pathExists(filePath) {
     return false
   }
 }
+
+/**
+ * @param {number} delayMs
+ * @returns {Promise<void>}
+ */
+export function waitForDelay(delayMs) {
+  return new Promise((resolve) => {
+    setTimeout(resolve, delayMs)
+  })
+}

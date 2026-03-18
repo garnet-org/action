@@ -35,14 +35,23 @@ export class GitHubIssueCommentClient {
 
   /**
    * @param {string} body
-   * @returns {Promise<void>}
+   * @returns {Promise<PullRequestComment>}
    */
   async createComment(body) {
-    await this.octokit.rest.issues.createComment({
+    const response = await this.octokit.rest.issues.createComment({
       ...this.repo,
       issue_number: this.pullRequestNumber,
       body,
     })
+
+    const comment = normalizeComment(response.data)
+    if (comment === null) {
+      throw new Error(
+        "GitHub createComment response did not include a valid comment",
+      )
+    }
+
+    return comment
   }
 
   /**

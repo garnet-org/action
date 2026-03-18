@@ -31005,6 +31005,17 @@ async function pathExists(filePath) {
     return false
   }
 }
+
+/**
+ * @param {number} delayMs
+ * @returns {Promise<void>}
+ */
+function waitForDelay(delayMs) {
+  return new Promise((resolve) => {
+    setTimeout(resolve, delayMs)
+  })
+}
+
 ;// CONCATENATED MODULE: ./src/github-event.js
 
 
@@ -31063,6 +31074,7 @@ async function readGitHubEventPayload(eventPath) {
   const payload = JSON.parse(await promises_namespaceObject.readFile(eventPath, "utf8"))
   return isRecord(payload) ? payload : null
 }
+
 ;// CONCATENATED MODULE: ./src/github-context.js
 
 
@@ -31137,6 +31149,7 @@ async function getProfileSha() {
 
   return getEnv("GITHUB_SHA")
 }
+
 ;// CONCATENATED MODULE: ./src/action.js
 // This script installs garnetctl and jibril, configures them, creates the
 // agent, fetches network policy, and sets up Jibril as a systemd service.
