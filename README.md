@@ -111,9 +111,7 @@ jobs:
 Assertions act like unit tests for runtime behavior:
 - Each assertion checks an invariant about what should or should not happen.
 - Current status labels reflect the first shipped assertion family (`known_bad_egress`).
-- Additional assertion families can cover invariants like hidden ELF binary execution.
-
-[Understanding your PR comment →](https://docs.garnet.ai)
+- Additional assertion families can cover invariants like known bad egress, hidden binary execution, sensitive file access.
 
 ---
 
