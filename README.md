@@ -19,62 +19,91 @@
 
 ---
 
-Runtime profiling and behavioral assertions for your GitHub workflows.
+Runtime profiling and behavioral assertions for CI/CD and agentic workflows in GitHub Actions.
 
-Garnet is powered by [Jibril](https://jibril.garnet.ai), an eBPF sensor that attaches to your CI runner and captures every process spawn and outbound connection — with full lineage. Results surface in-line showing pass / fail per run with context, similar to what you expect from tests.
+Garnet is powered by [Jibril](https://jibril.garnet.ai), an eBPF sensor that attaches to your CI runner and captures every process spawn and outbound connection — with full lineage. Results surface in-line showing pass / fail per run with context.
 
-One YAML step. No code changes.
-
-```yaml
-- uses: garnet-org/action@v2
-  with:
-    api_token: ${{ secrets.GARNET_API_TOKEN }}
-```
+One YAML step. No code changes and minimal overhead.
 
 Get your API token at [app.garnet.ai](https://app.garnet.ai)
 
----
-
 ## What you get
 
-**A behavioral profile of every run.**
-Jibril captures every process spawn and outbound connection during your workflow — with full lineage tracing which parent spawned which child, all the way down to the exact binary that opened the connection.
+- **A behavioral profile of every run**: kernel-level capture of every network call, process spawn, and file access — with full lineage from parent to child, down to the exact binary that made the connection.
+- **Runtime assertions in your PR**: Assertions are like unit tests for runtime behavior. Results appear as a PR comment and step summary: a table per job with pass / fail assertions and an egress table with lineage inline. A permalink links to the full run report, with Slack alerts configurable on failures.
+- **Lineage-based evidence**: When something unexpected runs, you don't get a domain name — you get the full chain:
 
-**Runtime assertions in your PR.**
-Assertions are like unit tests for runtime behavior. Results appear as a PR comment and step summary: a table per job with pass / fail assertions and an egress table with lineage inline. A permalink links to the full run report.
-
-**Lineage-first evidence.**
-When something unexpected runs, you don't get a domain name — you get the full chain:
-
-```
-npm install → dep@1.2.3 postinstall → bash → curl → unknown-domain.com
-```
-
----
+  ```
+  npm install → dep@1.2.3 postinstall → bash → curl → unknown-domain.com
+  ```
 
 ## Quickstart
 
-1. Create an account at [app.garnet.ai](https://app.garnet.ai)
-2. Generate an API token
-3. Add `GARNET_API_TOKEN` to your repository secrets
-4. Add Garnet as a step in any workflow:
+### 1. Create a token
+
+Create an API token in the Garnet app at [https://app.garnet.ai](https://app.garnet.ai), then add it as a repo secret named `GARNET_API_TOKEN`.
+
+### 2. Add the action to your workflow
 
 ```yaml
-name: CI
-on: [push, pull_request]
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
 
 jobs:
-  build:
+  monitor:
     runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout (recommended)
+        uses: actions/checkout@v4
 
       - uses: garnet-org/action@v2
         with:
           api_token: ${{ secrets.GARNET_API_TOKEN }}
-
+ 
       - name: Your existing steps
         run: npm test
+
+```
+
+## What you’ll see
+
+- **GitHub job summary**: A Markdown "security profile" appended at the end of the job—even if the job fails.
+- **Pull request comment**: On pull request workflows, Garnet creates one comment per push, merging jobs and workflows from the same push into that comment.
+- **Garnet UI**: linked from in-line results through a permalink, for in-depth investigation and additional management features. 
+
+
+
+
+## Under the hood
+
+- **Main step**: downloads `garnetctl` + `jibril`, creates a Garnet agent for the run, fetches your merged network policy, and starts Jibril as a `systemd` service on the runner.
+- **Post step (always)**: stops Jibril so it flushes events, appends the generated profile to `GITHUB_STEP_SUMMARY`, and creates or updates the pull request comment for the current push when the workflow runs for a PR. When `debug=true`, it also uploads Jibril logs as build artifacts.
+
+## Pull request comments
+
+For PR workflows, the action reads Jibril's JSON profile and rebuilds the
+markdown into one comment per push. Multiple jobs and workflows from the same
+push are merged into that comment so the PR stays readable while preserving
+history across pushes.
+
+To let the action write PR comments, grant the workflow token write access to
+pull requests or issue comments. For example:
+
+```yaml
+permissions:
+  contents: read
+  pull-requests: write
+
+steps:
+  - uses: garnet-org/action@v2
+    with:
+      api_token: ${{ secrets.GARNET_API_TOKEN }}
 ```
 
 ---
@@ -92,7 +121,7 @@ jobs:
 
 ---
 
-## How it works
+## Concepts
 
 #### Assertions
 
