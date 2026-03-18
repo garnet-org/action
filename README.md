@@ -116,6 +116,11 @@ steps:
 - **No summary output**: enable `debug: "true"` to upload Jibril logs as artifacts, then inspect `jibril.log` / `jibril.err`.
 - **Restrictive permissions**: this action typically works with `permissions: contents: read`. If your workflow hardens permissions aggressively, ensure the job can read repository contents.
 
+## Development
+
+- Running `npm install` or `npm ci` configures a repo-local git hook path at `.githooks`.
+- The pre-commit hook runs `npm run build` and stages `dist/` when staged changes can affect the bundles, so commits do not miss generated artifacts.
+
 ## License
 
 MIT
