@@ -1,5 +1,5 @@
-name: 'Garnet'
-description: 'Runtime visibility for GitHub Actions. See every process spawn and outbound connection your CI makes — with full process lineage.'
+name: 'Garnet Runtime Visibility'
+description: 'Runtime profiling and behavioral assertions for GitHub Actions'
 branding:
   icon: 'activity'
   color: 'purple'
