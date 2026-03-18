@@ -4,8 +4,8 @@
   </a>
   <p><strong>Runtime visibility for GitHub Workflows</strong></p>
   <p>
-    <a href="https://app.garnet.ai">Get an API token</a>
-    <a href="https://docs.garnet.ai">Docs</a> ·
+    <a href="https://app.garnet.ai">Get an API token</a> ·
+    <a href="https://docs.garnet.ai">Docs</a>
   </p>
   <p>
     <a href="../../releases">
@@ -113,25 +113,26 @@ Your team reviews the code. Your CI runs it. Between `git push` and production, 
 ---
 
 ## Setup & support
-
-#### Requirements
-
-Requires `runs-on: ubuntu-latest` (Linux with systemd), `sudo` access to install binaries, and `GARNET_API_TOKEN` set as a repository secret.
-
-#### Troubleshooting
-
-**"API token is required"** — confirm `GARNET_API_TOKEN` is set in your repository secrets and passed as `api_token`.
-
-**No PR comment appearing** — the action posts comments only on `pull_request` events. Confirm your workflow triggers include `pull_request`.
-
-**No summary output** — enable `debug: "true"` to upload Jibril logs as artifacts, then inspect `jibril.log` and `jibril.err`.
-
-**Restrictive permissions** — this action works with `permissions: contents: read`. If your workflow hardens permissions aggressively, ensure the job can read repository contents.
-
-#### Security & license
-
+ 
+### Requirements
+ 
+- `runs-on: ubuntu-latest` — Linux runner with systemd
+- `sudo` access to install binaries and configure the Jibril service
+- `GARNET_API_TOKEN` set as a repository secret
+ 
+### Troubleshooting
+ 
+| Symptom | Fix |
+|---------|-----|
+| "API token is required" | Confirm `GARNET_API_TOKEN` is set in repository secrets and passed as `api_token` |
+| No PR comment appearing | The action posts comments only on `pull_request` events — confirm your workflow triggers include `pull_request` |
+| No summary output | Enable `debug: "true"` to upload Jibril logs as artifacts, then inspect `jibril.log` and `jibril.err` |
+| Restrictive permissions | This action works with `permissions: contents: read` — if your workflow hardens permissions aggressively, ensure the job can read repository contents |
+ 
+### Security & license
+ 
 See [SECURITY.md](./SECURITY.md) to report vulnerabilities — or email **security@garnet.ai**. MIT — see [LICENSE](./LICENSE)
-
+ 
 ---
-
+ 
 [app.garnet.ai](https://app.garnet.ai) · [docs.garnet.ai](https://docs.garnet.ai) · [garnet.ai](https://garnet.ai)
