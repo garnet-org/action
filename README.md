@@ -2,27 +2,28 @@
   <a href="https://garnet.ai">
     <img src="brand/garnet-logo.png" alt="Garnet" width="160" />
   </a>
-  <p><strong>Runtime visibility for GitHub Workflows.</strong></p>
+  <p><strong>Runtime visibility for GitHub Workflows</strong></p>
   <p>
-    <a href="https://jibril.garnet.ai">Jibril</a> ·
     <a href="https://app.garnet.ai">Get an API token</a>
+    <a href="https://docs.garnet.ai">Docs</a> ·
   </p>
-
-<p>
-  <a href="../../releases">
-    <img alt="Release" src="https://img.shields.io/github/v/release/garnet-org/action?display_name=tag&sort=semver" />
-  </a>
-  <a href="./LICENSE">
-    <img alt="License" src="https://img.shields.io/badge/license-MIT-blue.svg" />
-  </a>
-</p>
+  <p>
+    <a href="../../releases">
+      <img alt="Release" src="https://img.shields.io/github/v/release/garnet-org/action?display_name=tag&sort=semver" />
+    </a>
+    <a href="./LICENSE">
+      <img alt="License" src="https://img.shields.io/badge/license-MIT-blue.svg" />
+    </a>
+  </p>
 </div>
 
-Garnet provides runtime visibility and behavioral assertions for your GitHub workflows. It profiles every workflow run using Jibril, an eBPF sensor that attaches
-to your CI runner. Every process spawn and outbound connection is captured with
-full process lineage and surfaced in-line with pass / fail status.
+---
 
-One YAML step in your workflow file, No code changes.
+Runtime profiling and behavioral assertions for your GitHub workflows.
+
+Garnet is powered by [Jibril](https://jibril.garnet.ai), an eBPF sensor that attaches to your CI runner and captures every process spawn and outbound connection — with full lineage. Results surface in-line showing pass / fail per run with context, similar to what you expect from tests.
+
+One YAML step. No code changes.
 
 ```yaml
 - uses: garnet-org/action@v2
@@ -37,17 +38,13 @@ Get your API token at [app.garnet.ai](https://app.garnet.ai)
 ## What you get
 
 **A behavioral profile of every run.**
-Jibril captures every process spawn and outbound connection during your
-workflow — with full lineage tracing which parent spawned which child,
-all the way down to the exact binary that opened the connection.
+Jibril captures every process spawn and outbound connection during your workflow — with full lineage tracing which parent spawned which child, all the way down to the exact binary that opened the connection.
 
 **Runtime assertions in your PR.**
-Assertions are like unit tests for runtime behavior. Results appear as a step summary, PR comment: a summary table per job with assertion
-results (pass / fail) and an egress table with process lineage inline. A permalink takes you to the Garnet UI for detailed investigation.
+Assertions are like unit tests for runtime behavior. Results appear as a PR comment and step summary: a table per job with pass / fail assertions and an egress table with lineage inline. A permalink links to the full run report.
 
 **Lineage-first evidence.**
-When something unexpected runs, you don't get a domain name — you get
-the full chain:
+When something unexpected runs, you don't get a domain name — you get the full chain:
 
 ```
 npm install → dep@1.2.3 postinstall → bash → curl → unknown-domain.com
@@ -91,87 +88,50 @@ jobs:
 | `api_url` | No | `https://api.garnet.ai` | Garnet API base URL |
 | `garnetctl_version` | No | `latest` | Garnet CLI version (`1.2.3` or `latest`) |
 | `jibril_version` | No | `""` (auto) | Jibril version (`v2.10.8` or `latest`) |
-| `profiler_4fun` | No | `false` | Enable profiler 4 fun mode |
 | `debug` | No | `false` | Enable debug mode and upload logs as artifacts |
 
-## Outputs
+---
 
-| Output | Description |
-|--------|-------------|
-| `profile_result` | Assertion result: `pass` or `fail` |
-| `report_url` | Full run report on app.garnet.ai |
-| `agent_id` | Jibril sensor instance identifier |
+## How it works
+
+#### Assertions
+
+Assertions are runtime invariants — like unit tests, but for execution behavior. The current assertion is `known_bad_egress`: it fails if any outbound connection matches a domain from Garnet's managed threat feed. Future assertion families will cover hidden binary execution, sensitive file access, and anomalous process spawns.
+
+#### Why runtime visibility matters
+
+Your team reviews the code. Your CI runs it. Between `git push` and production, dependencies execute postinstall scripts, AI-generated functions spawn processes, and build steps make outbound connections — none of which appear in a static scan. Garnet tells you what your pipeline actually did — the ground truth for execution.
+
+#### Real incidents
+
+- **Shai-Hulud** — 800+ npm packages with a second-stage payload. Postinstall hook bootstrapped Bun, ran TruffleHog to harvest runner secrets, then registered a rogue GitHub runner. [See the breakdown →](https://www.garnet.ai/resources/shai-hulud-2)
+
+- **Clinejection** — LLM agent prompt injection via a malicious GitHub Issue triggered code execution, poisoned the Actions cache, and exposed an npm publish token. 4,000+ developers received a backdoored package within 8 hours.
+
+- **tj-actions/changed-files** — Supply chain compromise in a widely-pinned Action injected a memory scraper that printed runner secrets to public workflow logs across 23,000 repos.
 
 ---
 
-## What assertions mean
+## Setup & support
 
-Assertions act like unit tests for runtime behavior:
-- Each assertion checks an invariant about what should or should not happen.
-- Current status labels reflect the first set of assertions, such as (`known_bad_egress`), which fails if an outbound connection matches a known suspicious domain from Garnet's managed feed.
-- Assertion families can cover invariants like known bad egress, hidden binary execution, sensitive file access.
+#### Requirements
 
----
+Requires `runs-on: ubuntu-latest` (Linux with systemd), `sudo` access to install binaries, and `GARNET_API_TOKEN` set as a repository secret.
 
-## Why runtime visibility matters
+#### Troubleshooting
 
-Your team reviews the code. Your CI runs it. Between `git push` and
-production, dependencies execute postinstall scripts, AI-generated functions
-spawn processes, and build steps make outbound connections — none of which
-appear in a static scan.
+**"API token is required"** — confirm `GARNET_API_TOKEN` is set in your repository secrets and passed as `api_token`.
 
-Garnet tells you what your pipeline actually did-the ground truth for execution.
+**No PR comment appearing** — the action posts comments only on `pull_request` events. Confirm your workflow triggers include `pull_request`.
 
----
+**No summary output** — enable `debug: "true"` to upload Jibril logs as artifacts, then inspect `jibril.log` and `jibril.err`.
 
-## Real incidents this catches
+**Restrictive permissions** — this action works with `permissions: contents: read`. If your workflow hardens permissions aggressively, ensure the job can read repository contents.
 
-**Shai-Hulud** — 800+ npm packages with a second-stage payload. Postinstall
-hook bootstrapped Bun, ran TruffleHog to harvest runner secrets, then
-registered a rogue GitHub runner.
-[See the breakdown →](https://www.garnet.ai/resources/shai-hulud-2)
+#### Security & license
 
-**tj-actions/changed-files** — Supply chain compromise in a widely-pinned
-Action injected a memory scraper that printed runner secrets to public workflow
-logs across 23,000 repos.
+See [SECURITY.md](./SECURITY.md) to report vulnerabilities — or email **security@garnet.ai**. MIT — see [LICENSE](./LICENSE)
 
 ---
 
-## Requirements
-
-- **Runner**: Linux with `systemd` (recommended: `ubuntu-latest`).
-- **Privileges**: the action uses `sudo` to install binaries and configure the Jibril service.
-- **Checkout**: `actions/checkout@v4` is recommended. If your repo isn't checked out, Jibril may need to fetch the workflow file via the GitHub API instead.
-
----
-
-## Troubleshooting
-
-- **"API token is required"**: make sure `api_token` is set and the `GARNET_API_TOKEN` secret exists.
-- **No summary output**: enable `debug: "true"` to upload Jibril logs as artifacts, then inspect `jibril.log` / `jibril.err`.
-- **Restrictive permissions**: this action typically works with `permissions: contents: read`. If your workflow hardens permissions aggressively, ensure the job can read repository contents.
-
-## Development
-
-- Running `npm install` or `npm ci` configures a repo-local git hook path at `.githooks`.
-- The pre-commit hook runs `npm run build` and stages `dist/` when staged changes can affect the bundles, so commits do not miss generated artifacts.
-
----
-
-## Security
-
-See [SECURITY.md](./SECURITY.md) for our vulnerability disclosure policy.
-Report vulnerabilities to **security@garnet.ai** or via
-[GitHub Security Advisories](../../security/advisories/new).
-
----
-
-## License
-
-MIT — see [LICENSE](./LICENSE)
-
----
-
-[app.garnet.ai](https://app.garnet.ai) ·
-[docs.garnet.ai](https://docs.garnet.ai) ·
-[garnet.ai](https://garnet.ai)
+[app.garnet.ai](https://app.garnet.ai) · [docs.garnet.ai](https://docs.garnet.ai) · [garnet.ai](https://garnet.ai)
