@@ -17,7 +17,7 @@
 
 Garnet profiles every workflow run using Jibril, an eBPF sensor that attaches
 to your CI runner. Every process spawn and outbound connection is captured with
-full process lineage and surfaced in-line with pass / fail status of assertions, just like unit tests, but for runtime behavior.
+full process lineage and surfaced in-line with pass / fail status of assertions.
 
 One YAML step. No code changes. Works on `ubuntu-latest`.
 
