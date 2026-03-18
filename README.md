@@ -59,7 +59,7 @@ jobs:
         uses: actions/checkout@v6
 
       - name: Garnet Runtime Security
-        uses: garnet-org/action@v0
+        uses: garnet-org/action@v2
         with:
           api_token: ${{ secrets.GARNET_API_TOKEN }}
 ```
@@ -87,7 +87,7 @@ permissions:
   pull-requests: write
 
 steps:
-  - uses: garnet-org/action@v0
+  - uses: garnet-org/action@v2
     with:
       api_token: ${{ secrets.GARNET_API_TOKEN }}
 ```
@@ -108,13 +108,18 @@ steps:
 
 - **Runner**: Linux with `systemd` (recommended: `ubuntu-latest`).
 - **Privileges**: the action uses `sudo` to install binaries and configure the Jibril service.
-- **Checkout**: `actions/checkout@v4` is recommended. If your repo isn’t checked out, Jibril may need to fetch the workflow file via the GitHub API instead.
+- **Checkout**: `actions/checkout` is recommended before this step. If your repo isn’t checked out, Jibril may need to fetch the workflow file via the GitHub API instead.
+
+## Failure behavior
+
+The **main step** (setup) will fail the job if Jibril cannot be installed or started — this is intentional so you know runtime monitoring is not active. The **post step** (reporting) never fails the job; errors during profile rendering or PR comment publishing are logged as warnings so your pipeline is not blocked by reporting issues.
 
 ## Troubleshooting
 
-- **“API token is required”**: make sure `api_token` is set and the `GARNET_API_TOKEN` secret exists.
-- **No summary output**: enable `debug: "true"` to upload Jibril logs as artifacts, then inspect `jibril.log` / `jibril.err`.
+- **”API token is required”**: make sure `api_token` is set and the `GARNET_API_TOKEN` secret exists.
+- **No summary output**: enable `debug: “true”` to upload Jibril logs as artifacts, then inspect `jibril.log` / `jibril.err`.
 - **Restrictive permissions**: this action typically works with `permissions: contents: read`. If your workflow hardens permissions aggressively, ensure the job can read repository contents.
+- **PR comments not appearing**: ensure the workflow has `pull-requests: write` permission and `github_token` is set (defaults to `${{ github.token }}`).
 
 ## Development
 

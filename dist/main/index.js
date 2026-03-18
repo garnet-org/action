@@ -31647,18 +31647,19 @@ StandardOutput=append:/var/log/jibril.log
 }
 
 /**
- * This function fails the script with a given error code and message.
- * @param {number} code
+ * This function fails the action with a given error message.
+ * Uses core.setFailed + throw instead of process.exit so the post step still
+ * runs (important for secret cleanup on disk).
+ * @param {number} _code
  * @param {string} message
  * @returns {never}
  */
-function fail(code, message) {
+function fail(_code, message) {
   if (_tmpDirForCleanup) {
     void promises_namespaceObject.rm(_tmpDirForCleanup, { recursive: true, force: true })
       .catch(() => {})
   }
-  error(message || "Error")
-  process.exit(code ?? 1)
+  throw new Error(message || "Error")
 }
 
 /**
@@ -31840,6 +31841,7 @@ function redactSensitive(text) {
     .replace(/\bGITHUB_TOKEN=[^\s\n]*/gi, "GITHUB_TOKEN=***")
     .replace(/\bGARNET_API_TOKEN=[^\s\n]*/gi, "GARNET_API_TOKEN=***")
     .replace(/\bGARNET_AGENT_TOKEN=[^\s\n]*/gi, "GARNET_AGENT_TOKEN=***")
+    .replace(/\bAI_TOKEN=[^\s\n]*/gi, "AI_TOKEN=***")
 }
 
 // Dumps jibril stdout/stderr and journalctl when jibril fails (for diagnostics).

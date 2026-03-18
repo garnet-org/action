@@ -70,23 +70,20 @@ jobs:
         env:
           TAG_NAME: ${{ steps.get-versions.outputs.tag_name }}
         run: |
-          cat > release-body.md << EOF
-          # Garnet Runtime Security $TAG_NAME
-
-          This release provides the Garnet Runtime Security for GitHub Actions.
-
+          cat > release-body.md <<EOF
           ## Usage
 
           \`\`\`yaml
-          - name: Run Garnet Runtime Security
-            uses: garnet-org/action@$TAG_NAME
+          - name: Garnet Runtime Security
+            uses: garnet-org/action@${TAG_NAME}
             with:
-              api_token: XXXXX
+              api_token: \${{ secrets.GARNET_API_TOKEN }}
           \`\`\`
 
-          For more details, see the [Garnet Dashboard](https://dashboard.garnet.ai).
-
+          See the [README](https://github.com/garnet-org/action#readme) for full configuration options and the [Garnet Dashboard](https://dashboard.garnet.ai) for runtime results.
           EOF
+          # Remove leading whitespace from heredoc
+          sed -i 's/^          //' release-body.md
           cat release-body.md
         #
       - name: Create Release
