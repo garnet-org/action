@@ -457,7 +457,11 @@ function renderSummaryTable(profiles) {
     )
     const runLabel =
       profile.github.run_id !== ""
-        ? `#${escapeMarkdown(profile.github.run_id)}`
+        ? formatRunMarkdownLink(
+            profile.github.repository,
+            profile.github.run_id,
+            `#${profile.github.run_id}`,
+          )
         : "-"
     const jobLabel = escapeMarkdown(
       getDisplayValue(profile.github.job, "unknown"),
@@ -493,7 +497,14 @@ function renderProfileSection(profile) {
     ["Branch", profile.github.ref],
     ["Commit", profile.github.sha],
     ["Triggered by", profile.github.actor],
-    ["Run ID / Job", formatRunJob(profile.github.run_id, profile.github.job)],
+    [
+      "Run ID / Job",
+      formatRunJob(
+        profile.github.repository,
+        profile.github.run_id,
+        profile.github.job,
+      ),
+    ],
   ])
   const networkSection = renderNetworkSection(profile)
   const assertionSection = renderAssertionSection(profile)
@@ -706,6 +717,25 @@ function buildReportLink(values) {
   // TODO: Switch back to the full repository/job route once the dashboard
   // supports /dashboard/runs/{org}/{repo}/{runID}/{job}.
   return `${baseURL}/dashboard/runs/${encodeURIComponent(values.run_id)}`
+}
+
+/**
+ * @param {string} repository
+ * @param {string} runId
+ * @returns {string}
+ */
+function buildGitHubRunLink(repository, runId) {
+  const repositoryPath = repository
+    .split("/")
+    .filter((part) => part !== "")
+    .map((part) => encodeURIComponent(part))
+    .join("/")
+
+  if (repositoryPath === "" || !repositoryPath.includes("/") || runId === "") {
+    return ""
+  }
+
+  return `https://github.com/${repositoryPath}/actions/runs/${encodeURIComponent(runId)}`
 }
 
 /**
@@ -958,18 +988,34 @@ function getDisplayValue(value, fallback) {
 }
 
 /**
+ * @param {string} repository
+ * @param {string} runId
+ * @param {string} label
+ * @returns {string}
+ */
+function formatRunMarkdownLink(repository, runId, label) {
+  const runLink = buildGitHubRunLink(repository, runId)
+  if (runLink === "") {
+    return escapeMarkdown(label)
+  }
+
+  return `[${escapeMarkdown(label)}](${escapeMarkdownLink(runLink)})`
+}
+
+/**
+ * @param {string} repository
  * @param {string} runId
  * @param {string} job
  * @returns {string}
  */
-function formatRunJob(runId, job) {
+function formatRunJob(repository, runId, job) {
   /** @type {string[]} */
   const parts = []
   if (runId !== "") {
-    parts.push(runId)
+    parts.push(formatRunMarkdownLink(repository, runId, runId))
   }
   if (job !== "") {
-    parts.push(job)
+    parts.push(escapeMarkdown(job))
   }
 
   return parts.length > 0 ? parts.join(" / ") : "-"
