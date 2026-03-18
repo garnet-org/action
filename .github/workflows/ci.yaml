@@ -18,15 +18,24 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Setup Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
-          node-version: "20"
+          node-version: "24"
+
+      - name: Remove dangling tsc
+        run: |-
+          npm uninstall tsc -g --force || true
+          npm uninstall typescript -g --force || true
 
       - name: Install dependencies
-        run: npm ci
+        run: |-
+          npm ci --include=dev
+
+      - name: Typecheck
+        run: npm run typecheck
 
       - name: Build
         run: npm run build

@@ -7,6 +7,10 @@ inputs:
   api_token:
     description: "Garnet API token"
     required: true
+  github_token:
+    description: "GitHub token used for pull request comments"
+    required: false
+    default: ${{ github.token }}
   api_url:
     description: "Garnet API URL"
     required: false
@@ -28,7 +32,7 @@ inputs:
     required: false
     default: "false"
 runs:
-  using: "node20"
+  using: "node24"
   main: "dist/main/index.js"
   post: "dist/post/index.js"
   post-if: "always()"

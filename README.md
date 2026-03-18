@@ -1,9 +1,10 @@
+# Garnet Runtime Security
+
 <div align="center">
   <a href="https://garnet.ai">
     <img src="brand/garnet-logo.png" alt="Garnet" width="160" />
   </a>
 
-  <h1>Garnet Runtime Security</h1>
   <p><strong>Runtime threat detection for your GitHub Actions jobs.</strong></p>
 
   <p>
@@ -25,7 +26,7 @@
   </p>
 </div>
 
-Protect your CI/CD from inside the runner. This action installs and runs **Jibril** during your job to observe process, filesystem, and network activity, enforce **Garnet network policies**, and publish a **security profile** to the job summary.
+Protect your CI/CD from inside the runner. This action installs and runs **Jibril** during your job to observe process, filesystem, and network activity, enforce **Garnet network policies**, and publish a **security profile** to the job summary and pull requests.
 
 ## Why this action
 
@@ -55,7 +56,7 @@ jobs:
       contents: read
     steps:
       - name: Checkout (recommended)
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Garnet Runtime Security
         uses: garnet-org/action@v0
@@ -66,18 +67,37 @@ jobs:
 ## What you’ll see
 
 - **GitHub job summary**: a Markdown “security profile” appended at the end of the job (runs even if the job fails).
+- **Pull request comment**: on pull request workflows, Garnet creates one comment per push and keeps that push's jobs and workflows merged into the same comment.
 - **Garnet dashboard**: runtime events and policy evaluation for the workflow run.
 
 ## How it works
 
 - **Main step**: downloads `garnetctl` + `jibril`, creates a Garnet “agent” for the run, fetches your merged network policy, and starts Jibril as a `systemd` service on the runner.
-- **Post step (always)**: stops Jibril so it flushes events, then appends the generated profile to `GITHUB_STEP_SUMMARY`. When `debug=true`, it also uploads Jibril logs as build artifacts.
+- **Post step (always)**: stops Jibril so it flushes events, appends the generated profile to `GITHUB_STEP_SUMMARY`, and creates or updates the pull request comment for the current push when the workflow runs for a PR. When `debug=true`, it also uploads Jibril logs as build artifacts.
+
+## Pull request comments
+
+For PR workflows, the action reads Jibril's JSON profile and rebuilds the markdown into one comment per push. Multiple jobs and workflows from the same push are merged into that comment so the PR stays readable while preserving history across pushes.
+
+To let the action write PR comments, grant the workflow token write access to pull requests or issue comments. For example:
+
+```yaml
+permissions:
+  contents: read
+  pull-requests: write
+
+steps:
+  - uses: garnet-org/action@v0
+    with:
+      api_token: ${{ secrets.GARNET_API_TOKEN }}
+```
 
 ## Inputs
 
 | Input | Description | Required | Default |
 |------|-------------|----------|---------|
 | `api_token` | Garnet API token | Yes | - |
+| `github_token` | GitHub token used to publish pull request comments | No | `${{ github.token }}` |
 | `api_url` | Garnet API base URL | No | `https://api.garnet.ai` |
 | `garnetctl_version` | `garnetctl` version (`1.2.3` or `latest`) | No | `latest` |
 | `jibril_version` | Jibril version (`v2.10.8`, `v0.0`, or `latest`) | No | `v0.0` (action@`v0`) / `v2.10.4` (action@`v1`) / `v2.10.8` (action@`v2`) |
@@ -95,6 +115,11 @@ jobs:
 - **“API token is required”**: make sure `api_token` is set and the `GARNET_API_TOKEN` secret exists.
 - **No summary output**: enable `debug: "true"` to upload Jibril logs as artifacts, then inspect `jibril.log` / `jibril.err`.
 - **Restrictive permissions**: this action typically works with `permissions: contents: read`. If your workflow hardens permissions aggressively, ensure the job can read repository contents.
+
+## Development
+
+- Running `npm install` or `npm ci` configures a repo-local git hook path at `.githooks`.
+- The pre-commit hook runs `npm run build` and stages `dist/` when staged changes can affect the bundles, so commits do not miss generated artifacts.
 
 ## License
 

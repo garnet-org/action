@@ -1,9 +1,20 @@
-const core = require("@actions/core");
-const exec = require("@actions/exec");
-const fs = require("fs");
-const path = require("path");
-const os = require("os");
-const artifactClient = require("@actions/artifact").default;
+import * as core from "@actions/core"
+import * as exec from "@actions/exec"
+import * as fs from "node:fs/promises"
+import { getEnv, getErrorMessage, pathExists } from "./shared.js"
+import { getPullRequestNumberFromEvent } from "./github-event.js"
+import { uploadJibrilArtifacts } from "./post-artifacts.js"
+import {
+  getDefaultJsonProfileFile,
+  parseProfileJson,
+} from "./profile-comment.js"
+import { publishPullRequestComment } from "./pr-comment.js"
+
+/** @typedef {import("./profile-comment.js").NormalizedProfile} NormalizedProfile */
+
+const DEFAULT_PROFILER_FILE = "/var/log/jibril.profiler.out"
+const DEFAULT_PROFILER4FUN_FILE = "/var/log/jibril.profiler4fun.out"
+const JSON_PROFILE_LABEL = "JSON profile"
 
 // This is the post step for the action. It is called by the GitHub Actions
 // runtime. It stops the Jibril service so the daemon flushes all pending events
@@ -13,128 +24,240 @@ const artifactClient = require("@actions/artifact").default;
 async function run() {
   try {
     // Stop the Jibril service so the daemon flushes all pending events.
-    core.info("stopping jibril service");
-    await exec.exec("sudo", ["systemctl", "stop", "jibril.service"], { ignoreReturnCode: true });
+    core.info("stopping jibril service")
+    await exec.exec("sudo", ["systemctl", "stop", "jibril.service"], {
+      ignoreReturnCode: true,
+    })
 
     // Remove secrets from disk (best-effort). Important for self-hosted runners.
-    await exec.exec("sudo", ["rm", "-f", "/etc/default/jibril"], { ignoreReturnCode: true });
+    await exec.exec("sudo", ["rm", "-f", "/etc/default/jibril"], {
+      ignoreReturnCode: true,
+    })
 
     // Upload jibril logs as artifacts when debug is enabled (only after service stops).
     // Get the debug state from the main.js.
-    const debug = core.getState("debug");
+    const debug = core.getState("debug")
     if (debug === "true") {
-      await uploadJibrilArtifacts();
+      await uploadJibrilArtifacts()
     }
 
-    const selectedProfiler =
-      core.getState("selectedProfiler") || (core.getState("profiler4fun") === "true" ? "profiler4fun" : "profiler");
+    const selectedProfiler = resolveSelectedProfiler()
+    const profilerFile = resolveSelectedProfilerFile(selectedProfiler)
 
-    // Prefer the file path passed via state, then fall back to env/defaults.
-    let profilerFile = core.getState("selectedProfilerFile");
-    if (!profilerFile) {
-      if (selectedProfiler === "profiler4fun") {
-        profilerFile =
-          core.getState("profiler4funFile") || process.env.JIBRIL_PROFILER4FUN_FILE || "/var/log/jibril.profiler4fun.out";
-      } else {
-        profilerFile = core.getState("profilerFile") || process.env.JIBRIL_PROFILER_FILE || "/var/log/jibril.profiler.out";
-      }
-    }
+    core.info(`using profiler printer: ${selectedProfiler}`)
 
-    core.info(`using profiler printer: ${selectedProfiler}`);
-
-    // Read the profiler markdown from the file.
-    let content;
-    try {
-      if (!profilerFile) {
-        core.warning("profiler output file is not set, skipping summary");
-        return;
-      }
-      const result = await exec.getExecOutput("sudo", ["cat", profilerFile], {
-        silent: true,
-        ignoreReturnCode: true,
-      });
-      if (result.exitCode !== 0) {
-        core.warning(`profiler output not found or unreadable: ${profilerFile}`);
-        return;
-      }
-      content = (result.stdout || "").trim();
-    } catch (e) {
-      core.warning(`failed to read profiler file: ${e.message}`);
-      return;
-    }
-    if (!content) {
-      core.warning("profiler output is empty, skipping summary");
-      return;
-    }
-
-    // Get the summary file from the environment variable.
-    const summaryFile = process.env.GITHUB_STEP_SUMMARY;
-    if (!summaryFile) {
-      core.warning("GITHUB_STEP_SUMMARY is not set, cannot write summary");
-      return;
-    }
-
-    // Append the profiler markdown to the job summary file.
-    fs.appendFileSync(summaryFile, "\n" + content + "\n");
-
-    core.info("profiler markdown written to job summary");
+    await appendProfilerSummary(profilerFile)
+    await publishProfilerComment()
   } catch (err) {
     // Never fail the job because of the profiler step.
-    core.warning(`failed to write summary: ${err.message}`);
+    core.warning(`failed to write summary: ${getErrorMessage(err)}`)
   }
 }
 
-async function uploadJibrilArtifacts() {
-  const artifactDir = path.join(os.tmpdir(), "garnet-jibril-artifacts");
-  fs.mkdirSync(artifactDir, { recursive: true });
-
-  const logFiles = [
-    ["/var/log/jibril.log", "jibril.log"],
-    ["/var/log/jibril.err", "jibril.err"],
-    ["/var/log/jibril.out", "jibril.out"],
-  ];
-
-  const uploaded = [];
-  for (const [src, destName] of logFiles) {
-    try {
-      const destPath = path.join(artifactDir, destName);
-      const cpResult = await exec.getExecOutput("sudo", ["cp", src, destPath], {
-        ignoreReturnCode: true,
-        silent: true,
-      });
-      if (cpResult.exitCode !== 0) {
-        core.debug(`Skipping ${destName}: source may not exist (cp exit ${cpResult.exitCode})`);
-        continue;
-      }
-      await exec.exec("sudo", ["chmod", "a+r", destPath], { ignoreReturnCode: true });
-      if (fs.existsSync(destPath)) {
-        uploaded.push(destName);
-      }
-    } catch (_) {}
+/**
+ * @param {string} profilerFile
+ * @returns {Promise<void>}
+ */
+async function appendProfilerSummary(profilerFile) {
+  const content = await readRootFile(profilerFile, "summary")
+  if (content === "") {
+    return
   }
 
-  if (uploaded.length === 0) {
-    core.info("No jibril log files to upload");
-    return;
+  const summaryFile = getEnv("GITHUB_STEP_SUMMARY")
+  if (summaryFile === "") {
+    core.warning("GITHUB_STEP_SUMMARY is not set, cannot write summary")
+    return
   }
 
-  // Re-verify files exist before upload; pass absolute paths (artifact client resolves relative paths from CWD, not rootDirectory)
-  const existing = uploaded.filter((f) => fs.existsSync(path.join(artifactDir, f)));
-  const absolutePaths = existing.map((f) => path.resolve(artifactDir, f));
+  await fs.appendFile(summaryFile, `\n${content}\n`)
+  core.info("profiler markdown written to job summary")
+}
+
+async function publishProfilerComment() {
+  const debug = core.getState("debug")
+  const eventPath = getEnv("GITHUB_EVENT_PATH")
+  if (eventPath === "") {
+    core.info("GITHUB_EVENT_PATH is not set, skipping PR comment")
+    return
+  }
+
+  const repository = getEnv("GITHUB_REPOSITORY")
+  if (repository === "") {
+    core.warning("GITHUB_REPOSITORY is not set, skipping PR comment")
+    return
+  }
+
+  const token = firstNonEmptyString([
+    core.getState("githubToken"),
+    getEnv("GITHUB_TOKEN"),
+  ])
+  if (token === "") {
+    core.warning("github_token is not set, skipping PR comment")
+    return
+  }
+
+  const pullRequestNumber = await getPullRequestNumberFromEvent(eventPath)
+  if (pullRequestNumber === null) {
+    core.info("workflow is not running for a pull request, skipping PR comment")
+    return
+  }
+
+  const jsonProfilerFile = firstNonEmptyString([
+    core.getState("jsonProfilerFile"),
+    getDefaultJsonProfileFile(),
+  ])
+  /** @type {NormalizedProfile} */
+  let profile
+  try {
+    const jsonProfile = await readOptionalRootFile(jsonProfilerFile)
+    if (jsonProfile === "") {
+      core.info(
+        `JSON profile not found, skipping PR comment: ${jsonProfilerFile}`,
+      )
+      return
+    }
+
+    if (debug === "true") {
+      core.info(`${JSON_PROFILE_LABEL} contents:`)
+      core.info(jsonProfile)
+    }
+
+    profile = parseProfileJson(jsonProfile)
+  } catch (error) {
+    core.warning(
+      `failed to read ${JSON_PROFILE_LABEL}: ${getErrorMessage(error)}`,
+    )
+    return
+  }
+
+  const runAttempt = parseRunAttempt(getEnv("GITHUB_RUN_ATTEMPT"))
 
   try {
-    await artifactClient.uploadArtifact("jibril-debug-logs", absolutePaths, artifactDir);
-    core.info(`Uploaded jibril artifacts: ${existing.join(", ")}`);
-  } catch (err) {
-    const msg = err.message || String(err);
-    if (msg.includes("ACTIONS_RUNTIME_TOKEN") || msg.includes("AUTH_TOKEN") || msg.includes("token")) {
-      core.warning(`Jibril artifact upload skipped (auth unavailable): ${msg}`);
-    } else {
-      core.warning(`Failed to upload jibril artifacts: ${msg}`);
-    }
-  } finally {
-    fs.rmSync(artifactDir, { recursive: true, force: true });
+    const result = await publishPullRequestComment({
+      repository,
+      pullRequestNumber,
+      token,
+      profile,
+      runAttempt,
+    })
+    core.info(`PR comment ${result}`)
+  } catch (error) {
+    core.warning(`failed to publish PR comment: ${getErrorMessage(error)}`)
   }
 }
 
-run();
+/**
+ * @param {string} filePath
+ * @param {string} label
+ * @returns {Promise<string>}
+ */
+async function readRootFile(filePath, label) {
+  if (filePath === "") {
+    core.warning(`${label} file path is not set, skipping`)
+    return ""
+  }
+
+  try {
+    const content = await readRootFileContent(filePath)
+    if (content === "") {
+      core.warning(`${label} file not found or unreadable: ${filePath}`)
+      return ""
+    }
+    return content
+  } catch (error) {
+    core.warning(`failed to read ${label} file: ${getErrorMessage(error)}`)
+    return ""
+  }
+}
+
+/**
+ * @param {string} filePath
+ * @returns {Promise<string>}
+ */
+async function readOptionalRootFile(filePath) {
+  if (filePath === "") {
+    return ""
+  }
+
+  try {
+    return await readRootFileContent(filePath)
+  } catch {
+    return ""
+  }
+}
+
+/**
+ * @returns {"profiler" | "profiler4fun"}
+ */
+function resolveSelectedProfiler() {
+  const selectedProfiler = core.getState("selectedProfiler")
+  if (selectedProfiler === "profiler" || selectedProfiler === "profiler4fun") {
+    return selectedProfiler
+  }
+
+  return core.getState("profiler4fun") === "true" ? "profiler4fun" : "profiler"
+}
+
+/**
+ * @param {"profiler" | "profiler4fun"} selectedProfiler
+ * @returns {string}
+ */
+function resolveSelectedProfilerFile(selectedProfiler) {
+  if (selectedProfiler === "profiler4fun") {
+    return firstNonEmptyString([
+      core.getState("selectedProfilerFile"),
+      core.getState("profiler4funFile"),
+      getEnv("JIBRIL_PROFILER4FUN_FILE"),
+      DEFAULT_PROFILER4FUN_FILE,
+    ])
+  }
+
+  return firstNonEmptyString([
+    core.getState("selectedProfilerFile"),
+    core.getState("profilerFile"),
+    getEnv("JIBRIL_PROFILER_FILE"),
+    DEFAULT_PROFILER_FILE,
+  ])
+}
+
+/**
+ * @param {string[]} values
+ * @returns {string}
+ */
+function firstNonEmptyString(values) {
+  for (const value of values) {
+    if (value !== "") {
+      return value
+    }
+  }
+
+  return ""
+}
+
+/**
+ * @param {string} value
+ * @returns {number}
+ */
+function parseRunAttempt(value) {
+  const parsedValue = Number.parseInt(value, 10)
+  return Number.isSafeInteger(parsedValue) ? parsedValue : 1
+}
+
+/**
+ * @param {string} filePath
+ * @returns {Promise<string>}
+ */
+async function readRootFileContent(filePath) {
+  const result = await exec.getExecOutput("sudo", ["cat", filePath], {
+    silent: true,
+    ignoreReturnCode: true,
+  })
+  if (result.exitCode !== 0) {
+    return ""
+  }
+
+  return result.stdout.trim()
+}
+
+run()

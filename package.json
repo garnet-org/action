@@ -3,16 +3,41 @@
   "version": "1.0.0",
   "description": "GarnetAI GitHub Action",
   "private": true,
+  "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/garnet-org/action.git"
+  },
+  "bugs": {
+    "url": "https://github.com/garnet-org/action/issues"
+  },
+  "keywords": [
+    "actions"
+  ],
+  "exports": {
+    ".": "./dist/main/index.js"
+  },
+  "engines": {
+    "node": ">=24"
+  },
   "scripts": {
-    "build": "ncc build src/main.js -o dist/main --license licenses.txt && ncc build src/post.js -o dist/post --license licenses.txt && sed -i \"s/\\r$//\" dist/main/index.js dist/post/index.js"
+    "prepare": "node scripts/setup-git-hooks.js",
+    "typecheck": "tsc -p jsconfig.json --noEmit",
+    "build": "ncc build src/main.js -o dist/main --license licenses.txt && ncc build src/post.js -o dist/post --license licenses.txt && perl -pi -e 's/\\r$//' dist/main/index.js dist/post/index.js",
+    "validate": "npm run typecheck && npm run build"
   },
   "dependencies": {
-    "@actions/core": "^1.10.1",
-    "@actions/exec": "^1.1.1",
-    "tar": "^7.5.9",
-    "upload-artifact": "github:actions/upload-artifact#v4"
+    "@actions/artifact": "^6.2.1",
+    "@actions/core": "^3.0.0",
+    "@actions/exec": "^3.0.0",
+    "@actions/github": "^9.0.0",
+    "@actions/http-client": "^4.0.0",
+    "tar": "^7.5.11",
+    "zod": "^4.3.6"
   },
   "devDependencies": {
-    "@vercel/ncc": "^0.38.1"
+    "@types/node": "^25.5.0",
+    "@vercel/ncc": "^0.38.4",
+    "typescript": "^5.9.3"
   }
 }
