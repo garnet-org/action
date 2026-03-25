@@ -81,6 +81,8 @@ export const COMMENT_MARKER = "garnet-runtime-visibility"
 
 const DEFAULT_JSON_PROFILE_FILE = "/var/log/jibril.profile.json"
 const DEFAULT_APP_BASE_URL = "https://app.garnet.ai"
+const UTM_SOURCE = "github"
+const UTM_MEDIUM = "pr_comment"
 
 const PROFILE_RESULT_SCHEMA = z
   .unknown()
@@ -713,12 +715,29 @@ function encodeCommentState(state) {
 function buildReportLink(values) {
   const baseURL = resolveAppBaseUrl()
   if (values.run_id === "") {
-    return baseURL
+    return utmTrackedURL(baseURL)
   }
 
   // TODO: Switch back to the full repository/job route once the dashboard
   // supports /dashboard/runs/{org}/{repo}/{runID}/{job}.
-  return `${baseURL}/dashboard/runs/${encodeURIComponent(values.run_id)}`
+  return utmTrackedURL(
+    `${baseURL}/dashboard/runs/${encodeURIComponent(values.run_id)}`,
+  )
+}
+
+/**
+ * @param {string} rawURL
+ * @returns {string}
+ */
+function utmTrackedURL(rawURL) {
+  try {
+    const url = new URL(rawURL)
+    url.searchParams.set("utm_source", UTM_SOURCE)
+    url.searchParams.set("utm_medium", UTM_MEDIUM)
+    return url.toString()
+  } catch {
+    return rawURL
+  }
 }
 
 /**
