@@ -27,9 +27,6 @@ import { getEnv, getErrorMessage, pathExists, waitForDelay } from "./shared.js"
 
 const INSTPATH = "/usr/local/bin"
 
-/** @type {string|null} */
-let _tmpDirForCleanup = null
-
 /**
  * @typedef {{ exitCode?: number }} ExitCodeError
  */
@@ -108,7 +105,6 @@ export async function run() {
 
     // Create a temporary directory for the script to use.
     tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "garnet-"))
-    _tmpDirForCleanup = tmpDir
 
     // Download garnetctl.
     const garnetPrefix =
@@ -533,7 +529,6 @@ StandardOutput=append:/var/log/jibril.log
     if (tmpDir !== "") {
       await fs.rm(tmpDir, { recursive: true, force: true })
     }
-    _tmpDirForCleanup = null
   }
 }
 

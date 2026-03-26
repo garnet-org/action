@@ -31176,9 +31176,6 @@ async function getProfileSha() {
 
 const INSTPATH = "/usr/local/bin"
 
-/** @type {string|null} */
-let _tmpDirForCleanup = null
-
 /**
  * @typedef {{ exitCode?: number }} ExitCodeError
  */
@@ -31257,7 +31254,6 @@ async function run() {
 
     // Create a temporary directory for the script to use.
     tmpDir = await promises_namespaceObject.mkdtemp(external_node_path_namespaceObject.join(external_node_os_namespaceObject.tmpdir(), "garnet-"))
-    _tmpDirForCleanup = tmpDir
 
     // Download garnetctl.
     const garnetPrefix =
@@ -31682,7 +31678,6 @@ StandardOutput=append:/var/log/jibril.log
     if (tmpDir !== "") {
       await promises_namespaceObject.rm(tmpDir, { recursive: true, force: true })
     }
-    _tmpDirForCleanup = null
   }
 }
 
