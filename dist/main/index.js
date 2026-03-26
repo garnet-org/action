@@ -31170,6 +31170,10 @@ async function getProfileSha() {
  * @typedef {import("@actions/exec").ExecOptions} ExecOptions
  */
 
+/**
+ * @typedef {{ stdout: string, stderr: string }} ExecCaptureResult
+ */
+
 const INSTPATH = "/usr/local/bin"
 
 /** @type {string|null} */
@@ -31305,9 +31309,10 @@ async function run() {
     info("Creating github context")
 
     if (DEBUG === "true") core_debug(`$ ${INSTPATH}/garnetctl version`)
-    const versionOutput = await execCapture(`${INSTPATH}/garnetctl`, [
-      "version",
-    ])
+    const { stdout: versionOutput } = await execCapture(
+      `${INSTPATH}/garnetctl`,
+      ["version"],
+    )
     // Extract the version from the output.
     const versionMatch = versionOutput.match(/Version:\s*([^,]+)/)
     const VERSION = versionMatch?.[1]?.trim() ?? ""
@@ -31344,7 +31349,7 @@ async function run() {
     try {
       if (DEBUG === "true")
         core_debug(`$ ${INSTPATH}/garnetctl create agent ...`)
-      agentOutput = await execCapture(`${INSTPATH}/garnetctl`, [
+      const agentResult = await execCapture(`${INSTPATH}/garnetctl`, [
         "create",
         "agent",
         "--version",
@@ -31360,6 +31365,7 @@ async function run() {
         "--context-file",
         githubContextPath,
       ])
+      agentOutput = agentResult.stdout
     } catch (err) {
       throw new Error(
         `Failed to create agent (exit code ${getExitCode(err) ?? 1})`,
@@ -31623,7 +31629,7 @@ StandardOutput=append:/var/log/jibril.log
     // Give the daemon a moment to settle so an immediate crash is surfaced here.
     await waitForDelay(5000)
 
-    const serviceState = await execCapture(
+    const { stdout: serviceState } = await execCapture(
       "sudo",
       ["systemctl", "is-active", "jibril.service"],
       {
@@ -31648,14 +31654,18 @@ StandardOutput=append:/var/log/jibril.log
 
       info("Jibril systemd unit (systemctl cat):")
       try {
-        const catOutput = await execCapture(
+        const { stdout, stderr } = await execCapture(
           "sudo",
           ["systemctl", "cat", "jibril.service"],
           {
             ignoreReturnCode: true,
           },
         )
-        info(redactSensitive(catOutput) ?? "(empty or failed)")
+        info(formatCapturedOutput(stdout, "(empty stdout)"))
+        if (stderr !== "") {
+          info("systemctl cat stderr:")
+          info(formatCapturedOutput(stderr, "(empty stderr)"))
+        }
       } catch (_) {
         info("(systemctl cat failed)")
       }
@@ -31715,25 +31725,33 @@ function resolveJibrilVersion(inputVersion, actionRef) {
 }
 
 /**
- * This function executes a command and returns the output.
+ * This function executes a command and returns captured stdout/stderr.
  * @param {string} command
  * @param {string[]=} args
  * @param {ExecOptions=} options
+ * @returns {Promise<ExecCaptureResult>}
  */
 async function execCapture(command, args, options = {}) {
-  let output = ""
+  let stdout = ""
+  let stderr = ""
   await exec_exec(command, args, {
+    silent: options.silent ?? true,
     ...options,
     listeners: {
       stdout: (data) => {
-        output += data.toString()
+        stdout += data.toString()
+        options.listeners?.stdout?.(data)
       },
       stderr: (data) => {
+        stderr += data.toString()
         options.listeners?.stderr?.(data)
       },
     },
   })
-  return output.trim()
+  return {
+    stdout: stdout.trim(),
+    stderr: stderr.trim(),
+  }
 }
 
 /**
@@ -31863,6 +31881,18 @@ function redactSensitive(text) {
     .replace(/(authorization:\s*(?:bearer|token|basic)\s+)[^\s\n]+/gi, "$1***")
 }
 
+/**
+ * @param {string|null} text
+ * @param {string} emptyMessage
+ */
+function formatCapturedOutput(text, emptyMessage) {
+  const redacted = redactSensitive(text)
+  if (redacted === null || redacted === "") {
+    return emptyMessage
+  }
+  return redacted
+}
+
 // Dumps jibril stdout/stderr and journalctl when jibril fails (for diagnostics).
 async function dumpJibrilLogs() {
   /** @type {[string, string][]} */
@@ -31872,36 +31902,48 @@ async function dumpJibrilLogs() {
   ]
   for (const [logPath, label] of logPaths) {
     try {
-      const content = await execCapture("sudo", ["cat", logPath], {
+      const { stdout, stderr } = await execCapture("sudo", ["cat", logPath], {
         ignoreReturnCode: true,
       })
       info(`--- ${label} (${logPath}) ---`)
-      info(redactSensitive(content) || "(empty or file not found)")
+      info(formatCapturedOutput(stdout, "(empty or file not found)"))
+      if (stderr !== "") {
+        info(`--- ${label} stderr (${logPath}) ---`)
+        info(formatCapturedOutput(stderr, "(empty stderr)"))
+      }
     } catch (_) {
       info(`--- ${label}: failed to read ---`)
     }
   }
   try {
     info("--- systemctl status ---")
-    const systemctlStatus = await execCapture(
+    const { stdout, stderr } = await execCapture(
       "sudo",
       ["systemctl", "status", "jibril.service", "--no-pager"],
       {
         ignoreReturnCode: true,
       },
     )
-    info(redactSensitive(systemctlStatus) || "(empty or failed)")
+    info(formatCapturedOutput(stdout, "(empty or failed)"))
+    if (stderr !== "") {
+      info("--- systemctl status stderr ---")
+      info(formatCapturedOutput(stderr, "(empty stderr)"))
+    }
   } catch (_) {}
   try {
     info("--- journalctl (last 50 lines) ---")
-    const journalOutput = await execCapture(
+    const { stdout, stderr } = await execCapture(
       "sudo",
       ["journalctl", "-u", "jibril.service", "-n", "50", "--no-pager"],
       {
         ignoreReturnCode: true,
       },
     )
-    info(redactSensitive(journalOutput) || "(empty or failed)")
+    info(formatCapturedOutput(stdout, "(empty or failed)"))
+    if (stderr !== "") {
+      info("--- journalctl stderr ---")
+      info(formatCapturedOutput(stderr, "(empty stderr)"))
+    }
   } catch (_) {}
 }
 
