@@ -82,7 +82,7 @@ jobs:
 
 ## Under the hood
 
-- **Main step**: downloads `garnetctl` + `jibril`, creates a Garnet agent for the run, fetches your merged network policy, and starts Jibril as a `systemd` service on the runner.
+- **Main step**: downloads `garnetctl` + `jibril`, creates a Garnet agent for the run, fetches your merged network policy, and starts Jibril as a `systemd` service on the runner. If Jibril crashes during startup, the action logs diagnostics and continues so later workflow steps still run.
 - **Post step (always)**: stops Jibril so it flushes events, appends the generated profile to `GITHUB_STEP_SUMMARY`, and creates or updates the pull request comment for the current push when the workflow runs for a PR. When `debug=true`, it also uploads Jibril logs as build artifacts.
 
 ## Pull request comments

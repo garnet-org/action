@@ -15,7 +15,7 @@ import {
   getProfileJobName,
   getWorkflowFilePath,
 } from "./github-context.js"
-import { getEnv, getOptionalRecord, isRecord, pathExists } from "./shared.js"
+import { getEnv, getErrorMessage, pathExists, waitForDelay } from "./shared.js"
 
 /**
  * @typedef {import("@actions/exec").ExecOptions} ExecOptions
@@ -32,80 +32,81 @@ let _tmpDirForCleanup = null
 
 // This function is the main entry point for the script.
 export async function run() {
-  // Get the variables from the environment.
-  const TOKEN = getEnv("GARNET_API_TOKEN")
-  const API = getEnv("GARNET_API_URL", "https://api.garnet.ai")
-  let GARNETVER = getEnv("GARNETCTL_VERSION", "latest")
-  let JIBRILVER = resolveJibrilVersion(
-    getEnv("JIBRIL_VERSION", ""),
-    getEnv("GITHUB_ACTION_REF", ""),
-  )
-  const DEBUG = getEnv("DEBUG", "false")
-
-  if (TOKEN === "") {
-    fail(1, "API token is required")
-  }
-
-  // Prevent accidental leakage of tokens in logs.
-  core.setSecret(TOKEN)
-  const GITHUB_TOKEN = getEnv("GITHUB_TOKEN", "")
-  if (GITHUB_TOKEN) core.setSecret(GITHUB_TOKEN)
-  const AI_TOKEN = getEnv("AI_TOKEN", "")
-  if (AI_TOKEN) core.setSecret(AI_TOKEN)
-
-  const workspace = getEnv("GITHUB_WORKSPACE")
-  if (!workspace) {
-    core.warning(
-      "GITHUB_WORKSPACE is not set. Jibril workflow-file resolution may be limited.",
-    )
-  } else if (!(await pathExists(path.join(workspace, ".git")))) {
-    core.warning(
-      "Repository checkout not detected. Jibril will rely on the GitHub API to fetch the running workflow file; " +
-        "if that fails, add 'actions/checkout@v6' before this action as a fallback.",
-    )
-  }
-
-  const platform = os.platform()
-  const arch = os.arch()
-
-  // Sanitize the OS and architecture.
-  let GARNET_OS = ""
-  if (platform === "linux") {
-    GARNET_OS = "linux"
-  } else if (platform === "darwin") {
-    GARNET_OS = "darwin"
-  } else {
-    fail(1, `Unsupported OS: ${platform}`)
-  }
-
-  // Sanitize the architecture.
-  let ALTARCH = ""
-  const archStr = String(arch)
-  if (archStr === "x64" || archStr === "x86_64") {
-    ALTARCH = "x86_64"
-  } else if (archStr === "arm64" || archStr === "aarch64") {
-    ALTARCH = "arm64"
-  } else {
-    fail(1, `Unsupported architecture: ${arch}`)
-  }
-
-  if (GARNETVER !== "latest" && !GARNETVER.startsWith("v")) {
-    GARNETVER = `v${GARNETVER}`
-  }
-  if (JIBRILVER !== "latest" && !JIBRILVER.startsWith("v")) {
-    JIBRILVER = `v${JIBRILVER}`
-  }
-
-  core.info(`API server: ${API}`)
-  core.info(`Garnet Control Version: ${GARNETVER}`)
-  core.info(`Jibril Version: ${JIBRILVER}`)
-
-  // Create a temporary directory for the script to use.
-  const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "garnet-"))
-  _tmpDirForCleanup = tmpDir
-
-  // Download garnetctl.
+  let tmpDir = ""
   try {
+    // Get the variables from the environment.
+    const TOKEN = getEnv("GARNET_API_TOKEN")
+    const API = getEnv("GARNET_API_URL", "https://api.garnet.ai")
+    let GARNETVER = getEnv("GARNETCTL_VERSION", "latest")
+    let JIBRILVER = resolveJibrilVersion(
+      getEnv("JIBRIL_VERSION", ""),
+      getEnv("GITHUB_ACTION_REF", ""),
+    )
+    const DEBUG = getEnv("DEBUG", "false")
+
+    if (TOKEN === "") {
+      throw new Error("API token is required")
+    }
+
+    // Prevent accidental leakage of tokens in logs.
+    core.setSecret(TOKEN)
+    const GITHUB_TOKEN = getEnv("GITHUB_TOKEN", "")
+    if (GITHUB_TOKEN) core.setSecret(GITHUB_TOKEN)
+    const AI_TOKEN = getEnv("AI_TOKEN", "")
+    if (AI_TOKEN) core.setSecret(AI_TOKEN)
+
+    const workspace = getEnv("GITHUB_WORKSPACE")
+    if (!workspace) {
+      core.warning(
+        "GITHUB_WORKSPACE is not set. Jibril workflow-file resolution may be limited.",
+      )
+    } else if (!(await pathExists(path.join(workspace, ".git")))) {
+      core.warning(
+        "Repository checkout not detected. Jibril will rely on the GitHub API to fetch the running workflow file; " +
+          "if that fails, add 'actions/checkout@v6' before this action as a fallback.",
+      )
+    }
+
+    const platform = os.platform()
+    const arch = os.arch()
+
+    // Sanitize the OS and architecture.
+    let GARNET_OS = ""
+    if (platform === "linux") {
+      GARNET_OS = "linux"
+    } else if (platform === "darwin") {
+      GARNET_OS = "darwin"
+    } else {
+      throw new Error(`Unsupported OS: ${platform}`)
+    }
+
+    // Sanitize the architecture.
+    let ALTARCH = ""
+    const archStr = String(arch)
+    if (archStr === "x64" || archStr === "x86_64") {
+      ALTARCH = "x86_64"
+    } else if (archStr === "arm64" || archStr === "aarch64") {
+      ALTARCH = "arm64"
+    } else {
+      throw new Error(`Unsupported architecture: ${arch}`)
+    }
+
+    if (GARNETVER !== "latest" && !GARNETVER.startsWith("v")) {
+      GARNETVER = `v${GARNETVER}`
+    }
+    if (JIBRILVER !== "latest" && !JIBRILVER.startsWith("v")) {
+      JIBRILVER = `v${JIBRILVER}`
+    }
+
+    core.info(`API server: ${API}`)
+    core.info(`Garnet Control Version: ${GARNETVER}`)
+    core.info(`Jibril Version: ${JIBRILVER}`)
+
+    // Create a temporary directory for the script to use.
+    tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "garnet-"))
+    _tmpDirForCleanup = tmpDir
+
+    // Download garnetctl.
     const garnetPrefix =
       "https://github.com/garnet-org/garnetctl-releases/releases"
     let garnetUrl =
@@ -121,7 +122,7 @@ export async function run() {
 
     const garnetctlSrc = path.join(tmpDir, "garnetctl")
     if (!(await pathExists(garnetctlSrc))) {
-      fail(1, "Failed to download garnetctl binary")
+      throw new Error("Failed to download garnetctl binary")
     }
 
     await execSudo(["mv", garnetctlSrc, `${INSTPATH}/garnetctl`])
@@ -211,7 +212,9 @@ export async function run() {
         githubContextPath,
       ])
     } catch (err) {
-      fail(getExitCode(err) ?? 1, "Failed to create agent")
+      throw new Error(
+        `Failed to create agent (exit code ${getExitCode(err) ?? 1})`,
+      )
     }
 
     // Parse the agent output.
@@ -236,7 +239,7 @@ export async function run() {
       AGENT_ID = agentInfo.id
       AGENT_TOKEN = agentInfo.agent_token
     } catch (_) {
-      fail(1, "Failed to parse agent output")
+      throw new Error("Failed to parse agent output")
     }
 
     if (AGENT_TOKEN) core.setSecret(AGENT_TOKEN)
@@ -272,11 +275,13 @@ export async function run() {
         NETPOLICY_PATH,
       ])
     } catch (err) {
-      fail(getExitCode(err) ?? 1, "Failed to fetch network policy")
+      throw new Error(
+        `Failed to fetch network policy (exit code ${getExitCode(err) ?? 1})`,
+      )
     }
 
     if (!(await pathExists(NETPOLICY_PATH))) {
-      fail(1, "Network policy file was not created")
+      throw new Error("Network policy file was not created")
     }
 
     // Save the network policy to the file system.
@@ -450,23 +455,40 @@ StandardOutput=append:/var/log/jibril.log
       core.info("Starting Jibril service...")
     }
 
-    // Start Jibril service.
-    let returnCode = 0
-    try {
-      await execSudo(["systemctl", "start", "jibril.service"])
-    } catch (err) {
-      returnCode = getExitCode(err) ?? 1
-    }
+    // Start Jibril service, but do not fail the workflow if the daemon crashes.
+    const returnCode = await execSudo(
+      ["systemctl", "start", "jibril.service"],
+      {
+        ignoreReturnCode: true,
+      },
+    )
 
-    // Check if Jibril service started successfully.
     if (returnCode !== 0) {
-      core.error("Jibril service failed to start. Showing logs:")
+      core.warning(
+        "Jibril service failed to start. The workflow will continue without runtime monitoring for this run.",
+      )
       await dumpJibrilLogs()
-      fail(1, "Failed to start Jibril service")
+      return
     }
 
-    // Wait for Jibril to initialize
-    await new Promise((r) => setTimeout(r, 5000))
+    // Give the daemon a moment to settle so an immediate crash is surfaced here.
+    await waitForDelay(5000)
+
+    const serviceState = await execCapture(
+      "sudo",
+      ["systemctl", "is-active", "jibril.service"],
+      {
+        ignoreReturnCode: true,
+      },
+    )
+
+    if (serviceState !== "active") {
+      core.warning(
+        `Jibril service exited early with state '${serviceState || "unknown"}'. The workflow will continue without runtime monitoring for this run.`,
+      )
+      await dumpJibrilLogs()
+      return
+    }
 
     // Check Jibril service status.
     if (DEBUG === "true") {
@@ -491,26 +513,18 @@ StandardOutput=append:/var/log/jibril.log
     }
 
     core.info("Jibril service started successfully")
+  } catch (err) {
+    core.warning(
+      `Garnet runtime monitoring setup did not complete: ${getErrorMessage(err)}. The workflow will continue without runtime monitoring for this run.`,
+    )
+    await dumpJibrilLogs()
   } finally {
     // Clean up the temporary directory.
-    await fs.rm(tmpDir, { recursive: true, force: true })
+    if (tmpDir !== "") {
+      await fs.rm(tmpDir, { recursive: true, force: true })
+    }
+    _tmpDirForCleanup = null
   }
-}
-
-/**
- * This function fails the script with a given error code and message.
- * @param {number} code
- * @param {string} message
- * @returns {never}
- */
-function fail(code, message) {
-  if (_tmpDirForCleanup) {
-    void fs
-      .rm(_tmpDirForCleanup, { recursive: true, force: true })
-      .catch(() => {})
-  }
-  core.error(message || "Error")
-  process.exit(code ?? 1)
 }
 
 /**
@@ -689,9 +703,15 @@ async function readdirRecursiveSafe(dirPath) {
 function redactSensitive(text) {
   if (typeof text !== "string") return text
   return text
+    .replace(/\bAI_TOKEN=[^\s\n]*/gi, "AI_TOKEN=***")
     .replace(/\bGITHUB_TOKEN=[^\s\n]*/gi, "GITHUB_TOKEN=***")
     .replace(/\bGARNET_API_TOKEN=[^\s\n]*/gi, "GARNET_API_TOKEN=***")
     .replace(/\bGARNET_AGENT_TOKEN=[^\s\n]*/gi, "GARNET_AGENT_TOKEN=***")
+    .replace(
+      /^([A-Z0-9_]*(?:TOKEN|SECRET|PASSWORD|API_KEY|PRIVATE_KEY))=.*/gim,
+      "$1=***",
+    )
+    .replace(/(authorization:\s*(?:bearer|token|basic)\s+)[^\s\n]+/gi, "$1***")
 }
 
 // Dumps jibril stdout/stderr and journalctl when jibril fails (for diagnostics).
@@ -707,29 +727,31 @@ async function dumpJibrilLogs() {
         ignoreReturnCode: true,
       })
       core.info(`--- ${label} (${logPath}) ---`)
-      core.info(content || "(empty or file not found)")
+      core.info(redactSensitive(content) || "(empty or file not found)")
     } catch (_) {
       core.info(`--- ${label}: failed to read ---`)
     }
   }
   try {
     core.info("--- systemctl status ---")
-    await exec.exec(
+    const systemctlStatus = await execCapture(
       "sudo",
       ["systemctl", "status", "jibril.service", "--no-pager"],
       {
         ignoreReturnCode: true,
       },
     )
+    core.info(redactSensitive(systemctlStatus) || "(empty or failed)")
   } catch (_) {}
   try {
     core.info("--- journalctl (last 50 lines) ---")
-    await exec.exec(
+    const journalOutput = await execCapture(
       "sudo",
       ["journalctl", "-u", "jibril.service", "-n", "50", "--no-pager"],
       {
         ignoreReturnCode: true,
       },
     )
+    core.info(redactSensitive(journalOutput) || "(empty or failed)")
   } catch (_) {}
 }
