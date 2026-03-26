@@ -74,6 +74,9 @@ dump_diagnostics() {
 warn_and_continue() {
 	local reason="$1"
 
+	# Temporary fail-open for flaky Jibril startup on CI runners.
+	# Once the upstream Jibril issue is fixed, replace callers of this helper
+	# with hard failures again so the test enforces monitoring startup.
 	echo "Warning: $reason"
 	dump_diagnostics "$reason"
 	echo "Test completed successfully in fail-open mode."
