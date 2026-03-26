@@ -17,6 +17,60 @@ if [ "$DEBUG" = "true" ]; then
 	set -x
 fi
 
+redact_stream() {
+	sed -E \
+		-e 's/(AI_TOKEN=).*/\1***/' \
+		-e 's/(GITHUB_TOKEN=).*/\1***/' \
+		-e 's/(GARNET_API_TOKEN=).*/\1***/' \
+		-e 's/(GARNET_AGENT_TOKEN=).*/\1***/' \
+		-e 's/([A-Z0-9_]*(TOKEN|SECRET|PASSWORD|API_KEY|PRIVATE_KEY)=).*/\1***/' \
+		-e 's/(authorization:[[:space:]]*(bearer|token|basic)[[:space:]]+).*/\1***/I'
+}
+
+DIAG_DIR="${RUNNER_TEMP:-/tmp}/jibril-test-diagnostics"
+mkdir -p "$DIAG_DIR"
+
+dump_diagnostics() {
+	local reason="${1:-unknown failure}"
+
+	echo "Collecting Jibril diagnostics: $reason"
+	echo "$reason" >"$DIAG_DIR/failure-reason.txt"
+
+	if [ -f /etc/default/jibril ]; then
+		sudo cat /etc/default/jibril | redact_stream | tee "$DIAG_DIR/default-jibril.env" >/dev/null || true
+	fi
+
+	sudo systemctl status jibril.service --no-pager >"$DIAG_DIR/systemctl-status.txt" 2>&1 || true
+	sudo systemctl cat jibril.service >"$DIAG_DIR/systemctl-cat.txt" 2>&1 || true
+	sudo journalctl -u jibril.service -n 200 --no-pager >"$DIAG_DIR/journalctl.txt" 2>&1 || true
+	sudo journalctl -xeu jibril.service >"$DIAG_DIR/journalctl-extended.txt" 2>&1 || true
+	sudo find /etc/jibril -maxdepth 3 -type f | sort >"$DIAG_DIR/etc-jibril-files.txt" 2>&1 || true
+	sudo cat /etc/jibril/config.yaml >"$DIAG_DIR/config.yaml" 2>&1 || true
+	sudo cat /etc/jibril/netpolicy.yaml >"$DIAG_DIR/netpolicy.yaml" 2>&1 || true
+	sudo cat /var/log/jibril.log | redact_stream >"$DIAG_DIR/jibril.log" 2>&1 || true
+	sudo cat /var/log/jibril.err | redact_stream >"$DIAG_DIR/jibril.err" 2>&1 || true
+
+	echo "--- systemctl status ---"
+	cat "$DIAG_DIR/systemctl-status.txt" || true
+	echo "--- systemctl cat ---"
+	cat "$DIAG_DIR/systemctl-cat.txt" | redact_stream || true
+	echo "--- journalctl (last 200 lines) ---"
+	cat "$DIAG_DIR/journalctl.txt" | redact_stream || true
+	echo "--- journalctl extended ---"
+	cat "$DIAG_DIR/journalctl-extended.txt" | redact_stream || true
+	echo "--- /etc/default/jibril ---"
+	cat "$DIAG_DIR/default-jibril.env" || true
+	echo "--- /etc/jibril/config.yaml ---"
+	cat "$DIAG_DIR/config.yaml" || true
+	echo "--- /etc/jibril/netpolicy.yaml ---"
+	cat "$DIAG_DIR/netpolicy.yaml" || true
+	echo "--- /var/log/jibril.log ---"
+	cat "$DIAG_DIR/jibril.log" || true
+	echo "--- /var/log/jibril.err ---"
+	cat "$DIAG_DIR/jibril.err" || true
+	echo "Diagnostics saved to $DIAG_DIR"
+}
+
 #
 # Global variables and defaults.
 #
@@ -234,7 +288,7 @@ sudo -E install -D -o root -m 600 /tmp/jibril.default /etc/default/jibril
 
 # Verify default environment file.
 echo "Default environment file:"
-sudo cat /etc/default/jibril || echo "No default environment file found"
+sudo cat /etc/default/jibril | redact_stream || echo "No default environment file found"
 
 # Install Jibril as a systemd service.
 echo "Installing Jibril as a systemd service"
@@ -271,17 +325,18 @@ sudo -E systemctl daemon-reload
 sudo -E systemctl enable jibril.service || true
 
 echo "Starting Jibril service:"
-sudo -E systemctl start jibril.service
-return_code=$?
-
-# Check journal logs for errors.
-if [ $return_code -ne 0 ]; then
-	sudo journalctl -xeu jibril.service
+if ! sudo -E systemctl start jibril.service; then
+	dump_diagnostics "systemctl start jibril.service failed"
 	exit 1
 fi
 
 # Wait.
 sleep 5
+
+if ! sudo -E systemctl is-active --quiet jibril.service; then
+	dump_diagnostics "jibril.service is not active after startup"
+	exit 1
+fi
 
 echo "Checking Jibril service status:"
 sudo -E systemctl status jibril.service --no-pager || true
@@ -302,6 +357,7 @@ sudo cat /var/log/jibril.err || echo "No Jibril error log file found"
 
 if [[ $(sudo cat /var/log/jibril.err 2>/dev/null | wc -l) -gt 0 ]]; then
 	echo "Errors were found in the Jibril error log."
+	dump_diagnostics "jibril.err contains output"
 	exit 1
 fi
 
