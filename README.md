@@ -60,7 +60,7 @@ jobs:
 
     steps:
       - name: Checkout (recommended)
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - uses: garnet-org/action@v2
         with:
