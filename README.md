@@ -1,6 +1,6 @@
 <div align="center">
   <a href="https://garnet.ai">
-    <img src="brand/garnet-logo.png" alt="Garnet" width="160" />
+    <img src="brand/garnet-logo.png" alt="Garnet" width="300" />
   </a>
   <p><strong>Runtime visibility for GitHub Workflows</strong></p>
   <p>
@@ -30,12 +30,11 @@ Get your API token at [app.garnet.ai](https://app.garnet.ai)
 ## What you get
 
 - **A behavioral profile of every run**: kernel-level capture of every network call, process spawn, and file access — with full lineage from parent to child, down to the exact binary that made the connection.
-- **Runtime assertions in your PR**: Assertions are like unit tests for runtime behavior. Results appear as a PR comment and step summary: a table per job with pass / fail assertions and an egress table with lineage inline. A permalink links to the full run report, with Slack alerts configurable on failures.
+- **Runtime assertions in your PR**: Assertions are like unit tests for runtime behavior. Results appear as a PR comment and step summary: a table per job with pass / fail assertions and an egress table with lineage inline. A permalink links to the full run report, with Slack alerts configurable in the Garnet dashboard on failures.
 - **Lineage-based evidence**: When something unexpected runs, you don't get a domain name — you get the full chain:
 
-  ```
-  npm install → dep@1.2.3 postinstall → bash → curl → unknown-domain.com
-  ```
+  <!-- TODO: replace with screenshot once available -->
+  <img src="brand/screenshot-lineage.png" alt="Lineage example: npm install → dep postinstall → bash → curl → unknown-domain.com" width="700" />
 
 ## Quickstart
 
@@ -57,6 +56,7 @@ jobs:
 
     permissions:
       contents: read
+      pull-requests: write
 
     steps:
       - name: Checkout (recommended)
@@ -65,20 +65,26 @@ jobs:
       - uses: garnet-org/action@v2
         with:
           api_token: ${{ secrets.GARNET_API_TOKEN }}
- 
+
       - name: Your existing steps
         run: npm test
-
 ```
 
-## What you’ll see
+> **Tip:** For maximum supply-chain safety, pin to a full commit SHA instead of a tag:
+> ```yaml
+> - uses: garnet-org/action@<commit-sha> # v2
+> ```
 
-- **GitHub job summary**: A Markdown "security profile" appended at the end of the job—even if the job fails.
-- **Pull request comment**: On pull request workflows, Garnet creates one comment per push, merging jobs and workflows from the same push into that comment.
-- **Garnet UI**: linked from in-line results through a permalink, for in-depth investigation and additional management features. 
+## What you'll see
 
+- **GitHub job summary**: A Markdown "security profile" appended at the end of the job — even if the job fails.
+- **Pull request comment**: On pull request workflows, Garnet posts one comment per push, merging jobs and workflows from the same push into a single comment.
+- **Garnet UI**: Linked from in-line results through a permalink for in-depth investigation and additional management features.
 
-
+<!-- TODO: add screenshots once available
+<img src="brand/screenshot-pr-comment.png" alt="Example PR comment with assertion results and egress table" width="700" />
+<img src="brand/screenshot-job-summary.png" alt="Example GitHub job summary" width="700" />
+-->
 
 ## Under the hood
 
@@ -93,7 +99,7 @@ push are merged into that comment so the PR stays readable while preserving
 history across pushes.
 
 To let the action write PR comments, grant the workflow token write access to
-pull requests or issue comments. For example:
+pull requests:
 
 ```yaml
 permissions:
@@ -119,6 +125,14 @@ steps:
 | `jibril_version` | No | `""` (auto) | Jibril version (`v2.10.8` or `latest`) |
 | `debug` | No | `false` | Enable debug mode and upload logs as artifacts |
 
+## Outputs
+
+| Output | Description |
+|--------|-------------|
+| `profile_result` | Assertion result for this run: `pass` or `fail` |
+| `report_url` | Link to the full run report on app.garnet.ai |
+| `agent_id` | Identifier for the Jibril sensor instance that ran |
+
 ---
 
 ## Concepts
@@ -142,26 +156,27 @@ Your team reviews the code. Your CI runs it. Between `git push` and production, 
 ---
 
 ## Setup & support
- 
+
 ### Requirements
- 
+
 - `runs-on: ubuntu-latest` — Linux runner with systemd
 - `sudo` access to install binaries and configure the Jibril service
 - `GARNET_API_TOKEN` set as a repository secret
- 
+
 ### Troubleshooting
- 
+
 | Symptom | Fix |
 |---------|-----|
 | "API token is required" | Confirm `GARNET_API_TOKEN` is set in repository secrets and passed as `api_token` |
 | No PR comment appearing | The action posts comments only on `pull_request` events — confirm your workflow triggers include `pull_request` |
+| PR comment says "Resource not accessible" | Add `pull-requests: write` to the workflow `permissions` block |
 | No summary output | Enable `debug: "true"` to upload Jibril logs as artifacts, then inspect `jibril.log` and `jibril.err` |
 | Restrictive permissions | This action works with `permissions: contents: read` — if your workflow hardens permissions aggressively, ensure the job can read repository contents |
- 
+
 ### Security & license
- 
+
 See [SECURITY.md](./SECURITY.md) to report vulnerabilities — or email **security@garnet.ai**. MIT — see [LICENSE](./LICENSE)
- 
+
 ---
- 
+
 [app.garnet.ai](https://app.garnet.ai) · [docs.garnet.ai](https://docs.garnet.ai) · [garnet.ai](https://garnet.ai)
