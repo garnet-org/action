@@ -36,6 +36,22 @@ Get your API token at [app.garnet.ai](https://app.garnet.ai)
   <!-- TODO: replace with screenshot once available -->
   <img src="brand/screenshot-lineage.png" alt="Lineage example: npm install → dep postinstall → bash → curl → unknown-domain.com" width="700" />
 
+## What this action does NOT do
+
+- **Read your source code** — Jibril monitors process and network behavior at the kernel level. It does not read, scan, or transmit repository contents.
+- **Access your secrets** — The action uses only the `GARNET_API_TOKEN` you provide and the default `GITHUB_TOKEN` for PR comments. It does not read or forward any other repository secrets.
+- **Make unexpected network calls** — `garnetctl` and Jibril communicate only with `api.garnet.ai` (configurable via `api_url`). Binaries are downloaded from `github.com/garnet-org/*-releases` over HTTPS. No other outbound connections are made by the action itself.
+- **Persist after the run** — Jibril runs as a systemd service that is stopped in the post step. Secrets are removed from disk and config files are cleaned up. On ephemeral GitHub-hosted runners, nothing survives the job.
+
+## Permissions
+
+| Permission | Required | Why |
+|---|---|---|
+| `contents: read` | Yes | Access workflow context and repository metadata |
+| `pull-requests: write` | Recommended | Post runtime profile as a PR comment |
+
+This action does not require `contents: write`, `actions: write`, or access to any repository secrets beyond the ones you explicitly pass.
+
 ## Quickstart
 
 ### 1. Create a token
