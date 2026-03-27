@@ -31806,7 +31806,7 @@ function redactSensitive(text) {
         .replace(/\bGITHUB_TOKEN=[^\s\n]*/gi, "GITHUB_TOKEN=***")
         .replace(/\bGARNET_API_TOKEN=[^\s\n]*/gi, "GARNET_API_TOKEN=***")
         .replace(/\bGARNET_AGENT_TOKEN=[^\s\n]*/gi, "GARNET_AGENT_TOKEN=***")
-        .replace(/^([A-Z0-9_]*(?:TOKEN|SECRET|PASSWORD|API_KEY|PRIVATE_KEY))=.*/gim, "$1=***")
+        .replace(/^([A-Z0-9_]*(?:TOKEN|SECRET|PASSWORD|KEY))=.*/gim, "$1=***")
         .replace(/(authorization:\s*(?:bearer|token|basic)\s+)[^\s\n]+/gi, "$1***")
 }
 
