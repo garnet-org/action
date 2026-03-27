@@ -125,14 +125,6 @@ steps:
 | `jibril_version` | No | `""` (auto) | Jibril version (`v2.10.8` or `latest`) |
 | `debug` | No | `false` | Enable debug mode and upload logs as artifacts |
 
-## Outputs
-
-| Output | Description |
-|--------|-------------|
-| `profile_result` | Assertion result for this run: `pass` or `fail` |
-| `report_url` | Link to the full run report on app.garnet.ai |
-| `agent_id` | Identifier for the Jibril sensor instance that ran |
-
 ---
 
 ## Concepts
