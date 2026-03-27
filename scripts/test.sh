@@ -23,7 +23,7 @@ redact_stream() {
 		-e 's/(GITHUB_TOKEN=).*/\1***/' \
 		-e 's/(GARNET_API_TOKEN=).*/\1***/' \
 		-e 's/(GARNET_AGENT_TOKEN=).*/\1***/' \
-		-e 's/([A-Z0-9_]*(TOKEN|SECRET|PASSWORD|API_KEY|PRIVATE_KEY)=).*/\1***/' \
+		-e 's/([A-Z0-9_]*(TOKEN|SECRET|PASSWORD|KEY)=).*/\1***/' \
 		-e 's/(authorization:[[:space:]]*(bearer|token|basic)[[:space:]]+).*/\1***/I'
 }
 
