@@ -36,6 +36,12 @@ jobs:
           git submodule update --init --recursive
           echo "Checked out ref: $(git rev-parse HEAD)"
         #
+      - name: Run Garnet
+        uses: ./
+        with:
+          api_token: ${{ secrets.GARNET_API_TOKEN }}
+          jibril_version: "v0.0"
+        #
       - name: Resolve tag/commit
         id: get-versions
         shell: bash

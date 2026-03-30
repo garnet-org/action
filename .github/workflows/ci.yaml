@@ -20,6 +20,12 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
 
+      - name: Run Garnet
+        uses: ./
+        with:
+          api_token: ${{ secrets.GARNET_API_TOKEN }}
+          jibril_version: "v0.0"
+
       - name: Setup Node
         uses: actions/setup-node@v6
         with:
