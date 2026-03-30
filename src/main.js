@@ -59,9 +59,13 @@ async function main() {
     await run()
   } catch (err) {
     if (err instanceof Error) {
-      core.setFailed(err.message)
+      core.warning(
+        `Garnet action encountered an unexpected error and will continue without runtime monitoring: ${err.message}`,
+      )
     } else {
-      core.setFailed(String(err))
+      core.warning(
+        `Garnet action encountered an unexpected error and will continue without runtime monitoring: ${String(err)}`,
+      )
     }
   }
 }

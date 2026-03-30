@@ -53,3 +53,11 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           ./scripts/test.sh
+
+      - name: Upload Jibril diagnostics
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: jibril-test-diagnostics
+          path: ${{ runner.temp }}/jibril-test-diagnostics
+          if-no-files-found: ignore

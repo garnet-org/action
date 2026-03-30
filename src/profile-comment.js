@@ -1,5 +1,5 @@
 import { z } from "zod"
-import { getOptionalRecord, isRecord } from "./shared.js"
+import { getOptionalRecord } from "./shared.js"
 
 export const COMMENT_MARKER = "garnet-runtime-visibility"
 

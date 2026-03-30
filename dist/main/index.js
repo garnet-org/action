@@ -30812,7 +30812,7 @@ function core_debug(message) {
  * @param properties optional properties to add to the annotation.
  */
 function error(message, properties = {}) {
-    command_issueCommand('error', utils_toCommandProperties(properties), message instanceof Error ? message.toString() : message);
+    issueCommand('error', toCommandProperties(properties), message instanceof Error ? message.toString() : message);
 }
 /**
  * Adds a warning issue
@@ -31170,10 +31170,11 @@ async function getProfileSha() {
  * @typedef {import("@actions/exec").ExecOptions} ExecOptions
  */
 
-const INSTPATH = "/usr/local/bin"
+/**
+ * @typedef {{ stdout: string, stderr: string }} ExecCaptureResult
+ */
 
-/** @type {string|null} */
-let _tmpDirForCleanup = null
+const INSTPATH = "/usr/local/bin"
 
 /**
  * @typedef {{ exitCode?: number }} ExitCodeError
@@ -31181,274 +31182,255 @@ let _tmpDirForCleanup = null
 
 // This function is the main entry point for the script.
 async function run() {
-  // Get the variables from the environment.
-  const TOKEN = getEnv("GARNET_API_TOKEN")
-  const API = getEnv("GARNET_API_URL", "https://api.garnet.ai")
-  let GARNETVER = getEnv("GARNETCTL_VERSION", "latest")
-  let JIBRILVER = resolveJibrilVersion(
-    getEnv("JIBRIL_VERSION", ""),
-    getEnv("GITHUB_ACTION_REF", ""),
-  )
-  const DEBUG = getEnv("DEBUG", "false")
-
-  if (TOKEN === "") {
-    fail(1, "API token is required")
-  }
-
-  // Prevent accidental leakage of tokens in logs.
-  core_setSecret(TOKEN)
-  const GITHUB_TOKEN = getEnv("GITHUB_TOKEN", "")
-  if (GITHUB_TOKEN) core_setSecret(GITHUB_TOKEN)
-  const AI_TOKEN = getEnv("AI_TOKEN", "")
-  if (AI_TOKEN) core_setSecret(AI_TOKEN)
-
-  const workspace = getEnv("GITHUB_WORKSPACE")
-  if (!workspace) {
-    warning(
-      "GITHUB_WORKSPACE is not set. Jibril workflow-file resolution may be limited.",
-    )
-  } else if (!(await pathExists(external_node_path_namespaceObject.join(workspace, ".git")))) {
-    warning(
-      "Repository checkout not detected. Jibril will rely on the GitHub API to fetch the running workflow file; " +
-        "if that fails, add 'actions/checkout@v6' before this action as a fallback.",
-    )
-  }
-
-  const platform = external_node_os_namespaceObject.platform()
-  const arch = external_node_os_namespaceObject.arch()
-
-  // Sanitize the OS and architecture.
-  let GARNET_OS = ""
-  if (platform === "linux") {
-    GARNET_OS = "linux"
-  } else if (platform === "darwin") {
-    GARNET_OS = "darwin"
-  } else {
-    fail(1, `Unsupported OS: ${platform}`)
-  }
-
-  // Sanitize the architecture.
-  let ALTARCH = ""
-  const archStr = String(arch)
-  if (archStr === "x64" || archStr === "x86_64") {
-    ALTARCH = "x86_64"
-  } else if (archStr === "arm64" || archStr === "aarch64") {
-    ALTARCH = "arm64"
-  } else {
-    fail(1, `Unsupported architecture: ${arch}`)
-  }
-
-  if (GARNETVER !== "latest" && !GARNETVER.startsWith("v")) {
-    GARNETVER = `v${GARNETVER}`
-  }
-  if (JIBRILVER !== "latest" && !JIBRILVER.startsWith("v")) {
-    JIBRILVER = `v${JIBRILVER}`
-  }
-
-  info(`API server: ${API}`)
-  info(`Garnet Control Version: ${GARNETVER}`)
-  info(`Jibril Version: ${JIBRILVER}`)
-
-  // Create a temporary directory for the script to use.
-  const tmpDir = await promises_namespaceObject.mkdtemp(external_node_path_namespaceObject.join(external_node_os_namespaceObject.tmpdir(), "garnet-"))
-  _tmpDirForCleanup = tmpDir
-
-  // Download garnetctl.
-  try {
-    const garnetPrefix =
-      "https://github.com/garnet-org/garnetctl-releases/releases"
-    let garnetUrl =
-      GARNETVER === "latest"
-        ? `${garnetPrefix}/latest/download/garnetctl_${GARNET_OS}_${ALTARCH}.tar.gz`
-        : `${garnetPrefix}/download/${GARNETVER}/garnetctl_${GARNET_OS}_${ALTARCH}.tar.gz`
-
-    info(`Downloading garnetctl: ${garnetUrl}`)
-
-    const garnetTarball = external_node_path_namespaceObject.join(tmpDir, "garnetctl.tar.gz")
-    await downloadFile(garnetUrl, garnetTarball)
-    await extractTarGz(garnetTarball, tmpDir)
-
-    const garnetctlSrc = external_node_path_namespaceObject.join(tmpDir, "garnetctl")
-    if (!(await pathExists(garnetctlSrc))) {
-      fail(1, "Failed to download garnetctl binary")
-    }
-
-    await execSudo(["mv", garnetctlSrc, `${INSTPATH}/garnetctl`])
-    await execSudo(["chmod", "+x", `${INSTPATH}/garnetctl`])
-
-    // Download jibril
-    const jibrilPrefix =
-      "https://github.com/garnet-org/jibril-releases/releases"
-    let jibrilUrl =
-      JIBRILVER === "latest"
-        ? `${jibrilPrefix}/latest/download/jibril`
-        : `${jibrilPrefix}/download/${JIBRILVER}/jibril`
-
-    info(`Downloading jibril: ${jibrilUrl}`)
-
-    const jibrilDest = external_node_path_namespaceObject.join(tmpDir, "jibril")
-    await downloadFile(jibrilUrl, jibrilDest)
-    await execSudo(["mv", jibrilDest, `${INSTPATH}/jibril`])
-    await execSudo(["chmod", "+x", `${INSTPATH}/jibril`])
-
-    // Configure garnetctl
-    info("Configuring garnetctl")
-    if (DEBUG === "true")
-      core_debug(`$ ${INSTPATH}/garnetctl config set-baseurl ${API}`)
-    await exec_exec(`${INSTPATH}/garnetctl`, ["config", "set-baseurl", API])
-    if (DEBUG === "true")
-      core_debug(`$ ${INSTPATH}/garnetctl config set-token ***`)
-    await exec_exec(`${INSTPATH}/garnetctl`, ["config", "set-token", TOKEN])
-
-    // Create github context
-    info("Creating github context")
-
-    if (DEBUG === "true") core_debug(`$ ${INSTPATH}/garnetctl version`)
-    const versionOutput = await execCapture(`${INSTPATH}/garnetctl`, [
-      "version",
-    ])
-    // Extract the version from the output.
-    const versionMatch = versionOutput.match(/Version:\s*([^,]+)/)
-    const VERSION = versionMatch?.[1]?.trim() ?? ""
-
-    const RUNNER_IP = getFirstIpv4() || "127.0.0.1"
-
-    // Get the system machine ID.
-    let SYSTEM_MACHINE_ID = external_node_os_namespaceObject.hostname()
-    const machineIdPaths = ["/etc/machine-id", "/var/lib/dbus/machine-id"]
-    for (const p of machineIdPaths) {
-      if (await pathExists(p)) {
-        SYSTEM_MACHINE_ID = (await promises_namespaceObject.readFile(p, "utf8")).trim()
-        break
-      }
-    }
-
-    const MACHINE_ID = SYSTEM_MACHINE_ID
-    const profileJob = getProfileJobName()
-    const HOSTNAME = `${external_node_os_namespaceObject.hostname()}-${getEnv("GITHUB_RUN_ID")}-${profileJob}`
-
-    // Create the github context.
-    const githubContext = await createGitHubContext()
-    const githubContextPath = external_node_path_namespaceObject.join(tmpDir, "github-context.json")
-    await promises_namespaceObject.writeFile(
-      githubContextPath,
-      JSON.stringify(githubContext, null, 2),
-    )
-
-    // Create agent
-    info("Creating github agent")
-
-    // Create the agent.
-    let agentOutput = ""
+    let tmpDir = ""
     try {
-      if (DEBUG === "true")
-        core_debug(`$ ${INSTPATH}/garnetctl create agent ...`)
-      agentOutput = await execCapture(`${INSTPATH}/garnetctl`, [
-        "create",
-        "agent",
-        "--version",
-        VERSION,
-        "--ip",
-        RUNNER_IP,
-        "--hostname",
-        HOSTNAME,
-        "--machine-id",
-        MACHINE_ID,
-        "--kind",
-        "github",
-        "--context-file",
-        githubContextPath,
-      ])
-    } catch (err) {
-      fail(getExitCode(err) ?? 1, "Failed to create agent")
-    }
+        // Get the variables from the environment.
+        const TOKEN = getEnv("GARNET_API_TOKEN")
+        const API = getEnv("GARNET_API_URL", "https://api.garnet.ai")
+        let GARNETVER = getEnv("GARNETCTL_VERSION", "latest")
+        let JIBRILVER = resolveJibrilVersion(getEnv("JIBRIL_VERSION", ""), getEnv("GITHUB_ACTION_REF", ""))
+        const DEBUG = getEnv("DEBUG", "false")
 
-    // Parse the agent output.
-    let AGENT_ID = ""
-    let AGENT_TOKEN = ""
-    try {
-      const agentInfo = JSON.parse(agentOutput)
-      if (typeof agentInfo !== "object" || agentInfo === null) {
-        throw new Error("Agent output is not a JSON object")
-      }
+        if (TOKEN === "") {
+            throw new Error("API token is required")
+        }
 
-      if (typeof agentInfo.id !== "string") {
-        throw new Error("Agent output does not contain a valid 'id' field")
-      }
+        // Prevent accidental leakage of tokens in logs.
+        core_setSecret(TOKEN)
+        const GITHUB_TOKEN = getEnv("GITHUB_TOKEN", "")
+        if (GITHUB_TOKEN) core_setSecret(GITHUB_TOKEN)
+        const AI_TOKEN = getEnv("AI_TOKEN", "")
+        if (AI_TOKEN) core_setSecret(AI_TOKEN)
 
-      if (typeof agentInfo.agent_token !== "string") {
-        throw new Error(
-          "Agent output does not contain a valid 'agent_token' field",
-        )
-      }
+        const workspace = getEnv("GITHUB_WORKSPACE")
+        if (!workspace) {
+            warning("GITHUB_WORKSPACE is not set. Jibril workflow-file resolution may be limited.")
+        } else if (!(await pathExists(external_node_path_namespaceObject.join(workspace, ".git")))) {
+            warning(
+                "Repository checkout not detected. Jibril will rely on the GitHub API to fetch the running workflow file; " +
+                    "if that fails, add 'actions/checkout@v6' before this action as a fallback.",
+            )
+        }
 
-      AGENT_ID = agentInfo.id
-      AGENT_TOKEN = agentInfo.agent_token
-    } catch (_) {
-      fail(1, "Failed to parse agent output")
-    }
+        const platform = external_node_os_namespaceObject.platform()
+        const arch = external_node_os_namespaceObject.arch()
 
-    if (AGENT_TOKEN) core_setSecret(AGENT_TOKEN)
+        // Sanitize the OS and architecture.
+        let GARNET_OS = ""
+        if (platform === "linux") {
+            GARNET_OS = "linux"
+        } else if (platform === "darwin") {
+            GARNET_OS = "darwin"
+        } else {
+            throw new Error(`Unsupported OS: ${platform}`)
+        }
 
-    info(`Created agent with ID: ${AGENT_ID}`)
+        // Sanitize the architecture.
+        let ALTARCH = ""
+        const archStr = String(arch)
+        if (archStr === "x64" || archStr === "x86_64") {
+            ALTARCH = "x86_64"
+        } else if (archStr === "arm64" || archStr === "aarch64") {
+            ALTARCH = "arm64"
+        } else {
+            throw new Error(`Unsupported architecture: ${arch}`)
+        }
 
-    // Get network policy
-    info("Getting network policy")
+        if (GARNETVER !== "latest" && !GARNETVER.startsWith("v")) {
+            GARNETVER = `v${GARNETVER}`
+        }
+        if (JIBRILVER !== "latest" && !JIBRILVER.startsWith("v")) {
+            JIBRILVER = `v${JIBRILVER}`
+        }
 
-    const REPO_ID = getEnv("GITHUB_REPOSITORY")
-    const WORKFLOW = getEnv("GITHUB_WORKFLOW")
+        info(`API server: ${API}`)
+        info(`Garnet Control Version: ${GARNETVER}`)
+        info(`Jibril Version: ${JIBRILVER}`)
 
-    // Create the network policy path.
-    const NETPOLICY_PATH = external_node_path_namespaceObject.join(tmpDir, "netpolicy.yaml")
+        // Create a temporary directory for the script to use.
+        tmpDir = await promises_namespaceObject.mkdtemp(external_node_path_namespaceObject.join(external_node_os_namespaceObject.tmpdir(), "garnet-"))
 
-    info(`Fetching network policy for ${REPO_ID}/${WORKFLOW}...`)
+        // Download garnetctl.
+        const garnetPrefix = "https://github.com/garnet-org/garnetctl-releases/releases"
+        let garnetUrl =
+            GARNETVER === "latest"
+                ? `${garnetPrefix}/latest/download/garnetctl_${GARNET_OS}_${ALTARCH}.tar.gz`
+                : `${garnetPrefix}/download/${GARNETVER}/garnetctl_${GARNET_OS}_${ALTARCH}.tar.gz`
 
-    // Fetch the network policy.
-    try {
-      if (DEBUG === "true")
-        core_debug(`$ ${INSTPATH}/garnetctl get network-policy merged ...`)
-      await exec_exec(`${INSTPATH}/garnetctl`, [
-        "get",
-        "network-policy",
-        "merged",
-        "--repository-id",
-        REPO_ID,
-        "--workflow-name",
-        WORKFLOW,
-        "--format",
-        "yaml",
-        "--output",
-        NETPOLICY_PATH,
-      ])
-    } catch (err) {
-      fail(getExitCode(err) ?? 1, "Failed to fetch network policy")
-    }
+        info(`Downloading garnetctl: ${garnetUrl}`)
 
-    if (!(await pathExists(NETPOLICY_PATH))) {
-      fail(1, "Network policy file was not created")
-    }
+        const garnetTarball = external_node_path_namespaceObject.join(tmpDir, "garnetctl.tar.gz")
+        await downloadFile(garnetUrl, garnetTarball)
+        await extractTarGz(garnetTarball, tmpDir)
 
-    // Save the network policy to the file system.
-    info(`Network policy saved to ${NETPOLICY_PATH}`)
-    if (DEBUG === "true") {
-      const content = await promises_namespaceObject.readFile(NETPOLICY_PATH, "utf8")
-      info(content.split("\n").slice(0, 20).join("\n"))
-    }
+        const garnetctlSrc = external_node_path_namespaceObject.join(tmpDir, "garnetctl")
+        if (!(await pathExists(garnetctlSrc))) {
+            throw new Error("Failed to download garnetctl binary")
+        }
 
-    info(
-      "Installing obtained network policy to /etc/jibril/netpolicy.yaml",
-    )
+        await execSudo(["mv", garnetctlSrc, `${INSTPATH}/garnetctl`])
+        await execSudo(["chmod", "+x", `${INSTPATH}/garnetctl`])
 
-    // Set the environment variables for Jibril.
-    process.env.GARNET_API_URL = API
-    process.env.GARNET_API_TOKEN = TOKEN
-    process.env.GARNET_AGENT_TOKEN = AGENT_TOKEN
-    process.env.GITHUB_WORKFLOW_FILE = getWorkflowFilePath()
+        // Download jibril
+        const jibrilPrefix = "https://github.com/garnet-org/jibril-releases/releases"
+        let jibrilUrl =
+            JIBRILVER === "latest"
+                ? `${jibrilPrefix}/latest/download/jibril`
+                : `${jibrilPrefix}/download/${JIBRILVER}/jibril`
 
-    // Create Jibril default environment file
-    info("Creating Jibril default environment file")
+        info(`Downloading jibril: ${jibrilUrl}`)
 
-    const jibrilDefault = `# Garnet API configuration
+        const jibrilDest = external_node_path_namespaceObject.join(tmpDir, "jibril")
+        await downloadFile(jibrilUrl, jibrilDest)
+        await execSudo(["mv", jibrilDest, `${INSTPATH}/jibril`])
+        await execSudo(["chmod", "+x", `${INSTPATH}/jibril`])
+
+        // Configure garnetctl
+        info("Configuring garnetctl")
+        if (DEBUG === "true") core_debug(`$ ${INSTPATH}/garnetctl config set-baseurl ${API}`)
+        await exec_exec(`${INSTPATH}/garnetctl`, ["config", "set-baseurl", API])
+        if (DEBUG === "true") core_debug(`$ ${INSTPATH}/garnetctl config set-token ***`)
+        await exec_exec(`${INSTPATH}/garnetctl`, ["config", "set-token", TOKEN])
+
+        // Create github context
+        info("Creating github context")
+
+        if (DEBUG === "true") core_debug(`$ ${INSTPATH}/garnetctl version`)
+        const { stdout: versionOutput } = await execCapture(`${INSTPATH}/garnetctl`, ["version"])
+        // Extract the version from the output.
+        const versionMatch = versionOutput.match(/Version:\s*([^,]+)/)
+        const VERSION = versionMatch?.[1]?.trim() ?? ""
+
+        const RUNNER_IP = getFirstIpv4() || "127.0.0.1"
+
+        // Get the system machine ID.
+        let SYSTEM_MACHINE_ID = external_node_os_namespaceObject.hostname()
+        const machineIdPaths = ["/etc/machine-id", "/var/lib/dbus/machine-id"]
+        for (const p of machineIdPaths) {
+            if (await pathExists(p)) {
+                SYSTEM_MACHINE_ID = (await promises_namespaceObject.readFile(p, "utf8")).trim()
+                break
+            }
+        }
+
+        const MACHINE_ID = SYSTEM_MACHINE_ID
+        const profileJob = getProfileJobName()
+        const HOSTNAME = `${external_node_os_namespaceObject.hostname()}-${getEnv("GITHUB_RUN_ID")}-${profileJob}`
+
+        // Create the github context.
+        const githubContext = await createGitHubContext()
+        const githubContextPath = external_node_path_namespaceObject.join(tmpDir, "github-context.json")
+        await promises_namespaceObject.writeFile(githubContextPath, JSON.stringify(githubContext, null, 2))
+
+        // Create agent
+        info("Creating github agent")
+
+        // Create the agent.
+        let agentOutput = ""
+        try {
+            if (DEBUG === "true") core_debug(`$ ${INSTPATH}/garnetctl create agent ...`)
+            const agentResult = await execCapture(`${INSTPATH}/garnetctl`, [
+                "create",
+                "agent",
+                "--version",
+                VERSION,
+                "--ip",
+                RUNNER_IP,
+                "--hostname",
+                HOSTNAME,
+                "--machine-id",
+                MACHINE_ID,
+                "--kind",
+                "github",
+                "--context-file",
+                githubContextPath,
+            ])
+            agentOutput = agentResult.stdout
+        } catch (err) {
+            throw new Error(`Failed to create agent (exit code ${getExitCode(err) ?? 1})`)
+        }
+
+        // Parse the agent output.
+        let AGENT_ID = ""
+        let AGENT_TOKEN = ""
+        try {
+            const agentInfo = JSON.parse(agentOutput)
+            if (typeof agentInfo !== "object" || agentInfo === null) {
+                throw new Error("Agent output is not a JSON object")
+            }
+
+            if (typeof agentInfo.id !== "string") {
+                throw new Error("Agent output does not contain a valid 'id' field")
+            }
+
+            if (typeof agentInfo.agent_token !== "string") {
+                throw new Error("Agent output does not contain a valid 'agent_token' field")
+            }
+
+            AGENT_ID = agentInfo.id
+            AGENT_TOKEN = agentInfo.agent_token
+        } catch (_) {
+            throw new Error("Failed to parse agent output")
+        }
+
+        if (AGENT_TOKEN) core_setSecret(AGENT_TOKEN)
+
+        info(`Created agent with ID: ${AGENT_ID}`)
+
+        // Get network policy
+        info("Getting network policy")
+
+        const REPO_ID = getEnv("GITHUB_REPOSITORY")
+        const WORKFLOW = getEnv("GITHUB_WORKFLOW")
+
+        // Create the network policy path.
+        const NETPOLICY_PATH = external_node_path_namespaceObject.join(tmpDir, "netpolicy.yaml")
+
+        info(`Fetching network policy for ${REPO_ID}/${WORKFLOW}...`)
+
+        // Fetch the network policy.
+        try {
+            if (DEBUG === "true") core_debug(`$ ${INSTPATH}/garnetctl get network-policy merged ...`)
+            await exec_exec(`${INSTPATH}/garnetctl`, [
+                "get",
+                "network-policy",
+                "merged",
+                "--repository-id",
+                REPO_ID,
+                "--workflow-name",
+                WORKFLOW,
+                "--format",
+                "yaml",
+                "--output",
+                NETPOLICY_PATH,
+            ])
+        } catch (err) {
+            throw new Error(`Failed to fetch network policy (exit code ${getExitCode(err) ?? 1})`)
+        }
+
+        if (!(await pathExists(NETPOLICY_PATH))) {
+            throw new Error("Network policy file was not created")
+        }
+
+        // Save the network policy to the file system.
+        info(`Network policy saved to ${NETPOLICY_PATH}`)
+        if (DEBUG === "true") {
+            const content = await promises_namespaceObject.readFile(NETPOLICY_PATH, "utf8")
+            info(content.split("\n").slice(0, 20).join("\n"))
+        }
+
+        info("Installing obtained network policy to /etc/jibril/netpolicy.yaml")
+
+        // Set the environment variables for Jibril.
+        process.env.GARNET_API_URL = API
+        process.env.GARNET_API_TOKEN = TOKEN
+        process.env.GARNET_AGENT_TOKEN = AGENT_TOKEN
+        process.env.GITHUB_WORKFLOW_FILE = getWorkflowFilePath()
+
+        // Create Jibril default environment file
+        info("Creating Jibril default environment file")
+
+        const jibrilDefault = `# Garnet API configuration
 GARNET_API_URL=${process.env.GARNET_API_URL}
 GARNET_API_TOKEN=${process.env.GARNET_API_TOKEN}
 GARNET_AGENT_TOKEN=${process.env.GARNET_AGENT_TOKEN}
@@ -31495,170 +31477,150 @@ GITHUB_WORKFLOW_FILE=${getEnv("GITHUB_WORKFLOW_FILE")}
 GITHUB_WORKSPACE=${getEnv("GITHUB_WORKSPACE")}
 `
 
-    const jibrilDefaultPath = external_node_path_namespaceObject.join(tmpDir, "jibril.default")
-    await promises_namespaceObject.writeFile(jibrilDefaultPath, jibrilDefault)
+        const jibrilDefaultPath = external_node_path_namespaceObject.join(tmpDir, "jibril.default")
+        await promises_namespaceObject.writeFile(jibrilDefaultPath, jibrilDefault)
 
-    info("Installing default environment file to /etc/default/jibril")
-    await execSudo([
-      "install",
-      "-D",
-      "-o",
-      "root",
-      "-m",
-      "600",
-      jibrilDefaultPath,
-      "/etc/default/jibril",
-    ])
+        info("Installing default environment file to /etc/default/jibril")
+        await execSudo(["install", "-D", "-o", "root", "-m", "600", jibrilDefaultPath, "/etc/default/jibril"])
 
-    // Verify default environment file (redacted for security).
-    if (DEBUG === "true") {
-      try {
-        const defaultContent = await readFileSafe("/etc/default/jibril")
-        info("Default environment file:")
-        info(
-          redactSensitive(defaultContent) ??
-            "No default environment file found",
-        )
-      } catch (_) {}
-    }
+        // Verify default environment file (redacted for security).
+        if (DEBUG === "true") {
+            try {
+                const defaultContent = await readFileSafe("/etc/default/jibril")
+                info("Default environment file:")
+                info(redactSensitive(defaultContent) ?? "No default environment file found")
+            } catch (_) {}
+        }
 
-    info("Installing Jibril as a systemd service")
-    await execSudo([`${INSTPATH}/jibril`, "--systemd", "install"])
+        info("Installing Jibril as a systemd service")
+        await execSudo([`${INSTPATH}/jibril`, "--systemd", "install"])
 
-    // Configure logging using a systemd drop-in override
-    info("Configuring Jibril logging")
-    await execSudo(["mkdir", "-p", "/etc/systemd/system/jibril.service.d"])
-    const loggingConf = `[Service]
+        // Configure logging using a systemd drop-in override
+        info("Configuring Jibril logging")
+        await execSudo(["mkdir", "-p", "/etc/systemd/system/jibril.service.d"])
+        const loggingConf = `[Service]
 StandardError=append:/var/log/jibril.err
 StandardOutput=append:/var/log/jibril.log
 `
 
-    // Configure logging using a systemd drop-in override.
-    const loggingConfPath = external_node_path_namespaceObject.join(tmpDir, "logging.conf")
-    await promises_namespaceObject.writeFile(loggingConfPath, loggingConf)
-    await execSudo([
-      "cp",
-      loggingConfPath,
-      "/etc/systemd/system/jibril.service.d/logging.conf",
-    ])
+        // Configure logging using a systemd drop-in override.
+        const loggingConfPath = external_node_path_namespaceObject.join(tmpDir, "logging.conf")
+        await promises_namespaceObject.writeFile(loggingConfPath, loggingConf)
+        await execSudo(["cp", loggingConfPath, "/etc/systemd/system/jibril.service.d/logging.conf"])
 
-    // Verify installed files.
-    if (DEBUG === "true") {
-      try {
-        const entries = await readdirRecursiveSafe("/etc/jibril")
-        info("Jibril installed files:")
-        info(
-          entries.length > 0
-            ? entries.join("\n")
-            : "No files found in /etc/jibril/",
-        )
-      } catch (_) {}
-      try {
-        const configOutput = await readFileSafe("/etc/jibril/config.yaml")
-        info("Jibril configuration:")
-        info(configOutput || "No configuration file found")
-      } catch (_) {}
-      try {
-        const policyContent = await readFileSafe("/etc/jibril/netpolicy.yaml")
-        info("Jibril default network policy:")
-        info(
-          policyContent
-            ? policyContent.split("\n").slice(0, 20).join("\n")
-            : "No network policy file found",
-        )
-      } catch (_) {}
-    }
+        // Verify installed files.
+        if (DEBUG === "true") {
+            try {
+                const entries = await readdirRecursiveSafe("/etc/jibril")
+                info("Jibril installed files:")
+                info(entries.length > 0 ? entries.join("\n") : "No files found in /etc/jibril/")
+            } catch (_) {}
+            try {
+                const configOutput = await readFileSafe("/etc/jibril/config.yaml")
+                info("Jibril configuration:")
+                info(configOutput || "No configuration file found")
+            } catch (_) {}
+            try {
+                const policyContent = await readFileSafe("/etc/jibril/netpolicy.yaml")
+                info("Jibril default network policy:")
+                info(
+                    policyContent ? policyContent.split("\n").slice(0, 20).join("\n") : "No network policy file found",
+                )
+            } catch (_) {}
+        }
 
-    // Replace network policy with fetched one.
-    await execSudo(["cp", "-v", NETPOLICY_PATH, "/etc/jibril/netpolicy.yaml"])
+        // Replace network policy with fetched one.
+        await execSudo(["cp", "-v", NETPOLICY_PATH, "/etc/jibril/netpolicy.yaml"])
 
-    // Verify replaced network policy.
-    if (DEBUG === "true") {
-      try {
-        const replacedContent = await readFileSafe("/etc/jibril/netpolicy.yaml")
-        info("Replaced Jibril network policy:")
-        info(
-          replacedContent
-            ? replacedContent.split("\n").slice(0, 20).join("\n")
-            : "No network policy file found",
-        )
-      } catch (_) {}
-    }
+        // Verify replaced network policy.
+        if (DEBUG === "true") {
+            try {
+                const replacedContent = await readFileSafe("/etc/jibril/netpolicy.yaml")
+                info("Replaced Jibril network policy:")
+                info(
+                    replacedContent
+                        ? replacedContent.split("\n").slice(0, 20).join("\n")
+                        : "No network policy file found",
+                )
+            } catch (_) {}
+        }
 
-    if (DEBUG === "true") {
-      info("Reloading systemd and enabling Jibril service...")
-    }
+        if (DEBUG === "true") {
+            info("Reloading systemd and enabling Jibril service...")
+        }
 
-    // Reload systemd and enable Jibril service.
-    await execSudo(["systemctl", "daemon-reload"])
-    await execSudo(["systemctl", "enable", "jibril.service"], {
-      ignoreReturnCode: true,
-    })
-
-    if (DEBUG === "true") {
-      info("Starting Jibril service...")
-    }
-
-    // Start Jibril service.
-    let returnCode = 0
-    try {
-      await execSudo(["systemctl", "start", "jibril.service"])
-    } catch (err) {
-      returnCode = getExitCode(err) ?? 1
-    }
-
-    // Check if Jibril service started successfully.
-    if (returnCode !== 0) {
-      error("Jibril service failed to start. Showing logs:")
-      await dumpJibrilLogs()
-      fail(1, "Failed to start Jibril service")
-    }
-
-    // Wait for Jibril to initialize
-    await new Promise((r) => setTimeout(r, 5000))
-
-    // Check Jibril service status.
-    if (DEBUG === "true") {
-      info("Checking Jibril service status...")
-      await execSudo(["systemctl", "status", "jibril.service", "--no-pager"], {
-        ignoreReturnCode: true,
-      })
-
-      info("Jibril systemd unit (systemctl cat):")
-      try {
-        const catOutput = await execCapture(
-          "sudo",
-          ["systemctl", "cat", "jibril.service"],
-          {
+        // Reload systemd and enable Jibril service.
+        await execSudo(["systemctl", "daemon-reload"])
+        await execSudo(["systemctl", "enable", "jibril.service"], {
             ignoreReturnCode: true,
-          },
+        })
+
+        if (DEBUG === "true") {
+            info("Starting Jibril service...")
+        }
+
+        // Start Jibril service, but do not fail the workflow if the daemon crashes.
+        const returnCode = await execSudo(["systemctl", "start", "jibril.service"], {
+            ignoreReturnCode: true,
+        })
+
+        if (returnCode !== 0) {
+            warning(
+                "Jibril service failed to start. The workflow will continue without runtime monitoring for this run.",
+            )
+            await dumpJibrilLogs()
+            return
+        }
+
+        // Give the daemon a moment to settle so an immediate crash is surfaced here.
+        await waitForDelay(5000)
+
+        const { stdout: serviceState } = await execCapture("sudo", ["systemctl", "is-active", "jibril.service"], {
+            ignoreReturnCode: true,
+        })
+
+        if (serviceState !== "active") {
+            warning(
+                `Jibril service exited early with state '${serviceState || "unknown"}'. The workflow will continue without runtime monitoring for this run.`,
+            )
+            await dumpJibrilLogs()
+            return
+        }
+
+        // Check Jibril service status.
+        if (DEBUG === "true") {
+            info("Checking Jibril service status...")
+            await execSudo(["systemctl", "status", "jibril.service", "--no-pager"], {
+                ignoreReturnCode: true,
+            })
+
+            info("Jibril systemd unit (systemctl cat):")
+            try {
+                const { stdout, stderr } = await execCapture("sudo", ["systemctl", "cat", "jibril.service"], {
+                    ignoreReturnCode: true,
+                })
+                info(formatCapturedOutput(stdout, "(empty stdout)"))
+                if (stderr !== "") {
+                    info("systemctl cat stderr:")
+                    info(formatCapturedOutput(stderr, "(empty stderr)"))
+                }
+            } catch (_) {
+                info("(systemctl cat failed)")
+            }
+        }
+
+        info("Jibril service started successfully")
+    } catch (err) {
+        warning(
+            `Garnet runtime monitoring setup did not complete: ${getErrorMessage(err)}. The workflow will continue without runtime monitoring for this run.`,
         )
-        info(redactSensitive(catOutput) ?? "(empty or failed)")
-      } catch (_) {
-        info("(systemctl cat failed)")
-      }
+        await dumpJibrilLogs()
+    } finally {
+        // Clean up the temporary directory.
+        if (tmpDir !== "") {
+            await promises_namespaceObject.rm(tmpDir, { recursive: true, force: true })
+        }
     }
-
-    info("Jibril service started successfully")
-  } finally {
-    // Clean up the temporary directory.
-    await promises_namespaceObject.rm(tmpDir, { recursive: true, force: true })
-  }
-}
-
-/**
- * This function fails the script with a given error code and message.
- * @param {number} code
- * @param {string} message
- * @returns {never}
- */
-function fail(code, message) {
-  if (_tmpDirForCleanup) {
-    void promises_namespaceObject.rm(_tmpDirForCleanup, { recursive: true, force: true })
-      .catch(() => {})
-  }
-  error(message || "Error")
-  process.exit(code ?? 1)
 }
 
 /**
@@ -31666,14 +31628,12 @@ function fail(code, message) {
  * @returns {number|undefined}
  */
 function getExitCode(err) {
-  if (typeof err !== "object" || err === null || !("exitCode" in err)) {
-    return undefined
-  }
+    if (typeof err !== "object" || err === null || !("exitCode" in err)) {
+        return undefined
+    }
 
-  const maybeError = /** @type {ExitCodeError} */ (err)
-  return typeof maybeError.exitCode === "number"
-    ? maybeError.exitCode
-    : undefined
+    const maybeError = /** @type {ExitCodeError} */ (err)
+    return typeof maybeError.exitCode === "number" ? maybeError.exitCode : undefined
 }
 
 /**
@@ -31681,44 +31641,52 @@ function getExitCode(err) {
  * @param {string} actionRef
  */
 function resolveJibrilVersion(inputVersion, actionRef) {
-  const v = String(inputVersion || "").trim()
-  if (v) return v
+    const v = String(inputVersion || "").trim()
+    if (v) return v
 
-  const ref = String(actionRef || "")
-    .trim()
-    .replace(/^refs\/tags\//, "")
-  // Keep tag behavior stable:
-  // - action@v0 -> daily builds (v0.0)
-  // - action@v2 -> stable release (pinned)
-  // - action@v1 stays pinned (do not change)
-  if (ref === "v0") return "v0.0"
-  if (ref === "v1") return "v2.10.4"
-  if (ref === "v2") return "v2.10.8"
+    const ref = String(actionRef || "")
+        .trim()
+        .replace(/^refs\/tags\//, "")
+    // Keep tag behavior stable:
+    // - action@v0 -> daily builds (v0.0)
+    // - action@v2 -> stable release (pinned)
+    // - action@v1 stays pinned (do not change)
+    if (ref === "v0") return "v0.0"
+    if (ref === "v1") return "v2.10.4"
+    if (ref === "v2") return "v2.10.8"
 
-  // Default for other refs (branch/SHA/etc).
-  return "latest"
+    // Default for other refs (branch/SHA/etc).
+    return "latest"
 }
 
 /**
- * This function executes a command and returns the output.
+ * This function executes a command and returns captured stdout/stderr.
  * @param {string} command
  * @param {string[]=} args
  * @param {ExecOptions=} options
+ * @returns {Promise<ExecCaptureResult>}
  */
 async function execCapture(command, args, options = {}) {
-  let output = ""
-  await exec_exec(command, args, {
-    ...options,
-    listeners: {
-      stdout: (data) => {
-        output += data.toString()
-      },
-      stderr: (data) => {
-        options.listeners?.stderr?.(data)
-      },
-    },
-  })
-  return output.trim()
+    let stdout = ""
+    let stderr = ""
+    await exec_exec(command, args, {
+        silent: options.silent ?? true,
+        ...options,
+        listeners: {
+            stdout: data => {
+                stdout += data.toString()
+                options.listeners?.stdout?.(data)
+            },
+            stderr: data => {
+                stderr += data.toString()
+                options.listeners?.stderr?.(data)
+            },
+        },
+    })
+    return {
+        stdout: stdout.trim(),
+        stderr: stderr.trim(),
+    }
 }
 
 /**
@@ -31727,10 +31695,10 @@ async function execCapture(command, args, options = {}) {
  * @param {ExecOptions=} options
  */
 async function execSudo(args, options = {}) {
-  if (getEnv("DEBUG") === "true") {
-    core_debug(`$ sudo -E ${args.join(" ")}`)
-  }
-  return exec_exec("sudo", ["-E", ...args], options)
+    if (getEnv("DEBUG") === "true") {
+        core_debug(`$ sudo -E ${args.join(" ")}`)
+    }
+    return exec_exec("sudo", ["-E", ...args], options)
 }
 
 /**
@@ -31748,36 +31716,33 @@ async function execSudo(args, options = {}) {
  * @returns {Promise<void>}
  */
 async function downloadFile(url, destPath, opts = {}) {
-  const { maxRedirects = 10, timeoutMs = 60_000, enforceHttps = true } = opts
-  const requestUrl = String(url || "")
+    const { maxRedirects = 10, timeoutMs = 60_000, enforceHttps = true } = opts
+    const requestUrl = String(url || "")
 
-  if (enforceHttps && !requestUrl.startsWith("https://")) {
-    throw new Error(`Refusing to download over non-HTTPS: ${requestUrl}`)
-  }
-
-  const client = new lib_HttpClient("garnet-action", undefined, {
-    allowRedirects: true,
-    maxRedirects,
-    socketTimeout: timeoutMs,
-  })
-
-  try {
-    const response = await client.get(requestUrl)
-    const statusCode = response.message.statusCode ?? 0
-
-    if (statusCode !== 200) {
-      response.message.resume()
-      throw new Error(`Failed to download ${requestUrl}: HTTP ${statusCode}`)
+    if (enforceHttps && !requestUrl.startsWith("https://")) {
+        throw new Error(`Refusing to download over non-HTTPS: ${requestUrl}`)
     }
 
-    await (0,external_node_stream_promises_namespaceObject.pipeline)(
-      response.message,
-      (0,external_node_fs_namespaceObject.createWriteStream)(destPath, { mode: 0o600 }),
-    )
-  } catch (error) {
-    await promises_namespaceObject.rm(destPath, { force: true }).catch(() => {})
-    throw error
-  }
+    const client = new lib_HttpClient("garnet-action", undefined, {
+        allowRedirects: true,
+        maxRedirects,
+        socketTimeout: timeoutMs,
+    })
+
+    try {
+        const response = await client.get(requestUrl)
+        const statusCode = response.message.statusCode ?? 0
+
+        if (statusCode !== 200) {
+            response.message.resume()
+            throw new Error(`Failed to download ${requestUrl}: HTTP ${statusCode}`)
+        }
+
+        await (0,external_node_stream_promises_namespaceObject.pipeline)(response.message, (0,external_node_fs_namespaceObject.createWriteStream)(destPath, { mode: 0o600 }))
+    } catch (error) {
+        await promises_namespaceObject.rm(destPath, { force: true }).catch(() => {})
+        throw error
+    }
 }
 
 /**
@@ -31786,23 +31751,23 @@ async function downloadFile(url, destPath, opts = {}) {
  * @param {string} destDir
  */
 async function extractTarGz(tarballPath, destDir) {
-  await co({ file: tarballPath, cwd: destDir })
+    await co({ file: tarballPath, cwd: destDir })
 }
 
 // Returns the first non-internal IPv4 address from network interfaces.
 function getFirstIpv4() {
-  const ifaces = external_node_os_namespaceObject.networkInterfaces()
-  for (const addrs of Object.values(ifaces)) {
-    if (!addrs) {
-      continue
+    const ifaces = external_node_os_namespaceObject.networkInterfaces()
+    for (const addrs of Object.values(ifaces)) {
+        if (!addrs) {
+            continue
+        }
+        for (const addr of addrs) {
+            if (addr.family === "IPv4" && !addr.internal) {
+                return addr.address
+            }
+        }
     }
-    for (const addr of addrs) {
-      if (addr.family === "IPv4" && !addr.internal) {
-        return addr.address
-      }
-    }
-  }
-  return null
+    return null
 }
 
 /**
@@ -31810,11 +31775,11 @@ function getFirstIpv4() {
  * @param {string} filePath
  */
 async function readFileSafe(filePath) {
-  try {
-    return (await promises_namespaceObject.readFile(filePath, "utf8")).trim()
-  } catch (_) {
-    return null
-  }
+    try {
+        return (await promises_namespaceObject.readFile(filePath, "utf8")).trim()
+    } catch (_) {
+        return null
+    }
 }
 
 /**
@@ -31822,12 +31787,12 @@ async function readFileSafe(filePath) {
  * @param {string} dirPath
  */
 async function readdirRecursiveSafe(dirPath) {
-  try {
-    const entries = await promises_namespaceObject.readdir(dirPath, { recursive: true })
-    return Array.isArray(entries) ? entries : []
-  } catch (_) {
-    return []
-  }
+    try {
+        const entries = await promises_namespaceObject.readdir(dirPath, { recursive: true })
+        return Array.isArray(entries) ? entries : []
+    } catch (_) {
+        return []
+    }
 }
 
 /**
@@ -31835,51 +31800,80 @@ async function readdirRecursiveSafe(dirPath) {
  * @param {string|null} text
  */
 function redactSensitive(text) {
-  if (typeof text !== "string") return text
-  return text
-    .replace(/\bGITHUB_TOKEN=[^\s\n]*/gi, "GITHUB_TOKEN=***")
-    .replace(/\bGARNET_API_TOKEN=[^\s\n]*/gi, "GARNET_API_TOKEN=***")
-    .replace(/\bGARNET_AGENT_TOKEN=[^\s\n]*/gi, "GARNET_AGENT_TOKEN=***")
+    if (typeof text !== "string") return text
+    return text
+        .replace(/\bAI_TOKEN=[^\s\n]*/gi, "AI_TOKEN=***")
+        .replace(/\bGITHUB_TOKEN=[^\s\n]*/gi, "GITHUB_TOKEN=***")
+        .replace(/\bGARNET_API_TOKEN=[^\s\n]*/gi, "GARNET_API_TOKEN=***")
+        .replace(/\bGARNET_AGENT_TOKEN=[^\s\n]*/gi, "GARNET_AGENT_TOKEN=***")
+        .replace(/^([A-Z0-9_]*(?:TOKEN|SECRET|PASSWORD|KEY))=.*/gim, "$1=***")
+        .replace(/(authorization:\s*(?:bearer|token|basic)\s+)[^\s\n]+/gi, "$1***")
 }
 
-// Dumps jibril stdout/stderr and journalctl when jibril fails (for diagnostics).
-async function dumpJibrilLogs() {
-  /** @type {[string, string][]} */
-  const logPaths = [
-    ["/var/log/jibril.log", "Jibril stdout"],
-    ["/var/log/jibril.err", "Jibril stderr"],
-  ]
-  for (const [logPath, label] of logPaths) {
-    try {
-      const content = await execCapture("sudo", ["cat", logPath], {
-        ignoreReturnCode: true,
-      })
-      info(`--- ${label} (${logPath}) ---`)
-      info(content || "(empty or file not found)")
-    } catch (_) {
-      info(`--- ${label}: failed to read ---`)
+/**
+ * @param {string|null} text
+ * @param {string} emptyMessage
+ */
+function formatCapturedOutput(text, emptyMessage) {
+    const redacted = redactSensitive(text)
+    if (redacted === null || redacted === "") {
+        return emptyMessage
     }
-  }
-  try {
-    info("--- systemctl status ---")
-    await exec_exec(
-      "sudo",
-      ["systemctl", "status", "jibril.service", "--no-pager"],
-      {
-        ignoreReturnCode: true,
-      },
-    )
-  } catch (_) {}
-  try {
-    info("--- journalctl (last 50 lines) ---")
-    await exec_exec(
-      "sudo",
-      ["journalctl", "-u", "jibril.service", "-n", "50", "--no-pager"],
-      {
-        ignoreReturnCode: true,
-      },
-    )
-  } catch (_) {}
+    return redacted
+}
+
+// Dumps jibril stdout/stderr and journalctl when jibril fails in debug mode.
+async function dumpJibrilLogs() {
+    if (getEnv("DEBUG") !== "true") {
+        return
+    }
+
+    /** @type {[string, string][]} */
+    const logPaths = [
+        ["/var/log/jibril.log", "Jibril stdout"],
+        ["/var/log/jibril.err", "Jibril stderr"],
+    ]
+    for (const [logPath, label] of logPaths) {
+        try {
+            const { stdout, stderr } = await execCapture("sudo", ["cat", logPath], {
+                ignoreReturnCode: true,
+            })
+            info(`--- ${label} (${logPath}) ---`)
+            info(formatCapturedOutput(stdout, "(empty or file not found)"))
+            if (stderr !== "") {
+                info(`--- ${label} stderr (${logPath}) ---`)
+                info(formatCapturedOutput(stderr, "(empty stderr)"))
+            }
+        } catch (_) {
+            info(`--- ${label}: failed to read ---`)
+        }
+    }
+    try {
+        info("--- systemctl status ---")
+        const { stdout, stderr } = await execCapture("sudo", ["systemctl", "status", "jibril.service", "--no-pager"], {
+            ignoreReturnCode: true,
+        })
+        info(formatCapturedOutput(stdout, "(empty or failed)"))
+        if (stderr !== "") {
+            info("--- systemctl status stderr ---")
+            info(formatCapturedOutput(stderr, "(empty stderr)"))
+        }
+    } catch (_) {}
+    try {
+        info("--- journalctl (last 50 lines) ---")
+        const { stdout, stderr } = await execCapture(
+            "sudo",
+            ["journalctl", "-u", "jibril.service", "-n", "50", "--no-pager"],
+            {
+                ignoreReturnCode: true,
+            },
+        )
+        info(formatCapturedOutput(stdout, "(empty or failed)"))
+        if (stderr !== "") {
+            info("--- journalctl stderr ---")
+            info(formatCapturedOutput(stderr, "(empty stderr)"))
+        }
+    } catch (_) {}
 }
 
 ;// CONCATENATED MODULE: ./src/main.js
@@ -31944,9 +31938,13 @@ async function main() {
     await run()
   } catch (err) {
     if (err instanceof Error) {
-      setFailed(err.message)
+      warning(
+        `Garnet action encountered an unexpected error and will continue without runtime monitoring: ${err.message}`,
+      )
     } else {
-      setFailed(String(err))
+      warning(
+        `Garnet action encountered an unexpected error and will continue without runtime monitoring: ${String(err)}`,
+      )
     }
   }
 }
