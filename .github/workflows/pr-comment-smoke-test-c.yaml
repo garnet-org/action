@@ -4,6 +4,12 @@ on:
   pull_request:
     branches:
       - main
+    types:
+      - opened
+      - reopened
+      - synchronize
+      - labeled
+      - unlabeled
 
 permissions:
   contents: read
@@ -12,6 +18,7 @@ permissions:
 jobs:
   smoke-c:
     name: Smoke C
+    if: contains(github.event.pull_request.labels.*.name, 'run-smoke-tests')
     runs-on: ubuntu-24.04
     steps:
       - name: Checkout
