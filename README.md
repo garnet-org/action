@@ -1,3 +1,5 @@
+# Garnet Runtime Visibility
+
 <div align="center">
   <a href="https://garnet.ai">
     <img src="brand/garnet-logo.png" alt="Garnet" width="260" />
@@ -53,10 +55,10 @@ Get your API token at [app.garnet.ai](https://app.garnet.ai).
 
 ## Permissions
 
-| Permission              | Required     | Why                                                |
-|------------------------|--------------|----------------------------------------------------|
-| `contents: read`       | Yes          | Access workflow context and repository metadata   |
-| `pull-requests: write` | Recommended  | Post the runtime profile as a PR comment          |
+| Permission             | Required    | Why                                             |
+| ---------------------- | ----------- | ----------------------------------------------- |
+| `contents: read`       | Yes         | Access workflow context and repository metadata |
+| `pull-requests: write` | Recommended | Post the runtime profile as a PR comment        |
 
 This action does not require `contents: write`, `actions: write`, or access to any repository secrets beyond the ones you explicitly pass.
 
@@ -94,14 +96,21 @@ jobs:
         run: npm test
 ```
 
-> **Tip:** For maximum supply-chain safety, pin to a full commit SHA instead of a tag:
+> **Tip:** Major tags such as `@v2` track the latest `v2.x.x` release automatically. Use `@main` only if you want the latest unreleased code, or pin to a full commit SHA for maximum supply-chain safety:
+>
 > ```yaml
-> - uses: garnet-org/action@<commit-sha> # v2
+> - uses: garnet-org/action@<commit-sha>
 > ```
+
+### Versioning
+
+- `garnet-org/action@v2` tracks the latest `v2.x.x` release.
+- `garnet-org/action@main` tracks the latest unreleased code on the default branch.
+- Exact tags such as `garnet-org/action@v2.3.0` remain available when you want a fully pinned released version.
 
 ## What you'll see
 
-- **GitHub job summary**: A Markdown "security profile" appended at the end of the job — even if the job fails (see an example [here](https://github.com/garnet-org/action/actions/runs/23175135499)).
+- **GitHub job summary**: A Markdown "security profile" appended at the end of the job — even if the job fails (see this [example GitHub Actions run](https://github.com/garnet-org/action/actions/runs/23175135499)).
 - **Pull request comment**: On pull request workflows, Garnet posts one comment per push, merging jobs and workflows from the same push into a single comment.
 
   <img
@@ -134,28 +143,38 @@ permissions:
 
 ## Configuration
 
-| Input               | Required | Default                  | Description                                          |
-|---------------------|----------|--------------------------|------------------------------------------------------|
-| `api_token`         | Yes      | —                        | Your Garnet API token from app.garnet.ai            |
-| `github_token`      | No       | `${{ github.token }}`    | GitHub token used for pull request comments         |
-| `api_url`           | No       | `https://api.garnet.ai`  | Garnet API base URL                                 |
-| `garnetctl_version` | No       | `latest`                 | Garnet CLI version (`1.2.3` or `latest`)            |
-| `jibril_version`    | No       | `""` (auto)              | Jibril version (`v2.10.8` or `latest`)              |
-| `debug`             | No       | `false`                  | Enable debug mode and upload logs as artifacts      |
+| Input               | Required | Default                 | Description                                    |
+| ------------------- | -------- | ----------------------- | ---------------------------------------------- |
+| `api_token`         | Yes      | —                       | Your Garnet API token from app.garnet.ai       |
+| `github_token`      | No       | `${{ github.token }}`   | GitHub token used for pull request comments    |
+| `api_url`           | No       | `https://api.garnet.ai` | Garnet API base URL                            |
+| `garnetctl_version` | No       | `latest`                | Garnet CLI version (`1.2.3` or `latest`)       |
+| `jibril_version`    | No       | `""` (auto)             | Jibril version (`v2.10.8` or `latest`)         |
+| `debug`             | No       | `false`                 | Enable debug mode and upload logs as artifacts |
+
+---
+
+## Outputs
+
+| Output           | Description                                        |
+| ---------------- | -------------------------------------------------- |
+| `profile_result` | Assertion result for this run: `pass` or `fail`    |
+| `report_url`     | Link to the full run report on app.garnet.ai       |
+| `agent_id`       | Identifier for the Jibril sensor instance that ran |
 
 ---
 
 ## Concepts
 
-#### Assertions
+### Assertions
 
 Assertions are runtime invariants — like unit tests, but for execution behavior. The current assertion is `known_bad_egress`, which fails if any outbound connection matches a domain from Garnet's managed threat feed. Future assertion families will cover hidden binary execution, sensitive file access, and anomalous process spawns.
 
-#### Why runtime visibility matters
+### Why runtime visibility matters
 
 Your team reviews the code; your CI runs it. Between `git push` and production, dependencies execute postinstall scripts, AI-generated functions spawn processes, and build steps make outbound connections — none of which appear in a static scan. Garnet tells you what your pipeline actually did — the ground truth for execution.
 
-#### Real incidents
+### Real incidents
 
 - **Shai-Hulud** — 800+ npm packages with a second-stage payload. A postinstall hook bootstrapped Bun, ran TruffleHog to harvest runner secrets, then registered a rogue GitHub runner. [See the breakdown →](https://www.garnet.ai/resources/garnet-saw-shai-hulud)
 - **Clinejection** — LLM agent prompt injection via a malicious GitHub Issue triggered code execution, poisoned the Actions cache, and exposed an npm publish token. Over 4,000 developers received a backdoored package within eight hours.
@@ -173,17 +192,17 @@ Your team reviews the code; your CI runs it. Between `git push` and production, 
 
 ### Troubleshooting
 
-| Symptom                                    | Fix                                                                                                         |
-|--------------------------------------------|-------------------------------------------------------------------------------------------------------------|
-| "API token is required"                    | Confirm `GARNET_API_TOKEN` is set in repository secrets and passed as `api_token`.                         |
-| No PR comment appearing                    | The action posts comments only on `pull_request` events — confirm your workflow includes that trigger.     |
-| PR comment says "Resource not accessible" | Add `pull-requests: write` to the workflow `permissions` block.                                            |
-| No summary output                          | Enable `debug: "true"` to upload Jibril logs as artifacts, then inspect `jibril.log` and `jibril.err`.    |
-| Restrictive permissions                    | This action works with `permissions: contents: read` — ensure the job can read repository contents.        |
+| Symptom                                   | Fix                                                                                                    |
+| ----------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| "API token is required"                   | Confirm `GARNET_API_TOKEN` is set in repository secrets and passed as `api_token`.                     |
+| No PR comment appearing                   | The action posts comments only on `pull_request` events — confirm your workflow includes that trigger. |
+| PR comment says "Resource not accessible" | Add `pull-requests: write` to the workflow `permissions` block.                                        |
+| No summary output                         | Enable `debug: "true"` to upload Jibril logs as artifacts, then inspect `jibril.log` and `jibril.err`. |
+| Restrictive permissions                   | This action works with `permissions: contents: read` — ensure the job can read repository contents.    |
 
 ### Security & license
 
-See [SECURITY.md](./SECURITY.md) to report vulnerabilities — or email **security@garnet.ai**. MIT — see [LICENSE](./LICENSE).
+See [SECURITY.md](./SECURITY.md) to report vulnerabilities — or email [security@garnet.ai](mailto:security@garnet.ai). MIT — see [LICENSE](./LICENSE).
 
 ---
 

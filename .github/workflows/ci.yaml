@@ -20,6 +20,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
 
+      # Dogfooding
       - name: Run Garnet
         uses: ./
         with:
@@ -29,12 +30,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v6
         with:
-          node-version: "24"
-
-      - name: Remove dangling tsc
-        run: |-
-          npm uninstall tsc -g --force || true
-          npm uninstall typescript -g --force || true
+          node-version: "lts/*"
 
       - name: Install dependencies
         run: |-

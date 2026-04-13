@@ -1,16 +1,9 @@
 name: Release
 on:
-  schedule:
-    # Daily at 02:00
-    - cron: 0 2 * * *
-  workflow_dispatch:
-    inputs:
-      given_ref:
-        description: "Optional tag/ref to release (blank for daily v0 from HEAD)"
-        required: false
-        type: string
-        default: ""
-#
+  push:
+    tags:
+      - "v*.*.*"
+
 jobs:
   release:
     name: Release
@@ -21,85 +14,67 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
-          submodules: true
-        #
-      - name: Checkout specific ref if provided
-        id: checkout-ref
-        if: ${{ github.event_name == 'workflow_dispatch' && inputs.given_ref != '' }}
-        run: |
-          git fetch --prune --tags origin
-          git reset --hard origin/main
-          git reset --hard "${{ inputs.given_ref }}"
-          git clean -fd
-          git submodule update --init --recursive
-          echo "Checked out ref: $(git rev-parse HEAD)"
-        #
+
+      # Dogfooding
       - name: Run Garnet
         uses: ./
         with:
           api_token: ${{ secrets.GARNET_API_TOKEN }}
           jibril_version: "v0.0"
-        #
-      - name: Resolve tag/commit
-        id: get-versions
-        shell: bash
-        run: |
-          set -euo pipefail
-          TAG_NAME="${{ inputs.given_ref }}"
-          if [ -z "$TAG_NAME" ]; then
-            TAG_NAME="v0"
-          fi
-          echo "tag_name=$TAG_NAME" >> "$GITHUB_OUTPUT"
-          echo "commit_sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
-        #
-      - name: Create/update daily v0 tag
-        id: create-tag
-        if: ${{ github.event_name != 'workflow_dispatch' || inputs.given_ref == '' }}
-        shell: bash
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAG_NAME: ${{ steps.get-versions.outputs.tag_name }}
-          COMMIT_SHA: ${{ steps.get-versions.outputs.commit_sha }}
-        run: |
-          set -euo pipefail
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
 
-          git tag -f "$TAG_NAME" "$COMMIT_SHA"
-          git push -f origin "refs/tags/$TAG_NAME"
-        #
-      - name: Release Body
-        id: prepare-body
-        shell: bash
+      - name: Update major tag and release
         env:
-          TAG_NAME: ${{ steps.get-versions.outputs.tag_name }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG_NAME: ${{ github.ref_name }}
+          COMMIT_SHA: ${{ github.sha }}
         run: |
+          set -euo pipefail
+          if [[ ! "$TAG_NAME" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::Release tags must use v<major>.<minor>.<patch>; got $TAG_NAME"
+            exit 1
+          fi
+
+          MAJOR_TAG="${TAG_NAME%%.*}"
+          RELEASE_TITLE="Garnet Runtime Security Action ${MAJOR_TAG}"
+
+          git tag -f "$MAJOR_TAG" "$COMMIT_SHA"
+          git push --force origin "refs/tags/$MAJOR_TAG"
+
           cat > release-body.md << EOF
-          # Garnet Runtime Security $TAG_NAME
+          # Garnet Runtime Security $MAJOR_TAG
 
           This release provides the Garnet Runtime Security for GitHub Actions.
+
+          Current version: `$TAG_NAME`
 
           ## Usage
 
           \`\`\`yaml
           - name: Run Garnet Runtime Security
-            uses: garnet-org/action@$TAG_NAME
+            uses: garnet-org/action@$MAJOR_TAG
             with:
               api_token: XXXXX
           \`\`\`
+
+          To pin exactly to this published version, use \`garnet-org/action@$TAG_NAME\`.
+
+          The floating major tag \`$MAJOR_TAG\` is updated in place for each new \`$MAJOR_TAG.x.x\` release, so the GitHub Releases tab keeps a single up-to-date release entry for this major version.
+
+          To track the latest unreleased code from main instead of a published release tag, use \`garnet-org/action@main\`.
 
           For more details, see the [Garnet Dashboard](https://dashboard.garnet.ai).
 
           EOF
           cat release-body.md
-        #
-      - name: Create Release
-        id: create-release
-        uses: softprops/action-gh-release@v2
-        with:
-          name: "Garnet Runtime Security Action ${{ steps.get-versions.outputs.tag_name }}"
-          tag_name: ${{ steps.get-versions.outputs.tag_name }}
-          target_commitish: ${{ steps.get-versions.outputs.commit_sha }}
-          body_path: release-body.md
+
+          if gh release view "$MAJOR_TAG" >/dev/null 2>&1; then
+            gh release edit "$MAJOR_TAG" \
+              --title "$RELEASE_TITLE" \
+              --target "$COMMIT_SHA" \
+              --notes-file release-body.md
+          else
+            gh release create "$MAJOR_TAG" \
+              --title "$RELEASE_TITLE" \
+              --target "$COMMIT_SHA" \
+              --notes-file release-body.md
+          fi
