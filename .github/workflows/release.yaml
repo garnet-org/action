@@ -97,7 +97,7 @@ jobs:
         #
       - name: Create Release
         id: create-release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           name: "Garnet Runtime Security Action ${{ steps.get-versions.outputs.tag_name }}"
           tag_name: ${{ steps.get-versions.outputs.tag_name }}
