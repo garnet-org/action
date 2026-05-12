@@ -1,6 +1,24 @@
 name: PR Comment Smoke Test C
 
 on:
+  workflow_dispatch:
+    inputs:
+      api_url:
+        description: "Garnet API URL"
+        required: false
+        default: "https://dev-api.garnet.ai"
+      jibril_version:
+        description: "Jibril version (e.g. v0.0, v2.10.8, latest)"
+        required: false
+        default: "v0.0"
+      garnetctl_version:
+        description: "Garnet CLI version (e.g. latest, 1.2.3)"
+        required: false
+        default: "latest"
+      debug:
+        description: "Enable debug mode"
+        required: false
+        default: "true"
   pull_request:
     branches:
       - main
@@ -18,7 +36,7 @@ permissions:
 jobs:
   smoke-c:
     name: Smoke C
-    if: contains(github.event.pull_request.labels.*.name, 'run-smoke-tests')
+    if: github.event_name == 'workflow_dispatch' || contains(github.event.pull_request.labels.*.name, 'run-smoke-tests')
     runs-on: ubuntu-24.04
     steps:
       - name: Checkout
@@ -27,10 +45,11 @@ jobs:
       - name: Run Garnet
         uses: ./
         with:
-          api_url: https://dev-api.garnet.ai
-          debug: "true"
+          api_url: ${{ inputs.api_url || 'https://dev-api.garnet.ai' }}
+          debug: ${{ inputs.debug || 'true' }}
           api_token: ${{ secrets.GARNET_API_TOKEN_DEV }}
-          jibril_version: "v0.0"
+          jibril_version: ${{ inputs.jibril_version || 'v0.0' }}
+          garnetctl_version: ${{ inputs.garnetctl_version || 'latest' }}
 
       - name: Attempt egress to known IPs
         shell: bash
