@@ -1,5 +1,7 @@
 import * as core from "@actions/core"
+import * as os from "node:os"
 import { run } from "./action.js"
+import { isSupportedArch, isSupportedPlatform } from "./shared.js"
 
 // This is the main entry point for the action. It is called by the GitHub Actions
 // runtime. The action installs the Jibril security scanner and sets it up as a
@@ -8,6 +10,22 @@ import { run } from "./action.js"
 // logging directed to /var/log/jibril.log and /var/log/jibril.err.
 
 async function main() {
+  const platform = os.platform()
+  if (!isSupportedPlatform(platform)) {
+    core.info(
+      `Garnet runtime monitoring requires Linux (eBPF-based). Skipping on ${platform}.`,
+    )
+    return
+  }
+
+  const arch = os.arch()
+  if (!isSupportedArch(arch)) {
+    core.info(
+      `Garnet runtime monitoring requires x86_64 (jibril is only available for amd64). Skipping on ${arch}.`,
+    )
+    return
+  }
+
   try {
     // Save whether profiler4fun mode is enabled as a boolean.
     const profiler4fun = core.getInput("profiler_4fun") === "true"

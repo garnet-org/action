@@ -11,7 +11,7 @@ import * as path from "node:path"
 import { pipeline } from "node:stream/promises"
 import * as tar from "tar"
 import { createGitHubContext, getProfileJobName, getWorkflowFilePath } from "./github-context.js"
-import { getEnv, getErrorMessage, pathExists, waitForDelay } from "./shared.js"
+import { getEnv, getErrorMessage, isSupportedArch, isSupportedPlatform, pathExists, waitForDelay } from "./shared.js"
 
 /**
  * @typedef {import("@actions/exec").ExecOptions} ExecOptions
@@ -60,28 +60,21 @@ export async function run() {
         }
 
         const platform = os.platform()
+        if (!isSupportedPlatform(platform)) {
+            core.warning(
+                `Garnet runtime monitoring requires Linux (eBPF-based). Skipping on ${platform}.`,
+            )
+            return
+        }
+
         const arch = os.arch()
-
-        // Sanitize the OS and architecture.
-        let GARNET_OS = ""
-        if (platform === "linux") {
-            GARNET_OS = "linux"
-        } else if (platform === "darwin") {
-            GARNET_OS = "darwin"
-        } else {
-            throw new Error(`Unsupported OS: ${platform}`)
+        if (!isSupportedArch(arch)) {
+            core.warning(
+                `Garnet runtime monitoring requires x86_64 (jibril is only available for amd64). Skipping on ${arch}.`,
+            )
+            return
         }
-
-        // Sanitize the architecture.
-        let ALTARCH = ""
-        const archStr = String(arch)
-        if (archStr === "x64" || archStr === "x86_64") {
-            ALTARCH = "x86_64"
-        } else if (archStr === "arm64" || archStr === "aarch64") {
-            ALTARCH = "arm64"
-        } else {
-            throw new Error(`Unsupported architecture: ${arch}`)
-        }
+        const ALTARCH = "x86_64"
 
         if (GARNETVER !== "latest" && !GARNETVER.startsWith("v")) {
             GARNETVER = `v${GARNETVER}`
@@ -98,11 +91,13 @@ export async function run() {
         tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "garnet-"))
 
         // Download garnetctl.
+        // garnetctl artifacts use title-case OS names (e.g. "Linux", "Darwin").
+        const garnetctlOS = platform.charAt(0).toUpperCase() + platform.slice(1)
         const garnetPrefix = "https://github.com/garnet-org/garnetctl-releases/releases"
         let garnetUrl =
             GARNETVER === "latest"
-                ? `${garnetPrefix}/latest/download/garnetctl_${GARNET_OS}_${ALTARCH}.tar.gz`
-                : `${garnetPrefix}/download/${GARNETVER}/garnetctl_${GARNET_OS}_${ALTARCH}.tar.gz`
+                ? `${garnetPrefix}/latest/download/garnetctl_${garnetctlOS}_${ALTARCH}.tar.gz`
+                : `${garnetPrefix}/download/${GARNETVER}/garnetctl_${garnetctlOS}_${ALTARCH}.tar.gz`
 
         core.info(`Downloading garnetctl: ${garnetUrl}`)
 
@@ -129,6 +124,9 @@ export async function run() {
 
         const jibrilDest = path.join(tmpDir, "jibril")
         await downloadFile(jibrilUrl, jibrilDest)
+        if (!(await pathExists(jibrilDest))) {
+            throw new Error("Failed to download jibril binary")
+        }
         await execSudo(["mv", jibrilDest, `${INSTPATH}/jibril`])
         await execSudo(["chmod", "+x", `${INSTPATH}/jibril`])
 

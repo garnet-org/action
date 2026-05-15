@@ -1,7 +1,8 @@
 import * as core from "@actions/core"
 import * as exec from "@actions/exec"
 import * as fs from "node:fs/promises"
-import { getEnv, getErrorMessage, pathExists } from "./shared.js"
+import * as os from "node:os"
+import { getEnv, getErrorMessage, isSupportedArch, isSupportedPlatform, pathExists } from "./shared.js"
 import { getPullRequestNumberFromEvent } from "./github-event.js"
 import { uploadJibrilArtifacts } from "./post-artifacts.js"
 import {
@@ -22,6 +23,22 @@ const JSON_PROFILE_LABEL = "JSON profile"
 // markdown and appends it to the real GITHUB_STEP_SUMMARY.
 
 async function run() {
+  const platform = os.platform()
+  if (!isSupportedPlatform(platform)) {
+    core.info(
+      `Garnet runtime monitoring requires Linux (eBPF-based). Skipping post step on ${platform}.`,
+    )
+    return
+  }
+
+  const arch = os.arch()
+  if (!isSupportedArch(arch)) {
+    core.info(
+      `Garnet runtime monitoring requires x86_64 (jibril is only available for amd64). Skipping post step on ${arch}.`,
+    )
+    return
+  }
+
   try {
     // Stop the Jibril service so the daemon flushes all pending events.
     core.info("stopping jibril service")

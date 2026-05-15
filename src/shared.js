@@ -59,3 +59,21 @@ export function waitForDelay(delayMs) {
     setTimeout(resolve, delayMs)
   })
 }
+
+/**
+ * Returns true only on Linux, where Jibril (eBPF-based) can run.
+ * @param {string} platform - value from os.platform()
+ * @returns {boolean}
+ */
+export function isSupportedPlatform(platform) {
+  return platform === "linux"
+}
+
+/**
+ * Returns true only on x86_64, the only architecture jibril is built for.
+ * @param {string} arch - value from os.arch()
+ * @returns {boolean}
+ */
+export function isSupportedArch(arch) {
+  return arch === "x64" || arch === "x86_64"
+}
