@@ -31,6 +31,15 @@ async function run() {
     return
   }
 
+  const arch = os.arch()
+  const archStr = String(arch)
+  if (archStr !== "x64" && archStr !== "x86_64") {
+    core.info(
+      `Garnet runtime monitoring requires x86_64 (jibril is only available for amd64). Skipping post step on ${arch}.`,
+    )
+    return
+  }
+
   try {
     // Stop the Jibril service so the daemon flushes all pending events.
     core.info("stopping jibril service")

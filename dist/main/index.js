@@ -30981,12 +30981,12 @@ function getIDToken(aud) {
  */
 
 //# sourceMappingURL=core.js.map
+;// CONCATENATED MODULE: external "node:os"
+const external_node_os_namespaceObject = __WEBPACK_EXTERNAL_createRequire(import.meta.url)("node:os");
 ;// CONCATENATED MODULE: external "node:fs"
 const external_node_fs_namespaceObject = __WEBPACK_EXTERNAL_createRequire(import.meta.url)("node:fs");
 ;// CONCATENATED MODULE: external "node:fs/promises"
 const promises_namespaceObject = __WEBPACK_EXTERNAL_createRequire(import.meta.url)("node:fs/promises");
-;// CONCATENATED MODULE: external "node:os"
-const external_node_os_namespaceObject = __WEBPACK_EXTERNAL_createRequire(import.meta.url)("node:os");
 ;// CONCATENATED MODULE: external "node:path"
 const external_node_path_namespaceObject = __WEBPACK_EXTERNAL_createRequire(import.meta.url)("node:path");
 ;// CONCATENATED MODULE: external "node:stream/promises"
@@ -31940,6 +31940,7 @@ async function dumpJibrilLogs() {
 
 
 
+
 // This is the main entry point for the action. It is called by the GitHub Actions
 // runtime. The action installs the Jibril security scanner and sets it up as a
 // systemd service. It retrieves the network policy for the repository and places
@@ -31947,6 +31948,23 @@ async function dumpJibrilLogs() {
 // logging directed to /var/log/jibril.log and /var/log/jibril.err.
 
 async function main() {
+  const platform = external_node_os_namespaceObject.platform()
+  if (platform !== "linux") {
+    info(
+      `Garnet runtime monitoring requires Linux (eBPF-based). Skipping on ${platform}.`,
+    )
+    return
+  }
+
+  const arch = external_node_os_namespaceObject.arch()
+  const archStr = String(arch)
+  if (archStr !== "x64" && archStr !== "x86_64") {
+    info(
+      `Garnet runtime monitoring requires x86_64 (jibril is only available for amd64). Skipping on ${arch}.`,
+    )
+    return
+  }
+
   try {
     // Save whether profiler4fun mode is enabled as a boolean.
     const profiler4fun = getInput("profiler_4fun") === "true"

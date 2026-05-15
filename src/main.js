@@ -1,4 +1,5 @@
 import * as core from "@actions/core"
+import * as os from "node:os"
 import { run } from "./action.js"
 
 // This is the main entry point for the action. It is called by the GitHub Actions
@@ -8,6 +9,23 @@ import { run } from "./action.js"
 // logging directed to /var/log/jibril.log and /var/log/jibril.err.
 
 async function main() {
+  const platform = os.platform()
+  if (platform !== "linux") {
+    core.info(
+      `Garnet runtime monitoring requires Linux (eBPF-based). Skipping on ${platform}.`,
+    )
+    return
+  }
+
+  const arch = os.arch()
+  const archStr = String(arch)
+  if (archStr !== "x64" && archStr !== "x86_64") {
+    core.info(
+      `Garnet runtime monitoring requires x86_64 (jibril is only available for amd64). Skipping on ${arch}.`,
+    )
+    return
+  }
+
   try {
     // Save whether profiler4fun mode is enabled as a boolean.
     const profiler4fun = core.getInput("profiler_4fun") === "true"
