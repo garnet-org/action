@@ -1,6 +1,7 @@
 import * as core from "@actions/core"
 import * as exec from "@actions/exec"
 import * as fs from "node:fs/promises"
+import * as os from "node:os"
 import { getEnv, getErrorMessage, pathExists } from "./shared.js"
 import { getPullRequestNumberFromEvent } from "./github-event.js"
 import { uploadJibrilArtifacts } from "./post-artifacts.js"
@@ -22,6 +23,14 @@ const JSON_PROFILE_LABEL = "JSON profile"
 // markdown and appends it to the real GITHUB_STEP_SUMMARY.
 
 async function run() {
+  const platform = os.platform()
+  if (platform !== "linux") {
+    core.info(
+      `Garnet runtime monitoring requires Linux (eBPF-based). Skipping post step on ${platform}.`,
+    )
+    return
+  }
+
   try {
     // Stop the Jibril service so the daemon flushes all pending events.
     core.info("stopping jibril service")

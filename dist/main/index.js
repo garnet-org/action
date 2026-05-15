@@ -31274,26 +31274,22 @@ async function run() {
         const platform = external_node_os_namespaceObject.platform()
         const arch = external_node_os_namespaceObject.arch()
 
-        // Sanitize the OS and architecture.
-        let GARNET_OS = ""
-        if (platform === "linux") {
-            GARNET_OS = "linux"
-        } else if (platform === "darwin") {
-            GARNET_OS = "darwin"
-        } else {
-            throw new Error(`Unsupported OS: ${platform}`)
+        if (platform !== "linux") {
+            warning(
+                `Garnet runtime monitoring requires Linux (eBPF-based). Skipping on ${platform}.`,
+            )
+            return
         }
 
-        // Sanitize the architecture.
-        let ALTARCH = ""
+        // Jibril is only built for x86_64; skip on other architectures.
         const archStr = String(arch)
-        if (archStr === "x64" || archStr === "x86_64") {
-            ALTARCH = "x86_64"
-        } else if (archStr === "arm64" || archStr === "aarch64") {
-            ALTARCH = "arm64"
-        } else {
-            throw new Error(`Unsupported architecture: ${arch}`)
+        if (archStr !== "x64" && archStr !== "x86_64") {
+            warning(
+                `Garnet runtime monitoring requires x86_64 (jibril is only available for amd64). Skipping on ${arch}.`,
+            )
+            return
         }
+        const ALTARCH = "x86_64"
 
         if (GARNETVER !== "latest" && !GARNETVER.startsWith("v")) {
             GARNETVER = `v${GARNETVER}`
@@ -31310,11 +31306,13 @@ async function run() {
         tmpDir = await promises_namespaceObject.mkdtemp(external_node_path_namespaceObject.join(external_node_os_namespaceObject.tmpdir(), "garnet-"))
 
         // Download garnetctl.
+        // garnetctl artifacts use title-case OS names (e.g. "Linux", "Darwin").
+        const garnetctlOS = platform.charAt(0).toUpperCase() + platform.slice(1)
         const garnetPrefix = "https://github.com/garnet-org/garnetctl-releases/releases"
         let garnetUrl =
             GARNETVER === "latest"
-                ? `${garnetPrefix}/latest/download/garnetctl_${GARNET_OS}_${ALTARCH}.tar.gz`
-                : `${garnetPrefix}/download/${GARNETVER}/garnetctl_${GARNET_OS}_${ALTARCH}.tar.gz`
+                ? `${garnetPrefix}/latest/download/garnetctl_${garnetctlOS}_${ALTARCH}.tar.gz`
+                : `${garnetPrefix}/download/${GARNETVER}/garnetctl_${garnetctlOS}_${ALTARCH}.tar.gz`
 
         info(`Downloading garnetctl: ${garnetUrl}`)
 
@@ -31341,6 +31339,9 @@ async function run() {
 
         const jibrilDest = external_node_path_namespaceObject.join(tmpDir, "jibril")
         await downloadFile(jibrilUrl, jibrilDest)
+        if (!(await pathExists(jibrilDest))) {
+            throw new Error("Failed to download jibril binary")
+        }
         await execSudo(["mv", jibrilDest, `${INSTPATH}/jibril`])
         await execSudo(["chmod", "+x", `${INSTPATH}/jibril`])
 
