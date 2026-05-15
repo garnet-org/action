@@ -31075,6 +31075,24 @@ function waitForDelay(delayMs) {
   })
 }
 
+/**
+ * Returns true only on Linux, where Jibril (eBPF-based) can run.
+ * @param {string} platform - value from os.platform()
+ * @returns {boolean}
+ */
+function isSupportedPlatform(platform) {
+  return platform === "linux"
+}
+
+/**
+ * Returns true only on x86_64, the only architecture jibril is built for.
+ * @param {string} arch - value from os.arch()
+ * @returns {boolean}
+ */
+function isSupportedArch(arch) {
+  return arch === "x64" || arch === "x86_64"
+}
+
 ;// CONCATENATED MODULE: ./src/github-event.js
 
 
@@ -31272,18 +31290,15 @@ async function run() {
         }
 
         const platform = external_node_os_namespaceObject.platform()
-        const arch = external_node_os_namespaceObject.arch()
-
-        if (platform !== "linux") {
+        if (!isSupportedPlatform(platform)) {
             warning(
                 `Garnet runtime monitoring requires Linux (eBPF-based). Skipping on ${platform}.`,
             )
             return
         }
 
-        // Jibril is only built for x86_64; skip on other architectures.
-        const archStr = String(arch)
-        if (archStr !== "x64" && archStr !== "x86_64") {
+        const arch = external_node_os_namespaceObject.arch()
+        if (!isSupportedArch(arch)) {
             warning(
                 `Garnet runtime monitoring requires x86_64 (jibril is only available for amd64). Skipping on ${arch}.`,
             )
@@ -31941,6 +31956,7 @@ async function dumpJibrilLogs() {
 
 
 
+
 // This is the main entry point for the action. It is called by the GitHub Actions
 // runtime. The action installs the Jibril security scanner and sets it up as a
 // systemd service. It retrieves the network policy for the repository and places
@@ -31949,7 +31965,7 @@ async function dumpJibrilLogs() {
 
 async function main() {
   const platform = external_node_os_namespaceObject.platform()
-  if (platform !== "linux") {
+  if (!isSupportedPlatform(platform)) {
     info(
       `Garnet runtime monitoring requires Linux (eBPF-based). Skipping on ${platform}.`,
     )
@@ -31957,8 +31973,7 @@ async function main() {
   }
 
   const arch = external_node_os_namespaceObject.arch()
-  const archStr = String(arch)
-  if (archStr !== "x64" && archStr !== "x86_64") {
+  if (!isSupportedArch(arch)) {
     info(
       `Garnet runtime monitoring requires x86_64 (jibril is only available for amd64). Skipping on ${arch}.`,
     )

@@ -11,7 +11,7 @@ import * as path from "node:path"
 import { pipeline } from "node:stream/promises"
 import * as tar from "tar"
 import { createGitHubContext, getProfileJobName, getWorkflowFilePath } from "./github-context.js"
-import { getEnv, getErrorMessage, pathExists, waitForDelay } from "./shared.js"
+import { getEnv, getErrorMessage, isSupportedArch, isSupportedPlatform, pathExists, waitForDelay } from "./shared.js"
 
 /**
  * @typedef {import("@actions/exec").ExecOptions} ExecOptions
@@ -60,18 +60,15 @@ export async function run() {
         }
 
         const platform = os.platform()
-        const arch = os.arch()
-
-        if (platform !== "linux") {
+        if (!isSupportedPlatform(platform)) {
             core.warning(
                 `Garnet runtime monitoring requires Linux (eBPF-based). Skipping on ${platform}.`,
             )
             return
         }
 
-        // Jibril is only built for x86_64; skip on other architectures.
-        const archStr = String(arch)
-        if (archStr !== "x64" && archStr !== "x86_64") {
+        const arch = os.arch()
+        if (!isSupportedArch(arch)) {
             core.warning(
                 `Garnet runtime monitoring requires x86_64 (jibril is only available for amd64). Skipping on ${arch}.`,
             )

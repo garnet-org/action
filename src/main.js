@@ -1,6 +1,7 @@
 import * as core from "@actions/core"
 import * as os from "node:os"
 import { run } from "./action.js"
+import { isSupportedArch, isSupportedPlatform } from "./shared.js"
 
 // This is the main entry point for the action. It is called by the GitHub Actions
 // runtime. The action installs the Jibril security scanner and sets it up as a
@@ -10,7 +11,7 @@ import { run } from "./action.js"
 
 async function main() {
   const platform = os.platform()
-  if (platform !== "linux") {
+  if (!isSupportedPlatform(platform)) {
     core.info(
       `Garnet runtime monitoring requires Linux (eBPF-based). Skipping on ${platform}.`,
     )
@@ -18,8 +19,7 @@ async function main() {
   }
 
   const arch = os.arch()
-  const archStr = String(arch)
-  if (archStr !== "x64" && archStr !== "x86_64") {
+  if (!isSupportedArch(arch)) {
     core.info(
       `Garnet runtime monitoring requires x86_64 (jibril is only available for amd64). Skipping on ${arch}.`,
     )

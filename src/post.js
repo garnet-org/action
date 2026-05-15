@@ -2,7 +2,7 @@ import * as core from "@actions/core"
 import * as exec from "@actions/exec"
 import * as fs from "node:fs/promises"
 import * as os from "node:os"
-import { getEnv, getErrorMessage, pathExists } from "./shared.js"
+import { getEnv, getErrorMessage, isSupportedArch, isSupportedPlatform, pathExists } from "./shared.js"
 import { getPullRequestNumberFromEvent } from "./github-event.js"
 import { uploadJibrilArtifacts } from "./post-artifacts.js"
 import {
@@ -24,7 +24,7 @@ const JSON_PROFILE_LABEL = "JSON profile"
 
 async function run() {
   const platform = os.platform()
-  if (platform !== "linux") {
+  if (!isSupportedPlatform(platform)) {
     core.info(
       `Garnet runtime monitoring requires Linux (eBPF-based). Skipping post step on ${platform}.`,
     )
@@ -32,8 +32,7 @@ async function run() {
   }
 
   const arch = os.arch()
-  const archStr = String(arch)
-  if (archStr !== "x64" && archStr !== "x86_64") {
+  if (!isSupportedArch(arch)) {
     core.info(
       `Garnet runtime monitoring requires x86_64 (jibril is only available for amd64). Skipping post step on ${arch}.`,
     )
