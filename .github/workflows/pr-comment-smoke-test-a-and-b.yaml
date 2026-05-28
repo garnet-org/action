@@ -15,6 +15,10 @@ on:
         description: "Garnet CLI version (e.g. latest, 1.2.3)"
         required: false
         default: "latest"
+      api_token:
+        description: "Garnet API token (optional; defaults to repo secret)"
+        required: false
+        default: ""
       debug:
         description: "Enable debug mode"
         required: false
@@ -47,7 +51,7 @@ jobs:
         with:
           api_url: ${{ inputs.api_url || 'https://dev-api.garnet.ai' }}
           debug: ${{ inputs.debug || 'true' }}
-          api_token: ${{ secrets.GARNET_API_TOKEN_DEV }}
+          api_token: ${{ inputs.api_token || secrets.GARNET_API_TOKEN_DEV }}
           jibril_version: ${{ inputs.jibril_version || 'v0.0' }}
           garnetctl_version: ${{ inputs.garnetctl_version || 'latest' }}
 
@@ -103,7 +107,7 @@ jobs:
         with:
           api_url: ${{ inputs.api_url || 'https://dev-api.garnet.ai' }}
           debug: ${{ inputs.debug || 'true' }}
-          api_token: ${{ secrets.GARNET_API_TOKEN_DEV }}
+          api_token: ${{ inputs.api_token || secrets.GARNET_API_TOKEN_DEV }}
           jibril_version: ${{ inputs.jibril_version || 'v0.0' }}
           garnetctl_version: ${{ inputs.garnetctl_version || 'latest' }}
 
