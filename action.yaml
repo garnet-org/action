@@ -1,11 +1,11 @@
-name: 'Garnet Runtime Visibility'
-description: 'Runtime profiling and behavioral assertions for GitHub Actions'
+name: "Garnet Runtime Visibility"
+description: "Runtime profiling and behavioral assertions for GitHub Actions"
 branding:
-  icon: 'activity'
-  color: 'purple'
+  icon: "activity"
+  color: "purple"
 inputs:
   api_token:
-    description: 'Your Garnet API token from app.garnet.ai'
+    description: "Your Garnet API token from app.garnet.ai"
     required: true
   github_token:
     description: "GitHub token used for pull request comments"
@@ -23,21 +23,17 @@ inputs:
     description: "Jibril version (v2.10.8, v0.0, or 'latest')"
     required: false
     default: ""
-  profiler_4fun:
-    description: "Enable profiler 4 fun mode"
-    required: false
-    default: "false"
   debug:
     description: "Enable debug mode"
     required: false
     default: "false"
 outputs:
   profile_result:
-    description: 'Assertion result for this run: pass or fail'
+    description: "Assertion result for this run: pass or fail"
   report_url:
-    description: 'Link to the full run report on app.garnet.ai'
+    description: "Link to the full run report on app.garnet.ai"
   agent_id:
-    description: 'Identifier for the Jibril sensor instance that ran'
+    description: "Identifier for the Jibril sensor instance that ran"
 runs:
   using: "node24"
   main: "dist/main/index.js"
