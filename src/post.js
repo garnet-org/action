@@ -14,7 +14,6 @@ import { publishPullRequestComment } from "./pr-comment.js"
 /** @typedef {import("./profile-comment.js").NormalizedProfile} NormalizedProfile */
 
 const DEFAULT_PROFILER_FILE = "/var/log/jibril.profiler.out"
-const DEFAULT_PROFILER4FUN_FILE = "/var/log/jibril.profiler4fun.out"
 const JSON_PROFILE_LABEL = "JSON profile"
 
 // This is the post step for the action. It is called by the GitHub Actions
@@ -58,10 +57,9 @@ async function run() {
       await uploadJibrilArtifacts()
     }
 
-    const selectedProfiler = resolveSelectedProfiler()
-    const profilerFile = resolveSelectedProfilerFile(selectedProfiler)
+    const profilerFile = resolveSelectedProfilerFile()
 
-    core.info(`using profiler printer: ${selectedProfiler}`)
+    core.info("using profiler printer: profiler")
 
     await appendProfilerSummary(profilerFile)
     await publishProfilerComment()
@@ -205,33 +203,10 @@ async function readOptionalRootFile(filePath) {
 }
 
 /**
- * @returns {"profiler" | "profiler4fun"}
- */
-function resolveSelectedProfiler() {
-  const selectedProfiler = core.getState("selectedProfiler")
-  if (selectedProfiler === "profiler" || selectedProfiler === "profiler4fun") {
-    return selectedProfiler
-  }
-
-  return core.getState("profiler4fun") === "true" ? "profiler4fun" : "profiler"
-}
-
-/**
- * @param {"profiler" | "profiler4fun"} selectedProfiler
  * @returns {string}
  */
-function resolveSelectedProfilerFile(selectedProfiler) {
-  if (selectedProfiler === "profiler4fun") {
-    return firstNonEmptyString([
-      core.getState("selectedProfilerFile"),
-      core.getState("profiler4funFile"),
-      getEnv("JIBRIL_PROFILER4FUN_FILE"),
-      DEFAULT_PROFILER4FUN_FILE,
-    ])
-  }
-
+function resolveSelectedProfilerFile() {
   return firstNonEmptyString([
-    core.getState("selectedProfilerFile"),
     core.getState("profilerFile"),
     getEnv("JIBRIL_PROFILER_FILE"),
     DEFAULT_PROFILER_FILE,
