@@ -13,6 +13,6 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@v7      
-      - uses: garnet-org/action@ccd6b73fddaa3c64195b654090fc1bfcb07788fd
+      - uses: garnet-org/action@8f85f71d4e50cf5f4ef188e885162432d144f0e1
         with:
           api_token: ${{ secrets.GARNET_API_TOKEN }}
