@@ -38,20 +38,12 @@ const CREATE_RECHECK_SPREAD_MS = 1500
 
 /**
  * @param {PublishCommentOptions} options
- * @returns {Promise<"created" | "updated" | "skipped-stale">}
+ * @returns {Promise<"created" | "updated" | "skipped-stale" | "skipped-control-plane">}
  */
 export async function publishPullRequestComment(options) {
-  const client = new GitHubIssueCommentClient(
-    options.repository,
-    options.pullRequestNumber,
-    options.token,
-  )
+    const client = new GitHubIssueCommentClient(options.repository, options.pullRequestNumber, options.token)
 
-  return publishPullRequestCommentWithClient(
-    client,
-    options.profile,
-    options.runAttempt,
-  )
+    return publishPullRequestCommentWithClient(client, options.profile, options.runAttempt)
 }
 
 /**
@@ -59,63 +51,49 @@ export async function publishPullRequestComment(options) {
  * @param {NormalizedProfile} profile
  * @param {number} runAttempt
  * @param {PublishWithClientOptions} [options]
- * @returns {Promise<"created" | "updated" | "skipped-stale">}
+ * @returns {Promise<"created" | "updated" | "skipped-stale" | "skipped-control-plane">}
  */
-export async function publishPullRequestCommentWithClient(
-  client,
-  profile,
-  runAttempt,
-  options = {},
-) {
-  const initialPlan = planPullRequestComment(
-    await client.listComments(),
-    profile,
-    runAttempt,
-  )
+export async function publishPullRequestCommentWithClient(client, profile, runAttempt, options = {}) {
+    const initialPlan = planPullRequestComment(await client.listComments(), profile, runAttempt)
 
-  if (initialPlan.kind !== "create") {
-    return applyPublishPlan(client, initialPlan)
-  }
+    if (initialPlan.kind !== "create") {
+        return applyPublishPlan(client, initialPlan)
+    }
 
-  const wait = options.wait ?? waitForDelay
-  await wait(getCreateRecheckDelayMs(profile))
+    const wait = options.wait ?? waitForDelay
+    await wait(getCreateRecheckDelayMs(profile))
 
-  const plan = planPullRequestComment(
-    await client.listComments(),
-    profile,
-    runAttempt,
-  )
+    const plan = planPullRequestComment(await client.listComments(), profile, runAttempt)
 
-  if (plan.kind === "create") {
-    const createdComment = await client.createComment(plan.body)
-    return reconcilePublishedComment(
-      client,
-      profile,
-      runAttempt,
-      createdComment.id,
-    )
-  }
+    if (plan.kind === "create") {
+        const createdComment = await client.createComment(plan.body)
+        return reconcilePublishedComment(client, profile, runAttempt, createdComment.id)
+    }
 
-  return applyPublishPlan(client, plan)
+    return applyPublishPlan(client, plan)
 }
 
 /**
  * @param {PublishCommentClient} client
  * @param {import("./pr-comment-plan.js").PublishCommentPlan} plan
- * @returns {Promise<"created" | "updated" | "skipped-stale">}
+ * @returns {Promise<"created" | "updated" | "skipped-stale" | "skipped-control-plane">}
  */
 async function applyPublishPlan(client, plan) {
-  if (plan.kind === "stale") {
-    return "skipped-stale"
-  }
+    if (plan.kind === "stale") {
+        return "skipped-stale"
+    }
 
-  if (plan.kind === "create") {
-    await client.createComment(plan.body)
-    return "created"
-  }
+    if (plan.kind === "blocked-by-control-plane") {
+        return "skipped-control-plane"
+    }
 
-  await applyUpdatePlan(client, plan)
-  return "updated"
+    if (plan.kind === "create") {
+        await client.createComment(plan.body)
+        return "created"
+    }
+
+    await applyUpdatePlan(client, plan)
+    return "updated"
 }
 
 /**
@@ -123,30 +101,25 @@ async function applyPublishPlan(client, plan) {
  * @param {NormalizedProfile} profile
  * @param {number} runAttempt
  * @param {number} createdCommentId
- * @returns {Promise<"created" | "updated" | "skipped-stale">}
+ * @returns {Promise<"created" | "updated" | "skipped-stale" | "skipped-control-plane">}
  */
-async function reconcilePublishedComment(
-  client,
-  profile,
-  runAttempt,
-  createdCommentId,
-) {
-  const plan = planPullRequestComment(
-    await client.listComments(),
-    profile,
-    runAttempt,
-  )
+async function reconcilePublishedComment(client, profile, runAttempt, createdCommentId) {
+    const plan = planPullRequestComment(await client.listComments(), profile, runAttempt)
 
-  if (plan.kind === "create") {
-    return "created"
-  }
+    if (plan.kind === "create") {
+        return "created"
+    }
 
-  if (plan.kind === "stale") {
-    return "skipped-stale"
-  }
+    if (plan.kind === "stale") {
+        return "skipped-stale"
+    }
 
-  await applyUpdatePlan(client, plan)
-  return plan.comment.id === createdCommentId ? "created" : "updated"
+    if (plan.kind === "blocked-by-control-plane") {
+        return "skipped-control-plane"
+    }
+
+    await applyUpdatePlan(client, plan)
+    return plan.comment.id === createdCommentId ? "created" : "updated"
 }
 
 /**
@@ -155,11 +128,11 @@ async function reconcilePublishedComment(
  * @returns {Promise<void>}
  */
 async function applyUpdatePlan(client, plan) {
-  if (plan.comment.body !== plan.body) {
-    await client.updateComment(plan.comment.id, plan.body)
-  }
+    if (plan.comment.body !== plan.body) {
+        await client.updateComment(plan.comment.id, plan.body)
+    }
 
-  await deleteComments(client, plan.duplicateCommentIds)
+    await deleteComments(client, plan.duplicateCommentIds)
 }
 
 /**
@@ -168,9 +141,9 @@ async function applyUpdatePlan(client, plan) {
  * @returns {Promise<void>}
  */
 async function deleteComments(client, commentIds) {
-  for (const commentId of commentIds) {
-    await client.deleteComment(commentId)
-  }
+    for (const commentId of commentIds) {
+        await client.deleteComment(commentId)
+    }
 }
 
 /**
@@ -178,12 +151,12 @@ async function deleteComments(client, commentIds) {
  * @returns {number}
  */
 function getCreateRecheckDelayMs(profile) {
-  const seed = `${profile.github.workflow}\u0000${profile.github.job}`
-  let hash = 0
+    const seed = `${profile.github.workflow}\u0000${profile.github.job}`
+    let hash = 0
 
-  for (const character of seed) {
-    hash = (hash * 31 + character.charCodeAt(0)) >>> 0
-  }
+    for (const character of seed) {
+        hash = (hash * 31 + character.charCodeAt(0)) >>> 0
+    }
 
-  return CREATE_RECHECK_MIN_DELAY_MS + (hash % CREATE_RECHECK_SPREAD_MS)
+    return CREATE_RECHECK_MIN_DELAY_MS + (hash % CREATE_RECHECK_SPREAD_MS)
 }
