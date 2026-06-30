@@ -26,6 +26,8 @@ export const COMMENT_MARKER = "garnet-runtime-visibility"
 /**
  * @typedef {{
  *   remote_names: string[]
+ *   remote_address: string
+ *   detections: string[]
  *   proc_trees: ProcTree[]
  *   result: ProfileResult
  * }} EgressPeer
@@ -105,10 +107,16 @@ const PEER_SCHEMA = z
   .looseObject({
     result: PROFILE_RESULT_SCHEMA,
     remote_names: z.array(z.string()),
+    remote_address: z.string().optional(),
+    detections: z.array(z.string()).optional(),
     proc_trees: z.array(PROC_TREE_SCHEMA),
   })
   .transform((peer) => ({
     remote_names: peer.remote_names.filter((name) => name.length > 0),
+    remote_address: peer.remote_address ?? "",
+    detections: (peer.detections ?? [])
+      .map((detection) => detection.trim())
+      .filter((detection) => detection.length > 0),
     proc_trees: peer.proc_trees,
     result: peer.result,
   }))
@@ -373,8 +381,8 @@ export function mergeCommentStates(states) {
 export function renderCommentBody(state) {
   const metadata = encodeCommentState(state)
   const profiles = [...state.profiles].sort(compareProfiles)
-  const headline = renderHeadline(profiles)
-  const summaryTable = renderSummaryTable(profiles)
+  const summaryLine = renderSummaryLine(profiles)
+  const narrative = renderNarrative(profiles)
   const sections = profiles
     .map((profile) => renderProfileSection(profile))
     .join("\n\n")
@@ -383,12 +391,289 @@ export function renderCommentBody(state) {
     `<!-- ${COMMENT_MARKER}:${metadata} -->`,
     "## Garnet Runtime Report",
     "",
-    headline,
+    summaryLine,
     "",
-    summaryTable,
+    narrative,
+    "<details>",
+    "<summary><strong>Evidence</strong> — full process · destination · activity tables and telemetry</summary>",
     "",
     sections,
+    "</details>",
   ].join("\n")
+}
+
+// ---------------------------------------------------------------------------
+// Narrative-first rendering — mirrors control-plane githubapp/comment.go and the
+// testbed Path B renderer so App- and Action-rendered comments match. Describes
+// the current run only ("what happened in this PR"), framed factually with no
+// risk/threat verdicts.
+// ---------------------------------------------------------------------------
+
+const MAX_NARRATIVE_DESTINATIONS = 6
+
+// KNOWN_BAD_DOMAIN_DETECTION is the detection identifier Garnet attaches to a
+// peer whose destination matched threat intelligence. Mirrors control-plane.
+const KNOWN_BAD_DOMAIN_DETECTION = "known_bad_domain"
+
+/**
+ * Plain-English "what it did" phrasing for detection identifiers.
+ * @type {Record<string, string>}
+ */
+const DETECTION_DESCRIPTIONS = {
+  credentials_files_access: "Accessed credential file paths on the build machine",
+  hidden_elf_exec: "Ran a binary that was deleted from disk after executing",
+  interpreter_shell_spawn:
+    "A scripting runtime (Node, Python, etc.) spawned a system shell",
+  exec_from_unusual_dir: "Executed a program from a non-standard directory",
+  code_modification_through_procfs: "Modified another process's memory via /proc",
+  known_bad_domain: "Connected to a domain listed in Garnet threat intelligence",
+  crypto_miner_execution: "Ran a process that matched cryptocurrency-mining behavior",
+  net_scan_tool_exec: "Ran a network scanning tool",
+}
+
+/** @type {Record<string, string>} */
+const DESTINATION_ANNOTATIONS = {
+  "169.254.169.254": "cloud instance metadata endpoint",
+}
+
+/**
+ * @param {string} detection
+ * @returns {boolean}
+ */
+function isMeaningfulDetection(detection) {
+  const d = (detection || "").trim()
+  return d !== "" && d !== "flow" && d !== "none"
+}
+
+/**
+ * @param {string[]} detections
+ * @returns {boolean}
+ */
+function hasMeaningfulDetection(detections) {
+  return detections.some(isMeaningfulDetection)
+}
+
+/**
+ * @param {string} detection
+ * @returns {string}
+ */
+function humanizeDetection(detection) {
+  const d = (detection || "").trim()
+  if (d === "" || d === "flow" || d === "none") return "Made a network connection"
+  const known = DETECTION_DESCRIPTIONS[d]
+  if (known !== undefined) return known
+  return d
+    .split("_")
+    .map((word) =>
+      word.length > 0 ? word.charAt(0).toUpperCase() + word.slice(1) : word,
+    )
+    .join(" ")
+}
+
+/**
+ * @param {string} dest
+ * @returns {string}
+ */
+function annotateDestination(dest) {
+  let out = `\`${escapeMarkdown(dest)}\``
+  const note = DESTINATION_ANNOTATIONS[(dest || "").trim()]
+  if (note) out += ` (${note})`
+  return out
+}
+
+/**
+ * renderBadDomainLine states the known-bad-domain fact plainly, naming the
+ * destination(s) without alarm styling or a merge/threat verdict.
+ * @param {string[]} badDomains
+ * @returns {string}
+ */
+function renderBadDomainLine(badDomains) {
+  if (badDomains.length === 1) {
+    return `Connected to a known bad domain (${annotateDestination(badDomains[0] ?? "")})`
+  }
+  return `Connected to known bad domains: ${renderDestinationList(badDomains)}`
+}
+
+/**
+ * @param {string[]} destinations
+ * @returns {string}
+ */
+function renderDestinationList(destinations) {
+  let shown = destinations
+  let extra = 0
+  if (shown.length > MAX_NARRATIVE_DESTINATIONS) {
+    extra = shown.length - MAX_NARRATIVE_DESTINATIONS
+    shown = shown.slice(0, MAX_NARRATIVE_DESTINATIONS)
+  }
+  let out = shown.map(annotateDestination).join(", ")
+  if (extra > 0) out += `, +${extra} more`
+  return out
+}
+
+/**
+ * @param {EgressPeer} peer
+ * @returns {string}
+ */
+function peerDestination(peer) {
+  for (const name of peer.remote_names) {
+    if (name.trim() !== "") return name
+  }
+  if (peer.remote_address !== "") return peer.remote_address
+  return "unknown"
+}
+
+/**
+ * @param {string[]} ancestry
+ * @returns {string}
+ */
+function shortenAncestry(ancestry) {
+  if (ancestry.length <= 4) return ancestry.join(" → ")
+  return `${ancestry[0]} → … → ${ancestry[ancestry.length - 2]} → ${ancestry[ancestry.length - 1]}`
+}
+
+/**
+ * @param {string[]} arr
+ * @param {string} value
+ */
+function appendUnique(arr, value) {
+  if (value === "" || arr.includes(value)) return
+  arr.push(value)
+}
+
+/**
+ * @typedef {{
+ *   leaf: string
+ *   shortTree: string
+ *   destinations: string[]
+ *   badDomains: string[]
+ *   detections: string[]
+ *   flagged: boolean
+ *   order: number
+ * }} ProcessGroup
+ */
+
+/**
+ * @param {NormalizedProfile[]} profiles
+ * @returns {ProcessGroup[]}
+ */
+function buildProcessGroups(profiles) {
+  /** @type {Map<string, ProcessGroup>} */
+  const byTree = new Map()
+  let order = 0
+  for (const profile of profiles) {
+    for (const peer of profile.egress_peers) {
+      const dest = peerDestination(peer)
+      for (const procTree of peer.proc_trees) {
+        const ancestry = procTree.ancestry
+        if (ancestry.length === 0) continue
+        const key = ancestry.join("\u0000")
+        let g = byTree.get(key)
+        if (g === undefined) {
+          g = {
+            leaf: ancestry[ancestry.length - 1] ?? "",
+            shortTree: shortenAncestry(ancestry),
+            destinations: [],
+            badDomains: [],
+            detections: [],
+            flagged: false,
+            order: order++,
+          }
+          byTree.set(key, g)
+        }
+        // A destination is named a known bad domain only when the
+        // known_bad_domain detection is present. A bad result alone can come
+        // from a process behavior and must not relabel an ordinary destination.
+        const badDest = peer.detections.includes(KNOWN_BAD_DOMAIN_DETECTION)
+        if (dest !== "" && dest !== "unknown") {
+          if (badDest) appendUnique(g.badDomains, dest)
+          else appendUnique(g.destinations, dest)
+        }
+        for (const det of peer.detections) {
+          if (isMeaningfulDetection(det)) appendUnique(g.detections, det.trim())
+        }
+        if (
+          peer.result === "fail" ||
+          peer.result === "attention" ||
+          hasMeaningfulDetection(peer.detections)
+        ) {
+          g.flagged = true
+        }
+      }
+    }
+  }
+  const groups = [...byTree.values()]
+  groups.sort((a, b) => {
+    if (a.flagged !== b.flagged) return a.flagged ? -1 : 1
+    return a.order - b.order
+  })
+  return groups
+}
+
+/**
+ * @param {NormalizedProfile[]} profiles
+ * @returns {string}
+ */
+function renderNarrative(profiles) {
+  const groups = buildProcessGroups(profiles)
+  if (groups.length === 0) {
+    return "No outbound network connections were observed during this run.\n"
+  }
+  let out = ""
+  for (const g of groups) {
+    out += `**\`${escapeMarkdown(g.leaf)}\`** (\`${escapeMarkdown(g.shortTree)}\`)\n\n`
+    if (g.detections.length > 0 || g.badDomains.length > 0) {
+      out += "What it did:\n"
+      const rendered = []
+      // Name known-bad destinations plainly and factually, not alarm-styled.
+      if (g.badDomains.length > 0) {
+        const line = renderBadDomainLine(g.badDomains)
+        rendered.push(line)
+        out += `- ${line}\n`
+      }
+      for (const det of g.detections) {
+        // The known-bad-domain fact is already named above with the actual
+        // destination(s); skip the generic restatement.
+        if (det === KNOWN_BAD_DOMAIN_DETECTION) continue
+        const line = humanizeDetection(det)
+        if (rendered.includes(line)) continue
+        rendered.push(line)
+        out += `- ${line}\n`
+      }
+      if (g.destinations.length > 0) {
+        out += `- Connected to: ${renderDestinationList(g.destinations)}\n`
+      }
+      out += "\n"
+      continue
+    }
+    if (g.destinations.length > 0) {
+      const noun = g.destinations.length === 1 ? "destination" : "destinations"
+      out += `Connected to ${g.destinations.length} ${noun}: ${renderDestinationList(g.destinations)}\n\n`
+      continue
+    }
+    out += "Ran without making outbound connections.\n\n"
+  }
+  return out
+}
+
+/**
+ * renderSummaryLine is the neutral one-line summary (≈1s read). No risk verdict.
+ * @param {NormalizedProfile[]} profiles
+ * @returns {string}
+ */
+function renderSummaryLine(profiles) {
+  let domains = 0
+  let connections = 0
+  for (const profile of profiles) {
+    domains += profile.telemetry.total_domains
+    connections += profile.telemetry.total_connections
+  }
+  const jobs = profiles.length
+  const parts = [
+    `${jobs} ${jobs === 1 ? "job" : "jobs"}`,
+    `${domains} ${domains === 1 ? "domain" : "domains"}`,
+    `${connections} ${connections === 1 ? "connection" : "connections"}`,
+  ]
+  return `Here's what your pipeline did at runtime — ${parts.join(", ")}.`
 }
 
 /**
@@ -423,62 +708,6 @@ export function parseCommentState(body) {
   } catch {
     return null
   }
-}
-
-/**
- * @param {NormalizedProfile[]} profiles
- * @returns {string}
- */
-function renderHeadline(profiles) {
-  const failedJobs = profiles.filter(
-    (profile) => getAssertionState(profile) === "failed",
-  ).length
-  const passedJobs = profiles.length - failedJobs
-  const workflowCount = new Set(
-    profiles.map((profile) => getWorkflowKey(profile)),
-  ).size
-
-  if (failedJobs > 0) {
-    return `🔴 ${failedJobs} job${failedJobs === 1 ? "" : "s"} failed assertions · ${passedJobs} passed across ${workflowCount} workflow${workflowCount === 1 ? "" : "s"}`
-  }
-
-  return `✅ ${passedJobs} job${passedJobs === 1 ? "" : "s"} passed assertions across ${workflowCount} workflow${workflowCount === 1 ? "" : "s"}`
-}
-
-/**
- * @param {NormalizedProfile[]} profiles
- * @returns {string}
- */
-function renderSummaryTable(profiles) {
-  const rows = profiles.map((profile) => {
-    const workflowLabel = escapeMarkdown(
-      getDisplayValue(profile.github.workflow, "unknown"),
-    )
-    const runLabel =
-      profile.github.run_id !== ""
-        ? formatRunMarkdownLink(
-            profile.github.repository,
-            profile.github.run_id,
-            `#${profile.github.run_id}`,
-          )
-        : "-"
-    const jobLabel = escapeMarkdown(
-      getDisplayValue(profile.github.job, "unknown"),
-    )
-    const assertionLabel = escapeMarkdown(getAssertionBadge(profile))
-    const linkLabel =
-      profile.report_link !== ""
-        ? `[View ↗](${escapeMarkdownLink(profile.report_link)})`
-        : "-"
-
-    return `| ${workflowLabel} | ${runLabel} | ${jobLabel} | ${assertionLabel} | ${linkLabel} |`
-  })
-
-  return [
-    "| Workflow | Run | Job | Assertions | Profile |",
-    "| --- | --- | --- | --- | --- |",
-    ...rows,
-  ].join("\n")
 }
 
 /**
