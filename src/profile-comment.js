@@ -541,6 +541,15 @@ function appendUnique(arr, value) {
 }
 
 /**
+ * @param {string[]} arr
+ * @param {string} value
+ */
+function removeValue(arr, value) {
+  const idx = arr.indexOf(value)
+  if (idx !== -1) arr.splice(idx, 1)
+}
+
+/**
  * @typedef {{
  *   leaf: string
  *   shortTree: string
@@ -585,8 +594,15 @@ function buildProcessGroups(profiles) {
         // from a process behavior and must not relabel an ordinary destination.
         const badDest = peer.detections.includes(KNOWN_BAD_DOMAIN_DETECTION)
         if (dest !== "" && dest !== "unknown") {
-          if (badDest) appendUnique(g.badDomains, dest)
-          else appendUnique(g.destinations, dest)
+          if (badDest) {
+            // Another peer on the same process tree may have already recorded
+            // this destination as ordinary; the known-bad classification wins,
+            // so drop the ordinary entry.
+            removeValue(g.destinations, dest)
+            appendUnique(g.badDomains, dest)
+          } else if (!g.badDomains.includes(dest)) {
+            appendUnique(g.destinations, dest)
+          }
         }
         for (const det of peer.detections) {
           if (isMeaningfulDetection(det)) appendUnique(g.detections, det.trim())
