@@ -1,10 +1,4 @@
-import {
-  COMMENT_MARKER,
-  mergeCommentState,
-  mergeCommentStates,
-  parseCommentState,
-  renderCommentBody,
-} from "./profile-comment.js"
+import { mergeCommentState, mergeCommentStates, parseCommentState, renderCommentBody } from "./profile-comment.js"
 
 /**
  * @typedef {import("./profile-comment.js").NormalizedProfile} NormalizedProfile
@@ -26,6 +20,8 @@ import {
  *   duplicateCommentIds: number[]
  * } | {
  *   kind: "stale"
+ * } | {
+ *   kind: "blocked-by-control-plane"
  * }} PublishCommentPlan
  */
 
@@ -36,37 +32,37 @@ import {
  * @returns {PublishCommentPlan}
  */
 export function planPullRequestComment(comments, profile, runAttempt) {
-  const threadKey = getProfileThreadKey(profile)
-  const matchingComments = getManagedCommentsForThread(comments, threadKey)
-  const primary = matchingComments.at(-1) ?? null
-  const existingState = mergeCommentStates(
-    matchingComments.map((entry) => entry.state),
-  )
-  const mergeResult = mergeCommentState(existingState, profile, runAttempt)
+    const threadKey = getProfileThreadKey(profile)
+    const matchingComments = getManagedCommentsForThread(comments, threadKey)
+    const primary = matchingComments.at(-1) ?? null
+    const existingState = mergeCommentStates(matchingComments.map(entry => entry.state))
+    const mergeResult = mergeCommentState(existingState, profile, runAttempt)
 
-  if (mergeResult.kind === "stale") {
-    return { kind: "stale" }
-  }
-
-  const duplicateCommentIds = matchingComments
-    .slice(0, -1)
-    .map((entry) => entry.comment.id)
-  const body = renderCommentBody(mergeResult.state)
-
-  if (primary === null) {
-    return {
-      kind: "create",
-      body,
-      duplicateCommentIds,
+    if (mergeResult.kind === "stale") {
+        return { kind: "stale" }
     }
-  }
 
-  return {
-    kind: "update",
-    comment: primary.comment,
-    body,
-    duplicateCommentIds,
-  }
+    const duplicateCommentIds = matchingComments.slice(0, -1).map(entry => entry.comment.id)
+    const body = renderCommentBody(mergeResult.state)
+
+    if (primary === null) {
+        if (containsControlPlaneComment(comments)) {
+            return { kind: "blocked-by-control-plane" }
+        }
+
+        return {
+            kind: "create",
+            body,
+            duplicateCommentIds,
+        }
+    }
+
+    return {
+        kind: "update",
+        comment: primary.comment,
+        body,
+        duplicateCommentIds,
+    }
 }
 
 /**
@@ -75,18 +71,17 @@ export function planPullRequestComment(comments, profile, runAttempt) {
  * @returns {{ comment: PullRequestComment, state: import("./profile-comment.js").CommentState }[]}
  */
 function getManagedCommentsForThread(comments, threadKey) {
-  return comments
-    .filter((comment) => comment.body.includes(COMMENT_MARKER))
-    .map((comment) => {
-      const state = parseCommentState(comment.body)
-      if (state === null) {
-        return null
-      }
+    return comments
+        .map(comment => {
+            const state = parseCommentState(comment.body)
+            if (state === null) {
+                return null
+            }
 
-      return isMatchingThread(state, threadKey) ? { comment, state } : null
-    })
-    .filter(isPresent)
-    .toSorted((left, right) => left.comment.id - right.comment.id)
+            return isMatchingThread(state, threadKey) ? { comment, state } : null
+        })
+        .filter(isPresent)
+        .toSorted((left, right) => left.comment.id - right.comment.id)
 }
 
 /**
@@ -94,11 +89,11 @@ function getManagedCommentsForThread(comments, threadKey) {
  * @returns {string}
  */
 function getProfileThreadKey(profile) {
-  if (profile.github.sha === "") {
-    throw new Error("profile JSON is missing the GitHub commit sha")
-  }
+    if (profile.github.sha === "") {
+        throw new Error("profile JSON is missing the GitHub commit sha")
+    }
 
-  return profile.github.sha
+    return profile.github.sha
 }
 
 /**
@@ -107,12 +102,12 @@ function getProfileThreadKey(profile) {
  * @returns {boolean}
  */
 function isMatchingThread(state, threadKey) {
-  const firstProfile = state.profiles[0]
-  if (firstProfile === undefined || firstProfile.github.sha !== threadKey) {
-    return false
-  }
+    const firstProfile = state.profiles[0]
+    if (firstProfile === undefined || firstProfile.github.sha !== threadKey) {
+        return false
+    }
 
-  return state.profiles.every((profile) => profile.github.sha === threadKey)
+    return state.profiles.every(profile => profile.github.sha === threadKey)
 }
 
 /**
@@ -121,5 +116,17 @@ function isMatchingThread(state, threadKey) {
  * @returns {value is T}
  */
 function isPresent(value) {
-  return value !== null && value !== undefined
+    return value !== null && value !== undefined
+}
+
+/**
+ * @param {PullRequestComment[]} comments
+ * @returns {boolean}
+ */
+function containsControlPlaneComment(comments) {
+    return comments.some(
+        comment =>
+            comment.body.includes("garnet-control-plane-pr-comment:v1") ||
+            comment.body.includes("garnet-control-plane-pending-pr-comment:v1"),
+    )
 }
