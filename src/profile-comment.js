@@ -686,6 +686,15 @@ function buildProcessGroups(profiles) {
 function renderNarrative(profiles) {
     const groups = buildProcessGroups(profiles)
     if (groups.length === 0) {
+        // The narrative is built from peer records; telemetry counts connections
+        // independently. If peers carry no attributable signal but telemetry saw
+        // egress, don't contradict the summary line by claiming zero activity.
+        const hasEgress = profiles.some(
+            p => p.telemetry.total_connections > 0 || p.telemetry.total_domains > 0,
+        )
+        if (hasEgress) {
+            return "Outbound connections were recorded but could not be attributed to a specific process — see the Evidence section below.\n"
+        }
         return "No outbound network connections were observed during this run.\n"
     }
     let out = ""
