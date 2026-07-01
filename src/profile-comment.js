@@ -573,6 +573,7 @@ function removeValue(arr, value) {
  *   destinations: string[]
  *   badDomains: string[]
  *   detections: string[]
+ *   unresolved: boolean
  *   flagged: boolean
  *   order: number
  *   unattributed?: boolean
@@ -597,6 +598,8 @@ function recordPeerActivity(g, peer, dest) {
         } else if (!g.badDomains.includes(dest)) {
             appendUnique(g.destinations, dest)
         }
+    } else {
+        g.unresolved = true
     }
     for (const det of peer.detections) {
         if (isMeaningfulDetection(det)) appendUnique(g.detections, det.trim())
@@ -633,6 +636,7 @@ function buildProcessGroups(profiles) {
                         destinations: [],
                         badDomains: [],
                         detections: [],
+                        unresolved: false,
                         flagged: false,
                         order: order++,
                     }
@@ -651,6 +655,7 @@ function buildProcessGroups(profiles) {
                         destinations: [],
                         badDomains: [],
                         detections: [],
+                        unresolved: false,
                         flagged: false,
                         order: order++,
                         unattributed: true,
@@ -663,12 +668,15 @@ function buildProcessGroups(profiles) {
     const groups = [...byTree.values()]
     // Only surface the catch-all when its peers actually carry something to
     // show. A tree-less peer with no destination and no meaningful detection
-    // contributes no signal, and an empty catch-all section would be misleading.
+    // contributes no signal — unless telemetry counted egress, in which case
+    // its unresolved connections are real activity the narrative must not
+    // undercount.
     if (
         unattributed !== undefined &&
         (unattributed.destinations.length > 0 ||
             unattributed.badDomains.length > 0 ||
-            unattributed.detections.length > 0)
+            unattributed.detections.length > 0 ||
+            (unattributed.unresolved && hasEgressTelemetry(profiles)))
     ) {
         groups.push(unattributed)
     }
@@ -683,16 +691,25 @@ function buildProcessGroups(profiles) {
  * @param {NormalizedProfile[]} profiles
  * @returns {string}
  */
+/**
+ * hasEgressTelemetry reports whether the run's telemetry counters saw any
+ * outbound activity, independent of whether individual peers were attributable.
+ * @param {NormalizedProfile[]} profiles
+ * @returns {boolean}
+ */
+function hasEgressTelemetry(profiles) {
+    return profiles.some(
+        p => p.telemetry.total_connections > 0 || p.telemetry.total_domains > 0,
+    )
+}
+
 function renderNarrative(profiles) {
     const groups = buildProcessGroups(profiles)
     if (groups.length === 0) {
         // The narrative is built from peer records; telemetry counts connections
         // independently. If peers carry no attributable signal but telemetry saw
         // egress, don't contradict the summary line by claiming zero activity.
-        const hasEgress = profiles.some(
-            p => p.telemetry.total_connections > 0 || p.telemetry.total_domains > 0,
-        )
-        if (hasEgress) {
+        if (hasEgressTelemetry(profiles)) {
             return "Outbound connections were recorded but could not be attributed to a specific process — see the Evidence section below.\n"
         }
         return "No outbound network connections were observed during this run.\n"
@@ -727,6 +744,8 @@ function renderNarrative(profiles) {
             }
             if (g.destinations.length > 0) {
                 out += `- Connected to: ${renderDestinationList(g.destinations)}\n`
+            } else if (g.unresolved) {
+                out += "- Made outbound connections to destinations that could not be resolved\n"
             }
             out += "\n"
             continue
@@ -734,6 +753,10 @@ function renderNarrative(profiles) {
         if (g.destinations.length > 0) {
             const noun = g.destinations.length === 1 ? "destination" : "destinations"
             out += `Connected to ${g.destinations.length} ${noun}: ${renderDestinationList(g.destinations)}\n\n`
+            continue
+        }
+        if (g.unresolved) {
+            out += "Made outbound connections to destinations that could not be resolved.\n\n"
             continue
         }
         out += "Ran without making outbound connections.\n\n"
