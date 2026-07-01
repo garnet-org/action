@@ -661,7 +661,17 @@ function buildProcessGroups(profiles) {
         }
     }
     const groups = [...byTree.values()]
-    if (unattributed !== undefined) groups.push(unattributed)
+    // Only surface the catch-all when its peers actually carry something to
+    // show. A tree-less peer with no destination and no meaningful detection
+    // contributes no signal, and an empty catch-all section would be misleading.
+    if (
+        unattributed !== undefined &&
+        (unattributed.destinations.length > 0 ||
+            unattributed.badDomains.length > 0 ||
+            unattributed.detections.length > 0)
+    ) {
+        groups.push(unattributed)
+    }
     groups.sort((a, b) => {
         if (a.flagged !== b.flagged) return a.flagged ? -1 : 1
         return a.order - b.order
@@ -696,8 +706,11 @@ function renderNarrative(profiles) {
             }
             for (const det of g.detections) {
                 // The known-bad-domain fact is already named above with the
-                // actual destination(s); skip the generic restatement.
-                if (det === KNOWN_BAD_DOMAIN_DETECTION) continue
+                // actual destination(s) — but only skip the generic restatement
+                // when a destination was actually captured. If the peer's
+                // destination was unresolvable ("unknown"), badDomains is empty
+                // and the humanized detection is the only way the fact surfaces.
+                if (det === KNOWN_BAD_DOMAIN_DETECTION && g.badDomains.length > 0) continue
                 const line = humanizeDetection(det)
                 if (rendered.includes(line)) continue
                 rendered.push(line)
