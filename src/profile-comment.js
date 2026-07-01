@@ -575,8 +575,36 @@ function removeValue(arr, value) {
  *   detections: string[]
  *   flagged: boolean
  *   order: number
+ *   unattributed?: boolean
  * }} ProcessGroup
  */
+
+/**
+ * record folds one peer's destination and detections into a process group. A
+ * destination is named a known bad domain only when the known_bad_domain
+ * detection is present; a bad result alone can come from a process behavior and
+ * must not relabel an ordinary destination.
+ * @param {ProcessGroup} g
+ * @param {EgressPeer} peer
+ * @param {string} dest
+ */
+function recordPeerActivity(g, peer, dest) {
+    const badDest = peer.detections.includes(KNOWN_BAD_DOMAIN_DETECTION)
+    if (dest !== "" && dest !== "unknown") {
+        if (badDest) {
+            removeValue(g.destinations, dest)
+            appendUnique(g.badDomains, dest)
+        } else if (!g.badDomains.includes(dest)) {
+            appendUnique(g.destinations, dest)
+        }
+    }
+    for (const det of peer.detections) {
+        if (isMeaningfulDetection(det)) appendUnique(g.detections, det.trim())
+    }
+    if (peer.result === "fail" || peer.result === "attention" || hasMeaningfulDetection(peer.detections)) {
+        g.flagged = true
+    }
+}
 
 /**
  * @param {NormalizedProfile[]} profiles
@@ -586,12 +614,16 @@ function buildProcessGroups(profiles) {
     /** @type {Map<string, ProcessGroup>} */
     const byTree = new Map()
     let order = 0
+    /** @type {ProcessGroup | undefined} */
+    let unattributed
     for (const profile of profiles) {
         for (const peer of profile.egress_peers) {
             const dest = peerDestination(peer)
+            let attributed = false
             for (const procTree of peer.proc_trees) {
                 const ancestry = procTree.ancestry
                 if (ancestry.length === 0) continue
+                attributed = true
                 const key = ancestry.join("\u0000")
                 let g = byTree.get(key)
                 if (g === undefined) {
@@ -606,32 +638,30 @@ function buildProcessGroups(profiles) {
                     }
                     byTree.set(key, g)
                 }
-                // A destination is named a known bad domain only when the
-                // known_bad_domain detection is present. A bad result alone can
-                // come from a process behavior and must not relabel an ordinary
-                // destination.
-                const badDest = peer.detections.includes(KNOWN_BAD_DOMAIN_DETECTION)
-                if (dest !== "" && dest !== "unknown") {
-                    if (badDest) {
-                        // Another peer on the same process tree may have already
-                        // recorded this destination as ordinary; the known-bad
-                        // classification wins, so drop the ordinary entry.
-                        removeValue(g.destinations, dest)
-                        appendUnique(g.badDomains, dest)
-                    } else if (!g.badDomains.includes(dest)) {
-                        appendUnique(g.destinations, dest)
+                recordPeerActivity(g, peer, dest)
+            }
+            if (!attributed) {
+                // The peer carries no usable process lineage; keep its
+                // destinations/detections in the narrative under a catch-all
+                // group rather than hiding them in the collapsed evidence.
+                if (unattributed === undefined) {
+                    unattributed = {
+                        leaf: "",
+                        shortTree: "",
+                        destinations: [],
+                        badDomains: [],
+                        detections: [],
+                        flagged: false,
+                        order: order++,
+                        unattributed: true,
                     }
                 }
-                for (const det of peer.detections) {
-                    if (isMeaningfulDetection(det)) appendUnique(g.detections, det.trim())
-                }
-                if (peer.result === "fail" || peer.result === "attention" || hasMeaningfulDetection(peer.detections)) {
-                    g.flagged = true
-                }
+                recordPeerActivity(unattributed, peer, dest)
             }
         }
     }
     const groups = [...byTree.values()]
+    if (unattributed !== undefined) groups.push(unattributed)
     groups.sort((a, b) => {
         if (a.flagged !== b.flagged) return a.flagged ? -1 : 1
         return a.order - b.order
@@ -650,7 +680,11 @@ function renderNarrative(profiles) {
     }
     let out = ""
     for (const g of groups) {
-        out += `**\`${escapeMarkdown(g.leaf)}\`** (\`${escapeMarkdown(g.shortTree)}\`)\n\n`
+        if (g.unattributed) {
+            out += "**Network activity without an attributed process**\n\n"
+        } else {
+            out += `**\`${escapeMarkdown(g.leaf)}\`** (\`${escapeMarkdown(g.shortTree)}\`)\n\n`
+        }
         if (g.detections.length > 0 || g.badDomains.length > 0) {
             out += "What it did:\n"
             const rendered = []
