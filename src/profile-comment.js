@@ -1,6 +1,7 @@
 import { z } from "zod"
 import { getOptionalRecord } from "./shared.js"
 
+export const RUNTIME_REVIEW_MARKER = "garnet-runtime-review"
 export const ACTION_COMMENT_MARKER = "garnet-action-pr-comment:v1"
 export const COMMIT_MARKER_PREFIX = "garnet-pr-commit:"
 export const LEGACY_COMMENT_STATE_MARKER = "garnet-runtime-visibility"
@@ -29,6 +30,7 @@ const COMMENT_STATE_MARKER_PREFIX = "garnet-action-comment-state:"
 
 /**
  * @typedef {{
+ *   remote_address?: string
  *   remote_names: string[]
  *   proc_trees: ProcTree[]
  *   result: ProfileResult
@@ -106,10 +108,12 @@ const ASSERTION_SCHEMA = z.looseObject({
 const PEER_SCHEMA = z
     .looseObject({
         result: PROFILE_RESULT_SCHEMA,
+        remote_address: z.string().optional(),
         remote_names: z.array(z.string()),
         proc_trees: z.array(PROC_TREE_SCHEMA),
     })
     .transform(peer => ({
+        remote_address: peer.remote_address ?? "",
         remote_names: peer.remote_names.filter(name => name.length > 0),
         proc_trees: peer.proc_trees,
         result: peer.result,
@@ -365,23 +369,31 @@ export function mergeCommentStates(states) {
 export function renderCommentBody(state) {
     const metadata = encodeCommentState(state)
     const profiles = [...state.profiles].sort(compareProfiles)
-    const headline = renderHeadline(profiles)
-    const summaryTable = renderSummaryTable(profiles)
-    const sections = profiles.map(profile => renderProfileSection(profile)).join("\n\n")
     const commitSha = getCommentCommitSha(profiles)
-
-    return [
+    const parts = [
+        `<!-- ${RUNTIME_REVIEW_MARKER} -->`,
         `<!-- ${ACTION_COMMENT_MARKER} -->`,
         `<!-- ${COMMIT_MARKER_PREFIX}${commitSha} -->`,
         `<!-- ${COMMENT_STATE_MARKER_PREFIX}${metadata} -->`,
-        "## Garnet Runtime Report",
+        "## Garnet Runtime Review",
+        renderMetaLine(profiles),
         "",
-        headline,
-        "",
-        summaryTable,
-        "",
-        sections,
-    ].join("\n")
+        renderHeadline(profiles),
+    ]
+
+    const inlineTrees = renderInlineTrees(profiles)
+    if (inlineTrees !== "") {
+        parts.push("", inlineTrees)
+    }
+
+    const quietJobLines = renderQuietJobLines(profiles)
+    if (quietJobLines !== "") {
+        parts.push("", quietJobLines)
+    }
+
+    parts.push("", renderEvidenceFold(profiles), "", "---", renderFooter(profiles))
+
+    return parts.join("\n")
 }
 
 /**
@@ -415,240 +427,387 @@ export function parseCommentState(body) {
  * @param {NormalizedProfile[]} profiles
  * @returns {string}
  */
-function renderHeadline(profiles) {
-    const failedJobs = profiles.filter(profile => getAssertionState(profile) === "failed").length
-    const passedJobs = profiles.length - failedJobs
+function renderMetaLine(profiles) {
+    const repository = getDisplayValue(profiles[0]?.github.repository ?? "", "unknown-repository")
+    const sha = shortSha(getCommentCommitSha(profiles))
+    const jobCount = profiles.length
     const workflowCount = new Set(profiles.map(profile => getWorkflowKey(profile))).size
 
-    if (failedJobs > 0) {
-        return `🔴 ${failedJobs} job${failedJobs === 1 ? "" : "s"} failed assertions · ${passedJobs} passed across ${workflowCount} workflow${workflowCount === 1 ? "" : "s"}`
-    }
-
-    return `✅ ${passedJobs} job${passedJobs === 1 ? "" : "s"} passed assertions across ${workflowCount} workflow${workflowCount === 1 ? "" : "s"}`
+    return `${repository} · ${getDisplayValue(sha, "unknown-commit")} · ${pluralize(jobCount, "job")} · ${pluralize(workflowCount, "workflow")}`
 }
 
 /**
  * @param {NormalizedProfile[]} profiles
  * @returns {string}
  */
-function renderSummaryTable(profiles) {
-    const rows = profiles.map(profile => {
-        const workflowLabel = escapeMarkdown(getDisplayValue(profile.github.workflow, "unknown"))
-        const runLabel =
-            profile.github.run_id !== ""
-                ? formatRunMarkdownLink(profile.github.repository, profile.github.run_id, `#${profile.github.run_id}`)
-                : "-"
-        const jobLabel = escapeMarkdown(getDisplayValue(profile.github.job, "unknown"))
-        const assertionLabel = escapeMarkdown(getAssertionBadge(profile))
-        const linkLabel = profile.report_link !== "" ? `[View ↗](${escapeMarkdownLink(profile.report_link)})` : "-"
-
-        return `| ${workflowLabel} | ${runLabel} | ${jobLabel} | ${assertionLabel} | ${linkLabel} |`
-    })
-
-    return ["| Workflow | Run | Job | Assertions | Profile |", "| --- | --- | --- | --- | --- |", ...rows].join("\n")
+function renderHeadline(profiles) {
+    return (
+        renderUniqueDestinationHeadline(profiles) ??
+        renderSpawnTopologyHeadline(profiles) ??
+        renderCountsHeadline(profiles)
+    )
 }
 
 /**
- * @param {NormalizedProfile} profile
- * @returns {string}
+ * R1 — a destination reached by exactly one job, computable only when multiple
+ * job profiles are present in the payload.
+ *
+ * @param {NormalizedProfile[]} profiles
+ * @returns {string | null}
  */
-function renderProfileSection(profile) {
-    const title = escapeHtml(formatWorkflowJob(profile.github.workflow, profile.github.job))
-    const assertionBadge = escapeHtml(getAssertionBadge(profile))
-    const workloadTable = renderKeyValueTable([
-        ["Workflow", profile.github.workflow],
-        ["Repository", profile.github.repository],
-        ["Branch", profile.github.ref],
-        ["Commit", profile.github.sha],
-        ["Triggered by", profile.github.actor],
-        ["Run ID / Job", formatRunJob(profile.github.repository, profile.github.run_id, profile.github.job)],
-    ])
-    const networkSection = renderNetworkSection(profile)
-    const assertionSection = renderAssertionSection(profile)
-    const footer = renderProfileFooter(profile)
-
-    return [
-        `<details>`,
-        `<summary><strong>${title}</strong> · ${assertionBadge}</summary>`,
-        "",
-        "#### Workload Summary",
-        "",
-        workloadTable,
-        "",
-        networkSection,
-        "",
-        assertionSection,
-        "",
-        footer,
-        "</details>",
-    ].join("\n")
-}
-
-/**
- * @param {NormalizedProfile} profile
- * @returns {string}
- */
-function renderNetworkSection(profile) {
-    if (!hasNetworkData(profile)) {
-        return [
-            "#### Network Egress Summary",
-            "",
-            "Duplicate egress destinations including their process tree are omitted.",
-            "",
-            "No network information available.",
-        ].join("\n")
+function renderUniqueDestinationHeadline(profiles) {
+    if (profiles.length < 2) {
+        return null
     }
 
-    const rows = []
-    const seen = new Set()
-    let skippedRemoteNames = 0
-    let totalRemoteNames = 0
-
-    for (const peer of profile.egress_peers) {
-        for (const remoteName of peer.remote_names) {
-            totalRemoteNames += 1
-            if (peer.result !== "fail") {
-                if (seen.has(remoteName)) {
-                    skippedRemoteNames += 1
-                    continue
-                }
-                seen.add(remoteName)
+    /** @type {Map<string, Set<string>>} */
+    const destinationJobs = new Map()
+    for (const profile of profiles) {
+        const jobKey = getProfileKey(profile)
+        for (const peer of profile.egress_peers) {
+            for (const remoteName of peer.remote_names) {
+                const jobs = destinationJobs.get(remoteName) ?? new Set()
+                jobs.add(jobKey)
+                destinationJobs.set(remoteName, jobs)
             }
-
-            rows.push([
-                `\`${escapeMarkdown(remoteName)}\``,
-                renderProcessTrees(peer.proc_trees),
-                getResultIcon(peer.result),
-            ])
         }
     }
 
-    const egressTable =
-        rows.length > 0
-            ? renderTable(["Destination", "Process Tree", "Status"], rows)
-            : "No egress peers information available."
+    const uniqueDestinations = [...destinationJobs.entries()]
+        .filter(([, jobs]) => jobs.size === 1)
+        .map(([destination]) => destination)
+        .sort()
 
-    /** @type {[string, string][]} */
-    const telemetryRows = [
-        ["Total egress unique domain(s)", String(profile.telemetry.total_domains)],
-        ["Total egress destination(s)", String(totalRemoteNames)],
-        ["Total egress omitted destination(s)", String(skippedRemoteNames)],
-        ["Total egress connection(s)", String(profile.telemetry.total_connections)],
-        ["Total egress flow(s)", String(profile.egress_peers.length)],
-    ]
+    const destination = uniqueDestinations[0]
+    if (destination === undefined || destinationJobs.size === uniqueDestinations.length) {
+        return null
+    }
 
-    return [
-        "#### Network Egress Summary",
-        "",
-        "Duplicate egress destinations including their process tree are omitted.",
-        "",
-        egressTable,
-        "",
-        "##### Network Telemetry Summary",
-        "",
-        renderKeyValueTable(telemetryRows),
-    ].join("\n")
+    const profile = profiles.find(candidate =>
+        candidate.egress_peers.some(peer => peer.remote_names.includes(destination)),
+    )
+    if (profile === undefined) {
+        return null
+    }
+
+    const jobLabel = getDisplayValue(profile.github.job, "unknown-job")
+    const process = findDestinationProcess(profile, destination)
+    const reachedBy = process !== "" ? `\`${process}\` reached` : "the job reached"
+
+    return `In \`${jobLabel}\`, ${reachedBy} \`${destination}\` — a destination no other job in this run reached.`
+}
+
+/**
+ * R2 — a network tool appearing in the lineage tail of an ancestry array.
+ *
+ * @param {NormalizedProfile[]} profiles
+ * @returns {string | null}
+ */
+function renderSpawnTopologyHeadline(profiles) {
+    for (const profile of profiles) {
+        for (const peer of profile.egress_peers) {
+            for (const procTree of peer.proc_trees) {
+                const toolIndex = findNetworkToolIndex(procTree.ancestry)
+                if (toolIndex === -1) {
+                    continue
+                }
+
+                const jobLabel = getDisplayValue(profile.github.job, "unknown-job")
+                const parent = procTree.ancestry[toolIndex - 1] ?? ""
+                const chain = procTree.ancestry.slice(toolIndex).join(" → ")
+                const destination = peer.remote_names[0] ?? ""
+                const spawnedBy = parent !== "" ? `\`${parent}\` spawned` : "the job spawned"
+                const reached = destination !== "" ? `, which reached \`${destination}\`` : ""
+
+                return `In \`${jobLabel}\`, ${spawnedBy} \`${chain}\`${reached}.`
+            }
+        }
+    }
+
+    return null
+}
+
+/**
+ * R3 — plain job/workflow/destination counts.
+ *
+ * @param {NormalizedProfile[]} profiles
+ * @returns {string}
+ */
+function renderCountsHeadline(profiles) {
+    const jobCount = profiles.length
+    const workflowCount = new Set(profiles.map(profile => getWorkflowKey(profile))).size
+    const domainCount = countUniqueDomains(profiles)
+    const connectionCount = countConnections(profiles)
+
+    if (domainCount === 0 && connectionCount === 0) {
+        return `${pluralize(jobCount, "job")} across ${pluralize(workflowCount, "workflow")} made no outbound connections.`
+    }
+
+    return `${pluralize(jobCount, "job")} across ${pluralize(workflowCount, "workflow")} reached ${pluralize(domainCount, "domain")} over ${pluralize(connectionCount, "connection")}.`
+}
+
+/**
+ * @param {NormalizedProfile[]} profiles
+ * @returns {string}
+ */
+function renderInlineTrees(profiles) {
+    const activeProfiles = profiles.filter(profile => !isQuietProfile(profile))
+    if (activeProfiles.length === 0) {
+        return ""
+    }
+
+    const trees = activeProfiles.map(profile => renderJobTree(profile).join("\n"))
+
+    return ["```text", trees.join("\n\n"), "```"].join("\n")
+}
+
+/**
+ * @param {NormalizedProfile[]} profiles
+ * @returns {string}
+ */
+function renderQuietJobLines(profiles) {
+    return profiles
+        .filter(profile => isQuietProfile(profile))
+        .map(profile => renderQuietJobLine(profile))
+        .join("\n")
 }
 
 /**
  * @param {NormalizedProfile} profile
  * @returns {string}
  */
-function renderAssertionSection(profile) {
-    if (profile.assertions.length === 0) {
-        return ["#### Assertions", "", "No assertions information available."].join("\n")
-    }
+function renderQuietJobLine(profile) {
+    const jobLabel = escapeMarkdown(getDisplayValue(profile.github.job, "unknown-job"))
+    const workflowLabel = escapeMarkdown(getDisplayValue(profile.github.workflow, "unknown-workflow"))
 
-    const rows = profile.assertions.map(assertion => [
-        escapeMarkdown(assertion.id),
-        escapeMarkdown(getResultIconText(assertion.result)),
-    ])
+    return `\`${jobLabel}\` · ${workflowLabel} — made no outbound connections.`
+}
 
-    return ["#### Assertions", "", renderTable(["Check", "Result"], rows)].join("\n")
+/**
+ * @param {NormalizedProfile[]} profiles
+ * @returns {string}
+ */
+function renderEvidenceFold(profiles) {
+    const jobCount = profiles.length
+    const domainCount = countUniqueDomains(profiles)
+    const connectionCount = countConnections(profiles)
+    const summary = `Full process & network evidence · ${pluralize(jobCount, "job")} · ${pluralize(domainCount, "domain")} · ${pluralize(connectionCount, "connection")}`
+    const sections = profiles.map(profile => renderEvidenceSection(profile))
+
+    return ["<details>", `<summary>${summary}</summary>`, "", sections.join("\n\n"), "", "</details>"].join("\n")
 }
 
 /**
  * @param {NormalizedProfile} profile
  * @returns {string}
  */
-function renderProfileFooter(profile) {
-    /** @type {string[]} */
-    const footerParts = []
-    footerParts.push(
-        `${profile.telemetry.total_domains} unique domains · ${profile.telemetry.total_connections} connections`,
-    )
-    if (profile.github.run_id.length > 0 || profile.github.job.length > 0) {
-        footerParts.push(
-            `Workflow ${escapeHtml(getDisplayValue(profile.github.workflow, "-"))} - Run #${escapeHtml(getDisplayValue(profile.github.run_id, "-"))} - Job ${escapeHtml(getDisplayValue(profile.github.job, "-"))}`,
-        )
-    }
-    if (profile.timestamp.length > 0) {
-        footerParts.push(`timestamp ${escapeHtml(profile.timestamp)}`)
+function renderEvidenceSection(profile) {
+    const workflowLabel = escapeMarkdown(getDisplayValue(profile.github.workflow, "unknown-workflow"))
+    const jobLabel = escapeMarkdown(getDisplayValue(profile.github.job, "unknown-job"))
+    const heading = `**${workflowLabel} / ${jobLabel}** · ${pluralize(profile.telemetry.total_domains, "domain")} · ${pluralize(profile.telemetry.total_connections, "connection")}`
+
+    if (isQuietProfile(profile)) {
+        return [heading, "", "Made no outbound connections."].join("\n")
     }
 
-    const header = footerParts.join("  -  ")
-    const viewLink = buildProfileFooterLink(profile.report_link)
-
-    return `<div align="right"><sub>${header}</sub><br><b>Powered by Garnet</b>${viewLink}</div>`
+    return [heading, "", "```text", renderJobTree(profile).join("\n"), "```"].join("\n")
 }
 
 /**
- * @param {ProcTree[]} procTrees
+ * @param {NormalizedProfile[]} profiles
  * @returns {string}
  */
-function renderProcessTrees(procTrees) {
-    const rendered = procTrees
-        .map(procTree => {
-            if (procTree.ancestry.length === 0) {
-                return ""
-            }
+function renderFooter(profiles) {
+    const permalink = profiles.map(profile => profile.report_link).find(link => link !== "") ?? ""
+    const runProfileLink = permalink !== "" ? ` · [Run Profile ↗](${escapeMarkdownLink(permalink)})` : ""
 
-            const [rootProcess, ...remainingAncestry] = procTree.ancestry
-            if (rootProcess === undefined || rootProcess === "") {
-                return ""
-            }
-
-            const items = []
-            items.push(`\`${escapeMarkdown(rootProcess)}\``)
-
-            let start = 1
-            if (procTree.ancestry.length > 4) {
-                start = procTree.ancestry.length - 3
-                items.push("`...`")
-            }
-
-            for (const processName of remainingAncestry.slice(start - 1)) {
-                items.push(`\`${escapeMarkdown(processName)}\``)
-            }
-
-            return items.join(" → ")
-        })
-        .filter(value => value.length > 0)
-
-    return rendered.length > 0 ? rendered.join("<br>") : "-"
+    return `<sub>What happened in this PR — each job's processes and where they reached.${runProfileLink}</sub>`
 }
 
 /**
- * @param {string[]} headers
- * @param {string[][]} rows
- * @returns {string}
+ * @typedef {{
+ *   children: Map<string, LineageNode>
+ *   destinations: Map<string, number>
+ * }} LineageNode
  */
-function renderTable(headers, rows) {
-    const headerRow = `| ${headers.map(header => escapeMarkdown(header)).join(" | ")} |`
-    const separatorRow = `| ${headers.map(() => "---").join(" | ")} |`
-    const bodyRows = rows.map(row => `| ${row.join(" | ")} |`)
-    return [headerRow, separatorRow, ...bodyRows].join("\n")
+
+/**
+ * @returns {LineageNode}
+ */
+function createLineageNode() {
+    return { children: new Map(), destinations: new Map() }
 }
 
 /**
- * @param {[string, string][]} rows
+ * @param {NormalizedProfile} profile
+ * @returns {string[]}
+ */
+function renderJobTree(profile) {
+    const root = createLineageNode()
+
+    for (const peer of profile.egress_peers) {
+        const destinations = peer.remote_names.map(remoteName => formatDestination(remoteName, peer.remote_address ?? ""))
+        const procTrees = peer.proc_trees.filter(procTree => procTree.ancestry.length > 0)
+        const leaves = procTrees.length > 0 ? procTrees.map(procTree => insertLineage(root, procTree.ancestry)) : [root]
+
+        for (const leaf of leaves) {
+            for (const destination of destinations) {
+                leaf.destinations.set(destination, (leaf.destinations.get(destination) ?? 0) + 1)
+            }
+        }
+    }
+
+    const lines = [getDisplayValue(profile.github.job, "unknown-job")]
+    renderLineageNode(root, "", lines)
+    return lines
+}
+
+/**
+ * @param {LineageNode} root
+ * @param {string[]} ancestry
+ * @returns {LineageNode}
+ */
+function insertLineage(root, ancestry) {
+    let node = root
+    for (const processName of ancestry) {
+        let child = node.children.get(processName)
+        if (child === undefined) {
+            child = createLineageNode()
+            node.children.set(processName, child)
+        }
+        node = child
+    }
+
+    return node
+}
+
+/**
+ * @param {LineageNode} node
+ * @param {string} prefix
+ * @param {string[]} lines
+ * @returns {void}
+ */
+function renderLineageNode(node, prefix, lines) {
+    /** @type {{ label: string, child: LineageNode | null }[]} */
+    const entries = []
+    for (const [destination, count] of node.destinations) {
+        entries.push({ label: count > 1 ? `→ ${destination} (×${count})` : `→ ${destination}`, child: null })
+    }
+    for (const [processName, child] of node.children) {
+        entries.push({ label: processName, child })
+    }
+
+    entries.forEach((entry, index) => {
+        const isLast = index === entries.length - 1
+        lines.push(`${prefix}${isLast ? "└─" : "├─"} ${entry.label}`)
+        if (entry.child !== null) {
+            renderLineageNode(entry.child, `${prefix}${isLast ? "   " : "│  "}`, lines)
+        }
+    })
+}
+
+/**
+ * @param {string} remoteName
+ * @param {string} remoteAddress
  * @returns {string}
  */
-function renderKeyValueTable(rows) {
-    return renderTable(
-        ["Field", "Value"],
-        rows.map(([key, value]) => [escapeMarkdown(key), escapeMarkdown(getDisplayValue(value, "-"))]),
-    )
+function formatDestination(remoteName, remoteAddress) {
+    return remoteAddress !== "" ? `${remoteName} · ${remoteAddress}` : remoteName
+}
+
+/**
+ * @param {NormalizedProfile} profile
+ * @param {string} destination
+ * @returns {string}
+ */
+function findDestinationProcess(profile, destination) {
+    for (const peer of profile.egress_peers) {
+        if (!peer.remote_names.includes(destination)) {
+            continue
+        }
+
+        for (const procTree of peer.proc_trees) {
+            const leafProcess = procTree.ancestry.at(-1)
+            if (leafProcess !== undefined && leafProcess !== "") {
+                return leafProcess
+            }
+        }
+    }
+
+    return ""
+}
+
+const NETWORK_TOOLS = new Set(["curl", "wget", "sh -c", "bash -c"])
+const NETWORK_TOOL_TAIL_LENGTH = 3
+
+/**
+ * @param {string[]} ancestry
+ * @returns {number}
+ */
+function findNetworkToolIndex(ancestry) {
+    const tailStart = Math.max(0, ancestry.length - NETWORK_TOOL_TAIL_LENGTH)
+    for (let index = tailStart; index < ancestry.length; index += 1) {
+        const processName = ancestry[index] ?? ""
+        if (NETWORK_TOOLS.has(processName) || NETWORK_TOOLS.has(processName.split(" ")[0] ?? "")) {
+            return index
+        }
+    }
+
+    return -1
+}
+
+/**
+ * @param {NormalizedProfile} profile
+ * @returns {boolean}
+ */
+function isQuietProfile(profile) {
+    return profile.egress_peers.every(peer => peer.remote_names.length === 0) && profile.telemetry.total_connections === 0
+}
+
+/**
+ * @param {NormalizedProfile[]} profiles
+ * @returns {number}
+ */
+function countUniqueDomains(profiles) {
+    const domains = new Set()
+    for (const profile of profiles) {
+        for (const peer of profile.egress_peers) {
+            for (const remoteName of peer.remote_names) {
+                domains.add(remoteName)
+            }
+        }
+    }
+
+    if (domains.size > 0) {
+        return domains.size
+    }
+
+    return profiles.reduce((total, profile) => total + profile.telemetry.total_domains, 0)
+}
+
+/**
+ * @param {NormalizedProfile[]} profiles
+ * @returns {number}
+ */
+function countConnections(profiles) {
+    return profiles.reduce((total, profile) => total + profile.telemetry.total_connections, 0)
+}
+
+/**
+ * @param {number} count
+ * @param {string} noun
+ * @returns {string}
+ */
+function pluralize(count, noun) {
+    return `${count} ${noun}${count === 1 ? "" : "s"}`
+}
+
+/**
+ * @param {string} sha
+ * @returns {string}
+ */
+function shortSha(sha) {
+    return sha.length > 7 ? sha.slice(0, 7) : sha
 }
 
 /**
@@ -724,25 +883,6 @@ function utmTrackedURL(rawURL) {
 }
 
 /**
- * @param {string} repository
- * @param {string} runId
- * @returns {string}
- */
-function buildGitHubRunLink(repository, runId) {
-    const repositoryPath = repository
-        .split("/")
-        .filter(part => part !== "")
-        .map(part => encodeURIComponent(part))
-        .join("/")
-
-    if (repositoryPath === "" || !repositoryPath.includes("/") || runId === "") {
-        return ""
-    }
-
-    return `https://github.com/${repositoryPath}/actions/runs/${encodeURIComponent(runId)}`
-}
-
-/**
  * @returns {string}
  */
 function resolveAppBaseUrl() {
@@ -791,62 +931,6 @@ function mapApiHostToAppHost(host) {
     }
 
     return host
-}
-
-/**
- * @param {NormalizedProfile} profile
- * @returns {"passed" | "failed"}
- */
-function getAssertionState(profile) {
-    return profile.assertions.some(assertion => assertion.result === "fail") ? "failed" : "passed"
-}
-
-/**
- * @param {NormalizedProfile} profile
- * @returns {string}
- */
-function getAssertionBadge(profile) {
-    return getAssertionState(profile) === "failed" ? "🔴 Failed" : "✅ Passed"
-}
-
-/**
- * @param {NormalizedProfile} profile
- * @returns {boolean}
- */
-function hasNetworkData(profile) {
-    return (
-        profile.egress_peers.length > 0 ||
-        profile.telemetry.total_domains > 0 ||
-        profile.telemetry.total_connections > 0
-    )
-}
-
-/**
- * @param {ProfileResult} result
- * @returns {string}
- */
-function getResultIcon(result) {
-    if (result === "fail") {
-        return "🔴"
-    }
-    if (result === "pass" || result === "attention") {
-        return "✅"
-    }
-    return "❓"
-}
-
-/**
- * @param {ProfileResult} result
- * @returns {string}
- */
-function getResultIconText(result) {
-    if (result === "fail") {
-        return "🔴 fail"
-    }
-    if (result === "pass" || result === "attention") {
-        return "✅ pass"
-    }
-    return "❓ unknown"
 }
 
 /**
@@ -920,15 +1004,6 @@ function compareProfiles(left, right) {
 }
 
 /**
- * @param {string} workflow
- * @param {string} job
- * @returns {string}
- */
-function formatWorkflowJob(workflow, job) {
-    return `${getDisplayValue(workflow, "Unknown workflow")} / ${getDisplayValue(job, "Unknown job")}`
-}
-
-/**
  * @param {string} value
  * @returns {bigint}
  */
@@ -988,58 +1063,12 @@ function getProfileNetworkTelemetry(profile) {
 }
 
 /**
- * @param {string} reportLink
- * @returns {string}
- */
-function buildProfileFooterLink(reportLink) {
-    if (reportLink === "") {
-        return ""
-    }
-
-    return ` · <a href="${escapeHtmlAttribute(reportLink)}">View full report ↗</a>`
-}
-
-/**
  * @param {string} value
  * @param {string} fallback
  * @returns {string}
  */
 function getDisplayValue(value, fallback) {
     return value !== "" ? value : fallback
-}
-
-/**
- * @param {string} repository
- * @param {string} runId
- * @param {string} label
- * @returns {string}
- */
-function formatRunMarkdownLink(repository, runId, label) {
-    const runLink = buildGitHubRunLink(repository, runId)
-    if (runLink === "") {
-        return escapeMarkdown(label)
-    }
-
-    return `[${escapeMarkdown(label)}](${escapeMarkdownLink(runLink)})`
-}
-
-/**
- * @param {string} repository
- * @param {string} runId
- * @param {string} job
- * @returns {string}
- */
-function formatRunJob(repository, runId, job) {
-    /** @type {string[]} */
-    const parts = []
-    if (runId !== "") {
-        parts.push(formatRunMarkdownLink(repository, runId, runId))
-    }
-    if (job !== "") {
-        parts.push(escapeMarkdown(job))
-    }
-
-    return parts.length > 0 ? parts.join(" / ") : "-"
 }
 
 /**
@@ -1066,18 +1095,3 @@ function escapeMarkdownLink(value) {
     return value.replaceAll(")", "%29")
 }
 
-/**
- * @param {string} value
- * @returns {string}
- */
-function escapeHtml(value) {
-    return value.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;")
-}
-
-/**
- * @param {string} value
- * @returns {string}
- */
-function escapeHtmlAttribute(value) {
-    return escapeHtml(value)
-}
