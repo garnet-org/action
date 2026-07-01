@@ -374,7 +374,7 @@ export function renderCommentBody(state) {
         `<!-- ${ACTION_COMMENT_MARKER} -->`,
         `<!-- ${COMMIT_MARKER_PREFIX}${commitSha} -->`,
         `<!-- ${COMMENT_STATE_MARKER_PREFIX}${metadata} -->`,
-        "## Garnet Runtime Report",
+        "## Garnet Runtime Review",
         "",
         headline,
         "",
@@ -417,14 +417,25 @@ export function parseCommentState(body) {
  */
 function renderHeadline(profiles) {
     const failedJobs = profiles.filter(profile => getAssertionState(profile) === "failed").length
-    const passedJobs = profiles.length - failedJobs
+    const attentionJobs = profiles.filter(profile => getAssertionState(profile) === "attention").length
+    const passedJobs = profiles.length - failedJobs - attentionJobs
     const workflowCount = new Set(profiles.map(profile => getWorkflowKey(profile))).size
+    const across = `across ${workflowCount} workflow${workflowCount === 1 ? "" : "s"}`
 
     if (failedJobs > 0) {
-        return `🔴 ${failedJobs} job${failedJobs === 1 ? "" : "s"} failed assertions · ${passedJobs} passed across ${workflowCount} workflow${workflowCount === 1 ? "" : "s"}`
+        const rest = []
+        if (attentionJobs > 0) {
+            rest.push(`${attentionJobs} attention`)
+        }
+        rest.push(`${passedJobs} passed`)
+        return `🛑 **Failed** — ${failedJobs} job${failedJobs === 1 ? "" : "s"} failed assertions · ${rest.join(" · ")} ${across}`
     }
 
-    return `✅ ${passedJobs} job${passedJobs === 1 ? "" : "s"} passed assertions across ${workflowCount} workflow${workflowCount === 1 ? "" : "s"}`
+    if (attentionJobs > 0) {
+        return `🔍 **Attention** — ${attentionJobs} job${attentionJobs === 1 ? "" : "s"} flagged for attention · ${passedJobs} passed ${across}`
+    }
+
+    return `✅ **Passed** — ${passedJobs} job${passedJobs === 1 ? "" : "s"} passed assertions ${across}`
 }
 
 /**
@@ -795,10 +806,16 @@ function mapApiHostToAppHost(host) {
 
 /**
  * @param {NormalizedProfile} profile
- * @returns {"passed" | "failed"}
+ * @returns {"passed" | "attention" | "failed"}
  */
 function getAssertionState(profile) {
-    return profile.assertions.some(assertion => assertion.result === "fail") ? "failed" : "passed"
+    if (profile.assertions.some(assertion => assertion.result === "fail")) {
+        return "failed"
+    }
+    if (profile.assertions.some(assertion => assertion.result === "attention")) {
+        return "attention"
+    }
+    return "passed"
 }
 
 /**
@@ -806,7 +823,14 @@ function getAssertionState(profile) {
  * @returns {string}
  */
 function getAssertionBadge(profile) {
-    return getAssertionState(profile) === "failed" ? "🔴 Failed" : "✅ Passed"
+    const state = getAssertionState(profile)
+    if (state === "failed") {
+        return "🛑 Failed"
+    }
+    if (state === "attention") {
+        return "🔍 Attention"
+    }
+    return "✅ Passed"
 }
 
 /**
@@ -827,9 +851,12 @@ function hasNetworkData(profile) {
  */
 function getResultIcon(result) {
     if (result === "fail") {
-        return "🔴"
+        return "🛑"
     }
-    if (result === "pass" || result === "attention") {
+    if (result === "attention") {
+        return "🔍"
+    }
+    if (result === "pass") {
         return "✅"
     }
     return "❓"
@@ -841,12 +868,15 @@ function getResultIcon(result) {
  */
 function getResultIconText(result) {
     if (result === "fail") {
-        return "🔴 fail"
+        return "🛑 Failed"
     }
-    if (result === "pass" || result === "attention") {
-        return "✅ pass"
+    if (result === "attention") {
+        return "🔍 Attention"
     }
-    return "❓ unknown"
+    if (result === "pass") {
+        return "✅ Passed"
+    }
+    return "❓ Unknown"
 }
 
 /**
