@@ -1,5 +1,6 @@
-name: "Garnet Runtime Visibility"
-description: "Runtime profiling and behavioral assertions for GitHub Actions"
+name: "Garnet Runtime Review"
+author: "Garnet Labs Inc."
+description: "Runtime review for GitHub Actions: eBPF records what your CI/CD actually did, then asserts on it in your PR"
 branding:
   icon: "activity"
   color: "purple"
