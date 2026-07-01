@@ -1,11 +1,11 @@
-# Garnet Runtime Visibility
+# Garnet Runtime Review
 
 <div align="center">
   <a href="https://garnet.ai">
     <img src="brand/garnet-logo.png" alt="Garnet" width="260" />
   </a>
 
-  <p><strong>Runtime visibility for GitHub Workflows</strong></p>
+  <p><strong>Runtime Review for GitHub Workflows — eBPF records what your CI/CD actually did, then asserts on it in your PR</strong></p>
 
   <p>
     <a href="https://app.garnet.ai">Get an API token</a> ·
@@ -96,10 +96,13 @@ jobs:
         run: npm test
 ```
 
-> **Tip:** Major tags such as `@v2` track the latest `v2.x.x` release automatically. Use `@main` only if you want the latest unreleased code, or pin to a full commit SHA for maximum supply-chain safety:
+> **Tip:** Major tags such as `@v2` track the latest `v2.x.x` release automatically. Use `@main` only if you want the latest unreleased code, or pin to a full commit SHA for maximum supply-chain safety (recommended for production):
 >
 > ```yaml
-> - uses: garnet-org/action@<commit-sha>
+> # Pinned to v2.1.0
+> - uses: garnet-org/action@189e3fecf8d9ebc204f47caf03d56cb1c061c197
+>   with:
+>     api_token: ${{ secrets.GARNET_API_TOKEN }}
 > ```
 
 ### Versioning
@@ -107,6 +110,25 @@ jobs:
 - `garnet-org/action@v2` tracks the latest `v2.x.x` release.
 - `garnet-org/action@main` tracks the latest unreleased code on the default branch.
 - Exact tags such as `garnet-org/action@v2.3.0` remain available when you want a fully pinned released version.
+
+## Not using GitHub Actions?
+
+This action is the easiest way to get Garnet Runtime Review into a GitHub workflow, but it is not the only way to run Garnet. The same eBPF sensor and runtime assertions work anywhere your code executes.
+
+- **GitHub App (no workflow edits):** Install the [Garnet GitHub App](https://app.garnet.ai) to connect repositories from the Garnet dashboard. Runtime Review results are posted back to your pull requests without adding a step to every workflow. Best for org-wide rollout.
+- **`garnetctl` CLI + Jibril agent (any CI or host):** Install the [`garnetctl`](https://github.com/garnet-org/garnetctl-releases) CLI and the [`jibril`](https://github.com/garnet-org/jibril-releases) agent to run runtime review on GitLab CI, Jenkins, Buildkite, self-hosted runners, or a bare Linux host (kernel 5.10+, root/eBPF required). Point it at `https://api.garnet.ai` with your API token — the same profiles and assertions you get from this action.
+
+  ```bash
+  # Point garnetctl at the Garnet API and authenticate
+  garnetctl config set-baseurl https://api.garnet.ai
+  garnetctl config set-token <your-api-token>
+  # Verify connectivity, then run the jibril agent on the host
+  garnetctl version
+  ```
+
+- **Docker / Kubernetes:** Run Jibril as a container or via the [Garnet Helm charts](https://github.com/garnet-org/helm-charts) for cluster-wide runtime visibility.
+
+Full installation guides for every path are in the [Garnet docs](https://docs.garnet.ai).
 
 ## What you'll see
 
