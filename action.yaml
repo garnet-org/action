@@ -1,5 +1,6 @@
 name: "Garnet Runtime Review"
-description: "Records what each job in your workflow did at runtime — processes and network egress — and posts the Runtime Review from the Action stage"
+author: "Garnet Labs Inc."
+description: "Records what each job did at runtime — processes and network egress — and posts the Runtime Review from the Action stage"
 branding:
     icon: "activity"
     color: "purple"
