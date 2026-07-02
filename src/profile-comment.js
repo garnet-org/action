@@ -25,13 +25,23 @@ const COMMENT_STATE_MARKER_PREFIX = "garnet-action-comment-state:"
  */
 
 /**
- * @typedef {{ ancestry: string[] }} ProcTree
+ * @typedef {{ ancestry: string[], github_step?: string | undefined }} ProcTree
  */
 
 /**
  * @typedef {{
- *   remote_address?: string
+ *   org?: string | undefined
+ *   city?: string | undefined
+ *   country_code?: string | undefined
+ * }} PeerGeoInfo
+ */
+
+/**
+ * @typedef {{
+ *   remote_address?: string | undefined
  *   remote_names: string[]
+ *   remote_ports?: (string | number)[] | undefined
+ *   remote_geo_info?: PeerGeoInfo | undefined
  *   proc_trees: ProcTree[]
  *   result: ProfileResult
  * }} EgressPeer
@@ -95,9 +105,11 @@ const PROFILE_RESULT_SCHEMA = z.unknown().transform(value => normalizeResult(val
 const PROC_TREE_SCHEMA = z
     .looseObject({
         ancestry: z.array(z.string()),
+        github_step: z.string().optional(),
     })
     .transform(procTree => ({
         ancestry: procTree.ancestry.filter(entry => entry.length > 0),
+        ...(procTree.github_step !== undefined ? { github_step: procTree.github_step } : {}),
     }))
 
 const ASSERTION_SCHEMA = z.looseObject({
@@ -105,11 +117,19 @@ const ASSERTION_SCHEMA = z.looseObject({
     result: PROFILE_RESULT_SCHEMA,
 })
 
+const PEER_GEO_INFO_SCHEMA = z.looseObject({
+    org: z.string().optional(),
+    city: z.string().optional(),
+    country_code: z.string().optional(),
+})
+
 const PEER_SCHEMA = z
     .looseObject({
         result: PROFILE_RESULT_SCHEMA,
         remote_address: z.string().optional(),
         remote_names: z.array(z.string()),
+        remote_ports: z.array(z.union([z.string(), z.number()])).optional(),
+        remote_geo_info: PEER_GEO_INFO_SCHEMA.optional(),
         proc_trees: z.array(PROC_TREE_SCHEMA),
     })
     .transform(peer => ({
@@ -117,6 +137,8 @@ const PEER_SCHEMA = z
         remote_names: peer.remote_names.filter(name => name.length > 0),
         proc_trees: peer.proc_trees,
         result: peer.result,
+        ...(peer.remote_ports !== undefined ? { remote_ports: peer.remote_ports } : {}),
+        ...(peer.remote_geo_info !== undefined ? { remote_geo_info: peer.remote_geo_info } : {}),
     }))
 
 const GITHUB_SCENARIO_SCHEMA = z.object({
@@ -375,23 +397,74 @@ export function renderCommentBody(state) {
         `<!-- ${ACTION_COMMENT_MARKER} -->`,
         `<!-- ${COMMIT_MARKER_PREFIX}${commitSha} -->`,
         `<!-- ${COMMENT_STATE_MARKER_PREFIX}${metadata} -->`,
-        "## Garnet Runtime Review",
-        renderMetaLine(profiles),
+        "## What this PR did at runtime",
         "",
-        renderHeadline(profiles),
     ]
 
-    const inlineTrees = renderInlineTrees(profiles)
-    if (inlineTrees !== "") {
-        parts.push("", inlineTrees)
+    if (profiles.length === 0) {
+        parts.push("No runtime activity was recorded for this commit.")
+        return parts.join("\n")
     }
 
-    const quietJobLines = renderQuietJobLines(profiles)
-    if (quietJobLines !== "") {
-        parts.push("", quietJobLines)
+    const totalConnections = profiles.reduce((total, profile) => total + profile.telemetry.total_connections, 0)
+    const uniqueDomains = new Set()
+    for (const profile of profiles) {
+        for (const peer of visiblePeers(profile)) {
+            uniqueDomains.add(lc(destinationName(peer)))
+        }
+    }
+    const totalDomains =
+        uniqueDomains.size > 0
+            ? uniqueDomains.size
+            : profiles.reduce((total, profile) => total + profile.telemetry.total_domains, 0)
+    const workloadDomains = new Set()
+    for (const profile of profiles) {
+        for (const peer of visiblePeers(profile)) {
+            const name = destinationName(peer)
+            if (!isInfraEgress(name)) {
+                workloadDomains.add(lc(name))
+            }
+        }
     }
 
-    parts.push("", renderEvidenceFold(profiles), "", "---", renderFooter(profiles))
+    parts.push(
+        renderSummaryLine({
+            jobs: profiles.length,
+            connections: totalConnections,
+            destinations: totalDomains,
+            workloadDestinations: workloadDomains.size,
+        }),
+        "",
+    )
+
+    // Each job with workload egress gets its own section, one bullet per unique
+    // process lineage. Registry/build-infra egress folds into one deduped block
+    // below, so the comment stays short even on a many-job PR.
+    for (const profile of profiles) {
+        const workload = visiblePeers(profile).filter(peer => !isInfraEgress(destinationName(peer)))
+        if (workload.length === 0) {
+            continue
+        }
+
+        parts.push(`**${escapeMarkdown(profileJobLabel(profile))}** · ${renderJobLinks(profile)}`, "")
+        for (const bullet of renderLineageBullets(workload)) {
+            parts.push(bullet)
+        }
+        parts.push("")
+    }
+
+    const infraBlock = renderInfraBlock(profiles)
+    if (infraBlock.length > 0) {
+        parts.push(...infraBlock, "")
+    }
+
+    const sha = shortSha(commitSha)
+    const reportLink = profiles.map(profile => profile.report_link).find(link => link !== "") ?? ""
+    const linkPart = reportLink !== "" ? ` · <a href="${escapeMarkdownLink(reportLink)}">full runtime record ↗</a>` : ""
+    parts.push(
+        "---",
+        `<sub>${pluralize(totalDomains, "destination")} · ${pluralize(totalConnections, "connection")} across ${pluralize(profiles.length, "job")}${sha !== "" ? ` · \`${sha}\`` : ""} · <b>Powered by Garnet</b>${linkPart}</sub>`,
+    )
 
     return parts.join("\n")
 }
@@ -424,373 +497,368 @@ export function parseCommentState(body) {
 }
 
 /**
- * @param {NormalizedProfile[]} profiles
+ * Package registries & build infrastructure: a FIXED, deterministic list of
+ * well-known package registries, source hosts, OS mirrors, and the runtime's
+ * own plumbing. Used only to group the snapshot so registry noise folds into
+ * one collapsed block — a factual classification, never a judgment. There is
+ * no baseline and no history: the same profile always renders the same comment.
+ */
+const INFRA_EGRESS = [
+    /(^|\.)npmjs\.(org|com)$/,
+    /(^|\.)yarnpkg\.com$/,
+    /(^|\.)pypi\.org$/,
+    /(^|\.)pythonhosted\.org$/,
+    /(^|\.)github\.com$/,
+    /(^|\.)githubusercontent\.com$/,
+    /(^|\.)ghcr\.io$/,
+    /(^|\.)deb\.debian\.org$/,
+    /(^|\.)(archive|security)\.ubuntu\.com$/,
+    /(^|\.)dl\.google\.com$/,
+    /(^|\.)(proxy|sum)\.golang\.org$/,
+    /(^|\.)(static\.)?crates\.io$/,
+    // The runtime's own plumbing: the Garnet sensor's control-plane endpoint
+    // and the GitHub-hosted runner watchdog. Part of running CI, not the PR's
+    // workload.
+    /(^|\.)garnet\.ai$/,
+    /(^|\.)githubapp\.com$/,
+    /hosted-compute-watchdog/,
+]
+
+/**
+ * @param {string} value
  * @returns {string}
  */
-function renderMetaLine(profiles) {
-    const repository = getDisplayValue(profiles[0]?.github.repository ?? "", "unknown-repository")
-    const sha = shortSha(getCommentCommitSha(profiles))
-    const jobCount = profiles.length
-    const workflowCount = new Set(profiles.map(profile => getWorkflowKey(profile))).size
-
-    return `${repository} · ${getDisplayValue(sha, "unknown-commit")} · ${pluralize(jobCount, "job")} · ${pluralize(workflowCount, "workflow")}`
+function lc(value) {
+    return value.trim().toLowerCase()
 }
 
 /**
- * @param {NormalizedProfile[]} profiles
+ * @param {string} name
+ * @returns {boolean}
+ */
+function isInfraEgress(name) {
+    const normalized = lc(name)
+    return INFRA_EGRESS.some(pattern => pattern.test(normalized))
+}
+
+/**
+ * Pick the most human-meaningful name for a destination: prefer a DNS name
+ * over a bare IP.
+ *
+ * @param {EgressPeer} peer
  * @returns {string}
  */
-function renderHeadline(profiles) {
-    return (
-        renderUniqueDestinationHeadline(profiles) ??
-        renderSpawnTopologyHeadline(profiles) ??
-        renderCountsHeadline(profiles)
+function destinationName(peer) {
+    const dns = peer.remote_names.find(name => /[a-z]/i.test(name) && !/^\d+\.\d+\.\d+\.\d+$/.test(name))
+    if (dns !== undefined) {
+        return dns
+    }
+
+    return peer.remote_names[0] ?? peer.remote_address ?? "an unknown host"
+}
+
+/**
+ * @param {EgressPeer} peer
+ * @returns {string}
+ */
+function destinationIP(peer) {
+    const ip = peer.remote_names.find(name => /^\d+\.\d+\.\d+\.\d+$/.test(name))
+    return ip ?? peer.remote_address ?? ""
+}
+
+/**
+ * Loopback / localhost "peers" are not real outbound egress — they're the
+ * local DNS resolver and same-host traffic Jibril also records.
+ *
+ * @param {EgressPeer} peer
+ * @returns {boolean}
+ */
+function isLoopbackPeer(peer) {
+    const names = [...peer.remote_names, peer.remote_address ?? ""].map(lc)
+    return names.some(
+        name => name === "localhost" || name === "::1" || /^127\./.test(name) || /(^|\.)localhost$/.test(name),
     )
 }
 
 /**
- * R1 — a destination reached by exactly one job, computable only when multiple
- * job profiles are present in the payload.
+ * Peers worth rendering: real outbound egress with a resolvable destination.
  *
- * @param {NormalizedProfile[]} profiles
- * @returns {string | null}
+ * @param {NormalizedProfile} profile
+ * @returns {EgressPeer[]}
  */
-function renderUniqueDestinationHeadline(profiles) {
-    if (profiles.length < 2) {
-        return null
-    }
-
-    /** @type {Map<string, Set<string>>} */
-    const destinationJobs = new Map()
-    for (const profile of profiles) {
-        const jobKey = getProfileKey(profile)
-        for (const peer of profile.egress_peers) {
-            for (const remoteName of peer.remote_names) {
-                const jobs = destinationJobs.get(remoteName) ?? new Set()
-                jobs.add(jobKey)
-                destinationJobs.set(remoteName, jobs)
-            }
-        }
-    }
-
-    const uniqueDestinations = [...destinationJobs.entries()]
-        .filter(([, jobs]) => jobs.size === 1)
-        .map(([destination]) => destination)
-        .sort()
-
-    const destination = uniqueDestinations[0]
-    if (destination === undefined || destinationJobs.size === uniqueDestinations.length) {
-        return null
-    }
-
-    const profile = profiles.find(candidate =>
-        candidate.egress_peers.some(peer => peer.remote_names.includes(destination)),
-    )
-    if (profile === undefined) {
-        return null
-    }
-
-    const jobLabel = getDisplayValue(profile.github.job, "unknown-job")
-    const process = findDestinationProcess(profile, destination)
-    const reachedBy = process !== "" ? `\`${process}\` reached` : "the job reached"
-
-    return `In \`${jobLabel}\`, ${reachedBy} \`${destination}\` — a destination no other job in this run reached.`
+function visiblePeers(profile) {
+    return profile.egress_peers.filter(peer => !isLoopbackPeer(peer) && destinationName(peer) !== "an unknown host")
 }
 
 /**
- * R2 — a network tool appearing in the lineage tail of an ancestry array.
+ * First non-empty ancestry recorded for a peer.
  *
- * @param {NormalizedProfile[]} profiles
- * @returns {string | null}
- */
-function renderSpawnTopologyHeadline(profiles) {
-    for (const profile of profiles) {
-        for (const peer of profile.egress_peers) {
-            for (const procTree of peer.proc_trees) {
-                const toolIndex = findNetworkToolIndex(procTree.ancestry)
-                if (toolIndex === -1) {
-                    continue
-                }
-
-                const jobLabel = getDisplayValue(profile.github.job, "unknown-job")
-                const parent = procTree.ancestry[toolIndex - 1] ?? ""
-                const chain = procTree.ancestry.slice(toolIndex).join(" → ")
-                const destination = peer.remote_names[0] ?? ""
-                const spawnedBy = parent !== "" ? `\`${parent}\` spawned` : "the job spawned"
-                const reached = destination !== "" ? `, which reached \`${destination}\`` : ""
-
-                return `In \`${jobLabel}\`, ${spawnedBy} \`${chain}\`${reached}.`
-            }
-        }
-    }
-
-    return null
-}
-
-/**
- * R3 — plain job/workflow/destination counts.
- *
- * @param {NormalizedProfile[]} profiles
- * @returns {string}
- */
-function renderCountsHeadline(profiles) {
-    const jobCount = profiles.length
-    const workflowCount = new Set(profiles.map(profile => getWorkflowKey(profile))).size
-    const domainCount = countUniqueDomains(profiles)
-    const connectionCount = countConnections(profiles)
-
-    if (domainCount === 0 && connectionCount === 0) {
-        return `${pluralize(jobCount, "job")} across ${pluralize(workflowCount, "workflow")} made no outbound connections.`
-    }
-
-    return `${pluralize(jobCount, "job")} across ${pluralize(workflowCount, "workflow")} reached ${pluralize(domainCount, "domain")} over ${pluralize(connectionCount, "connection")}.`
-}
-
-/**
- * @param {NormalizedProfile[]} profiles
- * @returns {string}
- */
-function renderInlineTrees(profiles) {
-    const activeProfiles = profiles.filter(profile => !isQuietProfile(profile))
-    if (activeProfiles.length === 0) {
-        return ""
-    }
-
-    const trees = activeProfiles.map(profile => renderJobTree(profile).join("\n"))
-
-    return ["```text", trees.join("\n\n"), "```"].join("\n")
-}
-
-/**
- * @param {NormalizedProfile[]} profiles
- * @returns {string}
- */
-function renderQuietJobLines(profiles) {
-    return profiles
-        .filter(profile => isQuietProfile(profile))
-        .map(profile => renderQuietJobLine(profile))
-        .join("\n")
-}
-
-/**
- * @param {NormalizedProfile} profile
- * @returns {string}
- */
-function renderQuietJobLine(profile) {
-    const jobLabel = escapeMarkdown(getDisplayValue(profile.github.job, "unknown-job"))
-    const workflowLabel = escapeMarkdown(getDisplayValue(profile.github.workflow, "unknown-workflow"))
-
-    return `\`${jobLabel}\` · ${workflowLabel} — made no outbound connections.`
-}
-
-/**
- * @param {NormalizedProfile[]} profiles
- * @returns {string}
- */
-function renderEvidenceFold(profiles) {
-    const jobCount = profiles.length
-    const domainCount = countUniqueDomains(profiles)
-    const connectionCount = countConnections(profiles)
-    const summary = `Full process & network evidence · ${pluralize(jobCount, "job")} · ${pluralize(domainCount, "domain")} · ${pluralize(connectionCount, "connection")}`
-    const sections = profiles.map(profile => renderEvidenceSection(profile))
-
-    return ["<details>", `<summary>${summary}</summary>`, "", sections.join("\n\n"), "", "</details>"].join("\n")
-}
-
-/**
- * @param {NormalizedProfile} profile
- * @returns {string}
- */
-function renderEvidenceSection(profile) {
-    const workflowLabel = escapeMarkdown(getDisplayValue(profile.github.workflow, "unknown-workflow"))
-    const jobLabel = escapeMarkdown(getDisplayValue(profile.github.job, "unknown-job"))
-    const heading = `**${workflowLabel} / ${jobLabel}** · ${pluralize(profile.telemetry.total_domains, "domain")} · ${pluralize(profile.telemetry.total_connections, "connection")}`
-
-    if (isQuietProfile(profile)) {
-        return [heading, "", "Made no outbound connections."].join("\n")
-    }
-
-    return [heading, "", "```text", renderJobTree(profile).join("\n"), "```"].join("\n")
-}
-
-/**
- * @param {NormalizedProfile[]} profiles
- * @returns {string}
- */
-function renderFooter(profiles) {
-    const permalink = profiles.map(profile => profile.report_link).find(link => link !== "") ?? ""
-    const runProfileLink = permalink !== "" ? ` · [Run Profile ↗](${escapeMarkdownLink(permalink)})` : ""
-
-    return `<sub>What happened in this PR — each job's processes and where they reached.${runProfileLink}</sub>`
-}
-
-/**
- * @typedef {{
- *   children: Map<string, LineageNode>
- *   destinations: Map<string, number>
- * }} LineageNode
- */
-
-/**
- * @returns {LineageNode}
- */
-function createLineageNode() {
-    return { children: new Map(), destinations: new Map() }
-}
-
-/**
- * @param {NormalizedProfile} profile
+ * @param {EgressPeer} peer
  * @returns {string[]}
  */
-function renderJobTree(profile) {
-    const root = createLineageNode()
-
-    for (const peer of profile.egress_peers) {
-        const destinations = peer.remote_names.map(remoteName => formatDestination(remoteName, peer.remote_address ?? ""))
-        const procTrees = peer.proc_trees.filter(procTree => procTree.ancestry.length > 0)
-        const leaves = procTrees.length > 0 ? procTrees.map(procTree => insertLineage(root, procTree.ancestry)) : [root]
-
-        for (const leaf of leaves) {
-            for (const destination of destinations) {
-                leaf.destinations.set(destination, (leaf.destinations.get(destination) ?? 0) + 1)
-            }
+function lineageOf(peer) {
+    for (const procTree of peer.proc_trees) {
+        if (procTree.ancestry.length > 0) {
+            return procTree.ancestry
         }
     }
 
-    const lines = [getDisplayValue(profile.github.job, "unknown-job")]
-    renderLineageNode(root, "", lines)
-    return lines
+    return []
 }
 
 /**
- * @param {LineageNode} root
- * @param {string[]} ancestry
- * @returns {LineageNode}
- */
-function insertLineage(root, ancestry) {
-    let node = root
-    for (const processName of ancestry) {
-        let child = node.children.get(processName)
-        if (child === undefined) {
-            child = createLineageNode()
-            node.children.set(processName, child)
-        }
-        node = child
-    }
-
-    return node
-}
-
-/**
- * @param {LineageNode} node
- * @param {string} prefix
- * @param {string[]} lines
- * @returns {void}
- */
-function renderLineageNode(node, prefix, lines) {
-    /** @type {{ label: string, child: LineageNode | null }[]} */
-    const entries = []
-    for (const [destination, count] of node.destinations) {
-        entries.push({ label: count > 1 ? `→ ${destination} (×${count})` : `→ ${destination}`, child: null })
-    }
-    for (const [processName, child] of node.children) {
-        entries.push({ label: processName, child })
-    }
-
-    entries.forEach((entry, index) => {
-        const isLast = index === entries.length - 1
-        lines.push(`${prefix}${isLast ? "└─" : "├─"} ${entry.label}`)
-        if (entry.child !== null) {
-            renderLineageNode(entry.child, `${prefix}${isLast ? "   " : "│  "}`, lines)
-        }
-    })
-}
-
-/**
- * @param {string} remoteName
- * @param {string} remoteAddress
+ * Reviewer-friendly lineage: keep the root and the last few meaningful hops,
+ * collapsing the noisy middle so a long CI ancestry stays one readable line
+ * (e.g. `systemd → … → bash → node`).
+ *
+ * @param {string[]} lineage
  * @returns {string}
  */
-function formatDestination(remoteName, remoteAddress) {
-    return remoteAddress !== "" ? `${remoteName} · ${remoteAddress}` : remoteName
+function lineageDisplay(lineage) {
+    if (lineage.length <= 5) {
+        return lineage.join(" → ")
+    }
+
+    return [lineage[0], "…", ...lineage.slice(-3)].join(" → ")
 }
 
 /**
- * @param {NormalizedProfile} profile
- * @param {string} destination
+ * Strip GitHub's step-number prefix: "3. Install dependencies" → "Install dependencies".
+ *
+ * @param {string} step
  * @returns {string}
  */
-function findDestinationProcess(profile, destination) {
-    for (const peer of profile.egress_peers) {
-        if (!peer.remote_names.includes(destination)) {
-            continue
-        }
+function cleanStep(step) {
+    return step.replace(/^\s*\d+\.\s*/, "").trim()
+}
 
-        for (const procTree of peer.proc_trees) {
-            const leafProcess = procTree.ancestry.at(-1)
-            if (leafProcess !== undefined && leafProcess !== "") {
-                return leafProcess
-            }
+/**
+ * @param {EgressPeer} peer
+ * @returns {string}
+ */
+function peerStep(peer) {
+    for (const procTree of peer.proc_trees) {
+        const step = cleanStep(procTree.github_step ?? "")
+        if (step !== "") {
+            return step
         }
     }
 
     return ""
 }
 
-const NETWORK_TOOLS = new Set(["curl", "wget", "sh -c", "bash -c"])
-const NETWORK_TOOL_TAIL_LENGTH = 3
-
 /**
- * @param {string[]} ancestry
- * @returns {number}
+ * Compact "who is on the other end" label from Jibril's geo enrichment, e.g.
+ * "Cloudflare, Inc. · Toronto, CA". Purely descriptive. Empty when no geo is
+ * present.
+ *
+ * @param {EgressPeer} peer
+ * @returns {string}
  */
-function findNetworkToolIndex(ancestry) {
-    const tailStart = Math.max(0, ancestry.length - NETWORK_TOOL_TAIL_LENGTH)
-    for (let index = tailStart; index < ancestry.length; index += 1) {
-        const processName = ancestry[index] ?? ""
-        if (NETWORK_TOOLS.has(processName) || NETWORK_TOOLS.has(processName.split(" ")[0] ?? "")) {
-            return index
-        }
+function hostedByLabel(peer) {
+    const geo = peer.remote_geo_info
+    if (geo === undefined) {
+        return ""
     }
 
-    return -1
+    const owner = (geo.org ?? "").trim()
+    const place = [geo.city, geo.country_code].filter(part => part !== undefined && part !== "").join(", ")
+    return [owner, place].filter(part => part !== "").join(" · ")
+}
+
+/**
+ * Join a list into "a", "a and b", or "a, b, and c".
+ *
+ * @param {string[]} items
+ * @returns {string}
+ */
+function humanList(items) {
+    if (items.length === 0) {
+        return ""
+    }
+    if (items.length === 1) {
+        return items[0] ?? ""
+    }
+    if (items.length === 2) {
+        return `${items[0]} and ${items[1]}`
+    }
+
+    return `${items.slice(0, -1).join(", ")}, and ${items[items.length - 1]}`
 }
 
 /**
  * @param {NormalizedProfile} profile
- * @returns {boolean}
+ * @returns {string}
  */
-function isQuietProfile(profile) {
-    return profile.egress_peers.every(peer => peer.remote_names.length === 0) && profile.telemetry.total_connections === 0
+function profileJobLabel(profile) {
+    const workflow = profile.github.workflow
+    const job = profile.github.job
+    if (workflow !== "" && job !== "") {
+        return `${workflow} / ${job}`
+    }
+
+    return getDisplayValue(job !== "" ? job : workflow, "unknown-job")
 }
 
 /**
- * @param {NormalizedProfile[]} profiles
- * @returns {number}
+ * @param {NormalizedProfile} profile
+ * @returns {string}
  */
-function countUniqueDomains(profiles) {
-    const domains = new Set()
-    for (const profile of profiles) {
-        for (const peer of profile.egress_peers) {
-            for (const remoteName of peer.remote_names) {
-                domains.add(remoteName)
-            }
+function renderJobLinks(profile) {
+    const links = []
+    if (profile.github.repository !== "" && profile.github.run_id !== "") {
+        links.push(`[run ↗](https://github.com/${profile.github.repository}/actions/runs/${profile.github.run_id})`)
+    }
+    if (profile.report_link !== "") {
+        links.push(`[details ↗](${escapeMarkdownLink(profile.report_link)})`)
+    }
+
+    return links.join(" · ")
+}
+
+/**
+ * @typedef {{
+ *   display: string
+ *   step: string
+ *   domains: { name: string, ip: string, hostedBy: string }[]
+ * }} LineageGroup
+ */
+
+/**
+ * Group peers by unique process lineage; append all destinations per lineage.
+ *
+ * @param {EgressPeer[]} peers
+ * @returns {LineageGroup[]}
+ */
+function groupByLineage(peers) {
+    /** @type {Map<string, LineageGroup>} */
+    const groups = new Map()
+    for (const peer of peers) {
+        const lineage = lineageOf(peer)
+        const key = lineage.join("\u241f")
+        let group = groups.get(key)
+        if (group === undefined) {
+            group = { display: lineageDisplay(lineage), step: peerStep(peer), domains: [] }
+            groups.set(key, group)
+        }
+        if (group.step === "") {
+            group.step = peerStep(peer)
+        }
+
+        const name = destinationName(peer)
+        if (!group.domains.some(domain => domain.name === name)) {
+            group.domains.push({ name, ip: destinationIP(peer), hostedBy: hostedByLabel(peer) })
         }
     }
 
-    if (domains.size > 0) {
-        return domains.size
+    return [...groups.values()]
+}
+
+const MAX_LINEAGES = 6
+const MAX_DOMAINS = 6
+
+/**
+ * One bullet per unique lineage, destinations appended into a single sentence.
+ * Caps width so a large PR stays readable; the rest lives in Garnet.
+ *
+ * @param {EgressPeer[]} peers
+ * @returns {string[]}
+ */
+function renderLineageBullets(peers) {
+    const groups = groupByLineage(peers)
+    const lines = []
+    for (const group of groups.slice(0, MAX_LINEAGES)) {
+        const shownDomains = group.domains.slice(0, MAX_DOMAINS)
+        // When a lineage reached a single destination, inline who is on the
+        // other end (IP · owner · city) — the reviewer's first question. With
+        // several destinations, keep the names clean.
+        const single = shownDomains.length === 1
+        const shown = shownDomains.map(domain => {
+            const meta = single
+                ? [domain.ip, domain.hostedBy].filter(part => part !== "" && part !== domain.name).map(escapeMarkdown)
+                : []
+            return meta.length > 0
+                ? `\`${escapeMarkdown(domain.name)}\` (${meta.join(" · ")})`
+                : `\`${escapeMarkdown(domain.name)}\``
+        })
+        const extra = group.domains.length > MAX_DOMAINS ? `, and ${group.domains.length - MAX_DOMAINS} more` : ""
+        const step = group.step !== "" ? ` — observed during **${escapeMarkdown(group.step)}**` : ""
+        const display = group.display !== "" ? group.display : "a process"
+        lines.push(`- \`${escapeMarkdown(display)}\` connected to ${humanList(shown)}${extra}${step}`)
+    }
+    if (groups.length > MAX_LINEAGES) {
+        lines.push(`- …and ${groups.length - MAX_LINEAGES} more process lineages`)
     }
 
-    return profiles.reduce((total, profile) => total + profile.telemetry.total_domains, 0)
+    return lines
 }
 
 /**
+ * Collapsed, deduped registry/build-infra block. Folds the package registries
+ * and source hosts across ALL jobs into one short list so the comment shows
+ * the workload egress up top and never repeats npm/GitHub noise per job.
+ *
  * @param {NormalizedProfile[]} profiles
- * @returns {number}
+ * @returns {string[]}
  */
-function countConnections(profiles) {
-    return profiles.reduce((total, profile) => total + profile.telemetry.total_connections, 0)
+function renderInfraBlock(profiles) {
+    /** @type {Map<string, Set<string>>} */
+    const domainJobs = new Map()
+    for (const profile of profiles) {
+        const label = profileJobLabel(profile)
+        for (const peer of visiblePeers(profile)) {
+            const name = destinationName(peer)
+            if (!isInfraEgress(name)) {
+                continue
+            }
+            const jobs = domainJobs.get(name) ?? new Set()
+            jobs.add(label)
+            domainJobs.set(name, jobs)
+        }
+    }
+
+    if (domainJobs.size === 0) {
+        return []
+    }
+
+    const jobs = new Set()
+    for (const set of domainJobs.values()) {
+        for (const job of set) {
+            jobs.add(job)
+        }
+    }
+
+    const rows = [...domainJobs.entries()].sort((left, right) => right[1].size - left[1].size || left[0].localeCompare(right[0]))
+    const lines = [
+        `<details><summary>Package registries & build infrastructure · ${pluralize(domainJobs.size, "destination")} across ${pluralize(jobs.size, "job")}</summary>`,
+        "",
+    ]
+    for (const [domain, set] of rows) {
+        lines.push(`- \`${escapeMarkdown(domain)}\` — ${pluralize(set.size, "job")}`)
+    }
+    lines.push("", "</details>")
+
+    return lines
+}
+
+/**
+ * Opening line — a factual account of the snapshot (counts + where the egress
+ * went), with no judgment attached.
+ *
+ * @param {{ jobs: number, connections: number, destinations: number, workloadDestinations: number }} counts
+ * @returns {string}
+ */
+function renderSummaryLine(counts) {
+    if (counts.connections === 0) {
+        return `This PR's code made **no outbound connections** across ${pluralize(counts.jobs, "CI job")}.`
+    }
+
+    const head = `This PR's code made **${pluralize(counts.connections, "outbound connection")} to ${pluralize(counts.destinations, "destination")}** across ${pluralize(counts.jobs, "CI job")}.`
+    if (counts.workloadDestinations === 0) {
+        return `${head} All of it went to package registries & build infrastructure.`
+    }
+
+    return `${head} Beyond package registries & build infrastructure, its workload connected to ${pluralize(counts.workloadDestinations, "destination")}:`
 }
 
 /**
