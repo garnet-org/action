@@ -1,5 +1,5 @@
 name: "Garnet Runtime Visibility"
-description: "Records what each job in your workflow did at runtime — processes and network egress — and posts it to the pull request"
+description: "Records what each job in your workflow did at runtime — processes and network egress — and posts the Runtime Review from the Action stage"
 branding:
   icon: "activity"
   color: "purple"
@@ -29,11 +29,11 @@ inputs:
     default: "false"
 outputs:
   profile_result:
-    description: "Reserved for the control plane; the action itself only records what happened in the run"
+    description: "Reserved for the companion GitHub App and control plane; this action records the Runtime Review"
   report_url:
-    description: "Link to the Run Profile on app.garnet.ai"
+    description: "Link to the Run Profile permalink on app.garnet.ai"
   agent_id:
-    description: "Identifier for the Jibril sensor instance that ran"
+    description: "Identifier for the Jibril sensor instance that recorded this Runtime Review"
 runs:
   using: "node24"
   main: "dist/main/index.js"
