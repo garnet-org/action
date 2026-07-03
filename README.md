@@ -1,11 +1,11 @@
-# Garnet Runtime Visibility
+# Garnet Runtime Review
 
 <div align="center">
   <a href="https://garnet.ai">
     <img src="brand/garnet-logo.png" alt="Garnet" width="260" />
   </a>
 
-  <p><strong>Observation-only Runtime Review for GitHub Workflows</strong></p>
+  <p><strong>Runtime Review for your PRs</strong></p>
 
   <p>
     <a href="https://app.garnet.ai">Get an API token</a> ·
@@ -24,13 +24,13 @@
 
 ---
 
-Observation-only runtime review for CI/CD and agentic workflows in GitHub Actions.
+Runtime review for CI/CD and agentic workflows in GitHub Actions.
 
 Garnet is powered by [Jibril](https://jibril.garnet.ai), an eBPF sensor that attaches to your CI runner and captures every process spawn, outbound connection, and file access — with full lineage. Results surface in a Runtime Review comment and the GitHub Step Summary.
 
 One YAML step. No code changes and minimal overhead.
 
-Get your API token at [app.garnet.ai](https://app.garnet.ai).
+Get your API token at [app.garnet.ai](https://app.garnet.ai). Install the companion GitHub App for the full code review experience in your PRs. 
 
 ## What you get
 
