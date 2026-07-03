@@ -22,6 +22,7 @@ import { mergeCommentState, mergeCommentStates, parseCommentState, renderComment
  *   kind: "stale"
  * } | {
  *   kind: "blocked-by-control-plane"
+ *   deleteCommentIds: number[]
  * }} PublishCommentPlan
  */
 
@@ -39,8 +40,17 @@ import { mergeCommentState, mergeCommentStates, parseCommentState, renderComment
 export function planPullRequestComment(comments, profile, runAttempt, renderOptions = {}) {
     // Stand down whenever the control-plane App owns the review comment,
     // on both the create and update paths.
-    if (containsControlPlaneComment(comments)) {
-        return { kind: "blocked-by-control-plane" }
+    const controlPlaneKind = getControlPlaneCommentKind(comments)
+    if (controlPlaneKind !== null) {
+        const deleteCommentIds =
+            controlPlaneKind === "authoritative" && profile.github.sha !== ""
+                ? getManagedCommentsForThread(comments, profile.github.sha).map(entry => entry.comment.id)
+                : []
+
+        return {
+            kind: "blocked-by-control-plane",
+            deleteCommentIds,
+        }
     }
 
     const threadKey = getProfileThreadKey(profile)
@@ -128,12 +138,20 @@ function isPresent(value) {
 
 /**
  * @param {PullRequestComment[]} comments
- * @returns {boolean}
+ * @returns {"authoritative" | "pending" | null}
  */
-function containsControlPlaneComment(comments) {
-    return comments.some(
-        comment =>
-            comment.body.includes("garnet-control-plane-pr-comment:v1") ||
-            comment.body.includes("garnet-control-plane-pending-pr-comment:v1"),
-    )
+function getControlPlaneCommentKind(comments) {
+    if (
+        comments.some(comment => comment.body.includes("garnet-control-plane-pr-comment:v1"))
+    ) {
+        return "authoritative"
+    }
+
+    if (
+        comments.some(comment => comment.body.includes("garnet-control-plane-pending-pr-comment:v1"))
+    ) {
+        return "pending"
+    }
+
+    return null
 }

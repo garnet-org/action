@@ -92,6 +92,7 @@ async function applyPublishPlan(client, plan) {
     }
 
     if (plan.kind === "blocked-by-control-plane") {
+        await deleteComments(client, plan.deleteCommentIds)
         return "skipped-control-plane"
     }
 
@@ -120,12 +121,12 @@ async function reconcilePublishedComment(client, profile, runAttempt, createdCom
     }
 
     if (plan.kind === "stale") {
-        await client.deleteComment(createdCommentId)
+        await deleteComments(client, [createdCommentId])
         return "skipped-stale"
     }
 
     if (plan.kind === "blocked-by-control-plane") {
-        await client.deleteComment(createdCommentId)
+        await deleteComments(client, [createdCommentId, ...plan.deleteCommentIds])
         return "skipped-control-plane"
     }
 
@@ -152,7 +153,7 @@ async function applyUpdatePlan(client, plan) {
  * @returns {Promise<void>}
  */
 async function deleteComments(client, commentIds) {
-    for (const commentId of commentIds) {
+    for (const commentId of new Set(commentIds)) {
         await client.deleteComment(commentId)
     }
 }
