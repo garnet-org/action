@@ -146,7 +146,7 @@ for (const [name, md] of Object.entries({ ...STATES, canary: CANARY })) {
         assert.ok(md.includes("## Garnet Runtime Review"))
         assert.match(
             md,
-            /\[`[0-9a-f]{7}`\]\(https:\/\/github\.com\/[^)]+\/commit\/[^)]+\) · (?:\d+ of \d+ jobs? recorded|\d+ jobs recorded) · updated \d{2}:\d{2} UTC · [A-Z][a-z]{2} \d{1,2}/,
+            /\[`[0-9a-f]{7}`\]\(https:\/\/github\.com\/[^)]+\/commit\/[^)]+\) · (?:\d+ of \d+ jobs? recorded|\d+ jobs? recorded) · updated \d{2}:\d{2} UTC · [A-Z][a-z]{2} \d{1,2}/,
         )
     })
     test(`[${name}] no banned vocabulary or status glyphs`, () => {
@@ -403,8 +403,8 @@ test("S5: unknown coverage degrades to the recorded-only meta line with no CTA",
     })
     const body = renderRunReview(baseReview)
     const equalBody = renderRunReview(equalReview)
-    assert.match(body, /· 1 jobs recorded ·/)
-    assert.ok(!body.includes("of 1 jobs recorded"), "unknown coverage does not invent n")
+    assert.match(body, /· 1 job recorded ·/)
+    assert.ok(!body.includes("of 1 job"), "unknown coverage does not invent n")
     assert.ok(!body.includes("not yet recorded — [add the step ↗]"), "unknown coverage suppresses the CTA")
     assert.equal(body, equalBody, "absent and equal coverage render the same degraded meta line")
 })
