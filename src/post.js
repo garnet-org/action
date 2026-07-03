@@ -134,7 +134,7 @@ async function appendRuntimeReviewSummary(profile, renderOptions) {
             commitUrl: repository !== "" && sha !== "" ? `https://github.com/${repository}/commit/${sha}` : "",
             expectedJobs: renderOptions.expectedJobs ?? 1,
             docsUrl: DOCS_URL,
-            renderedAt: new Date(),
+            renderedAt: renderOptions.renderedAt ?? new Date(),
         })
     } else {
         const review = buildProfileRunReview([profile], renderOptions)
