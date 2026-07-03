@@ -1,4 +1,4 @@
-name: "Garnet Runtime Visibility"
+name: "Garnet Runtime Review"
 description: "Records what each job in your workflow did at runtime — processes and network egress — and posts the Runtime Review from the Action stage"
 branding:
   icon: "activity"
