@@ -28,6 +28,7 @@ const INSTPATH = "/usr/local/bin"
  */
 
 // This function is the main entry point for the script.
+// Returns true when Jibril started successfully, false otherwise.
 export async function run() {
     let tmpDir = ""
     try {
@@ -39,7 +40,9 @@ export async function run() {
         const DEBUG = getEnv("DEBUG", "false")
 
         if (TOKEN === "") {
-            throw new Error("API token is required")
+            throw new Error(
+                "Input 'api_token' is required. This commonly happens on pull requests from forks, where repository secrets are not exposed to workflows. Add/verify that your workflow passes a valid token to this input, or conditionally skip this action for forked PRs.",
+            )
         }
 
         // Prevent accidental leakage of tokens in logs.
@@ -61,10 +64,8 @@ export async function run() {
 
         const platform = os.platform()
         if (!isSupportedPlatform(platform)) {
-            core.warning(
-                `Garnet runtime monitoring requires Linux (eBPF-based). Skipping on ${platform}.`,
-            )
-            return
+            core.warning(`Garnet runtime monitoring requires Linux (eBPF-based). Skipping on ${platform}.`)
+            return false
         }
 
         const arch = os.arch()
@@ -72,7 +73,7 @@ export async function run() {
             core.warning(
                 `Garnet runtime monitoring requires x86_64 (jibril is only available for amd64). Skipping on ${arch}.`,
             )
-            return
+            return false
         }
         const ALTARCH = "x86_64"
 
@@ -413,7 +414,7 @@ StandardOutput=append:/var/log/jibril.log
                 "Jibril service failed to start. The workflow will continue without runtime monitoring for this run.",
             )
             await dumpJibrilLogs()
-            return
+            return false
         }
 
         // Give the daemon a moment to settle so an immediate crash is surfaced here.
@@ -428,7 +429,7 @@ StandardOutput=append:/var/log/jibril.log
                 `Jibril service exited early with state '${serviceState || "unknown"}'. The workflow will continue without runtime monitoring for this run.`,
             )
             await dumpJibrilLogs()
-            return
+            return false
         }
 
         // Check Jibril service status.
@@ -454,11 +455,13 @@ StandardOutput=append:/var/log/jibril.log
         }
 
         core.info("Jibril service started successfully")
+        return true
     } catch (err) {
         core.warning(
             `Garnet runtime monitoring setup did not complete: ${getErrorMessage(err)}. The workflow will continue without runtime monitoring for this run.`,
         )
         await dumpJibrilLogs()
+        return false
     } finally {
         // Clean up the temporary directory.
         if (tmpDir !== "") {

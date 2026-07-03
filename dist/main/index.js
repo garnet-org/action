@@ -31394,6 +31394,7 @@ const INSTPATH = "/usr/local/bin"
  */
 
 // This function is the main entry point for the script.
+// Returns true when Jibril started successfully, false otherwise.
 async function run() {
     let tmpDir = ""
     try {
@@ -31405,7 +31406,9 @@ async function run() {
         const DEBUG = getEnv("DEBUG", "false")
 
         if (TOKEN === "") {
-            throw new Error("API token is required")
+            throw new Error(
+                "Input 'api_token' is required. This commonly happens on pull requests from forks, where repository secrets are not exposed to workflows. Add/verify that your workflow passes a valid token to this input, or conditionally skip this action for forked PRs.",
+            )
         }
 
         // Prevent accidental leakage of tokens in logs.
@@ -31427,10 +31430,8 @@ async function run() {
 
         const platform = external_node_os_namespaceObject.platform()
         if (!isSupportedPlatform(platform)) {
-            warning(
-                `Garnet runtime monitoring requires Linux (eBPF-based). Skipping on ${platform}.`,
-            )
-            return
+            warning(`Garnet runtime monitoring requires Linux (eBPF-based). Skipping on ${platform}.`)
+            return false
         }
 
         const arch = external_node_os_namespaceObject.arch()
@@ -31438,7 +31439,7 @@ async function run() {
             warning(
                 `Garnet runtime monitoring requires x86_64 (jibril is only available for amd64). Skipping on ${arch}.`,
             )
-            return
+            return false
         }
         const ALTARCH = "x86_64"
 
@@ -31779,7 +31780,7 @@ StandardOutput=append:/var/log/jibril.log
                 "Jibril service failed to start. The workflow will continue without runtime monitoring for this run.",
             )
             await dumpJibrilLogs()
-            return
+            return false
         }
 
         // Give the daemon a moment to settle so an immediate crash is surfaced here.
@@ -31794,7 +31795,7 @@ StandardOutput=append:/var/log/jibril.log
                 `Jibril service exited early with state '${serviceState || "unknown"}'. The workflow will continue without runtime monitoring for this run.`,
             )
             await dumpJibrilLogs()
-            return
+            return false
         }
 
         // Check Jibril service status.
@@ -31820,11 +31821,13 @@ StandardOutput=append:/var/log/jibril.log
         }
 
         info("Jibril service started successfully")
+        return true
     } catch (err) {
         warning(
             `Garnet runtime monitoring setup did not complete: ${getErrorMessage(err)}. The workflow will continue without runtime monitoring for this run.`,
         )
         await dumpJibrilLogs()
+        return false
     } finally {
         // Clean up the temporary directory.
         if (tmpDir !== "") {
@@ -32099,64 +32102,63 @@ async function dumpJibrilLogs() {
 // logging directed to /var/log/jibril.log and /var/log/jibril.err.
 
 async function main() {
-  const platform = external_node_os_namespaceObject.platform()
-  if (!isSupportedPlatform(platform)) {
-    info(
-      `Garnet runtime monitoring requires Linux (eBPF-based). Skipping on ${platform}.`,
-    )
-    return
-  }
-
-  const arch = external_node_os_namespaceObject.arch()
-  if (!isSupportedArch(arch)) {
-    info(
-      `Garnet runtime monitoring requires x86_64 (jibril is only available for amd64). Skipping on ${arch}.`,
-    )
-    return
-  }
-
-  try {
-    // Save debug state for later retrieval.
-    const debug = getInput("debug") === "true"
-    saveState("debug", debug ? "true" : "")
-
-    const githubToken = getInput("github_token")
-    saveState("githubToken", githubToken)
-
-    // Set inputs as environment variables for the action
-    process.env.GARNET_API_TOKEN = getInput("api_token")
-
-    // Make the token available to both the main and post steps when provided.
-    if (githubToken !== "") {
-      process.env.GITHUB_TOKEN = githubToken
+    const platform = external_node_os_namespaceObject.platform()
+    if (!isSupportedPlatform(platform)) {
+        info(`Garnet runtime monitoring requires Linux (eBPF-based). Skipping on ${platform}.`)
+        return
     }
-    process.env.GARNET_API_URL = getInput("api_url")
-    process.env.GARNETCTL_VERSION = getInput("garnetctl_version")
-    process.env.JIBRIL_VERSION = getInput("jibril_version")
-    process.env.DEBUG = getInput("debug")
 
-    // Set the default profiler printer file paths.
-    const profilerFile =
-      process.env.JIBRIL_PROFILER_FILE || "/var/log/jibril.profiler.out"
-    const jsonProfilerFile =
-      process.env.JIBRIL_JSONPROFILER_FILE || "/var/log/jibril.profile.json"
-    process.env.JIBRIL_PROFILER_FILE = profilerFile
-    process.env.JIBRIL_JSONPROFILER_FILE = jsonProfilerFile
-    saveState("profilerFile", profilerFile)
-    saveState("jsonProfilerFile", jsonProfilerFile)
-
-    await run()
-  } catch (err) {
-    if (err instanceof Error) {
-      warning(
-        `Garnet action encountered an unexpected error and will continue without runtime monitoring: ${err.message}`,
-      )
-    } else {
-      warning(
-        `Garnet action encountered an unexpected error and will continue without runtime monitoring: ${String(err)}`,
-      )
+    const arch = external_node_os_namespaceObject.arch()
+    if (!isSupportedArch(arch)) {
+        info(
+            `Garnet runtime monitoring requires x86_64 (jibril is only available for amd64). Skipping on ${arch}.`,
+        )
+        return
     }
-  }
+
+    try {
+        // Save debug state for later retrieval.
+        const debug = getInput("debug") === "true"
+        saveState("debug", debug ? "true" : "")
+
+        const githubToken = getInput("github_token")
+        saveState("githubToken", githubToken)
+
+        // Set inputs as environment variables for the action
+        process.env.GARNET_API_TOKEN = getInput("api_token")
+
+        // Make the token available to both the main and post steps when provided.
+        if (githubToken !== "") {
+            process.env.GITHUB_TOKEN = githubToken
+        }
+        process.env.GARNET_API_URL = getInput("api_url")
+        process.env.GARNETCTL_VERSION = getInput("garnetctl_version")
+        process.env.JIBRIL_VERSION = getInput("jibril_version")
+        process.env.DEBUG = getInput("debug")
+
+        // Set the default profiler printer file paths.
+        const profilerFile = process.env.JIBRIL_PROFILER_FILE || "/var/log/jibril.profiler.out"
+        const jsonProfilerFile = process.env.JIBRIL_JSONPROFILER_FILE || "/var/log/jibril.profile.json"
+        process.env.JIBRIL_PROFILER_FILE = profilerFile
+        process.env.JIBRIL_JSONPROFILER_FILE = jsonProfilerFile
+        saveState("profilerFile", profilerFile)
+        saveState("jsonProfilerFile", jsonProfilerFile)
+
+        const jibrilStarted = await run()
+        if (jibrilStarted) {
+            saveState("jibrilStarted", "true")
+        }
+    } catch (err) {
+        if (err instanceof Error) {
+            warning(
+                `Garnet action encountered an unexpected error and will continue without runtime monitoring: ${err.message}`,
+            )
+        } else {
+            warning(
+                `Garnet action encountered an unexpected error and will continue without runtime monitoring: ${String(err)}`,
+            )
+        }
+    }
 }
 
 main()

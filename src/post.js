@@ -5,10 +5,7 @@ import * as os from "node:os"
 import { getEnv, getErrorMessage, isSupportedArch, isSupportedPlatform, pathExists } from "./shared.js"
 import { getPullRequestNumberFromEvent } from "./github-event.js"
 import { uploadJibrilArtifacts } from "./post-artifacts.js"
-import {
-  getDefaultJsonProfileFile,
-  parseProfileJson,
-} from "./profile-comment.js"
+import { getDefaultJsonProfileFile, parseProfileJson } from "./profile-comment.js"
 import { publishPullRequestComment } from "./pr-comment.js"
 
 /** @typedef {import("./profile-comment.js").NormalizedProfile} NormalizedProfile */
@@ -22,51 +19,56 @@ const JSON_PROFILE_LABEL = "JSON profile"
 // markdown and appends it to the real GITHUB_STEP_SUMMARY.
 
 async function run() {
-  const platform = os.platform()
-  if (!isSupportedPlatform(platform)) {
-    core.info(
-      `Garnet runtime monitoring requires Linux (eBPF-based). Skipping post step on ${platform}.`,
-    )
-    return
-  }
-
-  const arch = os.arch()
-  if (!isSupportedArch(arch)) {
-    core.info(
-      `Garnet runtime monitoring requires x86_64 (jibril is only available for amd64). Skipping post step on ${arch}.`,
-    )
-    return
-  }
-
-  try {
-    // Stop the Jibril service so the daemon flushes all pending events.
-    core.info("stopping jibril service")
-    await exec.exec("sudo", ["systemctl", "stop", "jibril.service"], {
-      ignoreReturnCode: true,
-    })
-
-    // Remove secrets from disk (best-effort). Important for self-hosted runners.
-    await exec.exec("sudo", ["rm", "-f", "/etc/default/jibril"], {
-      ignoreReturnCode: true,
-    })
-
-    // Upload jibril logs as artifacts when debug is enabled (only after service stops).
-    // Get the debug state from the main.js.
-    const debug = core.getState("debug")
-    if (debug === "true") {
-      await uploadJibrilArtifacts()
+    const platform = os.platform()
+    if (!isSupportedPlatform(platform)) {
+        core.info(`Garnet runtime monitoring requires Linux (eBPF-based). Skipping post step on ${platform}.`)
+        return
     }
 
-    const profilerFile = resolveSelectedProfilerFile()
+    const arch = os.arch()
+    if (!isSupportedArch(arch)) {
+        core.info(
+            `Garnet runtime monitoring requires x86_64 (jibril is only available for amd64). Skipping post step on ${arch}.`,
+        )
+        return
+    }
 
-    core.info("using profiler printer: profiler")
+    try {
+        const jibrilStarted = core.getState("jibrilStarted") === "true"
 
-    await appendProfilerSummary(profilerFile)
-    await publishProfilerComment()
-  } catch (err) {
-    // Never fail the job because of the profiler step.
-    core.warning(`failed to write summary: ${getErrorMessage(err)}`)
-  }
+        // Remove secrets from disk (best-effort). Important for self-hosted runners.
+        await exec.exec("sudo", ["rm", "-f", "/etc/default/jibril"], {
+            ignoreReturnCode: true,
+        })
+
+        if (!jibrilStarted) {
+            core.info("Jibril did not start in the main step, skipping post-step runtime processing.")
+            return
+        }
+
+        // Stop the Jibril service so the daemon flushes all pending events.
+        core.info("stopping jibril service")
+        await exec.exec("sudo", ["systemctl", "stop", "jibril.service"], {
+            ignoreReturnCode: true,
+        })
+
+        // Upload jibril logs as artifacts when debug is enabled (only after service stops).
+        // Get the debug state from the main.js.
+        const debug = core.getState("debug")
+        if (debug === "true") {
+            await uploadJibrilArtifacts()
+        }
+
+        const profilerFile = resolveSelectedProfilerFile()
+
+        core.info("using profiler printer: profiler")
+
+        await appendProfilerSummary(profilerFile)
+        await publishProfilerComment()
+    } catch (err) {
+        // Never fail the job because of the profiler step.
+        core.warning(`failed to write summary: ${getErrorMessage(err)}`)
+    }
 }
 
 /**
@@ -74,92 +76,82 @@ async function run() {
  * @returns {Promise<void>}
  */
 async function appendProfilerSummary(profilerFile) {
-  const content = await readRootFile(profilerFile, "summary")
-  if (content === "") {
-    return
-  }
+    const content = await readRootFile(profilerFile, "summary")
+    if (content === "") {
+        return
+    }
 
-  const summaryFile = getEnv("GITHUB_STEP_SUMMARY")
-  if (summaryFile === "") {
-    core.warning("GITHUB_STEP_SUMMARY is not set, cannot write summary")
-    return
-  }
+    const summaryFile = getEnv("GITHUB_STEP_SUMMARY")
+    if (summaryFile === "") {
+        core.warning("GITHUB_STEP_SUMMARY is not set, cannot write summary")
+        return
+    }
 
-  await fs.appendFile(summaryFile, `\n${content}\n`)
-  core.info("profiler markdown written to job summary")
+    await fs.appendFile(summaryFile, `\n${content}\n`)
+    core.info("profiler markdown written to job summary")
 }
 
 async function publishProfilerComment() {
-  const debug = core.getState("debug")
-  const eventPath = getEnv("GITHUB_EVENT_PATH")
-  if (eventPath === "") {
-    core.info("GITHUB_EVENT_PATH is not set, skipping PR comment")
-    return
-  }
-
-  const repository = getEnv("GITHUB_REPOSITORY")
-  if (repository === "") {
-    core.warning("GITHUB_REPOSITORY is not set, skipping PR comment")
-    return
-  }
-
-  const token = firstNonEmptyString([
-    core.getState("githubToken"),
-    getEnv("GITHUB_TOKEN"),
-  ])
-  if (token === "") {
-    core.warning("github_token is not set, skipping PR comment")
-    return
-  }
-
-  const pullRequestNumber = await getPullRequestNumberFromEvent(eventPath)
-  if (pullRequestNumber === null) {
-    core.info("workflow is not running for a pull request, skipping PR comment")
-    return
-  }
-
-  const jsonProfilerFile = firstNonEmptyString([
-    core.getState("jsonProfilerFile"),
-    getDefaultJsonProfileFile(),
-  ])
-  /** @type {NormalizedProfile} */
-  let profile
-  try {
-    const jsonProfile = await readOptionalRootFile(jsonProfilerFile)
-    if (jsonProfile === "") {
-      core.info(
-        `JSON profile not found, skipping PR comment: ${jsonProfilerFile}`,
-      )
-      return
+    const debug = core.getState("debug")
+    const eventPath = getEnv("GITHUB_EVENT_PATH")
+    if (eventPath === "") {
+        core.info("GITHUB_EVENT_PATH is not set, skipping PR comment")
+        return
     }
 
-    if (debug === "true") {
-      core.info(`${JSON_PROFILE_LABEL} contents:`)
-      core.info(jsonProfile)
+    const repository = getEnv("GITHUB_REPOSITORY")
+    if (repository === "") {
+        core.warning("GITHUB_REPOSITORY is not set, skipping PR comment")
+        return
     }
 
-    profile = parseProfileJson(jsonProfile)
-  } catch (error) {
-    core.warning(
-      `failed to read ${JSON_PROFILE_LABEL}: ${getErrorMessage(error)}`,
-    )
-    return
-  }
+    const token = firstNonEmptyString([core.getState("githubToken"), getEnv("GITHUB_TOKEN")])
+    if (token === "") {
+        core.warning("github_token is not set, skipping PR comment")
+        return
+    }
 
-  const runAttempt = parseRunAttempt(getEnv("GITHUB_RUN_ATTEMPT"))
+    const pullRequestNumber = await getPullRequestNumberFromEvent(eventPath)
+    if (pullRequestNumber === null) {
+        core.info("workflow is not running for a pull request, skipping PR comment")
+        return
+    }
 
-  try {
-    const result = await publishPullRequestComment({
-      repository,
-      pullRequestNumber,
-      token,
-      profile,
-      runAttempt,
-    })
-    core.info(`PR comment ${result}`)
-  } catch (error) {
-    core.warning(`failed to publish PR comment: ${getErrorMessage(error)}`)
-  }
+    const jsonProfilerFile = firstNonEmptyString([core.getState("jsonProfilerFile"), getDefaultJsonProfileFile()])
+    /** @type {NormalizedProfile} */
+    let profile
+    try {
+        const jsonProfile = await readOptionalRootFile(jsonProfilerFile)
+        if (jsonProfile === "") {
+            core.info(`JSON profile not found, skipping PR comment: ${jsonProfilerFile}`)
+            return
+        }
+
+        if (debug === "true") {
+            core.info(`${JSON_PROFILE_LABEL} contents:`)
+            core.info(jsonProfile)
+        }
+
+        profile = parseProfileJson(jsonProfile)
+    } catch (error) {
+        core.warning(`failed to read ${JSON_PROFILE_LABEL}: ${getErrorMessage(error)}`)
+        return
+    }
+
+    const runAttempt = parseRunAttempt(getEnv("GITHUB_RUN_ATTEMPT"))
+
+    try {
+        const result = await publishPullRequestComment({
+            repository,
+            pullRequestNumber,
+            token,
+            profile,
+            runAttempt,
+        })
+        core.info(`PR comment ${result}`)
+    } catch (error) {
+        core.warning(`failed to publish PR comment: ${getErrorMessage(error)}`)
+    }
 }
 
 /**
@@ -168,22 +160,22 @@ async function publishProfilerComment() {
  * @returns {Promise<string>}
  */
 async function readRootFile(filePath, label) {
-  if (filePath === "") {
-    core.warning(`${label} file path is not set, skipping`)
-    return ""
-  }
-
-  try {
-    const content = await readRootFileContent(filePath)
-    if (content === "") {
-      core.warning(`${label} file not found or unreadable: ${filePath}`)
-      return ""
+    if (filePath === "") {
+        core.warning(`${label} file path is not set, skipping`)
+        return ""
     }
-    return content
-  } catch (error) {
-    core.warning(`failed to read ${label} file: ${getErrorMessage(error)}`)
-    return ""
-  }
+
+    try {
+        const content = await readRootFileContent(filePath)
+        if (content === "") {
+            core.warning(`${label} file not found or unreadable: ${filePath}`)
+            return ""
+        }
+        return content
+    } catch (error) {
+        core.warning(`failed to read ${label} file: ${getErrorMessage(error)}`)
+        return ""
+    }
 }
 
 /**
@@ -191,26 +183,22 @@ async function readRootFile(filePath, label) {
  * @returns {Promise<string>}
  */
 async function readOptionalRootFile(filePath) {
-  if (filePath === "") {
-    return ""
-  }
+    if (filePath === "") {
+        return ""
+    }
 
-  try {
-    return await readRootFileContent(filePath)
-  } catch {
-    return ""
-  }
+    try {
+        return await readRootFileContent(filePath)
+    } catch {
+        return ""
+    }
 }
 
 /**
  * @returns {string}
  */
 function resolveSelectedProfilerFile() {
-  return firstNonEmptyString([
-    core.getState("profilerFile"),
-    getEnv("JIBRIL_PROFILER_FILE"),
-    DEFAULT_PROFILER_FILE,
-  ])
+    return firstNonEmptyString([core.getState("profilerFile"), getEnv("JIBRIL_PROFILER_FILE"), DEFAULT_PROFILER_FILE])
 }
 
 /**
@@ -218,13 +206,13 @@ function resolveSelectedProfilerFile() {
  * @returns {string}
  */
 function firstNonEmptyString(values) {
-  for (const value of values) {
-    if (value !== "") {
-      return value
+    for (const value of values) {
+        if (value !== "") {
+            return value
+        }
     }
-  }
 
-  return ""
+    return ""
 }
 
 /**
@@ -232,8 +220,8 @@ function firstNonEmptyString(values) {
  * @returns {number}
  */
 function parseRunAttempt(value) {
-  const parsedValue = Number.parseInt(value, 10)
-  return Number.isSafeInteger(parsedValue) ? parsedValue : 1
+    const parsedValue = Number.parseInt(value, 10)
+    return Number.isSafeInteger(parsedValue) ? parsedValue : 1
 }
 
 /**
@@ -241,15 +229,15 @@ function parseRunAttempt(value) {
  * @returns {Promise<string>}
  */
 async function readRootFileContent(filePath) {
-  const result = await exec.getExecOutput("sudo", ["cat", filePath], {
-    silent: true,
-    ignoreReturnCode: true,
-  })
-  if (result.exitCode !== 0) {
-    return ""
-  }
+    const result = await exec.getExecOutput("sudo", ["cat", filePath], {
+        silent: true,
+        ignoreReturnCode: true,
+    })
+    if (result.exitCode !== 0) {
+        return ""
+    }
 
-  return result.stdout.trim()
+    return result.stdout.trim()
 }
 
 run()
