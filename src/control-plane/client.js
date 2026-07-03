@@ -56,6 +56,18 @@ export class ControlPlaneClient {
             throw new Error("ControlPlaneClient: 'baseURL' protocol must be http or https")
         }
 
+        if (parsedBaseURL.pathname !== "/") {
+            throw new Error("ControlPlaneClient: 'baseURL' must not include a path, query, or fragment")
+        }
+
+        if (parsedBaseURL.search !== "") {
+            throw new Error("ControlPlaneClient: 'baseURL' must not include a query")
+        }
+
+        if (parsedBaseURL.hash !== "") {
+            throw new Error("ControlPlaneClient: 'baseURL' must not include a fragment")
+        }
+
         if (options.projectToken !== undefined && typeof options.projectToken !== "string") {
             throw new Error("ControlPlaneClient: 'projectToken' must be a string when provided")
         }
