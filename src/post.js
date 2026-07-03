@@ -103,19 +103,12 @@ async function readNormalizedProfile(debug) {
 }
 
 /**
- * Optional rendering inputs (additive; defaults preserve current behavior).
+ * Render options for this publish flow; the clock is pinned once so every
+ * render in the flow produces identical bytes.
  * @returns {RenderOptions}
  */
 function getRenderOptions() {
-    /** @type {RenderOptions} */
-    const options = { renderedAt: new Date() }
-
-    const totalJobs = Number.parseInt(core.getInput("total_jobs"), 10)
-    if (Number.isSafeInteger(totalJobs) && totalJobs > 0) {
-        options.expectedJobs = totalJobs
-    }
-
-    return options
+    return { renderedAt: new Date() }
 }
 
 /**

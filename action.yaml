@@ -27,10 +27,6 @@ inputs:
     description: "Enable debug mode"
     required: false
     default: "false"
-  total_jobs:
-    description: "Total number of jobs in the run, used for the 'k of n jobs recorded' line in the PR comment (defaults to the number of recorded jobs)"
-    required: false
-    default: ""
 outputs:
   profile_result:
     description: "Assertion result for this run: pass or fail"
