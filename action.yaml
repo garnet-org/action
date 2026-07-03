@@ -27,12 +27,8 @@ inputs:
     description: "Enable debug mode"
     required: false
     default: "false"
-  expected_jobs:
-    description: "Number of jobs expected in the run, used for the 'k of n jobs recorded' line in the PR comment (defaults to the number of recorded jobs)"
-    required: false
-    default: ""
-  permalink_url:
-    description: "Explicit Run Profile link for the PR comment footer (defaults to a link derived from the run id)"
+  total_jobs:
+    description: "Total number of jobs in the run, used for the 'k of n jobs recorded' line in the PR comment (defaults to the number of recorded jobs)"
     required: false
     default: ""
 outputs:

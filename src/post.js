@@ -110,14 +110,9 @@ function getRenderOptions() {
     /** @type {RenderOptions} */
     const options = {}
 
-    const expectedJobs = Number.parseInt(core.getInput("expected_jobs"), 10)
-    if (Number.isSafeInteger(expectedJobs) && expectedJobs > 0) {
-        options.expectedJobs = expectedJobs
-    }
-
-    const permalinkUrl = core.getInput("permalink_url")
-    if (permalinkUrl !== "") {
-        options.permalinkUrl = permalinkUrl
+    const totalJobs = Number.parseInt(core.getInput("total_jobs"), 10)
+    if (Number.isSafeInteger(totalJobs) && totalJobs > 0) {
+        options.expectedJobs = totalJobs
     }
 
     return options
