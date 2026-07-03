@@ -6,6 +6,11 @@
  * merged in PR #30). Keep this file byte-faithful to the reference: the
  * rendered markdown must match the testbed mockups exactly.
  *
+ * Style note: where the reference used truthy/falsy guards, this copy uses the
+ * explicit checks AGENTS.md mandates (e.g. `x !== ""`, `x !== undefined`).
+ * These are byte-neutral — they never change the rendered markdown — so the
+ * vendoring stays faithful at the output level.
+ *
  * Frame: the comment answers exactly one question — "what happened in this
  * PR?". It is runtime evidence for code review, never an evaluation. No
  * statuses, no icons, no badges. Deterministic by construction: same profile
@@ -471,7 +476,7 @@ function dedupeConnections(connections) {
     }
     const key = connectionKey(c)
     const seen = byKey.get(key)
-    if (seen) seen.count += 1
+    if (seen !== undefined) seen.count += 1
     else byKey.set(key, { ...c, count: 1, class: classifyConnection(c) })
   }
   return [...byKey.values()]
@@ -508,7 +513,7 @@ function computeSalience(jobs, totals) {
   candidates.sort((a, b) => cmp(a.c, b.c))
 
   for (const job of jobs) {
-    const unclassified = job.connections.filter(c => !c.class)
+    const unclassified = job.connections.filter(c => c.class === "")
     const hasUnique = unclassified.some(c => totals.uniqueDests.has(destName(c)))
     const hasSpawn = !totals.lineageAbsent && unclassified.some(c => tailHasNetworkTool(c.ancestry))
     jobRungs.set(job.id, hasUnique ? 1 : hasSpawn ? 2 : 3)
@@ -922,7 +927,7 @@ function renderJobSection(review, job, lines, { collapsed }) {
     const procs = new Set(job.connections.flatMap(c => c.ancestry)).size
     lines.push(`┄ ${procs} process${procs === 1 ? "" : "es"} · ${connections} connection${connections === 1 ? "" : "s"} — full tree in the Step Summary ↗`)
     lines.push("")
-    if (logLink) {
+    if (logLink !== "") {
       lines.push(`<sub>Full detail in the Step Summary${logLink}</sub>`)
       lines.push("")
     }
