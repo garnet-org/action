@@ -841,7 +841,7 @@ function metaLine(review) {
   const coverage =
     review.counts.expectedJobs > review.counts.jobs
       ? `${review.counts.jobs} of ${review.counts.expectedJobs} job${review.counts.expectedJobs === 1 ? "" : "s"} recorded`
-      : `${review.counts.jobs} jobs recorded`
+      : `${review.counts.jobs} job${review.counts.jobs === 1 ? "" : "s"} recorded`
   const parts = [shaPart, coverage]
   if (review.counts.workflows > 1) parts.push(`${review.counts.workflows} workflows`)
   if (review.renderedAt) parts.push(freshnessStamp(review.renderedAt))
