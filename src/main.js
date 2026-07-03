@@ -40,7 +40,6 @@ async function main() {
             process.env.GITHUB_TOKEN = githubToken
         }
         process.env.GARNET_API_URL = core.getInput("api_url")
-        process.env.GARNETCTL_VERSION = core.getInput("garnetctl_version")
         process.env.JIBRIL_VERSION = core.getInput("jibril_version")
         process.env.DEBUG = core.getInput("debug")
 

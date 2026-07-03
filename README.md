@@ -50,7 +50,7 @@ Get your API token at [app.garnet.ai](https://app.garnet.ai).
 
 - **Read your source code** — Jibril monitors process and network behavior at the kernel level. It does not read, scan, or transmit repository contents.
 - **Access your secrets** — The action uses only the `GARNET_API_TOKEN` you provide and the default `GITHUB_TOKEN` for PR comments. It does not read or forward any other repository secrets.
-- **Make unexpected network calls** — `garnetctl` and Jibril communicate only with `api.garnet.ai` (configurable via `api_url`). Binaries are downloaded from `github.com/garnet-org/*-releases` over HTTPS. No other outbound connections are made by the action itself.
+- **Make unexpected network calls** — The action and Jibril communicate only with `api.garnet.ai` (configurable via `api_url`). Jibril binaries are downloaded from `github.com/garnet-org/jibril-releases` over HTTPS. No other outbound connections are made by the action itself.
 - **Persist after the run** — Jibril runs as a systemd service that is stopped in the post step. Secrets are removed from disk and config files are cleaned up. On ephemeral GitHub-hosted runners, nothing survives the job.
 
 ## Permissions
@@ -124,7 +124,7 @@ jobs:
 
 ## Under the hood
 
-- **Main step**: Downloads `garnetctl` and `jibril`, creates a Garnet agent for the run, fetches your merged network policy, and starts Jibril as a `systemd` service on the runner. If Jibril crashes during startup, the action logs diagnostics and continues so later workflow steps still run.
+- **Main step**: Downloads `jibril`, creates a Garnet agent via the control-plane API, fetches your merged network policy from the API, and starts Jibril as a `systemd` service on the runner. If Jibril crashes during startup, the action logs diagnostics and continues so later workflow steps still run.
 - **Post step (always)**: Stops Jibril so it flushes events, appends the generated profile to `GITHUB_STEP_SUMMARY`, and creates or updates the pull request comment for the current push when the workflow runs for a PR. When `debug=true`, it also uploads Jibril logs as build artifacts.
 
 ## Pull request comments
@@ -148,7 +148,7 @@ permissions:
 | `api_token`         | Yes      | —                       | Your Garnet API token from app.garnet.ai       |
 | `github_token`      | No       | `${{ github.token }}`   | GitHub token used for pull request comments    |
 | `api_url`           | No       | `https://api.garnet.ai` | Garnet API base URL                            |
-| `garnetctl_version` | No       | `latest`                | Garnet CLI version (`1.2.3` or `latest`)       |
+
 | `jibril_version`    | No       | `""` (auto)             | Jibril version (`v2.10.8` or `latest`)         |
 | `debug`             | No       | `false`                 | Enable debug mode and upload logs as artifacts |
 
