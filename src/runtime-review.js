@@ -32,8 +32,9 @@
  *        line; `Run Profile ↗` (footer) is ONLY the capability link — when no
  *        capability link exists the footer omits it rather than mislabel;
  *        `add the step ↗` only when coverage k < n.
- *   A7 — meta line: [`{sha}`](commit) · {k} of {n} jobs recorded ·
- *        updated {HH:MM} UTC · {Mon D}. Absolute UTC, never relative.
+ *   A7 — meta line: [`{sha}`](commit) · {k} of {n} jobs recorded (only when a
+ *        total n > k is known; otherwise `{k} job(s) recorded`) · updated
+ *        {HH:MM} UTC · {Mon D}. Absolute UTC, never relative.
  *   A8 — hardening: evidence strings are escaped, control characters
  *        stripped, tree fences use four backticks. Canonical sticky marker is
  *        `<!-- garnet-runtime-review -->`.
@@ -830,6 +831,8 @@ export function freshnessStamp(date) {
 /**
  * A7 — canonical meta line:
  * [`{sha}`](commit-url) · {k} of {n} jobs recorded · updated {HH:MM} UTC · {Mon D}
+ * The coverage clause is conditional: `{k} of {n} jobs recorded` only when a
+ * total n greater than the recorded k is known; otherwise `{k} job(s) recorded`.
  * Repo name dropped (the comment lives in the repo); `{w} workflows` only
  * when w > 1; timestamps absolute UTC, never relative.
  * @param {RunReview} review
