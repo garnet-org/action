@@ -5,7 +5,7 @@
     <img src="brand/garnet-logo.png" alt="Garnet" width="260" />
   </a>
 
-  <p><strong>Runtime visibility for GitHub Workflows</strong></p>
+  <p><strong>Observation-only Runtime Review for GitHub Workflows</strong></p>
 
   <p>
     <a href="https://app.garnet.ai">Get an API token</a> ·
@@ -24,9 +24,9 @@
 
 ---
 
-Runtime profiling and behavioral assertions for CI/CD and agentic workflows in GitHub Actions.
+Observation-only runtime review for CI/CD and agentic workflows in GitHub Actions.
 
-Garnet is powered by [Jibril](https://jibril.garnet.ai), an eBPF sensor that attaches to your CI runner and captures every process spawn and outbound connection — with full lineage. Results surface in line, showing pass/fail for each run with rich context.
+Garnet is powered by [Jibril](https://jibril.garnet.ai), an eBPF sensor that attaches to your CI runner and captures every process spawn, outbound connection, and file access — with full lineage. Results surface in a Runtime Review comment and the GitHub Step Summary.
 
 One YAML step. No code changes and minimal overhead.
 
@@ -34,8 +34,8 @@ Get your API token at [app.garnet.ai](https://app.garnet.ai).
 
 ## What you get
 
-- **A behavioral profile of every run**: Kernel-level capture of every network call, process spawn, and file access — with full lineage from parent to child, down to the exact binary that made the connection.
-- **Runtime assertions in your PR**: Assertions are like unit tests for runtime behavior. Results appear as a PR comment and step summary: a table per job with pass/fail assertions and an egress table with lineage inline, plus a permalink to the full run report and configurable alerts on failures.
+- **A Run Profile of every run**: Kernel-level capture of every network call, process spawn, and file access — with full lineage from parent to child, down to the exact binary that made the connection.
+- **Runtime Review in your PR**: The PR comment starts with a headline, then one line per job. Each job expands into a `<details>` fold with the full job view, and the same full detail is written to the GitHub Step Summary.
 - **Lineage-based evidence**: When something unexpected runs, you don't just see a domain name — you see the full chain.
 
 <p align="center">
@@ -108,10 +108,11 @@ jobs:
 - `garnet-org/action@main` tracks the latest unreleased code on the default branch.
 - Exact tags such as `garnet-org/action@v2.3.0` remain available when you want a fully pinned released version.
 
-## What you'll see
+## Comment anatomy
 
-- **GitHub job summary**: A Markdown "security profile" appended at the end of the job — even if the job fails (see this [example GitHub Actions run](https://github.com/garnet-org/action/actions/runs/23175135499)).
-- **Pull request comment**: On pull request workflows, Garnet posts one comment per push, merging jobs and workflows from the same push into a single comment.
+- **PR comment**: A headline, then one line per job. Each job opens into a `<details>` fold with the job's full runtime review.
+- **GitHub job summary**: The same full-detail Runtime Review is appended at the end of the job (see this [example GitHub Actions run](https://github.com/garnet-org/action/actions/runs/23175135499)).
+- **Pull request comment lifecycle**: On pull request workflows, Garnet posts one comment per push, merging jobs and workflows from the same push into a single comment.
 
   <img
     src="https://github.com/user-attachments/assets/13e0153b-fcfd-4794-b349-4a86e939e58a"
@@ -119,13 +120,13 @@ jobs:
     alt="Garnet PR comment example"
   />
 
-- **Garnet UI**: Linked from in-line results through a permalink for in-depth investigation and additional management features, such as Slack alerts on failures.
-- **Run profile page**: An artifact showing the behavioral profile for a run, shareable through the UI (see an example from the recent [telnyx TeamPCP incident](https://app.garnet.ai/public/runs/23662517211)).
+- **Garnet UI**: Linked from in-line results through a permalink for in-depth investigation and additional management features, such as Slack alerts.
+- **Run Profile page**: An artifact showing the behavioral profile for a run, shareable through the UI (see an example from the recent [telnyx TeamPCP incident](https://app.garnet.ai/public/runs/23662517211)).
 
 ## Under the hood
 
 - **Main step**: Downloads `garnetctl` and `jibril`, creates a Garnet agent for the run, fetches your merged network policy, and starts Jibril as a `systemd` service on the runner. If Jibril crashes during startup, the action logs diagnostics and continues so later workflow steps still run.
-- **Post step (always)**: Stops Jibril so it flushes events, appends the generated profile to `GITHUB_STEP_SUMMARY`, and creates or updates the pull request comment for the current push when the workflow runs for a PR. When `debug=true`, it also uploads Jibril logs as build artifacts.
+- **Post step (always)**: Stops Jibril so it flushes events, appends the generated Run Profile to `GITHUB_STEP_SUMMARY`, and creates or updates the pull request comment for the current push when the workflow runs for a PR. When `debug=true`, it also uploads Jibril logs as build artifacts.
 
 ## Pull request comments
 
@@ -156,19 +157,19 @@ permissions:
 
 ## Outputs
 
-| Output           | Description                                        |
-| ---------------- | -------------------------------------------------- |
-| `profile_result` | Assertion result for this run: `pass` or `fail`    |
-| `report_url`     | Link to the full run report on app.garnet.ai       |
-| `agent_id`       | Identifier for the Jibril sensor instance that ran |
+| Output           | Description                                                          |
+| ---------------- | -------------------------------------------------------------------- |
+| `profile_result` | Reserved for downstream control-plane use; this action records what happened |
+| `report_url`     | Link to the Run Profile on app.garnet.ai                             |
+| `agent_id`       | Identifier for the Jibril sensor instance that ran                  |
 
 ---
 
 ## Concepts
 
-### Assertions
+### Observation scope
 
-Assertions are runtime invariants — like unit tests, but for execution behavior. The current assertion is `known_bad_egress`, which fails if any outbound connection matches a domain from Garnet's managed threat feed. Future assertion families will cover hidden binary execution, sensitive file access, and anomalous process spawns.
+The current observation scope is `known_bad_egress`, which highlights outbound connections to domains from Garnet's managed threat feed. Future scopes will cover hidden binary execution, sensitive file access, and anomalous process spawns.
 
 ### Why runtime visibility matters
 
