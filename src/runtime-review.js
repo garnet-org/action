@@ -838,10 +838,11 @@ export function freshnessStamp(date) {
 function metaLine(review) {
   const sha7 = escapeCode(review.sha.slice(0, 7) || "unknown")
   const shaPart = review.commitUrl ? `[\`${sha7}\`](${review.commitUrl})` : `\`${sha7}\``
-  const parts = [
-    shaPart,
-    `${review.counts.jobs} of ${review.counts.expectedJobs} job${review.counts.expectedJobs === 1 ? "" : "s"} recorded`,
-  ]
+  const coverage =
+    review.counts.expectedJobs > review.counts.jobs
+      ? `${review.counts.jobs} of ${review.counts.expectedJobs} job${review.counts.expectedJobs === 1 ? "" : "s"} recorded`
+      : `${review.counts.jobs} jobs recorded`
+  const parts = [shaPart, coverage]
   if (review.counts.workflows > 1) parts.push(`${review.counts.workflows} workflows`)
   if (review.renderedAt) parts.push(freshnessStamp(review.renderedAt))
   return parts.join(" · ")

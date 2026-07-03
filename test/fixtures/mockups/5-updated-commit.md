@@ -1,7 +1,7 @@
 <!-- garnet-runtime-review -->
 <!-- garnet-run-profile -->
 ## Garnet Runtime Review
-[`786a5bc`](https://github.com/garnet-labs/runtime-review-testbed/commit/786a5bc8680486720bcf5dae13931de95d89b5ec) · 1 of 1 job recorded · updated 14:02 UTC · Jul 3
+[`786a5bc`](https://github.com/garnet-labs/runtime-review-testbed/commit/786a5bc8680486720bcf5dae13931de95d89b5ec) · 1 jobs recorded · updated 14:02 UTC · Jul 3
 
 In `runtime-review`, 6 processes reached 1 domain over 1 connection.
 

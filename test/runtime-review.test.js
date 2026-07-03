@@ -48,7 +48,7 @@ async function loadProfile(name) {
 }
 
 /** Render one or more real profiles through the exact CI code path. */
-function renderFromProfiles(profiles, { permalink = "", expectedJobs = 0 } = {}) {
+function renderFromProfiles(profiles, { permalink = "", expectedJobs = profiles.length } = {}) {
     const jobs = profiles.map(summarizeProfile).filter(Boolean)
     const sha = jobs[0]?.sha || ""
     const review = buildRunReview({
@@ -146,7 +146,7 @@ for (const [name, md] of Object.entries({ ...STATES, canary: CANARY })) {
         assert.ok(md.includes("## Garnet Runtime Review"))
         assert.match(
             md,
-            /\[`[0-9a-f]{7}`\]\(https:\/\/github\.com\/[^)]+\/commit\/[^)]+\) · \d+ of \d+ jobs? recorded · updated \d{2}:\d{2} UTC · [A-Z][a-z]{2} \d{1,2}/,
+            /\[`[0-9a-f]{7}`\]\(https:\/\/github\.com\/[^)]+\/commit\/[^)]+\) · (?:\d+ of \d+ jobs? recorded|\d+ jobs recorded) · updated \d{2}:\d{2} UTC · [A-Z][a-z]{2} \d{1,2}/,
         )
     })
     test(`[${name}] no banned vocabulary or status glyphs`, () => {
@@ -387,6 +387,26 @@ test("S5: partial coverage renders k of n and the add-the-step growth CTA", () =
     const md = STATES["partial-coverage"]
     assert.match(md, /· 1 of 6 jobs recorded ·/)
     assert.match(md, /5 jobs not yet recorded — \[add the step ↗\]\(/)
+})
+
+test("S5: unknown coverage degrades to the recorded-only meta line with no CTA", () => {
+    const baseReview = buildRunReview({
+        sha: "ac543cb",
+        renderedAt: RENDERED_AT,
+        jobs: [summarizeProfile(normal)],
+    })
+    const equalReview = buildRunReview({
+        sha: "ac543cb",
+        renderedAt: RENDERED_AT,
+        expectedJobs: 1,
+        jobs: [summarizeProfile(normal)],
+    })
+    const body = renderRunReview(baseReview)
+    const equalBody = renderRunReview(equalReview)
+    assert.match(body, /· 1 jobs recorded ·/)
+    assert.ok(!body.includes("of 1 jobs recorded"), "unknown coverage does not invent n")
+    assert.ok(!body.includes("not yet recorded — [add the step ↗]"), "unknown coverage suppresses the CTA")
+    assert.equal(body, equalBody, "absent and equal coverage render the same degraded meta line")
 })
 
 // ---------------------------------------------------------------------------

@@ -1,7 +1,7 @@
 <!-- garnet-runtime-review -->
 <!-- garnet-run-profile -->
 ## Garnet Runtime Review
-[`f49a847`](https://github.com/garnet-labs/runtime-review-testbed/commit/f49a8476ccfe33c72428d0c471093a1c84f40124) · 2 of 2 jobs recorded · updated 14:02 UTC · Jul 3
+[`f49a847`](https://github.com/garnet-labs/runtime-review-testbed/commit/f49a8476ccfe33c72428d0c471093a1c84f40124) · 2 jobs recorded · updated 14:02 UTC · Jul 3
 
 In `runtime-review`, `node` reached `github.com` — a destination no other job in this run reached.
 
