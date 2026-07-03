@@ -554,7 +554,7 @@ function getCommentCommitSha(profiles) {
  * @param {{ repository: string, run_id: string, job: string }} values
  * @returns {string}
  */
-function buildReportLink(values) {
+export function buildReportLink(values) {
     const baseURL = resolveAppBaseUrl()
     if (values.run_id === "") {
         return utmTrackedURL(baseURL)
