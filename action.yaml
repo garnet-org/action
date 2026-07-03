@@ -29,7 +29,7 @@ inputs:
     default: "false"
 outputs:
   profile_result:
-    description: "Reserved for the control plane; the action itself only records what happened and does not emit a verdict"
+    description: "Reserved for the control plane; the action itself only records what happened in the run"
   report_url:
     description: "Link to the Run Profile on app.garnet.ai"
   agent_id:
