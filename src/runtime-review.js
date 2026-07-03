@@ -242,7 +242,7 @@ export function classifyConnection(c) {
   if (/^(?:[a-z0-9-]+-)?api\.garnet\.ai$/.test(domain)) return "garnet upload"
   const ancestry = (c.ancestry || []).filter(Boolean)
   const fromRunnerChain = ancestry.length > 0 && ancestry.every(isRunnerChainProcess)
-  if (fromRunnerChain && (GITHUB_OWNED_RE.test(domain) || !domain)) return "github infra"
+  if (fromRunnerChain && (GITHUB_OWNED_RE.test(domain) || domain === "")) return "github infra"
   return ""
 }
 
@@ -294,9 +294,9 @@ export function summarizeProfile(profile) {
  * @returns {string}
  */
 export function derivePermalink(explicit, jobRecords, appUrl) {
-  if (explicit) return explicit
+  if (explicit !== "") return explicit
   const runId = (jobRecords || []).map(j => j?.run_id).find(Boolean)
-  if (!runId || !appUrl) return ""
+  if (runId === undefined || runId === "" || appUrl === "") return ""
   return `${appUrl}/dashboard/runs/${encodeURIComponent(String(runId))}?utm_source=github&utm_medium=pr_comment`
 }
 
@@ -500,7 +500,7 @@ function computeSalience(jobs, totals) {
   const candidates = []
   for (const job of jobs) {
     for (const c of job.connections) {
-      if (c.class) continue // A2 — classified connections are excluded from candidacy
+      if (c.class !== "") continue // A2 — classified connections are excluded from candidacy
       candidates.push({ job, c })
     }
   }
@@ -786,7 +786,7 @@ export function jobSummaryLine(job, uniqueDests = new Set(), opts = {}) {
     (a, b) => (a.domain ? 0 : 1) - (b.domain ? 0 : 1) || cmp(a, b),
   )
   for (const c of ordered) {
-    if (c.class) continue
+    if (c.class !== "") continue
     const d = destName(c)
     if (!d || seen.has(d)) continue
     seen.add(d)
@@ -844,7 +844,7 @@ function metaLine(review) {
       : `${review.counts.jobs} job${review.counts.jobs === 1 ? "" : "s"} recorded`
   const parts = [shaPart, coverage]
   if (review.counts.workflows > 1) parts.push(`${review.counts.workflows} workflows`)
-  if (review.renderedAt) parts.push(freshnessStamp(review.renderedAt))
+  if (review.renderedAt !== null) parts.push(freshnessStamp(review.renderedAt))
   return parts.join(" · ")
 }
 
