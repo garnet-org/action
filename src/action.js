@@ -70,7 +70,6 @@ export async function run() {
             )
             return false
         }
-        const ALTARCH = "x86_64"
 
         if (JIBRILVER !== "latest" && !JIBRILVER.startsWith("v")) {
             JIBRILVER = `v${JIBRILVER}`
