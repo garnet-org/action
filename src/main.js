@@ -58,7 +58,7 @@ async function main() {
             }),
         )
 
-        // Set the default profiler printer file paths.
+        // Set the default Run Profile printer file paths.
         const profilerFile = process.env.JIBRIL_PROFILER_FILE || "/var/log/jibril.profiler.out"
         const jsonProfilerFile = process.env.JIBRIL_JSONPROFILER_FILE || "/var/log/jibril.profile.json"
         process.env.JIBRIL_PROFILER_FILE = profilerFile

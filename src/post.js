@@ -18,7 +18,7 @@ const DOCS_URL = "https://github.com/garnet-org/action#readme"
 // This is the post step for the action. It is called by the GitHub Actions
 // runtime. It stops the Jibril service so the daemon flushes all pending events
 // and writes the JSON profile before we read it. It then renders the Runtime
-// Review Step Summary and publishes the PR comment from the same profile.
+// Review Step Summary and publishes the PR comment from the same Run Profile.
 
 async function run() {
     const platform = os.platform()
@@ -69,8 +69,8 @@ async function run() {
             await publishProfilerComment(profile, renderOptions)
         }
     } catch (err) {
-        // Never fail the job because of the profiler step.
-        core.warning(`failed to write summary: ${getErrorMessage(err)}`)
+        // Never fail the job because of the Runtime Review step.
+        core.warning(`failed to write Runtime Review summary: ${getErrorMessage(err)}`)
     }
 }
 
@@ -142,7 +142,7 @@ async function appendRuntimeReviewSummary(profile, renderOptions) {
     }
 
     await fs.appendFile(summaryFile, `\n${content}\n`)
-    core.info("runtime review written to job summary")
+    core.info("Runtime Review written to job summary")
 }
 
 /**
