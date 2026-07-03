@@ -1,5 +1,6 @@
 import { z } from "zod"
 import { getOptionalRecord } from "./shared.js"
+import { buildRunReview, derivePermalink, renderRunReview } from "./runtime-review.js"
 
 export const RUNTIME_REVIEW_MARKER = "garnet-runtime-review"
 export const ACTION_COMMENT_MARKER = "garnet-action-pr-comment:v1"
@@ -385,6 +386,11 @@ export function mergeCommentStates(states) {
 }
 
 /**
+ * Render the locked Garnet Runtime Review comment (v5.2 reference contract,
+ * ported byte-for-byte from garnet-labs/runtime-review-testbed). The action's
+ * own markers (v1 + commit + encoded state) ride on top of the shared
+ * `garnet-runtime-review` marker.
+ *
  * @param {CommentState} state
  * @returns {string}
  */
@@ -392,81 +398,75 @@ export function renderCommentBody(state) {
     const metadata = encodeCommentState(state)
     const profiles = [...state.profiles].sort(compareProfiles)
     const commitSha = getCommentCommitSha(profiles)
-    const parts = [
+    const markers = [
         `<!-- ${RUNTIME_REVIEW_MARKER} -->`,
         `<!-- ${ACTION_COMMENT_MARKER} -->`,
         `<!-- ${COMMIT_MARKER_PREFIX}${commitSha} -->`,
         `<!-- ${COMMENT_STATE_MARKER_PREFIX}${metadata} -->`,
-        "## What this PR did at runtime",
-        "",
     ]
 
     if (profiles.length === 0) {
-        parts.push("No runtime activity was recorded for this commit.")
-        return parts.join("\n")
+        return [...markers, "## Garnet Runtime Review", "", "No Run Profile was produced for this run."].join("\n")
     }
 
-    const totalConnections = profiles.reduce((total, profile) => total + profile.telemetry.total_connections, 0)
-    const uniqueDomains = new Set()
-    for (const profile of profiles) {
-        for (const peer of visiblePeers(profile)) {
-            uniqueDomains.add(lc(destinationName(peer)))
+    return renderRunReview(buildStateReview(state), { markers })
+}
+
+/**
+ * Build the review object for a comment state: one job record per profile,
+ * with the Run Profile permalink derived from the profiles' own run ids.
+ *
+ * @param {CommentState} state
+ * @returns {ReturnType<typeof buildRunReview>}
+ */
+export function buildStateReview(state) {
+    const profiles = [...state.profiles].sort(compareProfiles)
+    const commitSha = getCommentCommitSha(profiles)
+    const repository = profiles.map(profile => profile.github.repository).find(repo => repo !== "") ?? ""
+    const jobs = profiles.map(profileToJobRecord)
+
+    return buildRunReview({
+        repo: repository,
+        sha: commitSha,
+        commitUrl:
+            repository !== "" && commitSha !== ""
+                ? `https://github.com/${repository}/commit/${commitSha}`
+                : "",
+        permalink: derivePermalink("", jobs, resolveAppBaseUrl()),
+        jobs,
+    })
+}
+
+/**
+ * Adapt one normalized profile into the reference renderer's job record: one
+ * connection per (process lineage, destination) observation.
+ *
+ * @param {NormalizedProfile} profile
+ */
+function profileToJobRecord(profile) {
+    /** @type {{ ancestry: string[], domain: string, ip: string }[]} */
+    const connections = []
+    for (const peer of profile.egress_peers) {
+        const domain = peer.remote_names[0] ?? ""
+        const ip = peer.remote_address ?? ""
+        const ancestries =
+            peer.proc_trees.length > 0 ? peer.proc_trees.map(procTree => procTree.ancestry) : [[]]
+        for (const ancestry of ancestries) {
+            connections.push({ ancestry, domain, ip })
         }
     }
-    const totalDomains =
-        uniqueDomains.size > 0
-            ? uniqueDomains.size
-            : profiles.reduce((total, profile) => total + profile.telemetry.total_domains, 0)
-    const workloadDomains = new Set()
-    for (const profile of profiles) {
-        for (const peer of visiblePeers(profile)) {
-            const name = destinationName(peer)
-            if (!isInfraEgress(name)) {
-                workloadDomains.add(lc(name))
-            }
-        }
+
+    return {
+        name: profile.github.job,
+        workflow: profile.github.workflow,
+        sha: profile.github.sha,
+        run_id: profile.github.run_id,
+        run_url:
+            profile.github.run_id !== "" && profile.github.repository !== ""
+                ? `https://github.com/${profile.github.repository}/actions/runs/${profile.github.run_id}`
+                : "",
+        connections,
     }
-
-    parts.push(
-        renderSummaryLine({
-            jobs: profiles.length,
-            connections: totalConnections,
-            destinations: totalDomains,
-            workloadDestinations: workloadDomains.size,
-        }),
-        "",
-    )
-
-    // Each job with workload egress gets its own section, one bullet per unique
-    // process lineage. Registry/build-infra egress folds into one deduped block
-    // below, so the comment stays short even on a many-job PR.
-    for (const profile of profiles) {
-        const workload = visiblePeers(profile).filter(peer => !isInfraEgress(destinationName(peer)))
-        if (workload.length === 0) {
-            continue
-        }
-
-        parts.push(`**${escapeMarkdown(profileJobLabel(profile))}** · ${renderJobLinks(profile)}`, "")
-        for (const bullet of renderLineageBullets(workload)) {
-            parts.push(bullet)
-        }
-        parts.push("")
-    }
-
-    const infraBlock = renderInfraBlock(profiles)
-    if (infraBlock.length > 0) {
-        parts.push(...infraBlock, "")
-    }
-
-    const sha = shortSha(commitSha)
-    const reportLink = profiles.map(profile => profile.report_link).find(link => link !== "") ?? ""
-    const linkPart = reportLink !== "" ? ` · <a href="${escapeMarkdownLink(reportLink)}">full runtime record ↗</a>` : ""
-    parts.push(
-        "---",
-        `<sub>${pluralize(totalDomains, "destination")} · ${pluralize(totalConnections, "connection")} across ${pluralize(profiles.length, "job")}${sha !== "" ? ` · \`${sha}\`` : ""} · <b>Powered by Garnet</b>${linkPart}</sub>`,
-    )
-
-    return parts.join("\n")
 }
 
 /**
@@ -494,388 +494,6 @@ export function parseCommentState(body) {
     } catch {
         return null
     }
-}
-
-/**
- * Package registries & build infrastructure: a FIXED, deterministic list of
- * well-known package registries, source hosts, OS mirrors, and the runtime's
- * own plumbing. Used only to group the snapshot so registry noise folds into
- * one collapsed block — a factual classification, never a judgment. There is
- * no baseline and no history: the same profile always renders the same comment.
- */
-const INFRA_EGRESS = [
-    /(^|\.)npmjs\.(org|com)$/,
-    /(^|\.)yarnpkg\.com$/,
-    /(^|\.)pypi\.org$/,
-    /(^|\.)pythonhosted\.org$/,
-    /(^|\.)github\.com$/,
-    /(^|\.)githubusercontent\.com$/,
-    /(^|\.)ghcr\.io$/,
-    /(^|\.)deb\.debian\.org$/,
-    /(^|\.)(archive|security)\.ubuntu\.com$/,
-    /(^|\.)dl\.google\.com$/,
-    /(^|\.)(proxy|sum)\.golang\.org$/,
-    /(^|\.)(static\.)?crates\.io$/,
-    // The runtime's own plumbing: the Garnet sensor's control-plane endpoint
-    // and the GitHub-hosted runner watchdog. Part of running CI, not the PR's
-    // workload.
-    /(^|\.)garnet\.ai$/,
-    /(^|\.)githubapp\.com$/,
-    /hosted-compute-watchdog/,
-]
-
-/**
- * @param {string} value
- * @returns {string}
- */
-function lc(value) {
-    return value.trim().toLowerCase()
-}
-
-/**
- * @param {string} name
- * @returns {boolean}
- */
-function isInfraEgress(name) {
-    const normalized = lc(name)
-    return INFRA_EGRESS.some(pattern => pattern.test(normalized))
-}
-
-/**
- * Pick the most human-meaningful name for a destination: prefer a DNS name
- * over a bare IP.
- *
- * @param {EgressPeer} peer
- * @returns {string}
- */
-function destinationName(peer) {
-    const dns = peer.remote_names.find(name => /[a-z]/i.test(name) && !/^\d+\.\d+\.\d+\.\d+$/.test(name))
-    if (dns !== undefined) {
-        return dns
-    }
-
-    return peer.remote_names[0] ?? peer.remote_address ?? "an unknown host"
-}
-
-/**
- * @param {EgressPeer} peer
- * @returns {string}
- */
-function destinationIP(peer) {
-    const ip = peer.remote_names.find(name => /^\d+\.\d+\.\d+\.\d+$/.test(name))
-    return ip ?? peer.remote_address ?? ""
-}
-
-/**
- * Loopback / localhost "peers" are not real outbound egress — they're the
- * local DNS resolver and same-host traffic Jibril also records.
- *
- * @param {EgressPeer} peer
- * @returns {boolean}
- */
-function isLoopbackPeer(peer) {
-    const names = [...peer.remote_names, peer.remote_address ?? ""].map(lc)
-    return names.some(
-        name => name === "localhost" || name === "::1" || /^127\./.test(name) || /(^|\.)localhost$/.test(name),
-    )
-}
-
-/**
- * Peers worth rendering: real outbound egress with a resolvable destination.
- *
- * @param {NormalizedProfile} profile
- * @returns {EgressPeer[]}
- */
-function visiblePeers(profile) {
-    return profile.egress_peers.filter(peer => !isLoopbackPeer(peer) && destinationName(peer) !== "an unknown host")
-}
-
-/**
- * First non-empty ancestry recorded for a peer.
- *
- * @param {EgressPeer} peer
- * @returns {string[]}
- */
-function lineageOf(peer) {
-    for (const procTree of peer.proc_trees) {
-        if (procTree.ancestry.length > 0) {
-            return procTree.ancestry
-        }
-    }
-
-    return []
-}
-
-/**
- * Reviewer-friendly lineage: keep the root and the last few meaningful hops,
- * collapsing the noisy middle so a long CI ancestry stays one readable line
- * (e.g. `systemd → … → bash → node`).
- *
- * @param {string[]} lineage
- * @returns {string}
- */
-function lineageDisplay(lineage) {
-    if (lineage.length <= 5) {
-        return lineage.join(" → ")
-    }
-
-    return [lineage[0], "…", ...lineage.slice(-3)].join(" → ")
-}
-
-/**
- * Strip GitHub's step-number prefix: "3. Install dependencies" → "Install dependencies".
- *
- * @param {string} step
- * @returns {string}
- */
-function cleanStep(step) {
-    return step.replace(/^\s*\d+\.\s*/, "").trim()
-}
-
-/**
- * @param {EgressPeer} peer
- * @returns {string}
- */
-function peerStep(peer) {
-    for (const procTree of peer.proc_trees) {
-        const step = cleanStep(procTree.github_step ?? "")
-        if (step !== "") {
-            return step
-        }
-    }
-
-    return ""
-}
-
-/**
- * Compact "who is on the other end" label from Jibril's geo enrichment, e.g.
- * "Cloudflare, Inc. · Toronto, CA". Purely descriptive. Empty when no geo is
- * present.
- *
- * @param {EgressPeer} peer
- * @returns {string}
- */
-function hostedByLabel(peer) {
-    const geo = peer.remote_geo_info
-    if (geo === undefined) {
-        return ""
-    }
-
-    const owner = (geo.org ?? "").trim()
-    const place = [geo.city, geo.country_code].filter(part => part !== undefined && part !== "").join(", ")
-    return [owner, place].filter(part => part !== "").join(" · ")
-}
-
-/**
- * Join a list into "a", "a and b", or "a, b, and c".
- *
- * @param {string[]} items
- * @returns {string}
- */
-function humanList(items) {
-    if (items.length === 0) {
-        return ""
-    }
-    if (items.length === 1) {
-        return items[0] ?? ""
-    }
-    if (items.length === 2) {
-        return `${items[0]} and ${items[1]}`
-    }
-
-    return `${items.slice(0, -1).join(", ")}, and ${items[items.length - 1]}`
-}
-
-/**
- * @param {NormalizedProfile} profile
- * @returns {string}
- */
-function profileJobLabel(profile) {
-    const workflow = profile.github.workflow
-    const job = profile.github.job
-    if (workflow !== "" && job !== "") {
-        return `${workflow} / ${job}`
-    }
-
-    return getDisplayValue(job !== "" ? job : workflow, "unknown-job")
-}
-
-/**
- * @param {NormalizedProfile} profile
- * @returns {string}
- */
-function renderJobLinks(profile) {
-    const links = []
-    if (profile.github.repository !== "" && profile.github.run_id !== "") {
-        links.push(`[run ↗](https://github.com/${profile.github.repository}/actions/runs/${profile.github.run_id})`)
-    }
-    if (profile.report_link !== "") {
-        links.push(`[details ↗](${escapeMarkdownLink(profile.report_link)})`)
-    }
-
-    return links.join(" · ")
-}
-
-/**
- * @typedef {{
- *   display: string
- *   step: string
- *   domains: { name: string, ip: string, hostedBy: string }[]
- * }} LineageGroup
- */
-
-/**
- * Group peers by unique process lineage; append all destinations per lineage.
- *
- * @param {EgressPeer[]} peers
- * @returns {LineageGroup[]}
- */
-function groupByLineage(peers) {
-    /** @type {Map<string, LineageGroup>} */
-    const groups = new Map()
-    for (const peer of peers) {
-        const lineage = lineageOf(peer)
-        const key = lineage.join("\u241f")
-        let group = groups.get(key)
-        if (group === undefined) {
-            group = { display: lineageDisplay(lineage), step: peerStep(peer), domains: [] }
-            groups.set(key, group)
-        }
-        if (group.step === "") {
-            group.step = peerStep(peer)
-        }
-
-        const name = destinationName(peer)
-        if (!group.domains.some(domain => domain.name === name)) {
-            group.domains.push({ name, ip: destinationIP(peer), hostedBy: hostedByLabel(peer) })
-        }
-    }
-
-    return [...groups.values()]
-}
-
-const MAX_LINEAGES = 6
-const MAX_DOMAINS = 6
-
-/**
- * One bullet per unique lineage, destinations appended into a single sentence.
- * Caps width so a large PR stays readable; the rest lives in Garnet.
- *
- * @param {EgressPeer[]} peers
- * @returns {string[]}
- */
-function renderLineageBullets(peers) {
-    const groups = groupByLineage(peers)
-    const lines = []
-    for (const group of groups.slice(0, MAX_LINEAGES)) {
-        const shownDomains = group.domains.slice(0, MAX_DOMAINS)
-        // When a lineage reached a single destination, inline who is on the
-        // other end (IP · owner · city) — the reviewer's first question. With
-        // several destinations, keep the names clean.
-        const single = shownDomains.length === 1
-        const shown = shownDomains.map(domain => {
-            const meta = single
-                ? [domain.ip, domain.hostedBy].filter(part => part !== "" && part !== domain.name).map(escapeMarkdown)
-                : []
-            return meta.length > 0
-                ? `\`${escapeMarkdown(domain.name)}\` (${meta.join(" · ")})`
-                : `\`${escapeMarkdown(domain.name)}\``
-        })
-        const extra = group.domains.length > MAX_DOMAINS ? `, and ${group.domains.length - MAX_DOMAINS} more` : ""
-        const step = group.step !== "" ? ` — observed during **${escapeMarkdown(group.step)}**` : ""
-        const display = group.display !== "" ? group.display : "a process"
-        lines.push(`- \`${escapeMarkdown(display)}\` connected to ${humanList(shown)}${extra}${step}`)
-    }
-    if (groups.length > MAX_LINEAGES) {
-        lines.push(`- …and ${groups.length - MAX_LINEAGES} more process lineages`)
-    }
-
-    return lines
-}
-
-/**
- * Collapsed, deduped registry/build-infra block. Folds the package registries
- * and source hosts across ALL jobs into one short list so the comment shows
- * the workload egress up top and never repeats npm/GitHub noise per job.
- *
- * @param {NormalizedProfile[]} profiles
- * @returns {string[]}
- */
-function renderInfraBlock(profiles) {
-    /** @type {Map<string, Set<string>>} */
-    const domainJobs = new Map()
-    for (const profile of profiles) {
-        const label = profileJobLabel(profile)
-        for (const peer of visiblePeers(profile)) {
-            const name = destinationName(peer)
-            if (!isInfraEgress(name)) {
-                continue
-            }
-            const jobs = domainJobs.get(name) ?? new Set()
-            jobs.add(label)
-            domainJobs.set(name, jobs)
-        }
-    }
-
-    if (domainJobs.size === 0) {
-        return []
-    }
-
-    const jobs = new Set()
-    for (const set of domainJobs.values()) {
-        for (const job of set) {
-            jobs.add(job)
-        }
-    }
-
-    const rows = [...domainJobs.entries()].sort((left, right) => right[1].size - left[1].size || left[0].localeCompare(right[0]))
-    const lines = [
-        `<details><summary>Package registries & build infrastructure · ${pluralize(domainJobs.size, "destination")} across ${pluralize(jobs.size, "job")}</summary>`,
-        "",
-    ]
-    for (const [domain, set] of rows) {
-        lines.push(`- \`${escapeMarkdown(domain)}\` — ${pluralize(set.size, "job")}`)
-    }
-    lines.push("", "</details>")
-
-    return lines
-}
-
-/**
- * Opening line — a factual account of the snapshot (counts + where the egress
- * went), with no judgment attached.
- *
- * @param {{ jobs: number, connections: number, destinations: number, workloadDestinations: number }} counts
- * @returns {string}
- */
-function renderSummaryLine(counts) {
-    if (counts.connections === 0) {
-        return `This PR's code made **no outbound connections** across ${pluralize(counts.jobs, "CI job")}.`
-    }
-
-    const head = `This PR's code made **${pluralize(counts.connections, "outbound connection")} to ${pluralize(counts.destinations, "destination")}** across ${pluralize(counts.jobs, "CI job")}.`
-    if (counts.workloadDestinations === 0) {
-        return `${head} All of it went to package registries & build infrastructure.`
-    }
-
-    return `${head} Beyond package registries & build infrastructure, its workload connected to ${pluralize(counts.workloadDestinations, "destination")}:`
-}
-
-/**
- * @param {number} count
- * @param {string} noun
- * @returns {string}
- */
-function pluralize(count, noun) {
-    return `${count} ${noun}${count === 1 ? "" : "s"}`
-}
-
-/**
- * @param {string} sha
- * @returns {string}
- */
-function shortSha(sha) {
-    return sha.length > 7 ? sha.slice(0, 7) : sha
 }
 
 /**
@@ -924,7 +542,7 @@ function getCommentCommitSha(profiles) {
  * @param {{ repository: string, run_id: string, job: string }} values
  * @returns {string}
  */
-function buildReportLink(values) {
+export function buildReportLink(values) {
     const baseURL = resolveAppBaseUrl()
     if (values.run_id === "") {
         return utmTrackedURL(baseURL)
@@ -1146,20 +764,3 @@ function getDisplayValue(value, fallback) {
 function getString(value) {
     return typeof value === "string" ? value : ""
 }
-
-/**
- * @param {string} value
- * @returns {string}
- */
-function escapeMarkdown(value) {
-    return value.replaceAll("\\", "\\\\").replaceAll("|", "\\|").replaceAll("`", "\\`").replaceAll("\n", " ")
-}
-
-/**
- * @param {string} value
- * @returns {string}
- */
-function escapeMarkdownLink(value) {
-    return value.replaceAll(")", "%29")
-}
-

@@ -146,6 +146,10 @@ async function publishProfilerComment() {
     return
   }
 
+  if (profile.report_link !== "") {
+    core.setOutput("report_url", profile.report_link)
+  }
+
   const runAttempt = parseRunAttempt(getEnv("GITHUB_RUN_ATTEMPT"))
 
   try {

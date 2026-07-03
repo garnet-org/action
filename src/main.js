@@ -1,7 +1,8 @@
 import * as core from "@actions/core"
 import * as os from "node:os"
 import { run } from "./action.js"
-import { isSupportedArch, isSupportedPlatform } from "./shared.js"
+import { buildReportLink } from "./profile-comment.js"
+import { getEnv, isSupportedArch, isSupportedPlatform } from "./shared.js"
 
 // This is the main entry point for the action. It is called by the GitHub Actions
 // runtime. The action installs the Jibril security scanner and sets it up as a
@@ -45,6 +46,18 @@ async function main() {
     process.env.GARNETCTL_VERSION = core.getInput("garnetctl_version")
     process.env.JIBRIL_VERSION = core.getInput("jibril_version")
     process.env.DEBUG = core.getInput("debug")
+
+    // The Run Profile permalink is derived from the run id and the configured
+    // API host, so it is known up front — emit it here where later steps in
+    // the same job can consume it (post-step outputs are not visible to them).
+    core.setOutput(
+      "report_url",
+      buildReportLink({
+        repository: getEnv("GITHUB_REPOSITORY"),
+        run_id: getEnv("GITHUB_RUN_ID"),
+        job: getEnv("GITHUB_JOB"),
+      }),
+    )
 
     // Set the default profiler printer file paths.
     const profilerFile =

@@ -141,7 +141,7 @@ test("rendered comment emits runtime-review, action, and commit markers", () => 
     assert.ok(body.includes(`<!-- ${COMMIT_MARKER_PREFIX}0123456789abcdef0123456789abcdef01234567 -->`))
 })
 
-test("rendered comment follows the runtime-snapshot anatomy", () => {
+test("rendered comment follows the locked runtime-review anatomy", () => {
     const body = renderCommentBody(
         makeState([
             makeProfile(),
@@ -152,25 +152,42 @@ test("rendered comment follows the runtime-snapshot anatomy", () => {
         ]),
     )
 
-    assert.ok(body.includes("## What this PR did at runtime"))
+    assert.ok(body.includes("## Garnet Runtime Review"))
     assert.ok(
         body.includes(
-            "This PR's code made **12 outbound connections to 2 destinations** across 2 CI jobs. Beyond package registries & build infrastructure, its workload connected to 1 destination:",
+            "[`0123456`](https://github.com/garnet-org/example/commit/0123456789abcdef0123456789abcdef01234567) · 2 of 2 jobs recorded",
         ),
     )
-    assert.ok(body.includes("**CI / e2e** · [run ↗](https://github.com/garnet-org/example/actions/runs/12345)"))
-    assert.ok(body.includes("- `npm install → node → sh -c → curl` connected to `img-cdn-assets.com` (45.137.21.88)"))
     assert.ok(
-        body.includes("<details><summary>Package registries & build infrastructure · 1 destination across 1 job</summary>"),
+        body.includes("In `e2e`, `node` spawned `sh -c → curl`, which reached `img-cdn-assets.com`"),
+        "salience headline",
     )
-    assert.ok(body.includes("- `registry.npmjs.org` — 1 job"))
-    assert.ok(body.includes("<b>Powered by Garnet</b>"))
-    assert.ok(body.includes("full runtime record ↗"))
-    assert.ok(body.includes("2 destinations · 12 connections across 2 jobs · `0123456`"))
+    assert.ok(
+        body.includes(
+            "<details open><summary><b><code>e2e</code></b> — reached <code>img-cdn-assets.com</code>, <code>registry.npmjs.org</code> · 2 connections</summary>",
+        ),
+        "job row: summary line IS the fold summary, rendered as HTML",
+    )
+    assert.ok(body.includes("````text"), "lineage tree in a four-backtick fence")
+    assert.ok(body.includes("└─ → img-cdn-assets.com · 45.137.21.88"))
+    assert.ok(
+        body.includes(
+            "<sub>Paste the tree into your review agent · full detail in the Step Summary · [job log ↗](https://github.com/garnet-org/example/actions/runs/12345)</sub>",
+        ),
+        "agent-prompt hint + job log live inside the fold",
+    )
+    assert.ok(body.includes("**`build-docs`** — made no outbound connections."), "quiet job stays one plain line")
+    assert.ok(
+        body.includes(
+            "[Run Profile ↗](https://app.garnet.ai/dashboard/runs/12345?utm_source=github&utm_medium=pr_comment)",
+        ),
+        "footer permalink derives from the profile run_id",
+    )
+    assert.ok(!/github\.com\/[^ )]*\/actions\/[^ )]*Run Profile/.test(body), "Run Profile is never a GitHub URL")
     assert.ok(!body.includes("Assertions"), "phase 1 must not render assertions")
 })
 
-test("registry-only run folds everything into the infra block", () => {
+test("registry destinations render as observations, never judged or folded away", () => {
     const registryOnly = makeProfile(
         {},
         {
@@ -187,15 +204,15 @@ test("registry-only run folds everything into the infra block", () => {
     )
     const body = renderCommentBody(makeState([registryOnly]))
 
-    assert.ok(body.includes("All of it went to package registries & build infrastructure."))
-    assert.ok(!body.includes("**CI / e2e** ·"), "registry-only jobs must not get a workload section")
+    assert.ok(body.includes("→ registry.npmjs.org · 104.16.10.34"), "registry egress stays in the tree")
+    assert.ok(body.includes("<b><code>e2e</code></b> — reached <code>registry.npmjs.org</code> · 1 connection"))
 })
 
 test("zero-connection run states no outbound connections", () => {
     const quiet = makeProfile({}, { egress_peers: [], telemetry: { total_domains: 0, total_connections: 0 } })
     const body = renderCommentBody(makeState([quiet]))
 
-    assert.ok(body.includes("This PR's code made **no outbound connections** across 1 CI job."))
+    assert.ok(body.includes("**`e2e`** — made no outbound connections."))
 })
 
 test("rendered comment state round-trips", () => {
