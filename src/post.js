@@ -108,7 +108,7 @@ async function readNormalizedProfile(debug) {
  */
 function getRenderOptions() {
     /** @type {RenderOptions} */
-    const options = {}
+    const options = { renderedAt: new Date() }
 
     const totalJobs = Number.parseInt(core.getInput("total_jobs"), 10)
     if (Number.isSafeInteger(totalJobs) && totalJobs > 0) {
