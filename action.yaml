@@ -1,5 +1,5 @@
 name: "Garnet Runtime Visibility"
-description: "Runtime profiling and behavioral assertions for GitHub Actions"
+description: "Records what each job in your workflow did at runtime — processes and network egress — and posts it to the pull request"
 branding:
   icon: "activity"
   color: "purple"
@@ -29,9 +29,9 @@ inputs:
     default: "false"
 outputs:
   profile_result:
-    description: "Assertion result for this run: pass or fail"
+    description: "Reserved for the control plane; the action itself only records what happened and does not emit a verdict"
   report_url:
-    description: "Link to the full run report on app.garnet.ai"
+    description: "Link to the Run Profile on app.garnet.ai"
   agent_id:
     description: "Identifier for the Jibril sensor instance that ran"
 runs:
