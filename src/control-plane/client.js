@@ -14,7 +14,7 @@ import {
 /**
  * @typedef {{
  *   baseURL: string
- *   projectToken: string
+ *   projectToken?: string
  *   userAgent?: string
  * }} ControlPlaneClientOptions
  */
@@ -29,6 +29,13 @@ import {
  * }} RequestOptions
  */
 
+/**
+ * @typedef {{
+ *   status: number
+ *   responseText: string
+ * }} RequestTextResult
+ */
+
 export class ControlPlaneClient {
     /**
      * @param {ControlPlaneClientOptions} options
@@ -38,12 +45,23 @@ export class ControlPlaneClient {
             throw new Error("ControlPlaneClient: 'baseURL' is required")
         }
 
-        if (typeof options.projectToken !== "string" || options.projectToken.trim() === "") {
-            throw new Error("ControlPlaneClient: 'projectToken' is required")
+        let parsedBaseURL
+        try {
+            parsedBaseURL = new URL(options.baseURL)
+        } catch {
+            throw new Error("ControlPlaneClient: 'baseURL' must be a valid absolute URL")
         }
 
-        this.baseURL = options.baseURL.replace(/\/+$/, "")
-        this.projectToken = options.projectToken
+        if (parsedBaseURL.protocol !== "http:" && parsedBaseURL.protocol !== "https:") {
+            throw new Error("ControlPlaneClient: 'baseURL' protocol must be http or https")
+        }
+
+        if (options.projectToken !== undefined && typeof options.projectToken !== "string") {
+            throw new Error("ControlPlaneClient: 'projectToken' must be a string when provided")
+        }
+
+        this.baseURL = parsedBaseURL.toString().replace(/\/+$/, "")
+        this.projectToken = options.projectToken?.trim() ?? ""
         this.userAgent = options.userAgent ?? "garnet-action"
     }
 
@@ -79,7 +97,7 @@ export class ControlPlaneClient {
             query.set("workflow_name", params.workflow_name)
         }
 
-        const responseText = await this.requestText({
+        const { responseText, status } = await this.requestText({
             method: "GET",
             path: "/api/v1/network_policies/merged",
             query,
@@ -88,7 +106,7 @@ export class ControlPlaneClient {
 
         if (responseText.trim() === "") {
             throw new Error(
-                "Control plane request failed: GET /api/v1/network_policies/merged (HTTP 200: empty response body)",
+                `Control plane request failed: GET /api/v1/network_policies/merged (HTTP ${status}: empty response body)`,
             )
         }
 
@@ -100,7 +118,7 @@ export class ControlPlaneClient {
      * @returns {Promise<unknown>}
      */
     async requestJson(options) {
-        const responseText = await this.requestText({
+        const { responseText, status } = await this.requestText({
             ...options,
             accept: "application/json",
         })
@@ -113,14 +131,14 @@ export class ControlPlaneClient {
             return JSON.parse(responseText)
         } catch {
             throw new Error(
-                `Control plane request failed: ${options.method} ${options.path} (HTTP 200: expected JSON but received non-JSON response)`,
+                `Control plane request failed: ${options.method} ${options.path} (HTTP ${status}: expected JSON but received non-JSON response)`,
             )
         }
     }
 
     /**
      * @param {RequestOptions} options
-     * @returns {Promise<string>}
+     * @returns {Promise<RequestTextResult>}
      */
     async requestText(options) {
         const requestUrl = new URL(options.path, `${this.baseURL}/`)
@@ -132,7 +150,10 @@ export class ControlPlaneClient {
         const headers = {
             Accept: options.accept ?? "*/*",
             "User-Agent": this.userAgent,
-            "X-Project-Token": this.projectToken,
+        }
+
+        if (this.projectToken !== "") {
+            headers["X-Project-Token"] = this.projectToken
         }
 
         if (options.body !== undefined) {
@@ -167,7 +188,10 @@ export class ControlPlaneClient {
             throw new Error(`Control plane request failed: ${options.method} ${options.path} (${statusDetail})`)
         }
 
-        return responseText
+        return {
+            status: response.status,
+            responseText,
+        }
     }
 }
 
