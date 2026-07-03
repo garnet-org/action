@@ -148,7 +148,6 @@ permissions:
 | `api_token`         | Yes      | —                       | Your Garnet API token from app.garnet.ai       |
 | `github_token`      | No       | `${{ github.token }}`   | GitHub token used for pull request comments    |
 | `api_url`           | No       | `https://api.garnet.ai` | Garnet API base URL                            |
-
 | `jibril_version`    | No       | `""` (auto)             | Jibril version (`v2.10.8` or `latest`)         |
 | `debug`             | No       | `false`                 | Enable debug mode and upload logs as artifacts |
 
