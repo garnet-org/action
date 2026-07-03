@@ -10,64 +10,63 @@ import { isSupportedArch, isSupportedPlatform } from "./shared.js"
 // logging directed to /var/log/jibril.log and /var/log/jibril.err.
 
 async function main() {
-  const platform = os.platform()
-  if (!isSupportedPlatform(platform)) {
-    core.info(
-      `Garnet runtime monitoring requires Linux (eBPF-based). Skipping on ${platform}.`,
-    )
-    return
-  }
-
-  const arch = os.arch()
-  if (!isSupportedArch(arch)) {
-    core.info(
-      `Garnet runtime monitoring requires x86_64 (jibril is only available for amd64). Skipping on ${arch}.`,
-    )
-    return
-  }
-
-  try {
-    // Save debug state for later retrieval.
-    const debug = core.getInput("debug") === "true"
-    core.saveState("debug", debug ? "true" : "")
-
-    const githubToken = core.getInput("github_token")
-    core.saveState("githubToken", githubToken)
-
-    // Set inputs as environment variables for the action
-    process.env.GARNET_API_TOKEN = core.getInput("api_token")
-
-    // Make the token available to both the main and post steps when provided.
-    if (githubToken !== "") {
-      process.env.GITHUB_TOKEN = githubToken
+    const platform = os.platform()
+    if (!isSupportedPlatform(platform)) {
+        core.info(`Garnet runtime monitoring requires Linux (eBPF-based). Skipping on ${platform}.`)
+        return
     }
-    process.env.GARNET_API_URL = core.getInput("api_url")
-    process.env.GARNETCTL_VERSION = core.getInput("garnetctl_version")
-    process.env.JIBRIL_VERSION = core.getInput("jibril_version")
-    process.env.DEBUG = core.getInput("debug")
 
-    // Set the default profiler printer file paths.
-    const profilerFile =
-      process.env.JIBRIL_PROFILER_FILE || "/var/log/jibril.profiler.out"
-    const jsonProfilerFile =
-      process.env.JIBRIL_JSONPROFILER_FILE || "/var/log/jibril.profile.json"
-    process.env.JIBRIL_PROFILER_FILE = profilerFile
-    process.env.JIBRIL_JSONPROFILER_FILE = jsonProfilerFile
-    core.saveState("profilerFile", profilerFile)
-    core.saveState("jsonProfilerFile", jsonProfilerFile)
-
-    await run()
-  } catch (err) {
-    if (err instanceof Error) {
-      core.warning(
-        `Garnet action encountered an unexpected error and will continue without runtime monitoring: ${err.message}`,
-      )
-    } else {
-      core.warning(
-        `Garnet action encountered an unexpected error and will continue without runtime monitoring: ${String(err)}`,
-      )
+    const arch = os.arch()
+    if (!isSupportedArch(arch)) {
+        core.info(
+            `Garnet runtime monitoring requires x86_64 (jibril is only available for amd64). Skipping on ${arch}.`,
+        )
+        return
     }
-  }
+
+    try {
+        // Save debug state for later retrieval.
+        const debug = core.getInput("debug") === "true"
+        core.saveState("debug", debug ? "true" : "")
+
+        const githubToken = core.getInput("github_token")
+        core.saveState("githubToken", githubToken)
+
+        // Set inputs as environment variables for the action
+        process.env.GARNET_API_TOKEN = core.getInput("api_token")
+
+        // Make the token available to both the main and post steps when provided.
+        if (githubToken !== "") {
+            process.env.GITHUB_TOKEN = githubToken
+        }
+        process.env.GARNET_API_URL = core.getInput("api_url")
+        process.env.GARNETCTL_VERSION = core.getInput("garnetctl_version")
+        process.env.JIBRIL_VERSION = core.getInput("jibril_version")
+        process.env.DEBUG = core.getInput("debug")
+
+        // Set the default profiler printer file paths.
+        const profilerFile = process.env.JIBRIL_PROFILER_FILE || "/var/log/jibril.profiler.out"
+        const jsonProfilerFile = process.env.JIBRIL_JSONPROFILER_FILE || "/var/log/jibril.profile.json"
+        process.env.JIBRIL_PROFILER_FILE = profilerFile
+        process.env.JIBRIL_JSONPROFILER_FILE = jsonProfilerFile
+        core.saveState("profilerFile", profilerFile)
+        core.saveState("jsonProfilerFile", jsonProfilerFile)
+
+        const jibrilStarted = await run()
+        if (jibrilStarted) {
+            core.saveState("jibrilStarted", "true")
+        }
+    } catch (err) {
+        if (err instanceof Error) {
+            core.warning(
+                `Garnet action encountered an unexpected error and will continue without runtime monitoring: ${err.message}`,
+            )
+        } else {
+            core.warning(
+                `Garnet action encountered an unexpected error and will continue without runtime monitoring: ${String(err)}`,
+            )
+        }
+    }
 }
 
 main()
