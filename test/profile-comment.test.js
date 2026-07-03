@@ -27,6 +27,7 @@ import {
     RUNTIME_REVIEW_MARKER,
     CONTROL_PLANE_MARKERS,
 } from "../src/runtime-review.js"
+import { publishPullRequestCommentWithClient } from "../src/pr-comment.js"
 
 const here = dirname(fileURLToPath(import.meta.url))
 const fixturesDir = join(here, "fixtures")
@@ -105,4 +106,39 @@ test("stand-down: control-plane comment blocks the UPDATE path too", () => {
 test("no control-plane comment: update path proceeds normally", () => {
     const plan = planPullRequestComment([{ id: 1, body }], worth, 2, RENDER_OPTIONS)
     assert.equal(plan.kind, "update")
+})
+
+test("publishPullRequestCommentWithClient deletes an orphaned create when control-plane takes over", async () => {
+    const calls = { listComments: 0, createBody: null, createId: 0, deletedIds: [] }
+    const client = {
+        async listComments() {
+            calls.listComments += 1
+            if (calls.listComments < 3) {
+                return []
+            }
+
+            return [{ id: 99, body: `<!-- ${CONTROL_PLANE_MARKERS[0]} -->\nCP comment` }]
+        },
+        async createComment(body) {
+            calls.createBody = body
+            calls.createId = 321
+            return { id: calls.createId, body }
+        },
+        async updateComment() {
+            throw new Error("updateComment should not be called")
+        },
+        async deleteComment(commentId) {
+            calls.deletedIds.push(commentId)
+        },
+    }
+
+    const result = await publishPullRequestCommentWithClient(client, worth, 1, {
+        wait: async () => {},
+        renderOptions: RENDER_OPTIONS,
+    })
+
+    assert.equal(result, "skipped-control-plane")
+    assert.ok(calls.createBody !== null)
+    assert.deepEqual(calls.deletedIds, [calls.createId])
+    assert.equal(calls.listComments, 3)
 })

@@ -120,10 +120,12 @@ async function reconcilePublishedComment(client, profile, runAttempt, createdCom
     }
 
     if (plan.kind === "stale") {
+        await client.deleteComment(createdCommentId)
         return "skipped-stale"
     }
 
     if (plan.kind === "blocked-by-control-plane") {
+        await client.deleteComment(createdCommentId)
         return "skipped-control-plane"
     }
 
