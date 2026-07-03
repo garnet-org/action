@@ -26,12 +26,23 @@ import { mergeCommentState, mergeCommentStates, parseCommentState, renderComment
  */
 
 /**
+ * @typedef {import("./profile-comment.js").RenderOptions} RenderOptions
+ */
+
+/**
  * @param {PullRequestComment[]} comments
  * @param {NormalizedProfile} profile
  * @param {number} runAttempt
+ * @param {RenderOptions} [renderOptions]
  * @returns {PublishCommentPlan}
  */
-export function planPullRequestComment(comments, profile, runAttempt) {
+export function planPullRequestComment(comments, profile, runAttempt, renderOptions = {}) {
+    // Stand down whenever the control-plane App owns the review comment,
+    // on both the create and update paths.
+    if (containsControlPlaneComment(comments)) {
+        return { kind: "blocked-by-control-plane" }
+    }
+
     const threadKey = getProfileThreadKey(profile)
     const matchingComments = getManagedCommentsForThread(comments, threadKey)
     const primary = matchingComments.at(-1) ?? null
@@ -43,13 +54,9 @@ export function planPullRequestComment(comments, profile, runAttempt) {
     }
 
     const duplicateCommentIds = matchingComments.slice(0, -1).map(entry => entry.comment.id)
-    const body = renderCommentBody(mergeResult.state)
+    const body = renderCommentBody(mergeResult.state, renderOptions)
 
     if (primary === null) {
-        if (containsControlPlaneComment(comments)) {
-            return { kind: "blocked-by-control-plane" }
-        }
-
         return {
             kind: "create",
             body,

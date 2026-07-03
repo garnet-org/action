@@ -1,0 +1,56 @@
+{
+  "scenarios": {
+    "github": {
+      "workflow": "Garnet Runtime Review",
+      "repository": "garnet-labs/runtime-review-testbed",
+      "ref": "refs/pull/22/merge",
+      "sha": "786a5bc8680486720bcf5dae13931de95d89b5ec",
+      "actor": "devin-ai-integration[bot]",
+      "run_id": "28488074733",
+      "job": "runtime-review",
+      "server_url": "https://github.com"
+    }
+  },
+  "network": {
+    "egress": {
+      "peers": [
+        {
+          "remote_names": [
+            "registry.npmjs.org",
+            "104.16.5.34"
+          ],
+          "remote_address": "104.16.5.34",
+          "remote_ports": [
+            443
+          ],
+          "result": "",
+          "detections": [],
+          "remote_geo_info": {},
+          "proc_trees": [
+            {
+              "ancestry": [
+                "systemd",
+                "hosted-compute-agent",
+                "Runner.Listener",
+                "Runner.Worker",
+                "bash",
+                "npm install"
+              ],
+              "arguments": "node /opt/hostedtoolcache/node/20.20.2/x64/bin/npm install",
+              "github_step": ""
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "assertions": [],
+  "telemetry": {
+    "network": {
+      "egress": {
+        "total_domains": 1,
+        "total_connections": 15
+      }
+    }
+  }
+}
