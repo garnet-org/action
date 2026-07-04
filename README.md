@@ -118,7 +118,7 @@ Install the companion GitHub App for the full Runtime Review experience in your 
 
 The Action is the standalone entry point: it records runtime, posts the Runtime Review comment and Step Summary, and only knows the jobs it observed in that run. The companion GitHub App is the full experience: it owns the authoritative Runtime Review comment, can observe true coverage, and can add cross-run management.
 
-When the App is installed, the action stands down to the App's comment on both create and update, so the PR still has exactly one Runtime Review comment.
+When the App is installed, the action stands down on both create and update — it stops posting or updating its own comment. The App owns the authoritative Runtime Review comment and reconciles any comment the action had already posted, so the PR converges to a single Runtime Review comment.
 
 ## Comment anatomy
 
