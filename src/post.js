@@ -22,13 +22,13 @@ const DOCS_URL = "https://github.com/garnet-org/action#readme"
 
 async function run() {
     const platform = os.platform()
-    if (!isSupportedPlatform(platform)) {
+    if (isSupportedPlatform(platform) === false) {
         core.info(`Garnet runtime monitoring requires Linux (eBPF-based). Skipping post step on ${platform}.`)
         return
     }
 
     const arch = os.arch()
-    if (!isSupportedArch(arch)) {
+    if (isSupportedArch(arch) === false) {
         core.info(
             `Garnet runtime monitoring requires x86_64 (jibril is only available for amd64). Skipping post step on ${arch}.`,
         )
@@ -43,7 +43,7 @@ async function run() {
             ignoreReturnCode: true,
         })
 
-        if (!jibrilStarted) {
+        if (jibrilStarted === false) {
             core.info("Jibril did not start in the main step, skipping post-step runtime processing.")
             return
         }
@@ -90,7 +90,7 @@ async function readNormalizedProfile(debug) {
             return null
         }
 
-        if (debug) {
+        if (debug === true) {
             core.info(`${JSON_PROFILE_LABEL} contents:`)
             core.info(jsonProfile)
         }
