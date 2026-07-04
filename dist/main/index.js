@@ -39823,13 +39823,10 @@ function preprocess(fn, schema) {
  *
  * Vendored from the locked reference renderer in
  * garnet-labs/runtime-review-testbed (`cmd/garnet-runtime-review/review.mjs`,
- * merged in PR #30). Keep this file byte-faithful to the reference: the
- * rendered markdown must match the testbed mockups exactly.
- *
- * Style note: where the reference used truthy/falsy guards, this copy uses the
- * explicit checks AGENTS.md mandates (e.g. `x !== ""`, `x !== undefined`).
- * These are byte-neutral — they never change the rendered markdown — so the
- * vendoring stays faithful at the output level.
+ * merged in PR #30). This copy follows the repo's AGENTS.md explicit-check
+ * rule throughout; every such rewrite is byte-neutral and verified by the
+ * fixture byte-compare tests, so the rendered markdown stays faithful to the
+ * reference.
  *
  * Frame: the comment answers exactly one question — "what happened in this
  * PR?". It is runtime evidence for code review, never an evaluation. No
@@ -39995,6 +39992,17 @@ const GITHUB_OWNED_RE =
  */
 const stripControl = value => String(value ?? "").replace(/[\u0000-\u0008\u000B-\u001F\u007F]/g, "")
 
+/** @param {unknown} value @returns {value is string} */
+const isNonEmptyString = value => value !== undefined && value !== null && value !== ""
+
+/** @param {...unknown} values @returns {string} */
+const firstNonEmptyString = (...values) => {
+  for (const value of values) {
+    if (isNonEmptyString(value)) return value
+  }
+  return ""
+}
+
 /**
  * Escape a value destined for INSIDE a `code span`: a stray backtick would
  * break out of the span, so neutralize it (and collapse newlines).
@@ -40062,11 +40070,11 @@ const isRunnerChainProcess = name => RUNNER_CHAIN.has(normalizeIdentifier(String
  * @returns {string}
  */
 function classifyConnection(c) {
-  const domain = String(c.domain || "")
-  const ip = String(c.ip || "")
+  const domain = String(firstNonEmptyString(c.domain))
+  const ip = String(firstNonEmptyString(c.ip))
   if (/^(localhost|127\.|::1)/.test(domain) || /^(127\.|::1)/.test(ip)) return "dns"
   if (/^(?:[a-z0-9-]+-)?api\.garnet\.ai$/.test(domain)) return "garnet upload"
-  const ancestry = (c.ancestry || []).filter(Boolean)
+  const ancestry = (c.ancestry ?? []).filter(isNonEmptyString)
   const fromRunnerChain = ancestry.length > 0 && ancestry.every(isRunnerChainProcess)
   if (fromRunnerChain && (GITHUB_OWNED_RE.test(domain) || domain === "")) return "github infra"
   return ""
@@ -40078,19 +40086,22 @@ function classifyConnection(c) {
  * @returns {JobRecord | null}
  */
 function summarizeProfile(profile) {
-  if (!profile || typeof profile !== "object") return null
+  if (profile === null || profile === undefined || typeof profile !== "object") return null
   const p = /** @type {Record<string, any>} */ (profile)
-  const github = p?.scenarios?.github || p?.github || {}
+  const github = p?.scenarios?.github ?? p?.github ?? {}
 
   const egressPeers = Array.isArray(p?.network?.egress?.peers) ? p.network.egress.peers : []
   /** @type {RawConnection[]} */
   const connections = []
   for (const peer of egressPeers) {
-    const domain = (peer?.remote_names || peer?.RemoteNames || []).filter(Boolean)[0] || ""
-    const ip = peer?.remote_address || peer?.RemoteAddress || ""
-    const trees = peer?.proc_trees || peer?.ProcTrees || []
-    const ancestries = trees.length
-      ? trees.map((/** @type {any} */ t) => ((t?.ancestry || t?.Ancestry || []) || 0).filter(Boolean))
+    const domain = String(firstNonEmptyString(...(peer?.remote_names ?? peer?.RemoteNames ?? [])))
+    const ip = String(firstNonEmptyString(peer?.remote_address, peer?.RemoteAddress))
+    const trees = peer?.proc_trees ?? peer?.ProcTrees ?? []
+    const ancestries = trees.length > 0
+      ? trees.map((/** @type {any} */ t) => {
+          const ancestry = t?.ancestry ?? t?.Ancestry ?? []
+          return ancestry.filter(isNonEmptyString)
+        })
       : [[]]
     for (const ancestry of ancestries) {
       connections.push({ ancestry, domain, ip })
@@ -40098,13 +40109,13 @@ function summarizeProfile(profile) {
   }
 
   return {
-    name: github.job || "",
-    workflow: github.workflow || "",
-    sha: github.sha || "",
-    run_id: github.run_id || "",
+    name: firstNonEmptyString(github.job),
+    workflow: firstNonEmptyString(github.workflow),
+    sha: firstNonEmptyString(github.sha),
+    run_id: firstNonEmptyString(github.run_id),
     run_url:
-      github.run_id && github.repository
-        ? `${github.server_url || "https://github.com"}/${github.repository}/actions/runs/${github.run_id}`
+      isNonEmptyString(github.run_id) && isNonEmptyString(github.repository)
+        ? `${isNonEmptyString(github.server_url) ? github.server_url : "https://github.com"}/${github.repository}/actions/runs/${github.run_id}`
         : "",
     connections,
   }
@@ -40121,7 +40132,7 @@ function summarizeProfile(profile) {
  */
 function runtime_review_derivePermalink(explicit, jobRecords, appUrl) {
   if (explicit !== "") return explicit
-  const runId = (jobRecords || []).map(j => j?.run_id).find(Boolean)
+  const runId = (jobRecords ?? []).map(j => j?.run_id).find(isNonEmptyString)
   if (runId === undefined || runId === "" || appUrl === "") return ""
   return `${appUrl}/dashboard/runs/${encodeURIComponent(String(runId))}?utm_source=github&utm_medium=pr_comment`
 }
@@ -40131,7 +40142,7 @@ function runtime_review_derivePermalink(explicit, jobRecords, appUrl) {
  * @param {{ ancestry: string[], domain: string, ip: string }} c
  * @returns {string}
  */
-const connectionKey = c => `${(c.ancestry || []).join("\u0000")}\u0001${c.domain}\u0001${c.ip}`
+const connectionKey = c => `${(c.ancestry ?? []).join("\u0000")}\u0001${c.domain}\u0001${c.ip}`
 
 /**
  * A5 — behavior signature for R0 comparison across pushes: normalized
@@ -40141,14 +40152,14 @@ const connectionKey = c => `${(c.ancestry || []).join("\u0000")}\u0001${c.domain
  * @returns {string}
  */
 const behaviorSignature = c =>
-  `${(c.ancestry || []).map(normalizeIdentifier).join("\u0000")}\u0001${c.domain || c.ip || ""}`
+  `${(c.ancestry ?? []).map(normalizeIdentifier).join("\u0000")}\u0001${firstNonEmptyString(c.domain, c.ip)}`
 
 /**
  * A destination's display identity (domain when named, else address).
  * @param {{ domain: string, ip: string }} c
  * @returns {string}
  */
-const destName = c => c.domain || c.ip || ""
+const destName = c => firstNonEmptyString(c.domain, c.ip)
 
 /**
  * Display label for a destination under A1 (`dns` replaces the stub name).
@@ -40201,16 +40212,16 @@ function salienceComparator(uniqueDests) {
  */
 function runtime_review_buildRunReview(input) {
   /** @type {ReviewJob[]} */
-  let jobs = (input.jobs || []).filter(Boolean).map((j, i) => ({
+  let jobs = (input.jobs ?? []).filter(job => job !== undefined && job !== null).map((j, i) => ({
     id: i,
-    name: j.name || `job-${i + 1}`,
-    workflow: j.workflow || "",
-    run_url: j.run_url || "",
-    connections: dedupeConnections(j.connections || []),
+    name: firstNonEmptyString(j.name, `job-${i + 1}`),
+    workflow: firstNonEmptyString(j.workflow),
+    run_url: firstNonEmptyString(j.run_url),
+    connections: dedupeConnections(j.connections ?? []),
   }))
 
-  const workflows = [...new Set(jobs.map(j => j.workflow).filter(Boolean))]
-  const domains = [...new Set(jobs.flatMap(j => j.connections.map(destName)).filter(Boolean))]
+  const workflows = [...new Set(jobs.map(j => j.workflow).filter(isNonEmptyString))]
+  const domains = [...new Set(jobs.flatMap(j => j.connections.map(destName)).filter(isNonEmptyString))]
   const totalConnections = jobs.reduce(
     (n, j) => n + j.connections.reduce((m, c) => m + c.count, 0),
     0,
@@ -40226,7 +40237,7 @@ function runtime_review_buildRunReview(input) {
     for (const job of jobs) {
       for (const c of job.connections) {
         const d = destName(c)
-        if (!d) continue
+        if (d === "") continue
         const owners = destJobs.get(d) ?? new Set()
         owners.add(job.id)
         destJobs.set(d, owners)
@@ -40248,7 +40259,7 @@ function runtime_review_buildRunReview(input) {
   // A3 — job ordering: headline-picked jobs first, then rung ascending;
   // ties by name (total order). Keeps the salient job out of the group fold.
   /** @param {ReviewJob} job */
-  const salientRank = job => (salience.salientJobs.includes(job.id) ? 0 : 1)
+  const salientRank = job => (salience.salientJobs.includes(job.id) === true ? 0 : 1)
   /** @param {ReviewJob} job */
   const rungRank = job => salience.jobRungs.get(job.id) ?? 3
   jobs = [...jobs].sort(
@@ -40257,15 +40268,15 @@ function runtime_review_buildRunReview(input) {
   )
 
   const recorded = jobs.length
-  const expected = Math.max(input.expectedJobs || 0, recorded)
+  const expected = Math.max(input.expectedJobs ?? 0, recorded)
 
   return {
-    repo: input.repo || "",
-    sha: String(input.sha || ""),
-    permalink: input.permalink || "",
-    docsUrl: input.docsUrl || "",
-    renderedAt: input.renderedAt ? new Date(input.renderedAt) : null,
-    commitUrl: input.commitUrl || "",
+    repo: firstNonEmptyString(input.repo),
+    sha: firstNonEmptyString(input.sha),
+    permalink: firstNonEmptyString(input.permalink),
+    docsUrl: firstNonEmptyString(input.docsUrl),
+    renderedAt: input.renderedAt !== undefined && input.renderedAt !== null ? new Date(input.renderedAt) : null,
+    commitUrl: firstNonEmptyString(input.commitUrl),
     jobs,
     uniqueDests,
     lineageAbsent,
@@ -40290,9 +40301,9 @@ function dedupeConnections(connections) {
   const byKey = new Map()
   for (const raw of connections) {
     const c = {
-      ancestry: (raw.ancestry || []).map(s => String(s)),
-      domain: String(raw.domain || ""),
-      ip: String(raw.ip || ""),
+      ancestry: (raw.ancestry ?? []).map(s => String(s)),
+      domain: String(firstNonEmptyString(raw.domain)),
+      ip: String(firstNonEmptyString(raw.ip)),
     }
     const key = connectionKey(c)
     const seen = byKey.get(key)
@@ -40335,13 +40346,13 @@ function computeSalience(jobs, totals) {
   for (const job of jobs) {
     const unclassified = job.connections.filter(c => c.class === "")
     const hasUnique = unclassified.some(c => totals.uniqueDests.has(destName(c)))
-    const hasSpawn = !totals.lineageAbsent && unclassified.some(c => tailHasNetworkTool(c.ancestry))
-    jobRungs.set(job.id, hasUnique ? 1 : hasSpawn ? 2 : 3)
+    const hasSpawn = totals.lineageAbsent === false && unclassified.some(c => tailHasNetworkTool(c.ancestry))
+    jobRungs.set(job.id, hasUnique === true ? 1 : hasSpawn === true ? 2 : 3)
   }
 
   if (totals.uniqueDests.size > 0) {
     const pick = candidates.find(({ c }) => totals.uniqueDests.has(destName(c)))
-    if (pick) {
+    if (pick !== undefined) {
       return {
         rule: "R1",
         jobRungs,
@@ -40354,9 +40365,9 @@ function computeSalience(jobs, totals) {
     }
   }
 
-  if (!totals.lineageAbsent) {
+  if (totals.lineageAbsent === false) {
     const pick = candidates.find(({ c }) => tailHasNetworkTool(c.ancestry))
-    if (pick) {
+    if (pick !== undefined) {
       return {
         rule: "R2",
         jobRungs,
@@ -40393,7 +40404,7 @@ function computeSalience(jobs, totals) {
  * @returns {string}
  */
 function describeConnection(job, c, suffix) {
-  const ancestry = c.ancestry.filter(Boolean)
+  const ancestry = c.ancestry.filter(isNonEmptyString)
   const dest = destLabel(c)
   const tail = ancestry.slice(-TAIL_DEPTH)
   const toolIdx = tail.findIndex(step => NETWORK_TOOLS.some(re => re.test(String(step))))
@@ -40404,10 +40415,10 @@ function describeConnection(job, c, suffix) {
     const chain = ancestry.slice(chainStart).map(escapeCode).join(" → ")
     action = `\`${escapeCode(parent)}\` spawned \`${chain}\`, which reached \`${escapeCode(dest)}\``
   } else {
-    const proc = ancestry[ancestry.length - 1] || "a process"
+    const proc = isNonEmptyString(ancestry[ancestry.length - 1]) ? ancestry[ancestry.length - 1] : "a process"
     action = `\`${escapeCode(proc)}\` reached \`${escapeCode(dest)}\``
   }
-  const tailPart = suffix ? ` — ${suffix}` : ""
+  const tailPart = suffix !== "" ? ` — ${suffix}` : ""
   return `In \`${escapeCode(job.name)}\`, ${action}${tailPart}.`
 }
 
@@ -40432,7 +40443,7 @@ function splitRunnerChain(job) {
   /** @type {ReviewConnection[]} */
   const visible = []
   for (const c of job.connections) {
-    const ancestry = c.ancestry.filter(Boolean)
+    const ancestry = c.ancestry.filter(isNonEmptyString)
     const allMembers = ancestry.length > 0 && ancestry.every(isRunnerChainProcess)
     if (allMembers && (c.class === "github infra" || c.class === "dns")) elided.push(c)
     else visible.push(c)
@@ -40471,7 +40482,7 @@ function stripRunnerPrefix(ancestry) {
  */
 function renderJobTree(job, opts = {}) {
   const elide = opts.elide !== false
-  const focus = opts.focus || ""
+  const focus = firstNonEmptyString(opts.focus)
   const lines = [fenceSafe(job.name)]
 
   const { visible, elidedProcs, elidedConnections } = elide
@@ -40483,24 +40494,24 @@ function renderJobTree(job, opts = {}) {
   /** @type {Set<string>} */
   const prefixProcs = new Set()
   for (const c of visible) {
-    const ancestry = c.ancestry.filter(Boolean)
+    const ancestry = c.ancestry.filter(isNonEmptyString)
     const { prefix, rest } = elide ? stripRunnerPrefix(ancestry) : { prefix: [], rest: ancestry }
     for (const p of prefix) prefixProcs.add(p)
     const focused = focus !== "" && connectionKey(c) === focus
     let node = root
-    if (focused) root.onPath = true
+    if (focused === true) root.onPath = true
     for (const step of rest) {
       const key = String(step)
       const child = node.children.get(key) ?? { children: new Map(), leaves: [] }
       node.children.set(key, child)
       node = child
-      if (focused) node.onPath = true
+      if (focused === true) node.onPath = true
     }
     node.leaves.push(c)
   }
 
   const runnerProcs = new Set([...elidedProcs, ...prefixProcs])
-  if (elide && runnerProcs.size > 0) {
+  if (elide === true && runnerProcs.size > 0) {
     const connPart = elidedConnections > 0
       ? ` · ${elidedConnections} connection${elidedConnections === 1 ? "" : "s"} → GitHub-owned addresses`
       : ""
@@ -40538,7 +40549,7 @@ function subtreeCounts(node, dests = new Set(), totals = { connections: 0 }) {
 function renderNodeChildren(node, prefix, lines, focusMode = false) {
   let procs = [...node.children.entries()].map(([name, child]) => ({ name, child }))
   let collapsedNote = ""
-  if (focusMode) {
+  if (focusMode === true) {
     const offPath = procs.filter(p => p.child.onPath !== true)
     if (offPath.length > 0) {
       /** @type {Set<string>} */
@@ -40557,7 +40568,7 @@ function renderNodeChildren(node, prefix, lines, focusMode = false) {
   const entries = [
     ...procs.map(p => /** @type {{ kind: "proc", name: string, child: TreeNode }} */ ({ kind: "proc", ...p })),
     ...node.leaves.map(leaf => /** @type {{ kind: "leaf", leaf: ReviewConnection }} */ ({ kind: "leaf", leaf })),
-    ...(collapsedNote ? [/** @type {{ kind: "note", note: string }} */ ({ kind: "note", note: collapsedNote })] : []),
+    ...(collapsedNote !== "" ? [/** @type {{ kind: "note", note: string }} */ ({ kind: "note", note: collapsedNote })] : []),
   ]
   entries.forEach((entry, i) => {
     const last = i === entries.length - 1
@@ -40565,16 +40576,16 @@ function renderNodeChildren(node, prefix, lines, focusMode = false) {
     const childPrefix = prefix + (last ? "   " : "│  ")
     if (entry.kind === "proc") {
       lines.push(`${prefix}${branch}${fenceSafe(entry.name)}`)
-      renderNodeChildren(entry.child, childPrefix, lines, focusMode && entry.child.onPath === true)
+      renderNodeChildren(entry.child, childPrefix, lines, focusMode === true && entry.child.onPath === true)
     } else if (entry.kind === "note") {
       lines.push(`${prefix}${branch}${entry.note}`)
     } else {
       const { leaf } = entry
       const name = leaf.class === "dns" ? "dns" : ""
       const label =
-        [...new Set([name || leaf.domain, leaf.ip].filter(Boolean))].map(fenceSafe).join(" · ") ||
+        [...new Set([firstNonEmptyString(name, leaf.domain), leaf.ip].filter(isNonEmptyString))].map(fenceSafe).join(" · ") ||
         "(unnamed peer)"
-      const annotation = leaf.class && leaf.class !== "dns" ? ` — ${leaf.class}` : ""
+      const annotation = isNonEmptyString(leaf.class) && leaf.class !== "dns" ? ` — ${leaf.class}` : ""
       const times = leaf.count > 1 ? ` ×${leaf.count}` : ""
       lines.push(`${prefix}${branch}→ ${label}${annotation}${times}`)
     }
@@ -40596,10 +40607,10 @@ function renderNodeChildren(node, prefix, lines, focusMode = false) {
  */
 function jobSummaryLine(job, uniqueDests = new Set(), opts = {}) {
   /** @type {(v: string) => string} */
-  const code = opts.html ? v => `<code>${escapeHtml(v)}</code>` : v => `\`${escapeCode(v)}\``
-  const ident = opts.html ? `<b>${code(job.name)}</b>` : `**${code(job.name)}**`
+  const code = opts.html === true ? v => `<code>${escapeHtml(v)}</code>` : v => `\`${escapeCode(v)}\``
+  const ident = opts.html === true ? `<b>${code(job.name)}</b>` : `**${code(job.name)}**`
   const logLink =
-    job.run_url && opts.link !== false ? ` · [job log ↗](${job.run_url})` : ""
+    isNonEmptyString(job.run_url) && opts.link !== false ? ` · [job log ↗](${job.run_url})` : ""
   if (job.connections.length === 0) {
     return `${ident} — made no outbound connections.${logLink}`
   }
@@ -40609,22 +40620,22 @@ function jobSummaryLine(job, uniqueDests = new Set(), opts = {}) {
   /** @type {Set<string>} */
   const seen = new Set()
   const ordered = [...job.connections].sort(
-    (a, b) => (a.domain ? 0 : 1) - (b.domain ? 0 : 1) || cmp(a, b),
+    (a, b) => (isNonEmptyString(a.domain) ? 0 : 1) - (isNonEmptyString(b.domain) ? 0 : 1) || cmp(a, b),
   )
   for (const c of ordered) {
     if (c.class !== "") continue
     const d = destName(c)
-    if (!d || seen.has(d)) continue
+    if (d === "" || seen.has(d)) continue
     seen.add(d)
     named.push(d)
     if (named.length === 3) break
   }
-  const allDests = new Set(job.connections.map(destName).filter(Boolean))
+  const allDests = new Set(job.connections.map(destName).filter(isNonEmptyString))
   const remainder = allDests.size - named.length
   const total = job.connections.reduce((n, c) => n + c.count, 0)
   const shown = named.map(code).join(", ")
   const more = remainder > 0 ? ` and ${remainder} more` : ""
-  const reach = named.length
+  const reach = named.length > 0
     ? `reached ${shown}${more}`
     : `reached ${allDests.size} destination${allDests.size === 1 ? "" : "s"}`
   return `${ident} — ${reach} · ${total} connection${total === 1 ? "" : "s"}${logLink}`
@@ -40636,7 +40647,7 @@ function jobSummaryLine(job, uniqueDests = new Set(), opts = {}) {
  * @returns {{ domains: number, connections: number }}
  */
 function jobCounts(job) {
-  const domains = new Set(job.connections.map(destName).filter(Boolean)).size
+  const domains = new Set(job.connections.map(destName).filter(isNonEmptyString)).size
   const connections = job.connections.reduce((n, c) => n + c.count, 0)
   return { domains, connections }
 }
@@ -40664,8 +40675,9 @@ function freshnessStamp(date) {
  * @returns {string}
  */
 function metaLine(review) {
-  const sha7 = escapeCode(review.sha.slice(0, 7) || "unknown")
-  const shaPart = review.commitUrl ? `[\`${sha7}\`](${review.commitUrl})` : `\`${sha7}\``
+  const shaPrefix = review.sha.slice(0, 7)
+  const sha7 = escapeCode(isNonEmptyString(shaPrefix) ? shaPrefix : "unknown")
+  const shaPart = isNonEmptyString(review.commitUrl) ? `[\`${sha7}\`](${review.commitUrl})` : `\`${sha7}\``
   const coverage =
     review.counts.expectedJobs > review.counts.jobs
       ? `${review.counts.jobs} of ${review.counts.expectedJobs} job${review.counts.expectedJobs === 1 ? "" : "s"} recorded`
@@ -40683,7 +40695,7 @@ function metaLine(review) {
  * @returns {string[]}
  */
 function renderHeader(review, { markers }) {
-  const lines = markers ? [runtime_review_RUNTIME_REVIEW_MARKER, runtime_review_COMMENT_MARKER] : []
+  const lines = markers === true ? [runtime_review_RUNTIME_REVIEW_MARKER, runtime_review_COMMENT_MARKER] : []
   lines.push("## Garnet Runtime Review")
   lines.push(metaLine(review))
   lines.push("")
@@ -40703,12 +40715,12 @@ function renderHeader(review, { markers }) {
 function renderFooter(review, lines) {
   lines.push("---")
   const capability =
-    review.permalink && !/github\.com\/[^ ]*\/actions\//.test(review.permalink)
+    isNonEmptyString(review.permalink) && !/github\.com\/[^ ]*\/actions\//.test(review.permalink)
       ? ` · [Run Profile ↗](${review.permalink})`
       : ""
   const missing = review.counts.expectedJobs - review.counts.jobs
   const growth =
-    missing > 0 && review.docsUrl
+    missing > 0 && isNonEmptyString(review.docsUrl)
       ? ` · ${missing} job${missing === 1 ? "" : "s"} not yet recorded — [add the step ↗](${review.docsUrl})`
       : ""
   lines.push(
@@ -40729,7 +40741,7 @@ function renderFooter(review, lines) {
  * @returns {void}
  */
 function renderJobSection(review, job, lines, { collapsed }) {
-  if (job.connections.length === 0 || review.lineageAbsent) {
+  if (job.connections.length === 0 || review.lineageAbsent === true) {
     lines.push(jobSummaryLine(job, review.uniqueDests))
     lines.push("")
     return
@@ -40742,8 +40754,8 @@ function renderJobSection(review, job, lines, { collapsed }) {
     `<details${open}><summary>${jobSummaryLine(job, review.uniqueDests, { link: false, html: true })}</summary>`,
   )
   lines.push("")
-  const logLink = job.run_url ? ` · [job log ↗](${job.run_url})` : ""
-  if (collapsed) {
+  const logLink = isNonEmptyString(job.run_url) ? ` · [job log ↗](${job.run_url})` : ""
+  if (collapsed === true) {
     const procs = new Set(job.connections.flatMap(c => c.ancestry)).size
     lines.push(`┄ ${procs} process${procs === 1 ? "" : "es"} · ${connections} connection${connections === 1 ? "" : "s"} — full tree in the Step Summary ↗`)
     lines.push("")
@@ -40753,7 +40765,7 @@ function renderJobSection(review, job, lines, { collapsed }) {
     }
   } else {
     lines.push("````text")
-    lines.push(renderJobTree(job, { focus: salient ? review.salience.salientKey : "" }))
+    lines.push(renderJobTree(job, { focus: salient === true ? review.salience.salientKey : "" }))
     lines.push("````")
     lines.push("")
     lines.push(
@@ -40786,7 +40798,7 @@ function runtime_review_renderRunReview(review) {
   // one fold so the comment's height is O(1) in the size of the job matrix.
   const GROUP_AFTER = 3
   const grouped = review.jobs.length > GROUP_AFTER + 1 ? review.jobs.slice(GROUP_AFTER) : []
-  const ungrouped = grouped.length ? review.jobs.slice(0, GROUP_AFTER) : review.jobs
+  const ungrouped = grouped.length > 0 ? review.jobs.slice(0, GROUP_AFTER) : review.jobs
 
   /** @type {Set<number>} */
   const collapsedIds = new Set()
@@ -40795,8 +40807,8 @@ function runtime_review_renderRunReview(review) {
     for (const job of ungrouped) {
       renderJobSection(review, job, lines, { collapsed: collapsedIds.has(job.id) })
     }
-    if (grouped.length) {
-      const domains = new Set(grouped.flatMap(j => j.connections.map(destName)).filter(Boolean)).size
+    if (grouped.length > 0) {
+      const domains = new Set(grouped.flatMap(j => j.connections.map(destName)).filter(isNonEmptyString)).size
       const connections = grouped.reduce((n, j) => n + j.connections.reduce((m, c) => m + c.count, 0), 0)
       lines.push(
         `<details><summary>${grouped.length} more jobs · ${domains} domain${domains === 1 ? "" : "s"} · ${connections} connection${connections === 1 ? "" : "s"}</summary>`,
@@ -40830,7 +40842,7 @@ function renderStepSummary(review) {
   review.jobs.forEach(job => {
     lines.push(jobSummaryLine(job, review.uniqueDests))
     lines.push("")
-    if (job.connections.length === 0 || review.lineageAbsent) return
+    if (job.connections.length === 0 || review.lineageAbsent === true) return
     lines.push("````text")
     lines.push(renderJobTree(job, { elide: false }))
     lines.push("````")
@@ -40856,12 +40868,13 @@ function renderStepSummary(review) {
  * @returns {string}
  */
 function renderNoRecord(input) {
-  const expected = Math.max(input.expectedJobs, 1)
-  const sha7 = escapeCode(String(input.sha || "unknown").slice(0, 7))
+  const expected = Math.max(input.expectedJobs ?? 0, 1)
+  const shaSource = isNonEmptyString(input.sha) ? input.sha : "unknown"
+  const sha7 = escapeCode(String(shaSource).slice(0, 7))
   const stamp = freshnessStamp(new Date(input.renderedAt))
   return [
     "## Garnet Runtime Review",
-    `${input.commitUrl ? `[\`${sha7}\`](${input.commitUrl})` : `\`${sha7}\``} · 0 of ${expected} job${expected === 1 ? "" : "s"} recorded · ${stamp}`,
+    `${isNonEmptyString(input.commitUrl) ? `[\`${sha7}\`](${input.commitUrl})` : `\`${sha7}\``} · 0 of ${expected} job${expected === 1 ? "" : "s"} recorded · ${stamp}`,
     "",
     "No Run Profile was produced for this run.",
     "",
