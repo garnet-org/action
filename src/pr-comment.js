@@ -14,12 +14,17 @@ const CREATE_RECHECK_MIN_DELAY_MS = 750
 const CREATE_RECHECK_SPREAD_MS = 1500
 
 /**
+ * @typedef {import("./profile-comment.js").RenderOptions} RenderOptions
+ */
+
+/**
  * @typedef {{
  *   repository: string
  *   pullRequestNumber: number
  *   token: string
  *   profile: NormalizedProfile
  *   runAttempt: number
+ *   renderOptions?: RenderOptions
  * }} PublishCommentOptions
  */
 
@@ -33,7 +38,7 @@ const CREATE_RECHECK_SPREAD_MS = 1500
  */
 
 /**
- * @typedef {{ wait?: (delayMs: number) => Promise<void> }} PublishWithClientOptions
+ * @typedef {{ wait?: (delayMs: number) => Promise<void>, renderOptions?: RenderOptions }} PublishWithClientOptions
  */
 
 /**
@@ -43,7 +48,9 @@ const CREATE_RECHECK_SPREAD_MS = 1500
 export async function publishPullRequestComment(options) {
     const client = new GitHubIssueCommentClient(options.repository, options.pullRequestNumber, options.token)
 
-    return publishPullRequestCommentWithClient(client, options.profile, options.runAttempt)
+    return publishPullRequestCommentWithClient(client, options.profile, options.runAttempt, {
+        ...(options.renderOptions === undefined ? {} : { renderOptions: options.renderOptions }),
+    })
 }
 
 /**
@@ -54,7 +61,8 @@ export async function publishPullRequestComment(options) {
  * @returns {Promise<"created" | "updated" | "skipped-stale" | "skipped-control-plane">}
  */
 export async function publishPullRequestCommentWithClient(client, profile, runAttempt, options = {}) {
-    const initialPlan = planPullRequestComment(await client.listComments(), profile, runAttempt)
+    const renderOptions = options.renderOptions ?? {}
+    const initialPlan = planPullRequestComment(await client.listComments(), profile, runAttempt, renderOptions)
 
     if (initialPlan.kind !== "create") {
         return applyPublishPlan(client, initialPlan)
@@ -63,11 +71,11 @@ export async function publishPullRequestCommentWithClient(client, profile, runAt
     const wait = options.wait ?? waitForDelay
     await wait(getCreateRecheckDelayMs(profile))
 
-    const plan = planPullRequestComment(await client.listComments(), profile, runAttempt)
+    const plan = planPullRequestComment(await client.listComments(), profile, runAttempt, renderOptions)
 
     if (plan.kind === "create") {
         const createdComment = await client.createComment(plan.body)
-        return reconcilePublishedComment(client, profile, runAttempt, createdComment.id)
+        return reconcilePublishedComment(client, profile, runAttempt, createdComment.id, renderOptions)
     }
 
     return applyPublishPlan(client, plan)
@@ -101,16 +109,18 @@ async function applyPublishPlan(client, plan) {
  * @param {NormalizedProfile} profile
  * @param {number} runAttempt
  * @param {number} createdCommentId
+ * @param {RenderOptions} renderOptions
  * @returns {Promise<"created" | "updated" | "skipped-stale" | "skipped-control-plane">}
  */
-async function reconcilePublishedComment(client, profile, runAttempt, createdCommentId) {
-    const plan = planPullRequestComment(await client.listComments(), profile, runAttempt)
+async function reconcilePublishedComment(client, profile, runAttempt, createdCommentId, renderOptions) {
+    const plan = planPullRequestComment(await client.listComments(), profile, runAttempt, renderOptions)
 
     if (plan.kind === "create") {
         return "created"
     }
 
     if (plan.kind === "stale") {
+        await deleteComments(client, [createdCommentId])
         return "skipped-stale"
     }
 
@@ -141,7 +151,7 @@ async function applyUpdatePlan(client, plan) {
  * @returns {Promise<void>}
  */
 async function deleteComments(client, commentIds) {
-    for (const commentId of commentIds) {
+    for (const commentId of new Set(commentIds)) {
         await client.deleteComment(commentId)
     }
 }

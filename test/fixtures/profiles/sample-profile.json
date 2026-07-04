@@ -1,0 +1,217 @@
+{
+  "timestamp": "2026-05-01T23:45:34.726866+00:00",
+  "scenarios": {
+    "github": {
+      "workflow": "devin-agentic-workflow",
+      "repository": "jadoonf/jibril-devin-setup",
+      "ref": "refs/heads/master",
+      "sha": "ac1c01beb50484ecaf80f02e9adbdb7d493516c8",
+      "actor": "devin-agent",
+      "run_id": "devin-1777678834",
+      "job": "agentic-coding-session"
+    }
+  },
+  "assertions": [
+    {
+      "id": "interpreter shell spawn (70 events)",
+      "result": "attention"
+    }
+  ],
+  "network": {
+    "egress": {
+      "peers": [
+        {
+          "remote_names": [
+            "devin-box",
+            "127.0.0.1",
+            "devinbox",
+            "localhost"
+          ],
+          "proc_trees": [
+            {
+              "ancestry": [
+                "systemd",
+                "python3.10"
+              ]
+            },
+            {
+              "ancestry": [
+                "systemd",
+                "sshd",
+                "sshd",
+                "sshd"
+              ]
+            }
+          ],
+          "result": "pass"
+        },
+        {
+          "remote_names": [
+            "git-manager.local",
+            "172.16.9.1"
+          ],
+          "proc_trees": [
+            {
+              "ancestry": [
+                "systemd",
+                "sshd",
+                "sshd",
+                "sshd"
+              ]
+            }
+          ],
+          "result": "pass"
+        },
+        {
+          "remote_names": [
+            "google.com",
+            "142.251.45.142"
+          ],
+          "proc_trees": [
+            {
+              "ancestry": [
+                "systemd",
+                "python3.10",
+                "bash",
+                "curl"
+              ]
+            }
+          ],
+          "result": "pass"
+        },
+        {
+          "remote_names": [
+            "127.0.0.53",
+            "localhost"
+          ],
+          "proc_trees": [
+            {
+              "ancestry": [
+                "systemd",
+                "python3.10",
+                "bash",
+                "curl"
+              ]
+            },
+            {
+              "ancestry": [
+                "systemd",
+                "python3.10",
+                "bash",
+                "python3.12"
+              ]
+            },
+            {
+              "ancestry": [
+                "systemd",
+                "sshd",
+                "sshd",
+                "sshd",
+                "git",
+                "git",
+                "git-remote-http"
+              ]
+            }
+          ],
+          "result": "pass"
+        },
+        {
+          "remote_names": [
+            "104.16.10.34",
+            "registry.npmjs.org"
+          ],
+          "proc_trees": [
+            {
+              "ancestry": [
+                "systemd",
+                "python3.10",
+                "bash",
+                "curl"
+              ]
+            }
+          ],
+          "result": "pass"
+        },
+        {
+          "remote_names": [
+            "api.github.com",
+            "140.82.116.5"
+          ],
+          "proc_trees": [
+            {
+              "ancestry": [
+                "systemd",
+                "python3.10",
+                "bash",
+                "python3.12"
+              ]
+            }
+          ],
+          "result": "pass"
+        },
+        {
+          "remote_names": [
+            "github.com",
+            "140.82.116.3"
+          ],
+          "proc_trees": [
+            {
+              "ancestry": [
+                "systemd",
+                "python3.10",
+                "bash",
+                "curl"
+              ]
+            }
+          ],
+          "result": "pass"
+        },
+        {
+          "remote_names": [
+            "pypi.org",
+            "151.101.64.223"
+          ],
+          "proc_trees": [
+            {
+              "ancestry": [
+                "systemd",
+                "python3.10",
+                "bash",
+                "curl"
+              ]
+            }
+          ],
+          "result": "pass"
+        },
+        {
+          "remote_names": [
+            "git-manager.devin.ai",
+            "35.81.98.143"
+          ],
+          "proc_trees": [
+            {
+              "ancestry": [
+                "systemd",
+                "sshd",
+                "sshd",
+                "sshd",
+                "git",
+                "git",
+                "git-remote-http"
+              ]
+            }
+          ],
+          "result": "pass"
+        }
+      ]
+    }
+  },
+  "telemetry": {
+    "network": {
+      "egress": {
+        "total_domains": 9,
+        "total_connections": 23
+      }
+    }
+  }
+}

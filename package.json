@@ -23,8 +23,9 @@
     "scripts": {
         "prepare": "node scripts/setup-git-hooks.js",
         "typecheck": "node ./node_modules/typescript/bin/tsc -p jsconfig.json --noEmit",
+        "test": "node --test test/*.test.js",
         "build": "ncc build src/main.js -o dist/main --license licenses.txt && ncc build src/post.js -o dist/post --license licenses.txt && perl -pi -e 's/\\r$//' dist/main/index.js dist/post/index.js",
-        "validate": "npm run typecheck && npm run build"
+        "validate": "npm run typecheck && npm run test && npm run build"
     },
     "dependencies": {
         "@actions/artifact": "^6.2.1",

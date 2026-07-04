@@ -1,11 +1,11 @@
-# Garnet Runtime Visibility
+# Garnet Runtime Review
 
 <div align="center">
   <a href="https://garnet.ai">
     <img src="brand/garnet-logo.png" alt="Garnet" width="260" />
   </a>
 
-  <p><strong>Runtime visibility for GitHub Workflows</strong></p>
+  <p><strong>Runtime Review for your PRs</strong></p>
 
   <p>
     <a href="https://app.garnet.ai">Get an API token</a> ·
@@ -24,18 +24,18 @@
 
 ---
 
-Runtime profiling and behavioral assertions for CI/CD and agentic workflows in GitHub Actions.
+Runtime review for CI/CD and agentic workflows in GitHub Actions.
 
-Garnet is powered by [Jibril](https://jibril.garnet.ai), an eBPF sensor that attaches to your CI runner and captures every process spawn and outbound connection — with full lineage. Results surface in line, showing pass/fail for each run with rich context.
+Garnet is powered by [Jibril](https://jibril.garnet.ai), an eBPF sensor that attaches to your CI runner and captures every process spawn, outbound connection, and file access — with full lineage. The Action stage posts a Runtime Review comment and the GitHub Step Summary for the jobs it can see. The companion GitHub App owns the authoritative Runtime Review comment when installed.
 
 One YAML step. No code changes and minimal overhead.
 
-Get your API token at [app.garnet.ai](https://app.garnet.ai).
+Get your API token at [app.garnet.ai](https://app.garnet.ai). Start with the Action, then install the companion GitHub App for the full PR experience.
 
 ## What you get
 
-- **A behavioral profile of every run**: Kernel-level capture of every network call, process spawn, and file access — with full lineage from parent to child, down to the exact binary that made the connection.
-- **Runtime assertions in your PR**: Assertions are like unit tests for runtime behavior. Results appear as a PR comment and step summary: a table per job with pass/fail assertions and an egress table with lineage inline, plus a permalink to the full run report and configurable alerts on failures.
+- **Action stage**: Add the workflow step and Jibril records runtime from that job. The action self-posts a Runtime Review PR comment plus the GitHub Step Summary. Because the Action only knows its own jobs, the coverage line reads `k jobs recorded`, and the Run Profile permalink is derived from the run_id.
+- **Companion GitHub App stage**: Install the companion GitHub App for the full PR experience. The App owns the authoritative Runtime Review comment, can show true coverage (`k of n`), richer capability permalinks, Slack alerts, and cross-run management.
 - **Lineage-based evidence**: When something unexpected runs, you don't just see a domain name — you see the full chain.
 
 <p align="center">
@@ -55,10 +55,12 @@ Get your API token at [app.garnet.ai](https://app.garnet.ai).
 
 ## Permissions
 
-| Permission             | Required    | Why                                             |
-| ---------------------- | ----------- | ----------------------------------------------- |
-| `contents: read`       | Yes         | Access workflow context and repository metadata |
-| `pull-requests: write` | Recommended | Post the runtime profile as a PR comment        |
+| Mode | Permission | Why |
+| ---- | ---------- | --- |
+| Standalone Action | `contents: read` | Access workflow context and repository metadata |
+| Standalone Action | `pull-requests: write` | Post and update the Runtime Review comment from the workflow |
+| App-installed | `contents: read` | The Action still reads the workflow context and the Jibril profile |
+| App-installed | `pull-requests: write` | Not used by the Action when the companion GitHub App owns the comment |
 
 This action does not require `contents: write`, `actions: write`, or access to any repository secrets beyond the ones you explicitly pass.
 
@@ -102,16 +104,27 @@ jobs:
 > - uses: garnet-org/action@<commit-sha>
 > ```
 
+### 3. Install the companion GitHub App
+
+Install the companion GitHub App for the full Runtime Review experience in your PRs. <!-- TODO(farrukh): confirm GitHub App install URL + exact permissions/feature list -->
+
 ### Versioning
 
 - `garnet-org/action@v2` tracks the latest `v2.x.x` release.
 - `garnet-org/action@main` tracks the latest unreleased code on the default branch.
 - Exact tags such as `garnet-org/action@v2.3.0` remain available when you want a fully pinned released version.
 
-## What you'll see
+## Action vs. GitHub App
 
-- **GitHub job summary**: A Markdown "security profile" appended at the end of the job — even if the job fails (see this [example GitHub Actions run](https://github.com/garnet-org/action/actions/runs/23175135499)).
-- **Pull request comment**: On pull request workflows, Garnet posts one comment per push, merging jobs and workflows from the same push into a single comment.
+The Action is the standalone entry point: it records runtime, posts the Runtime Review comment and Step Summary, and only knows the jobs it observed in that run. The companion GitHub App is the full experience: it owns the authoritative Runtime Review comment, can observe true coverage, and can add cross-run management.
+
+When the App is installed, the action stands down on both create and update — it stops posting or updating its own comment. The App owns the authoritative Runtime Review comment and reconciles any comment the action had already posted, so the PR converges to a single Runtime Review comment.
+
+## Comment anatomy
+
+- **PR comment**: A headline, then one line per job. Each job opens into a `<details>` fold with the job's full Runtime Review.
+- **GitHub job summary**: The same full-detail Runtime Review is appended at the end of the job (see this [example GitHub Actions run](https://github.com/garnet-org/action/actions/runs/23175135499)).
+- **Pull request comment lifecycle**: On pull request workflows, Garnet posts one comment per push, merging jobs and workflows from the same push into a single comment. When the GitHub App is installed, the action defers so the App keeps ownership of that comment.
 
   <img
     src="https://github.com/user-attachments/assets/13e0153b-fcfd-4794-b349-4a86e939e58a"
@@ -119,19 +132,19 @@ jobs:
     alt="Garnet PR comment example"
   />
 
-- **Garnet UI**: Linked from in-line results through a permalink for in-depth investigation and additional management features, such as Slack alerts on failures.
-- **Run profile page**: An artifact showing the behavioral profile for a run, shareable through the UI (see an example from the recent [telnyx TeamPCP incident](https://app.garnet.ai/public/runs/23662517211)).
+- **Garnet UI**: Linked from in-line results through a Run Profile permalink for in-depth investigation and additional management features, such as Slack alerts.
+- **Run Profile page**: An artifact showing the behavioral profile for a run, shareable through the UI (see an example from the recent [telnyx TeamPCP incident](https://app.garnet.ai/public/runs/23662517211)).
 
 ## Under the hood
 
 - **Main step**: Downloads `jibril`, creates a Garnet agent via the control-plane API, fetches your merged network policy from the API, and starts Jibril as a `systemd` service on the runner. If Jibril crashes during startup, the action logs diagnostics and continues so later workflow steps still run.
-- **Post step (always)**: Stops Jibril so it flushes events, appends the generated profile to `GITHUB_STEP_SUMMARY`, and creates or updates the pull request comment for the current push when the workflow runs for a PR. When `debug=true`, it also uploads Jibril logs as build artifacts.
+- **Post step (always)**: Stops Jibril so it flushes events, appends the generated Run Profile to `GITHUB_STEP_SUMMARY`, and creates or updates the pull request comment for the current push when the workflow runs for a PR. When `debug=true`, it also uploads Jibril logs as build artifacts.
 
 ## Pull request comments
 
-For PR workflows, the action reads Jibril's JSON profile and rebuilds the Markdown into a single comment per push. Multiple jobs and workflows from the same push are merged into that comment so the PR stays readable while still preserving history across pushes.
+For PR workflows in standalone Action mode, the action reads Jibril's JSON profile and rebuilds the Markdown into a single comment per push. Multiple jobs and workflows from the same push are merged into that comment so the PR stays readable while still preserving history across pushes. When the companion GitHub App is installed, the action stands down and the App owns that comment.
 
-To let the action write PR comments, grant the workflow token write access to pull requests:
+In standalone mode, grant the workflow token write access to pull requests:
 
 ```yaml
 permissions:
@@ -155,23 +168,23 @@ permissions:
 
 ## Outputs
 
-| Output           | Description                                        |
-| ---------------- | -------------------------------------------------- |
-| `profile_result` | Assertion result for this run: `pass` or `fail`    |
-| `report_url`     | Link to the full run report on app.garnet.ai       |
-| `agent_id`       | Identifier for the Jibril sensor instance that ran |
+| Output           | Description                                                          |
+| ---------------- | -------------------------------------------------------------------- |
+| `profile_result` | Reserved for downstream control-plane use; this action records what happened |
+| `report_url`     | Link to the Run Profile on app.garnet.ai                             |
+| `agent_id`       | Identifier for the Jibril sensor instance that ran                  |
 
 ---
 
 ## Concepts
 
-### Assertions
+### Observation scope
 
-Assertions are runtime invariants — like unit tests, but for execution behavior. The current assertion is `known_bad_egress`, which fails if any outbound connection matches a domain from Garnet's managed threat feed. Future assertion families will cover hidden binary execution, sensitive file access, and anomalous process spawns.
+The current observation scope is `known_bad_egress`, which highlights outbound connections to domains from Garnet's managed threat feed. Future scopes will cover hidden binary execution, sensitive file access, and anomalous process spawns.
 
-### Why runtime visibility matters
+### Why Runtime Review matters
 
-Your team reviews the code; your CI runs it. Between `git push` and production, dependencies execute postinstall scripts, AI-generated functions spawn processes, and build steps make outbound connections — none of which appear in a static scan. Garnet tells you what your pipeline actually did — the ground truth for execution.
+Your team reviews the code; your CI runs it. Between `git push` and production, dependencies execute postinstall scripts, AI-generated functions spawn processes, and build steps make outbound connections — none of which appear in a static scan. Garnet tells you what your pipeline actually did — the ground truth for runtime evidence.
 
 ### Real incidents
 
