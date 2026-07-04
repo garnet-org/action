@@ -108,27 +108,7 @@ test("no control-plane comment: update path proceeds normally", () => {
     assert.equal(plan.kind, "update")
 })
 
-test("stand-down: authoritative control-plane comment surfaces managed comment ids for deletion", () => {
-    const comments = [
-        { id: 17, body },
-        { id: 23, body: `<!-- ${CONTROL_PLANE_MARKERS[0]} -->\nCP comment` },
-    ]
-    const plan = planPullRequestComment(comments, worth, 2, RENDER_OPTIONS)
-    assert.equal(plan.kind, "blocked-by-control-plane")
-    assert.deepEqual(plan.deleteCommentIds, [17])
-})
-
-test("stand-down: pending control-plane comment keeps managed comment ids for deletion empty", () => {
-    const comments = [
-        { id: 17, body },
-        { id: 23, body: `<!-- ${CONTROL_PLANE_MARKERS[1]} -->\nCP pending comment` },
-    ]
-    const plan = planPullRequestComment(comments, worth, 2, RENDER_OPTIONS)
-    assert.equal(plan.kind, "blocked-by-control-plane")
-    assert.deepEqual(plan.deleteCommentIds, [])
-})
-
-test("publishPullRequestCommentWithClient deletes an orphaned create when control-plane takes over", async () => {
+test("publishPullRequestCommentWithClient leaves takeover comments alone when control-plane takes over", async () => {
     const calls = { listComments: 0, createBody: null, createId: 0, deletedIds: [] }
     const client = {
         async listComments() {
@@ -138,7 +118,6 @@ test("publishPullRequestCommentWithClient deletes an orphaned create when contro
             }
 
             return [
-                { id: 99, body },
                 { id: 100, body: `<!-- ${CONTROL_PLANE_MARKERS[0]} -->\nCP comment` },
             ]
         },
@@ -162,6 +141,6 @@ test("publishPullRequestCommentWithClient deletes an orphaned create when contro
 
     assert.equal(result, "skipped-control-plane")
     assert.ok(calls.createBody !== null)
-    assert.deepEqual(calls.deletedIds, [calls.createId, 99])
+    assert.deepEqual(calls.deletedIds, [])
     assert.equal(calls.listComments, 3)
 })

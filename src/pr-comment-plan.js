@@ -1,4 +1,5 @@
 import { mergeCommentState, mergeCommentStates, parseCommentState, renderCommentBody } from "./profile-comment.js"
+import { CONTROL_PLANE_MARKERS } from "./runtime-review.js"
 
 /**
  * @typedef {import("./profile-comment.js").NormalizedProfile} NormalizedProfile
@@ -22,7 +23,6 @@ import { mergeCommentState, mergeCommentStates, parseCommentState, renderComment
  *   kind: "stale"
  * } | {
  *   kind: "blocked-by-control-plane"
- *   deleteCommentIds: number[]
  * }} PublishCommentPlan
  */
 
@@ -38,18 +38,9 @@ import { mergeCommentState, mergeCommentStates, parseCommentState, renderComment
  * @returns {PublishCommentPlan}
  */
 export function planPullRequestComment(comments, profile, runAttempt, renderOptions = {}) {
-    // Stand down whenever the control-plane App owns the review comment,
-    // on both the create and update paths.
-    const controlPlaneKind = getControlPlaneCommentKind(comments)
-    if (controlPlaneKind !== null) {
-        const deleteCommentIds =
-            controlPlaneKind === "authoritative" && profile.github.sha !== ""
-                ? getManagedCommentsForThread(comments, profile.github.sha).map(entry => entry.comment.id)
-                : []
-
+    if (containsControlPlaneComment(comments)) {
         return {
             kind: "blocked-by-control-plane",
-            deleteCommentIds,
         }
     }
 
@@ -138,20 +129,10 @@ function isPresent(value) {
 
 /**
  * @param {PullRequestComment[]} comments
- * @returns {"authoritative" | "pending" | null}
+ * @returns {boolean}
  */
-function getControlPlaneCommentKind(comments) {
-    if (
-        comments.some(comment => comment.body.includes("garnet-control-plane-pr-comment:v1"))
-    ) {
-        return "authoritative"
-    }
-
-    if (
-        comments.some(comment => comment.body.includes("garnet-control-plane-pending-pr-comment:v1"))
-    ) {
-        return "pending"
-    }
-
-    return null
+function containsControlPlaneComment(comments) {
+    return CONTROL_PLANE_MARKERS.some(/** @param {string} marker */ marker =>
+        comments.some(comment => comment.body.includes(marker)),
+    )
 }
