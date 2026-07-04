@@ -5,18 +5,20 @@ import * as os from "node:os"
 import { getEnv, getErrorMessage, isSupportedArch, isSupportedPlatform, pathExists } from "./shared.js"
 import { getPullRequestNumberFromEvent } from "./github-event.js"
 import { uploadJibrilArtifacts } from "./post-artifacts.js"
-import { getDefaultJsonProfileFile, parseProfileJson } from "./profile-comment.js"
+import { buildProfileRunReview, getDefaultJsonProfileFile, parseProfileJson } from "./profile-comment.js"
+import { renderNoRecord, renderStepSummary } from "./runtime-review.js"
 import { publishPullRequestComment } from "./pr-comment.js"
 
 /** @typedef {import("./profile-comment.js").NormalizedProfile} NormalizedProfile */
+/** @typedef {import("./profile-comment.js").RenderOptions} RenderOptions */
 
-const DEFAULT_PROFILER_FILE = "/var/log/jibril.profiler.out"
 const JSON_PROFILE_LABEL = "JSON profile"
+const DOCS_URL = "https://github.com/garnet-org/action#readme"
 
 // This is the post step for the action. It is called by the GitHub Actions
 // runtime. It stops the Jibril service so the daemon flushes all pending events
-// and writes the profiler markdown before we read it. It then reads the profiler
-// markdown and appends it to the real GITHUB_STEP_SUMMARY.
+// and writes the JSON profile before we read it. It then renders the Runtime
+// Review Step Summary and publishes the PR comment from the same Run Profile.
 
 async function run() {
     const platform = os.platform()
@@ -59,40 +61,96 @@ async function run() {
             await uploadJibrilArtifacts()
         }
 
-        const profilerFile = resolveSelectedProfilerFile()
+        const profile = await readNormalizedProfile(debug === "true")
+        const renderOptions = getRenderOptions()
 
-        core.info("using profiler printer: profiler")
-
-        await appendProfilerSummary(profilerFile)
-        await publishProfilerComment()
+        await appendRuntimeReviewSummary(profile, renderOptions)
+        if (profile !== null) {
+            await publishProfilerComment(profile, renderOptions)
+        }
     } catch (err) {
-        // Never fail the job because of the profiler step.
-        core.warning(`failed to write summary: ${getErrorMessage(err)}`)
+        // Never fail the job because of the Runtime Review step.
+        core.warning(`failed to write Runtime Review summary: ${getErrorMessage(err)}`)
     }
 }
 
 /**
- * @param {string} profilerFile
+ * Reads and parses the JSON profile produced by Jibril, or null when the
+ * profile is missing or unreadable.
+ * @param {boolean} debug
+ * @returns {Promise<NormalizedProfile | null>}
+ */
+async function readNormalizedProfile(debug) {
+    const jsonProfilerFile = firstNonEmptyString([core.getState("jsonProfilerFile"), getDefaultJsonProfileFile()])
+
+    try {
+        const jsonProfile = await readOptionalRootFile(jsonProfilerFile)
+        if (jsonProfile === "") {
+            core.info(`${JSON_PROFILE_LABEL} not found: ${jsonProfilerFile}`)
+            return null
+        }
+
+        if (debug) {
+            core.info(`${JSON_PROFILE_LABEL} contents:`)
+            core.info(jsonProfile)
+        }
+
+        return parseProfileJson(jsonProfile)
+    } catch (error) {
+        core.warning(`failed to read ${JSON_PROFILE_LABEL}: ${getErrorMessage(error)}`)
+        return null
+    }
+}
+
+/**
+ * Render options for this publish flow; the clock is pinned once so every
+ * render in the flow produces identical bytes.
+ * @returns {RenderOptions}
+ */
+function getRenderOptions() {
+    return { renderedAt: new Date() }
+}
+
+/**
+ * Writes the full-detail Runtime Review snapshot to the GitHub Step Summary
+ * (no elision, no folds, no markers).
+ * @param {NormalizedProfile | null} profile
+ * @param {RenderOptions} renderOptions
  * @returns {Promise<void>}
  */
-async function appendProfilerSummary(profilerFile) {
-    const content = await readRootFile(profilerFile, "summary")
-    if (content === "") {
-        return
-    }
-
+async function appendRuntimeReviewSummary(profile, renderOptions) {
     const summaryFile = getEnv("GITHUB_STEP_SUMMARY")
     if (summaryFile === "") {
         core.warning("GITHUB_STEP_SUMMARY is not set, cannot write summary")
         return
     }
 
+    let content
+    if (profile === null) {
+        const sha = getEnv("GITHUB_SHA")
+        const repository = getEnv("GITHUB_REPOSITORY")
+        content = renderNoRecord({
+            sha,
+            commitUrl: repository !== "" && sha !== "" ? `https://github.com/${repository}/commit/${sha}` : "",
+            expectedJobs: renderOptions.expectedJobs ?? 1,
+            docsUrl: DOCS_URL,
+            renderedAt: renderOptions.renderedAt ?? new Date(),
+        })
+    } else {
+        const review = buildProfileRunReview([profile], renderOptions)
+        content = renderStepSummary(review)
+    }
+
     await fs.appendFile(summaryFile, `\n${content}\n`)
-    core.info("profiler markdown written to job summary")
+    core.info("Runtime Review written to job summary")
 }
 
-async function publishProfilerComment() {
-    const debug = core.getState("debug")
+/**
+ * @param {NormalizedProfile} profile
+ * @param {RenderOptions} renderOptions
+ * @returns {Promise<void>}
+ */
+async function publishProfilerComment(profile, renderOptions) {
     const eventPath = getEnv("GITHUB_EVENT_PATH")
     if (eventPath === "") {
         core.info("GITHUB_EVENT_PATH is not set, skipping PR comment")
@@ -117,27 +175,6 @@ async function publishProfilerComment() {
         return
     }
 
-    const jsonProfilerFile = firstNonEmptyString([core.getState("jsonProfilerFile"), getDefaultJsonProfileFile()])
-    /** @type {NormalizedProfile} */
-    let profile
-    try {
-        const jsonProfile = await readOptionalRootFile(jsonProfilerFile)
-        if (jsonProfile === "") {
-            core.info(`JSON profile not found, skipping PR comment: ${jsonProfilerFile}`)
-            return
-        }
-
-        if (debug === "true") {
-            core.info(`${JSON_PROFILE_LABEL} contents:`)
-            core.info(jsonProfile)
-        }
-
-        profile = parseProfileJson(jsonProfile)
-    } catch (error) {
-        core.warning(`failed to read ${JSON_PROFILE_LABEL}: ${getErrorMessage(error)}`)
-        return
-    }
-
     const runAttempt = parseRunAttempt(getEnv("GITHUB_RUN_ATTEMPT"))
 
     try {
@@ -147,34 +184,11 @@ async function publishProfilerComment() {
             token,
             profile,
             runAttempt,
+            renderOptions,
         })
         core.info(`PR comment ${result}`)
     } catch (error) {
         core.warning(`failed to publish PR comment: ${getErrorMessage(error)}`)
-    }
-}
-
-/**
- * @param {string} filePath
- * @param {string} label
- * @returns {Promise<string>}
- */
-async function readRootFile(filePath, label) {
-    if (filePath === "") {
-        core.warning(`${label} file path is not set, skipping`)
-        return ""
-    }
-
-    try {
-        const content = await readRootFileContent(filePath)
-        if (content === "") {
-            core.warning(`${label} file not found or unreadable: ${filePath}`)
-            return ""
-        }
-        return content
-    } catch (error) {
-        core.warning(`failed to read ${label} file: ${getErrorMessage(error)}`)
-        return ""
     }
 }
 
@@ -192,13 +206,6 @@ async function readOptionalRootFile(filePath) {
     } catch {
         return ""
     }
-}
-
-/**
- * @returns {string}
- */
-function resolveSelectedProfilerFile() {
-    return firstNonEmptyString([core.getState("profilerFile"), getEnv("JIBRIL_PROFILER_FILE"), DEFAULT_PROFILER_FILE])
 }
 
 /**
