@@ -40259,7 +40259,7 @@ function runtime_review_buildRunReview(input) {
   // A3 — job ordering: headline-picked jobs first, then rung ascending;
   // ties by name (total order). Keeps the salient job out of the group fold.
   /** @param {ReviewJob} job */
-  const salientRank = job => (salience.salientJobs.includes(job.id) === true ? 0 : 1)
+  const salientRank = job => (salience.salientJobs.includes(job.id) ? 0 : 1)
   /** @param {ReviewJob} job */
   const rungRank = job => salience.jobRungs.get(job.id) ?? 3
   jobs = [...jobs].sort(
@@ -40346,8 +40346,8 @@ function computeSalience(jobs, totals) {
   for (const job of jobs) {
     const unclassified = job.connections.filter(c => c.class === "")
     const hasUnique = unclassified.some(c => totals.uniqueDests.has(destName(c)))
-    const hasSpawn = totals.lineageAbsent === false && unclassified.some(c => tailHasNetworkTool(c.ancestry))
-    jobRungs.set(job.id, hasUnique === true ? 1 : hasSpawn === true ? 2 : 3)
+    const hasSpawn = !totals.lineageAbsent && unclassified.some(c => tailHasNetworkTool(c.ancestry))
+    jobRungs.set(job.id, hasUnique ? 1 : hasSpawn ? 2 : 3)
   }
 
   if (totals.uniqueDests.size > 0) {
@@ -40365,7 +40365,7 @@ function computeSalience(jobs, totals) {
     }
   }
 
-  if (totals.lineageAbsent === false) {
+  if (!totals.lineageAbsent) {
     const pick = candidates.find(({ c }) => tailHasNetworkTool(c.ancestry))
     if (pick !== undefined) {
       return {
@@ -40499,19 +40499,19 @@ function renderJobTree(job, opts = {}) {
     for (const p of prefix) prefixProcs.add(p)
     const focused = focus !== "" && connectionKey(c) === focus
     let node = root
-    if (focused === true) root.onPath = true
+    if (focused) root.onPath = true
     for (const step of rest) {
       const key = String(step)
       const child = node.children.get(key) ?? { children: new Map(), leaves: [] }
       node.children.set(key, child)
       node = child
-      if (focused === true) node.onPath = true
+      if (focused) node.onPath = true
     }
     node.leaves.push(c)
   }
 
   const runnerProcs = new Set([...elidedProcs, ...prefixProcs])
-  if (elide === true && runnerProcs.size > 0) {
+  if (elide && runnerProcs.size > 0) {
     const connPart = elidedConnections > 0
       ? ` · ${elidedConnections} connection${elidedConnections === 1 ? "" : "s"} → GitHub-owned addresses`
       : ""
@@ -40549,7 +40549,7 @@ function subtreeCounts(node, dests = new Set(), totals = { connections: 0 }) {
 function renderNodeChildren(node, prefix, lines, focusMode = false) {
   let procs = [...node.children.entries()].map(([name, child]) => ({ name, child }))
   let collapsedNote = ""
-  if (focusMode === true) {
+  if (focusMode) {
     const offPath = procs.filter(p => p.child.onPath !== true)
     if (offPath.length > 0) {
       /** @type {Set<string>} */
@@ -40576,7 +40576,7 @@ function renderNodeChildren(node, prefix, lines, focusMode = false) {
     const childPrefix = prefix + (last ? "   " : "│  ")
     if (entry.kind === "proc") {
       lines.push(`${prefix}${branch}${fenceSafe(entry.name)}`)
-      renderNodeChildren(entry.child, childPrefix, lines, focusMode === true && entry.child.onPath === true)
+      renderNodeChildren(entry.child, childPrefix, lines, focusMode && entry.child.onPath === true)
     } else if (entry.kind === "note") {
       lines.push(`${prefix}${branch}${entry.note}`)
     } else {
@@ -40607,8 +40607,8 @@ function renderNodeChildren(node, prefix, lines, focusMode = false) {
  */
 function jobSummaryLine(job, uniqueDests = new Set(), opts = {}) {
   /** @type {(v: string) => string} */
-  const code = opts.html === true ? v => `<code>${escapeHtml(v)}</code>` : v => `\`${escapeCode(v)}\``
-  const ident = opts.html === true ? `<b>${code(job.name)}</b>` : `**${code(job.name)}**`
+  const code = opts.html ? v => `<code>${escapeHtml(v)}</code>` : v => `\`${escapeCode(v)}\``
+  const ident = opts.html ? `<b>${code(job.name)}</b>` : `**${code(job.name)}**`
   const logLink =
     isNonEmptyString(job.run_url) && opts.link !== false ? ` · [job log ↗](${job.run_url})` : ""
   if (job.connections.length === 0) {
@@ -40695,7 +40695,7 @@ function metaLine(review) {
  * @returns {string[]}
  */
 function renderHeader(review, { markers }) {
-  const lines = markers === true ? [runtime_review_RUNTIME_REVIEW_MARKER, runtime_review_COMMENT_MARKER] : []
+  const lines = markers ? [runtime_review_RUNTIME_REVIEW_MARKER, runtime_review_COMMENT_MARKER] : []
   lines.push("## Garnet Runtime Review")
   lines.push(metaLine(review))
   lines.push("")
@@ -40741,7 +40741,7 @@ function renderFooter(review, lines) {
  * @returns {void}
  */
 function renderJobSection(review, job, lines, { collapsed }) {
-  if (job.connections.length === 0 || review.lineageAbsent === true) {
+  if (job.connections.length === 0 || review.lineageAbsent) {
     lines.push(jobSummaryLine(job, review.uniqueDests))
     lines.push("")
     return
@@ -40755,7 +40755,7 @@ function renderJobSection(review, job, lines, { collapsed }) {
   )
   lines.push("")
   const logLink = isNonEmptyString(job.run_url) ? ` · [job log ↗](${job.run_url})` : ""
-  if (collapsed === true) {
+  if (collapsed) {
     const procs = new Set(job.connections.flatMap(c => c.ancestry)).size
     lines.push(`┄ ${procs} process${procs === 1 ? "" : "es"} · ${connections} connection${connections === 1 ? "" : "s"} — full tree in the Step Summary ↗`)
     lines.push("")
@@ -40765,7 +40765,7 @@ function renderJobSection(review, job, lines, { collapsed }) {
     }
   } else {
     lines.push("````text")
-    lines.push(renderJobTree(job, { focus: salient === true ? review.salience.salientKey : "" }))
+    lines.push(renderJobTree(job, { focus: salient ? review.salience.salientKey : "" }))
     lines.push("````")
     lines.push("")
     lines.push(
@@ -40842,7 +40842,7 @@ function renderStepSummary(review) {
   review.jobs.forEach(job => {
     lines.push(jobSummaryLine(job, review.uniqueDests))
     lines.push("")
-    if (job.connections.length === 0 || review.lineageAbsent === true) return
+    if (job.connections.length === 0 || review.lineageAbsent) return
     lines.push("````text")
     lines.push(renderJobTree(job, { elide: false }))
     lines.push("````")
