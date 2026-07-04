@@ -1,5 +1,5 @@
-// This script installs garnetctl and jibril, configures them, creates the
-// agent, fetches network policy, and sets up Jibril as a systemd service.
+// This script installs jibril, calls the control-plane API to create the
+// agent and fetch network policy, and sets up Jibril as a systemd service.
 
 import * as core from "@actions/core"
 import * as exec from "@actions/exec"
@@ -9,8 +9,8 @@ import * as fs from "node:fs/promises"
 import * as os from "node:os"
 import * as path from "node:path"
 import { pipeline } from "node:stream/promises"
-import * as tar from "tar"
 import { createGitHubContext, getProfileJobName, getWorkflowFilePath } from "./github-context.js"
+import { ControlPlaneClient } from "./control-plane/client.js"
 import { getEnv, getErrorMessage, isSupportedArch, isSupportedPlatform, pathExists, waitForDelay } from "./shared.js"
 
 /**
@@ -23,10 +23,6 @@ import { getEnv, getErrorMessage, isSupportedArch, isSupportedPlatform, pathExis
 
 const INSTPATH = "/usr/local/bin"
 
-/**
- * @typedef {{ exitCode?: number }} ExitCodeError
- */
-
 // This function is the main entry point for the script.
 // Returns true when Jibril started successfully, false otherwise.
 export async function run() {
@@ -35,7 +31,6 @@ export async function run() {
         // Get the variables from the environment.
         const TOKEN = getEnv("GARNET_API_TOKEN")
         const API = getEnv("GARNET_API_URL", "https://api.garnet.ai")
-        let GARNETVER = getEnv("GARNETCTL_VERSION", "latest")
         let JIBRILVER = resolveJibrilVersion(getEnv("JIBRIL_VERSION", ""), getEnv("GITHUB_ACTION_REF", ""))
         const DEBUG = getEnv("DEBUG", "false")
 
@@ -75,44 +70,16 @@ export async function run() {
             )
             return false
         }
-        const ALTARCH = "x86_64"
 
-        if (GARNETVER !== "latest" && !GARNETVER.startsWith("v")) {
-            GARNETVER = `v${GARNETVER}`
-        }
         if (JIBRILVER !== "latest" && !JIBRILVER.startsWith("v")) {
             JIBRILVER = `v${JIBRILVER}`
         }
 
         core.info(`API server: ${API}`)
-        core.info(`Garnet Control Version: ${GARNETVER}`)
         core.info(`Jibril Version: ${JIBRILVER}`)
 
         // Create a temporary directory for the script to use.
         tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "garnet-"))
-
-        // Download garnetctl.
-        // garnetctl artifacts use title-case OS names (e.g. "Linux", "Darwin").
-        const garnetctlOS = platform.charAt(0).toUpperCase() + platform.slice(1)
-        const garnetPrefix = "https://github.com/garnet-org/garnetctl-releases/releases"
-        let garnetUrl =
-            GARNETVER === "latest"
-                ? `${garnetPrefix}/latest/download/garnetctl_${garnetctlOS}_${ALTARCH}.tar.gz`
-                : `${garnetPrefix}/download/${GARNETVER}/garnetctl_${garnetctlOS}_${ALTARCH}.tar.gz`
-
-        core.info(`Downloading garnetctl: ${garnetUrl}`)
-
-        const garnetTarball = path.join(tmpDir, "garnetctl.tar.gz")
-        await downloadFile(garnetUrl, garnetTarball)
-        await extractTarGz(garnetTarball, tmpDir)
-
-        const garnetctlSrc = path.join(tmpDir, "garnetctl")
-        if (!(await pathExists(garnetctlSrc))) {
-            throw new Error("Failed to download garnetctl binary")
-        }
-
-        await execSudo(["mv", garnetctlSrc, `${INSTPATH}/garnetctl`])
-        await execSudo(["chmod", "+x", `${INSTPATH}/garnetctl`])
 
         // Download jibril
         const jibrilPrefix = "https://github.com/garnet-org/jibril-releases/releases"
@@ -131,25 +98,16 @@ export async function run() {
         await execSudo(["mv", jibrilDest, `${INSTPATH}/jibril`])
         await execSudo(["chmod", "+x", `${INSTPATH}/jibril`])
 
-        // Configure garnetctl
-        core.info("Configuring garnetctl")
-        if (DEBUG === "true") core.debug(`$ ${INSTPATH}/garnetctl config set-baseurl ${API}`)
-        await exec.exec(`${INSTPATH}/garnetctl`, ["config", "set-baseurl", API])
-        if (DEBUG === "true") core.debug(`$ ${INSTPATH}/garnetctl config set-token ***`)
-        await exec.exec(`${INSTPATH}/garnetctl`, ["config", "set-token", TOKEN])
-
-        // Create github context
+        // Create github context.
         core.info("Creating github context")
+        const githubContext = /** @type {import("./control-plane/types.js").AgentGithubContext} */ (
+            await createGitHubContext()
+        )
 
-        if (DEBUG === "true") core.debug(`$ ${INSTPATH}/garnetctl version`)
-        const { stdout: versionOutput } = await execCapture(`${INSTPATH}/garnetctl`, ["version"])
-        // Extract the version from the output.
-        const versionMatch = versionOutput.match(/Version:\s*([^,]+)/)
-        const VERSION = versionMatch?.[1]?.trim() ?? ""
-
+        // Resolve runtime values for agent creation.
+        const VERSION = JIBRILVER
         const RUNNER_IP = getFirstIpv4() || "127.0.0.1"
 
-        // Get the system machine ID.
         let SYSTEM_MACHINE_ID = os.hostname()
         const machineIdPaths = ["/etc/machine-id", "/var/lib/dbus/machine-id"]
         for (const p of machineIdPaths) {
@@ -162,61 +120,34 @@ export async function run() {
         const MACHINE_ID = SYSTEM_MACHINE_ID
         const profileJob = getProfileJobName()
         const HOSTNAME = `${os.hostname()}-${getEnv("GITHUB_RUN_ID")}-${profileJob}`
+        const AGENT_OS = normalizeAgentOs(os.platform())
+        const AGENT_ARCH = normalizeAgentArch(os.arch())
 
-        // Create the github context.
-        const githubContext = await createGitHubContext()
-        const githubContextPath = path.join(tmpDir, "github-context.json")
-        await fs.writeFile(githubContextPath, JSON.stringify(githubContext, null, 2))
+        const controlPlaneClient = new ControlPlaneClient({
+            baseURL: API,
+            projectToken: TOKEN,
+        })
 
-        // Create agent
+        // Create agent.
         core.info("Creating github agent")
 
-        // Create the agent.
-        let agentOutput = ""
-        try {
-            if (DEBUG === "true") core.debug(`$ ${INSTPATH}/garnetctl create agent ...`)
-            const agentResult = await execCapture(`${INSTPATH}/garnetctl`, [
-                "create",
-                "agent",
-                "--version",
-                VERSION,
-                "--ip",
-                RUNNER_IP,
-                "--hostname",
-                HOSTNAME,
-                "--machine-id",
-                MACHINE_ID,
-                "--kind",
-                "github",
-                "--context-file",
-                githubContextPath,
-            ])
-            agentOutput = agentResult.stdout
-        } catch (err) {
-            throw new Error(`Failed to create agent (exit code ${getExitCode(err) ?? 1})`)
-        }
-
-        // Parse the agent output.
         let AGENT_ID = ""
         let AGENT_TOKEN = ""
         try {
-            const agentInfo = JSON.parse(agentOutput)
-            if (typeof agentInfo !== "object" || agentInfo === null) {
-                throw new Error("Agent output is not a JSON object")
-            }
-
-            if (typeof agentInfo.id !== "string") {
-                throw new Error("Agent output does not contain a valid 'id' field")
-            }
-
-            if (typeof agentInfo.agent_token !== "string") {
-                throw new Error("Agent output does not contain a valid 'agent_token' field")
-            }
-
-            AGENT_ID = agentInfo.id
-            AGENT_TOKEN = agentInfo.agent_token
-        } catch (_) {
-            throw new Error("Failed to parse agent output")
+            const createdAgent = await controlPlaneClient.createAgent({
+                os: AGENT_OS,
+                arch: AGENT_ARCH,
+                hostname: HOSTNAME,
+                version: VERSION,
+                ip: RUNNER_IP,
+                machine_id: MACHINE_ID,
+                kind: "github",
+                github_context: githubContext,
+            })
+            AGENT_ID = createdAgent.id
+            AGENT_TOKEN = createdAgent.agent_token
+        } catch (error) {
+            throw new Error(`Failed to create agent: ${getErrorMessage(error)}`)
         }
 
         if (AGENT_TOKEN) core.setSecret(AGENT_TOKEN)
@@ -234,24 +165,16 @@ export async function run() {
 
         core.info(`Fetching network policy for ${REPO_ID}/${WORKFLOW}...`)
 
-        // Fetch the network policy.
+        // Fetch and save the network policy.
         try {
-            if (DEBUG === "true") core.debug(`$ ${INSTPATH}/garnetctl get network-policy merged ...`)
-            await exec.exec(`${INSTPATH}/garnetctl`, [
-                "get",
-                "network-policy",
-                "merged",
-                "--repository-id",
-                REPO_ID,
-                "--workflow-name",
-                WORKFLOW,
-                "--format",
-                "yaml",
-                "--output",
-                NETPOLICY_PATH,
-            ])
-        } catch (err) {
-            throw new Error(`Failed to fetch network policy (exit code ${getExitCode(err) ?? 1})`)
+            const networkPolicyYaml = await controlPlaneClient.mergedNetPoliciesAsYAML({
+                repository_id: REPO_ID,
+                workflow_name: WORKFLOW,
+            })
+
+            await fs.writeFile(NETPOLICY_PATH, networkPolicyYaml)
+        } catch (error) {
+            throw new Error(`Failed to fetch network policy: ${getErrorMessage(error)}`)
         }
 
         if (!(await pathExists(NETPOLICY_PATH))) {
@@ -471,19 +394,6 @@ StandardOutput=append:/var/log/jibril.log
 }
 
 /**
- * @param {unknown} err
- * @returns {number|undefined}
- */
-function getExitCode(err) {
-    if (typeof err !== "object" || err === null || !("exitCode" in err)) {
-        return undefined
-    }
-
-    const maybeError = /** @type {ExitCodeError} */ (err)
-    return typeof maybeError.exitCode === "number" ? maybeError.exitCode : undefined
-}
-
-/**
  * @param {string} inputVersion
  * @param {string} actionRef
  */
@@ -592,15 +502,6 @@ async function downloadFile(url, destPath, opts = {}) {
     }
 }
 
-/**
- * This function extracts a tarball to a destination directory.
- * @param {string} tarballPath
- * @param {string} destDir
- */
-async function extractTarGz(tarballPath, destDir) {
-    await tar.extract({ file: tarballPath, cwd: destDir })
-}
-
 // Returns the first non-internal IPv4 address from network interfaces.
 function getFirstIpv4() {
     const ifaces = os.networkInterfaces()
@@ -615,6 +516,34 @@ function getFirstIpv4() {
         }
     }
     return null
+}
+
+/**
+ * @param {NodeJS.Platform} platform
+ * @returns {string}
+ */
+function normalizeAgentOs(platform) {
+    if (platform === "win32") {
+        return "windows"
+    }
+
+    return platform
+}
+
+/**
+ * @param {string} arch
+ * @returns {string}
+ */
+function normalizeAgentArch(arch) {
+    if (arch === "x64") {
+        return "amd64"
+    }
+
+    if (arch === "arm64") {
+        return "arm64"
+    }
+
+    return arch
 }
 
 /**

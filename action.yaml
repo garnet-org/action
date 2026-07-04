@@ -1,41 +1,37 @@
 name: "Garnet Runtime Review"
 description: "Records what each job in your workflow did at runtime — processes and network egress — and posts the Runtime Review from the Action stage"
 branding:
-  icon: "activity"
-  color: "purple"
+    icon: "activity"
+    color: "purple"
 inputs:
-  api_token:
-    description: "Your Garnet API token from app.garnet.ai"
-    required: true
-  github_token:
-    description: "GitHub token used for pull request comments"
-    required: false
-    default: ${{ github.token }}
-  api_url:
-    description: "Garnet API URL"
-    required: false
-    default: "https://api.garnet.ai"
-  garnetctl_version:
-    description: "Garnet CLI version (1.2.3, or 'latest')"
-    required: false
-    default: "latest"
-  jibril_version:
-    description: "Jibril version (v2.10.8, v0.0, or 'latest')"
-    required: false
-    default: ""
-  debug:
-    description: "Enable debug mode"
-    required: false
-    default: "false"
+    api_token:
+        description: "Your Garnet API token from app.garnet.ai"
+        required: true
+    github_token:
+        description: "GitHub token used for pull request comments"
+        required: false
+        default: ${{ github.token }}
+    api_url:
+        description: "Garnet API URL"
+        required: false
+        default: "https://api.garnet.ai"
+    jibril_version:
+        description: "Jibril version (v2.10.8, v0.0, or 'latest')"
+        required: false
+        default: ""
+    debug:
+        description: "Enable debug mode"
+        required: false
+        default: "false"
 outputs:
-  profile_result:
-    description: "Reserved for the companion GitHub App and control plane; this action records the Runtime Review"
-  report_url:
-    description: "Link to the Run Profile permalink on app.garnet.ai"
-  agent_id:
-    description: "Identifier for the Jibril sensor instance that recorded this Runtime Review"
+    profile_result:
+        description: "Reserved for the companion GitHub App and control plane; this action records the Runtime Review"
+    report_url:
+        description: "Link to the Run Profile permalink on app.garnet.ai"
+    agent_id:
+        description: "Identifier for the Jibril sensor instance that recorded this Runtime Review"
 runs:
-  using: "node24"
-  main: "dist/main/index.js"
-  post: "dist/post/index.js"
-  post-if: "always()"
+    using: "node24"
+    main: "dist/main/index.js"
+    post: "dist/post/index.js"
+    post-if: "always()"
