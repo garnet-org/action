@@ -5,6 +5,7 @@
 - Avoid third-party libraries whenever possible.
 - Always ask before introducing any new dependency.
 - Write idiomatic, easy-to-read, self-documenting code.
+- Prefer straightforward control flow (`if` statements and intermediate variables) over clever inline expressions/spreads when constructing objects.
 - Prefer explicit checks; do not rely on truthy/falsy comparisons.
 - Handle errors at all I/O, process, and network boundaries.
 - Favor strict, safe code (validate external input and fail clearly).

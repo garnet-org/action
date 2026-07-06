@@ -42,6 +42,11 @@ jobs:
             - name: Checkout
               uses: actions/checkout@v7
 
+            - name: Enable internal skip-comment mode
+              if: github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'skip-github-app-comment')
+              shell: bash
+              run: echo "GARNET_ACTION_SKIP_GITHUB_APP_COMMENT=true" >> "$GITHUB_ENV"
+
             - name: Run Garnet
               uses: ./
               with:

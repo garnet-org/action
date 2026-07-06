@@ -21,6 +21,7 @@ import { z } from "zod"
  *   machine_id: string
  *   kind: "github" | "kubernetes"
  *   github_context?: AgentGithubContext
+ *   labels?: Record<string, string>
  * }} CreateAgentRequest
  */
 
@@ -68,6 +69,7 @@ export const CREATE_AGENT_REQUEST_SCHEMA = z.object({
     machine_id: z.string().min(1),
     kind: z.enum(["github", "kubernetes"]),
     github_context: AGENT_GITHUB_CONTEXT_SCHEMA.optional(),
+    labels: z.record(z.string(), z.string()).optional(),
 })
 
 export const AGENT_CREATED_RESPONSE_SCHEMA = z.object({
