@@ -123,6 +123,10 @@ export async function run() {
         const AGENT_OS = normalizeAgentOs(os.platform())
         const AGENT_ARCH = normalizeAgentArch(os.arch())
 
+        // Internal test toggle: when true, we ask the control-plane to skip posting
+        // the profile GitHub App comment for this run.
+        const skipProfileGitHubComment = getEnv("GARNET_ACTION_SKIP_GITHUB_APP_COMMENT", "false") === "true"
+
         const controlPlaneClient = new ControlPlaneClient({
             baseURL: API,
             projectToken: TOKEN,
@@ -134,7 +138,8 @@ export async function run() {
         let AGENT_ID = ""
         let AGENT_TOKEN = ""
         try {
-            const createdAgent = await controlPlaneClient.createAgent({
+            /** @type {import("./control-plane/types.js").CreateAgentRequest} */
+            const createAgentInput = {
                 os: AGENT_OS,
                 arch: AGENT_ARCH,
                 hostname: HOSTNAME,
@@ -143,7 +148,15 @@ export async function run() {
                 machine_id: MACHINE_ID,
                 kind: "github",
                 github_context: githubContext,
-            })
+            }
+
+            if (skipProfileGitHubComment) {
+                createAgentInput.labels = {
+                    "garnet.ai/skipProfileGitHubComment": "true",
+                }
+            }
+
+            const createdAgent = await controlPlaneClient.createAgent(createAgentInput)
             AGENT_ID = createdAgent.id
             AGENT_TOKEN = createdAgent.agent_token
         } catch (error) {

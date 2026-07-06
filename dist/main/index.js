@@ -39094,6 +39094,7 @@ function preprocess(fn, schema) {
  *   machine_id: string
  *   kind: "github" | "kubernetes"
  *   github_context?: AgentGithubContext
+ *   labels?: Record<string, string>
  * }} CreateAgentRequest
  */
 
@@ -39140,6 +39141,7 @@ const CREATE_AGENT_REQUEST_SCHEMA = object({
     machine_id: schemas_string().min(1),
     kind: schemas_enum(["github", "kubernetes"]),
     github_context: AGENT_GITHUB_CONTEXT_SCHEMA.optional(),
+    labels: record(schemas_string(), schemas_string()).optional(),
 })
 
 const AGENT_CREATED_RESPONSE_SCHEMA = object({
@@ -39565,6 +39567,10 @@ async function run() {
         const AGENT_OS = normalizeAgentOs(external_node_os_namespaceObject.platform())
         const AGENT_ARCH = normalizeAgentArch(external_node_os_namespaceObject.arch())
 
+        // Internal test toggle: when true, we ask the control-plane to skip posting
+        // the profile GitHub App comment for this run.
+        const skipProfileGitHubComment = getEnv("GARNET_ACTION_SKIP_GITHUB_APP_COMMENT", "false") === "true"
+
         const controlPlaneClient = new ControlPlaneClient({
             baseURL: API,
             projectToken: TOKEN,
@@ -39576,7 +39582,8 @@ async function run() {
         let AGENT_ID = ""
         let AGENT_TOKEN = ""
         try {
-            const createdAgent = await controlPlaneClient.createAgent({
+            /** @type {import("./control-plane/types.js").CreateAgentRequest} */
+            const createAgentInput = {
                 os: AGENT_OS,
                 arch: AGENT_ARCH,
                 hostname: HOSTNAME,
@@ -39585,7 +39592,15 @@ async function run() {
                 machine_id: MACHINE_ID,
                 kind: "github",
                 github_context: githubContext,
-            })
+            }
+
+            if (skipProfileGitHubComment) {
+                createAgentInput.labels = {
+                    "garnet.ai/skipProfileGitHubComment": "true",
+                }
+            }
+
+            const createdAgent = await controlPlaneClient.createAgent(createAgentInput)
             AGENT_ID = createdAgent.id
             AGENT_TOKEN = createdAgent.agent_token
         } catch (error) {
