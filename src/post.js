@@ -5,8 +5,9 @@ import * as os from "node:os"
 import { getEnv, getErrorMessage, isSupportedArch, isSupportedPlatform, pathExists } from "./shared.js"
 import { getPullRequestNumberFromEvent } from "./github-event.js"
 import { uploadJibrilArtifacts } from "./post-artifacts.js"
-import { buildProfileRunReview, getDefaultJsonProfileFile, parseProfileJson } from "./profile-comment.js"
-import { renderNoRecord, renderStepSummary } from "./runtime-review.js"
+import { getDefaultJsonProfileFile, parseProfileJson } from "./profile-comment.js"
+import { renderNoRecord } from "./runtime-review.js"
+import { renderProfileStepSummary } from "./step-summary.js"
 import { publishPullRequestComment } from "./pr-comment.js"
 
 /** @typedef {import("./profile-comment.js").NormalizedProfile} NormalizedProfile */
@@ -112,8 +113,8 @@ function getRenderOptions() {
 }
 
 /**
- * Writes the full-detail Runtime Review snapshot to the GitHub Step Summary
- * (no elision, no folds, no markers).
+ * Writes the tabular Garnet Runtime Report to the GitHub Step Summary
+ * (workload, egress table, telemetry counts, assertions).
  * @param {NormalizedProfile | null} profile
  * @param {RenderOptions} renderOptions
  * @returns {Promise<void>}
@@ -137,8 +138,7 @@ async function appendRuntimeReviewSummary(profile, renderOptions) {
             renderedAt: renderOptions.renderedAt ?? new Date(),
         })
     } else {
-        const review = buildProfileRunReview([profile], renderOptions)
-        content = renderStepSummary(review)
+        content = renderProfileStepSummary(profile)
     }
 
     await fs.appendFile(summaryFile, `\n${content}\n`)
