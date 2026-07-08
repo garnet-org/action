@@ -60,9 +60,13 @@ uses — agent registration, netpolicy fetch, and the sensor's own upload. The
 entire post-step rendering pipeline is already local.
 
 Jibril itself already supports this: the action sets `GARNET_SAR=true` by
-default, which puts Jibril in offline-agent mode (no registration required),
-and Jibril ships a bundled default `netpolicy.yaml`. No Jibril or
-control-plane changes are required for phase 1.
+default, which puts Jibril in offline-agent mode (no registration required).
+No Jibril or control-plane changes are required for phase 1. However,
+Jibril's **bundled sample netpolicy is not observe-only** —
+`jibril/etc/config/netpolicy.yaml` ships deny rules (e.g. `example.com`,
+`uol.com.br`, `2.2.2.2`) — so the action must write its own known
+observe-only policy in tokenless mode rather than trust whatever the
+resolved Jibril version bundles (§6, §7).
 
 ## 3. Input changes
 
@@ -90,16 +94,21 @@ vs standalone).
 | --- | --- | --- | --- |
 | present, valid | yes | register agent, fetch merged netpolicy, cloud sync | Step Summary; action defers the PR comment to the App (unchanged) |
 | present, valid | no | same | Step Summary + standalone PR comment + Run Profile permalink (unchanged) |
-| **absent** | yes\* | log "local-only mode"; skip registration + netpolicy fetch; Jibril bundled default policy, observe-only; omit token lines from `/etc/default/jibril` | Step Summary + standalone PR comment, **local shape** (§5): no garnet permalink, labeled local-only, upgrade CTA |
+| **absent** | yes\* | log "local-only mode"; skip registration + netpolicy fetch; action writes a **known observe-only policy** to `/etc/jibril/netpolicy.yaml` (§6); omit token lines from `/etc/default/jibril` | Step Summary + standalone PR comment, **local shape** (§5): no garnet permalink, labeled local-only, upgrade CTA |
 | **absent** | no | same | same |
-| present, **invalid** (control-plane call fails auth) | — | **fail loudly** (warning + no monitoring, as today) — misconfiguration is not tokenless intent | no local fallback: a configured token that stops working should be visible, not silently downgraded |
+| present, **invalid** (control-plane call fails auth) | — | **fail loudly** — today's semantics: a visible `core.warning` and no monitoring, the job itself is **not** failed (`setFailed` is not introduced). Misconfiguration is not tokenless intent | no local fallback: a configured token that stops working should be visible, not silently downgraded |
 
 \* Without a token there is no agent registration, so the control plane never
 learns about the run and the App never posts — "App installed" is
 indistinguishable from standalone in tokenless mode. The action posts the
-standalone comment. If the App is installed *and* other tokened workflows on
-the same PR report through it, two comments can coexist (see open question
-Q3).
+standalone comment. Note the action already marker-scans before posting:
+`planPullRequestComment` (`src/pr-comment-plan.js`) returns
+`blocked-by-control-plane` when any existing comment carries a
+`CONTROL_PLANE_MARKERS` marker (`src/runtime-review.js`), so a tokenless run
+on a PR that already has an App comment stands down today. The residual case
+is the ordering race — tokenless posts first, App posts later (from another
+tokened workflow) — which control-plane reconciliation already converges
+(see open question Q3).
 
 Other deltas in tokenless mode:
 
@@ -157,7 +166,8 @@ confined to permalink/CTA/marker elements that exist in either shape.
 
 - `action.yaml`: `api_token` → `required: false` (§3).
 - `src/action.js`: when `TOKEN === ""`, branch to local mode — skip
-  `createAgent` and `mergedNetPoliciesAsYAML`, keep Jibril's bundled
+  `createAgent` and `mergedNetPoliciesAsYAML`, write a **vendored
+  observe-only netpolicy** (checked into this repo, version-independent) to
   `/etc/jibril/netpolicy.yaml`, write `/etc/default/jibril` without the
   `GARNET_API_TOKEN`/`GARNET_AGENT_TOKEN` lines (keep `GARNET_SAR=true`),
   and `core.saveState("localOnly", "true")`.
@@ -176,9 +186,11 @@ against two shapes).
 - **Strictly better data posture**: in tokenless mode nothing leaves the
   runner — no registration, no upload, no telemetry. Worth stating in README
   and the local-only marker.
-- **Observe-only default policy**: the bundled netpolicy must stay
-  observe/alert-only. A tokenless run must never block egress surprisingly —
-  policy enforcement is a tokened, centrally-managed capability.
+- **Observe-only policy is a phase-1 requirement, not an assumption**:
+  Jibril's bundled sample policy contains deny rules, so the action vendors
+  and installs its own observe/alert-only policy in tokenless mode. A
+  tokenless run must never block egress surprisingly — policy enforcement is
+  a tokened, centrally-managed capability.
 - **Secrets hygiene improves**: `/etc/default/jibril` (mode 600, deleted in
   post) no longer contains any Garnet credential in tokenless mode.
 - **Fork PR comments**: standalone comments already depend on the workflow's
@@ -217,12 +229,13 @@ against two shapes).
 2. **Waiting state**: the tokenless standalone comment renders only from the
    post step of each job — is the §2 waiting body reachable/needed at all in
    tokenless mode, or is the comment only ever created at first profile?
-3. **App + tokenless coexistence**: when the App is installed but a
-   tokenless workflow also runs, do we accept two comments, or should the
-   action attempt App-comment detection (marker scan) before posting?
-4. **`jibril_version` pinning**: tokenless users get the bundled default
-   netpolicy of whatever Jibril version resolves — do we need a minimum
-   version gate for a known-good observe-only default?
+3. **App + tokenless ordering race**: marker-scan stand-down already covers
+   the "App comment exists first" case; when a tokenless comment posts
+   before the App's, control-plane reconciliation converges — is any
+   action-side handling needed at all, or do we document and accept it?
+4. **Vendored observe-only policy contents**: exact rules for the vendored
+   tokenless netpolicy (pure observe vs. alert-on-known-bad), and whether it
+   needs the same refresh-by-PR discipline as `github-cidrs.json`.
 5. **Phase 2 trigger**: what evidence (Marketplace installs? fork-PR volume?)
    promotes the OIDC anonymous-ingestion work from direction to committed
    scope?
