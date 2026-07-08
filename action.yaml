@@ -1,5 +1,5 @@
 name: "Garnet Runtime Review"
-description: "Execution evidence for code review: what each CI job ran and reached, recorded at the kernel, posted on your PRsreview.
+description: "Execution evidence for code review: what each CI job ran and reached, recorded at the kernel, posted on your PRs.
 
 "
 branding:
