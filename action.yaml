@@ -1,5 +1,5 @@
 name: "Garnet Runtime Review"
-description: "Records what each job in your workflow did at runtime — processes and network egress — and posts the Runtime Review from the Action stage"
+description: "Runtime review for your PRs — process trees and network destinations from your CI runs, rendered in the pull request."
 branding:
     icon: "activity"
     color: "purple"

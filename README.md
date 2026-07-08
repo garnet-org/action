@@ -177,11 +177,11 @@ permissions:
 
 ## Outputs
 
-| Output           | Description                                                          |
-| ---------------- | -------------------------------------------------------------------- |
-| `profile_result` | Reserved for downstream control-plane use; this action records what happened |
-| `report_url`     | Link to the Run Profile on app.garnet.ai                             |
-| `agent_id`       | Identifier for the Jibril sensor instance that ran                  |
+| Output           | Description                                                                   |
+| ---------------- | ----------------------------------------------------------------------------- |
+| `profile_result` | Reserved for downstream control-plane use; this action records what happened  |
+| `report_url`     | Link to the Run Profile on app.garnet.ai                                      |
+| `agent_id`       | Identifier for the Jibril sensor instance that ran                            |
 
 ---
 
