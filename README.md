@@ -106,16 +106,16 @@ jobs:
 
 ### 3. Install the companion GitHub App
 
-Install the [Garnet Runtime Review GitHub App](https://github.com/apps/garnet-runtime-review) on the repositories you monitor (also available from Settings → GitHub in [app.garnet.ai](https://app.garnet.ai)).
+Install the [Garnet Runtime Review GitHub App](https://github.com/apps/garnet-runtime-review) on the repos you monitor, or from Settings → GitHub in [app.garnet.ai](https://app.garnet.ai).
 
-The App requests only:
+Two permissions, nothing else:
 
 | Permission | Access | Why |
 | ---------- | ------ | --- |
-| Pull requests | Read & write | Find, post, and update the single Runtime Review comment per commit |
-| Metadata | Read | Mandatory for all GitHub Apps |
+| Pull requests | Read & write | Post and update the one Runtime Review comment per commit |
+| Metadata | Read | Required for every GitHub App |
 
-Once installed, the App owns the authoritative Runtime Review comment — true coverage across every recorded job on the commit — and the Action stands down automatically. No webhook events are consumed; the App only writes the comment.
+The App writes the comment and does nothing else — no webhooks, no code access. Once installed it owns the comment across every recorded job on the commit, and the Action stands down.
 
 ### Versioning
 
