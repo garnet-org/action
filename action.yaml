@@ -1,5 +1,7 @@
 name: "Garnet Runtime Review"
-description: "Runtime review for your PRs — process trees and network destinations from your CI runs, rendered in the pull request."
+description: "Execution evidence for code review: what each CI job ran and reached, recorded at the kernel, posted on your PRsreview.
+
+"
 branding:
     icon: "activity"
     color: "purple"
