@@ -106,7 +106,7 @@ jobs:
 
 ### 3. Install the companion GitHub App
 
-Install the [Garnet Platform GitHub App](https://github.com/apps/garnet-platform) on the repositories you monitor (also available from Settings → GitHub in [app.garnet.ai](https://app.garnet.ai)).
+Install the [Garnet Runtime Review GitHub App](https://github.com/apps/garnet-runtime-review) on the repositories you monitor (also available from Settings → GitHub in [app.garnet.ai](https://app.garnet.ai)).
 
 The App requests only:
 
