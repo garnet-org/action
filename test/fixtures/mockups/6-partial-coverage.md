@@ -1,30 +1,39 @@
 <!-- garnet-runtime-review -->
 <!-- garnet-run-profile -->
-## Garnet Runtime Review
-[`ef01a52`](https://github.com/garnet-labs/runtime-review-testbed/commit/ef01a52517e7532ab34aadea58b952c9f1e79ece) · 1 of 6 jobs recorded · updated 14:02 UTC · Jul 3
+### Garnet Runtime Review
+> *commit [`ef01a52`](https://github.com/garnet-org/runtime-review-testbed/commit/ef01a52517e7532ab34aadea58b952c9f1e79ece)* · **1 of 6 jobs recorded** · *jobs recorded as of Jul 3 2026, 2:02 PM UTC*
+>
+> <details><summary><sub><i>What happened on this commit — each job's process tree and where it reached</i> · 💡 how to read this</sub></summary>
+>
+> <sub>Each row is one recorded CI job — <b>workflow / job ↗</b>, the job name linking to its GitHub Actions run — with the counts Garnet's sensor recorded at the kernel level. Open a job for its process tree: <b>bold</b> = a process the job ran, <i>italic</i> = runner scaffolding, <code>→</code> = destination reached. Notes like <i>(github infra)</i> mark platform plumbing; a bare IP means no domain was observed for that connection. Jobs that reached a destination unique to them in this commit start expanded; <i>View Run Profile in Garnet ↗</i> opens the full record.</sub>
+>
+> </details>
 
-In `runtime-review`, 9 processes reached 4 domains over 5 connections.
+<details open><summary><b><code>Garnet Runtime Review</code></b> / <a href="https://github.com/garnet-labs/runtime-review-testbed/actions/runs/28492112239"><b><code>runtime-review</code></b> ↗</a> — <i>9 processes · contacted 4 domains</i></summary>
 
-<details><summary><b><code>runtime-review</code></b> — reached <code>github.com</code>, <code>images.unsplash.com</code>, <code>registry.npmjs.org</code> and 1 more · 5 connections</summary>
+<br>
 
-````text
-runtime-review
-└─ GitHub runner ┄ 4 processes
-   └─ bash
-      ├─ npm test
-      │  └─ sh
-      │     └─ node
-      │        ├─ → api.garnet.ai · 104.26.11.16 — garnet upload
-      │        ├─ → images.unsplash.com · 146.75.94.208
-      │        ├─ → registry.npmjs.org · 104.16.8.34
-      │        └─ → github.com · 140.82.113.3
-      └─ npm install
-         └─ → registry.npmjs.org · 104.16.8.34
-````
+<pre>
+<i>runtime-review · job</i>
+└─ <i>systemd</i>
+   └─ <i>hosted-compute-agent</i>
+      └─ <i>Runner.Listener</i>
+         └─ <i>Runner.Worker</i>
+            └─ <b>bash</b>
+               ├─ <b>npm test</b>
+               │  └─ <b>sh</b>
+               │     └─ <b>node</b>
+               │        ├─ → api.garnet.ai <i>(garnet sensor upload)</i>
+               │        ├─ → images.unsplash.com
+               │        ├─ → registry.npmjs.org
+               │        └─ → github.com
+               └─ <b>npm install</b>
+                  └─ → registry.npmjs.org
+</pre>
 
-<sub>Paste the tree into your review agent · full detail in the Step Summary · [job log ↗](https://github.com/garnet-labs/runtime-review-testbed/actions/runs/28492112239)</sub>
+<p align="right"><sub><a href="https://app.garnet.ai/public/runs/28492112239?utm_source=github&amp;utm_medium=pr_comment">View Run Profile in Garnet ↗</a></sub></p>
 
 </details>
 
 ---
-<sub>What happened in this PR — each job's processes and where they reached. · [Run Profile ↗](https://app.garnet.ai/p/runtime-review-testbed) · 5 jobs not yet recorded — [add the step ↗](https://github.com/garnet-org/action#readme)</sub>
+> <sub>5 jobs not yet recorded — [add the step ↗](https://github.com/garnet-org/action#readme)</sub>

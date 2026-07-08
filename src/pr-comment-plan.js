@@ -1,5 +1,5 @@
 import { mergeCommentState, mergeCommentStates, parseCommentState, renderCommentBody } from "./profile-comment.js"
-import { CONTROL_PLANE_MARKERS } from "./runtime-review.js"
+import { CONTROL_PLANE_MARKERS, RUNTIME_REVIEW_MARKER } from "./runtime-review.js"
 
 /**
  * @typedef {import("./profile-comment.js").NormalizedProfile} NormalizedProfile
@@ -55,7 +55,10 @@ export function planPullRequestComment(comments, profile, runAttempt, renderOpti
     }
 
     const duplicateCommentIds = matchingComments.slice(0, -1).map(entry => entry.comment.id)
-    const body = renderCommentBody(mergeResult.state, renderOptions)
+    const body = renderCommentBody(mergeResult.state, {
+        ...renderOptions,
+        firstRun: isFirstCommitLifecycle(comments, threadKey),
+    })
 
     if (primary === null) {
         return {
@@ -71,6 +74,29 @@ export function planPullRequestComment(comments, profile, runAttempt, renderOpti
         body,
         duplicateCommentIds,
     }
+}
+
+/**
+ * The explainer's open state (v6.1 §1.4): open through the PR's ENTIRE
+ * first-commit lifecycle, collapsed from the second commit onward. The
+ * comment state marker retains the commit sha, so "still on the PR's first
+ * commit" means every prior Garnet comment on the PR belongs to the SAME
+ * commit as the incoming profile (vacuously true when none exist). A Garnet
+ * comment we cannot attribute to a commit (canonical marker but no parseable
+ * state) counts as prior history, so the explainer collapses.
+ * @param {PullRequestComment[]} comments
+ * @param {string} threadKey
+ * @returns {boolean}
+ */
+function isFirstCommitLifecycle(comments, threadKey) {
+    return comments.every(comment => {
+        const state = parseCommentState(comment.body)
+        if (state !== null) {
+            return isMatchingThread(state, threadKey)
+        }
+
+        return !comment.body.includes(RUNTIME_REVIEW_MARKER)
+    })
 }
 
 /**

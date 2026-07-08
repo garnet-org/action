@@ -3,6 +3,7 @@ import { getOptionalRecord } from "./shared.js"
 import {
     buildRunReview,
     derivePermalink,
+    isAddressLike,
     renderRunReview,
     COMMENT_MARKER,
     RUNTIME_REVIEW_MARKER,
@@ -96,11 +97,14 @@ const COMMENT_STATE_MARKER_PREFIX = "garnet-action-comment-state:"
 
 /**
  * Rendering knobs threaded from the action's inputs (all optional, additive).
+ * `firstRun` drives the explainer's open state (v6.1 §1.4): true through the
+ * PR's first-commit lifecycle, false on every update after.
  * @typedef {{
  *   expectedJobs?: number
  *   permalinkUrl?: string
  *   docsUrl?: string
  *   renderedAt?: string | Date
+ *   firstRun?: boolean
  * }} RenderOptions
  */
 
@@ -425,16 +429,19 @@ export function buildProfileRunReview(profiles, options = {}) {
     const sha = getCommentCommitSha(profiles)
     const repository = getCommentRepository(profiles)
     const commitUrl = repository !== "" && sha !== "" ? `https://github.com/${repository}/commit/${sha}` : ""
-    const permalink = derivePermalink(options.permalinkUrl ?? "", jobs, resolveAppBaseUrl())
+    const appUrl = resolveAppBaseUrl()
+    const permalink = derivePermalink(options.permalinkUrl ?? "", jobs, appUrl)
 
     return buildRunReview({
         repo: repository,
         sha,
         commitUrl,
         permalink,
+        appUrl,
         docsUrl: options.docsUrl ?? DEFAULT_DOCS_URL,
         expectedJobs: options.expectedJobs ?? 0,
         renderedAt: options.renderedAt ?? new Date(),
+        firstRun: options.firstRun === true,
         jobs,
     })
 }
@@ -448,7 +455,11 @@ function profileToJobRecord(profile) {
     /** @type {{ ancestry: string[], domain: string, ip: string }[]} */
     const connections = []
     for (const peer of profile.egress_peers) {
-        const domain = peer.remote_names[0] ?? ""
+        // A recorded remote_names entry can be the peer's bare address — an
+        // address-like "name" is NOT a domain, or the fold-heading noun rule
+        // (v6.1 §1.5) would read `domains` over a tree of IPs. The
+        // connection's domain is the first NAMED identity, if any.
+        const domain = peer.remote_names.find(name => !isAddressLike(name)) ?? ""
         const ip = peer.remote_address
         const ancestries =
             peer.proc_trees.length > 0 ? peer.proc_trees.map(tree => tree.ancestry.filter(entry => entry !== "")) : [[]]
@@ -462,7 +473,12 @@ function profileToJobRecord(profile) {
         workflow: profile.github.workflow,
         sha: profile.github.sha,
         run_id: profile.github.run_id,
+        run_number: "",
         run_url: buildGitHubRunLink(profile.github.repository, profile.github.run_id),
+        telemetry: {
+            domains: profile.telemetry.total_domains,
+            connections: profile.telemetry.total_connections,
+        },
         connections,
     }
 }
@@ -560,9 +576,11 @@ export function buildReportLink(values) {
         return utmTrackedURL(baseURL)
     }
 
-    // TODO: Switch back to the full repository/job route once the dashboard
-    // supports /dashboard/runs/{org}/{repo}/{runID}/{job}.
-    return utmTrackedURL(`${baseURL}/dashboard/runs/${encodeURIComponent(values.run_id)}`)
+    // The tokenless PUBLIC report route (v6.1 §1.1) — never the authed
+    // dashboard, which would wall cold PR traffic behind a login. Run-level:
+    // no `?job=` selector (per-job `?job=` permalinks are the control-plane
+    // GitHub App comment's job — ENG-1355).
+    return utmTrackedURL(`${baseURL}/public/runs/${encodeURIComponent(values.run_id)}`)
 }
 
 /**
@@ -600,9 +618,11 @@ function buildGitHubRunLink(repository, runId) {
 }
 
 /**
+ * The Garnet app base URL for permalinks, mapped from the configured API
+ * host (dev-api → dev-app, …).
  * @returns {string}
  */
-function resolveAppBaseUrl() {
+export function resolveAppBaseUrl() {
     const apiUrl = getConfiguredApiUrl()
     if (apiUrl === "") {
         return DEFAULT_APP_BASE_URL
