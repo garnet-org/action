@@ -1,5 +1,5 @@
 import { z } from "zod"
-import { getOptionalRecord } from "./shared.js"
+import { firstNonEmptyString, getOptionalRecord } from "./shared.js"
 import {
     buildRunReview,
     derivePermalink,
@@ -861,19 +861,6 @@ function getProfileNetworkTelemetry(profile) {
         total_domains: getNumber(egress?.total_domains),
         total_connections: getNumber(egress?.total_connections),
     }
-}
-
-/**
- * @param {...unknown} values
- * @returns {string}
- */
-function firstNonEmptyString(...values) {
-    for (const value of values) {
-        if (typeof value === "string" && value !== "") {
-            return value
-        }
-    }
-    return ""
 }
 
 /**

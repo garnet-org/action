@@ -31168,6 +31168,20 @@ function shared_getOptionalRecord(value) {
 }
 
 /**
+ * @param {...unknown} values
+ * @returns {string}
+ */
+function shared_firstNonEmptyString(...values) {
+  for (const value of values) {
+    if (typeof value === "string" && value !== "") {
+      return value
+    }
+  }
+
+  return ""
+}
+
+/**
  * @param {string} filePath
  * @returns {Promise<boolean>}
  */
@@ -40110,6 +40124,8 @@ async function dumpJibrilLogs() {
 }
 
 ;// CONCATENATED MODULE: ./src/runtime-review.js
+
+
 /**
  * Garnet Runtime Review — observation-only PR comment renderer (Comment v5.2).
  *
@@ -40302,17 +40318,6 @@ function stripControl(value) {
  */
 function isNonEmptyString(value) {
   return value !== undefined && value !== null && value !== ""
-}
-
-/**
- * @param {...unknown} values
- * @returns {string}
- */
-function firstNonEmptyString(...values) {
-  for (const value of values) {
-    if (isNonEmptyString(value)) return value
-  }
-  return ""
 }
 
 /**
@@ -41705,7 +41710,7 @@ function buildProfileRunReview(profiles, options = {}) {
     const repository = getCommentRepository(profiles)
     const commitURL = repository !== "" && sha !== "" ? `https://github.com/${repository}/commit/${sha}` : ""
     const permalink = derivePermalink(
-        profile_comment_firstNonEmptyString(options.permalinkURL, optionsRecord["permalinkUrl"]),
+        firstNonEmptyString(options.permalinkURL, optionsRecord["permalinkUrl"]),
         jobs,
         resolveAppBaseURL(),
     )
@@ -41715,7 +41720,7 @@ function buildProfileRunReview(profiles, options = {}) {
         sha,
         commitURL,
         permalink,
-        docsURL: profile_comment_firstNonEmptyString(options.docsURL, optionsRecord["docsUrl"], DEFAULT_DOCS_URL),
+        docsURL: firstNonEmptyString(options.docsURL, optionsRecord["docsUrl"], DEFAULT_DOCS_URL),
         expectedJobs: options.expectedJobs ?? 0,
         renderedAt: options.renderedAt ?? new Date(),
         jobs,
@@ -42060,19 +42065,6 @@ function getProfileNetworkTelemetry(profile) {
         total_domains: getNumber(egress?.total_domains),
         total_connections: getNumber(egress?.total_connections),
     }
-}
-
-/**
- * @param {...unknown} values
- * @returns {string}
- */
-function profile_comment_firstNonEmptyString(...values) {
-    for (const value of values) {
-        if (typeof value === "string" && value !== "") {
-            return value
-        }
-    }
-    return ""
 }
 
 /**

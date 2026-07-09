@@ -1,3 +1,5 @@
+import { firstNonEmptyString } from "./shared.js"
+
 /**
  * Garnet Runtime Review — observation-only PR comment renderer (Comment v5.2).
  *
@@ -190,17 +192,6 @@ function stripControl(value) {
  */
 function isNonEmptyString(value) {
   return value !== undefined && value !== null && value !== ""
-}
-
-/**
- * @param {...unknown} values
- * @returns {string}
- */
-function firstNonEmptyString(...values) {
-  for (const value of values) {
-    if (isNonEmptyString(value)) return value
-  }
-  return ""
 }
 
 /**

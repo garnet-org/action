@@ -2,7 +2,7 @@ import * as core from "@actions/core"
 import * as exec from "@actions/exec"
 import * as fs from "node:fs/promises"
 import * as os from "node:os"
-import { getEnv, getErrorMessage, isSupportedArch, isSupportedPlatform, pathExists } from "./shared.js"
+import { firstNonEmptyString, getEnv, getErrorMessage, isSupportedArch, isSupportedPlatform, pathExists } from "./shared.js"
 import { getPullRequestNumberFromEvent } from "./github-event.js"
 import { uploadJibrilArtifacts } from "./post-artifacts.js"
 import { buildProfileRunReview, getDefaultJsonProfileFile, parseProfileJson } from "./profile-comment.js"
@@ -81,7 +81,7 @@ async function run() {
  * @returns {Promise<NormalizedProfile | null>}
  */
 async function readNormalizedProfile(debug) {
-    const jsonProfilerFile = firstNonEmptyString([core.getState("jsonProfilerFile"), getDefaultJsonProfileFile()])
+    const jsonProfilerFile = firstNonEmptyString(core.getState("jsonProfilerFile"), getDefaultJsonProfileFile())
 
     try {
         const jsonProfile = await readOptionalRootFile(jsonProfilerFile)
@@ -163,7 +163,7 @@ async function publishProfilerComment(profile, renderOptions) {
         return
     }
 
-    const token = firstNonEmptyString([core.getState("githubToken"), getEnv("GITHUB_TOKEN")])
+    const token = firstNonEmptyString(core.getState("githubToken"), getEnv("GITHUB_TOKEN"))
     if (token === "") {
         core.warning("github_token is not set, skipping PR comment")
         return
@@ -206,20 +206,6 @@ async function readOptionalRootFile(filePath) {
     } catch {
         return ""
     }
-}
-
-/**
- * @param {string[]} values
- * @returns {string}
- */
-function firstNonEmptyString(values) {
-    for (const value of values) {
-        if (value !== "") {
-            return value
-        }
-    }
-
-    return ""
 }
 
 /**
