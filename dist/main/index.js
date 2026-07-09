@@ -40634,7 +40634,7 @@ const escapeHtmlAttr = value =>
     .trim()
 
 /**
- * Sanitize a value rendered inside a four-backtick ````text fence (§9): no
+ * Sanitize a value rendered inside a four-backtick text fence (§9): no
  * three-plus backtick runs, one line, control characters stripped.
  * @param {unknown} value
  * @returns {string}
