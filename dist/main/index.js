@@ -40317,7 +40317,7 @@ function stripControl(value) {
  * @returns {value is string}
  */
 function isNonEmptyString(value) {
-  return value !== undefined && value !== null && value !== ""
+  return typeof value === "string" && value !== ""
 }
 
 /**
