@@ -1,3 +1,5 @@
+import { firstNonEmptyString } from "./shared.js"
+
 /**
  * Garnet Runtime Review — observation-only PR comment renderer (Comment v5.2).
  *
@@ -140,9 +142,9 @@ const GITHUB_OWNED_RE =
  *   repo: string
  *   sha: string
  *   permalink: string
- *   docsUrl: string
+ *   docsURL: string
  *   renderedAt: Date | null
- *   commitUrl: string
+ *   commitURL: string
  *   jobs: ReviewJob[]
  *   uniqueDests: Set<string>
  *   lineageAbsent: boolean
@@ -166,21 +168,30 @@ const GITHUB_OWNED_RE =
  */
 
 /**
+ * @typedef {{
+ *   sha: string
+ *   commitURL: string
+ *   expectedJobs: number
+ *   docsURL: string
+ *   renderedAt: string | Date
+ * }} NoRecordInput
+ */
+
+/**
  * Strip control characters from any evidence string (A8).
  * @param {unknown} value
  * @returns {string}
  */
-const stripControl = value => String(value ?? "").replace(/[\u0000-\u0008\u000B-\u001F\u007F]/g, "")
+function stripControl(value) {
+  return String(value ?? "").replace(/[\u0000-\u0008\u000B-\u001F\u007F]/g, "")
+}
 
-/** @param {unknown} value @returns {value is string} */
-const isNonEmptyString = value => value !== undefined && value !== null && value !== ""
-
-/** @param {...unknown} values @returns {string} */
-const firstNonEmptyString = (...values) => {
-  for (const value of values) {
-    if (isNonEmptyString(value)) return value
-  }
-  return ""
+/**
+ * @param {unknown} value
+ * @returns {value is string}
+ */
+function isNonEmptyString(value) {
+  return typeof value === "string" && value !== ""
 }
 
 /**
@@ -189,36 +200,39 @@ const firstNonEmptyString = (...values) => {
  * @param {unknown} value
  * @returns {string}
  */
-export const escapeCode = value =>
-  stripControl(value)
+export function escapeCode(value) {
+  return stripControl(value)
     .replace(/`/g, "ʼ")
     .replace(/[\r\n]+/g, " ")
     .trim()
+}
 
 /**
  * Escape a value destined for INSIDE an HTML element (A8).
  * @param {unknown} value
  * @returns {string}
  */
-const escapeHtml = value =>
-  stripControl(value)
+function escapeHtml(value) {
+  return stripControl(value)
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
     .replace(/[\r\n]+/g, " ")
     .trim()
+}
 
 /**
- * Sanitize a value rendered inside a four-backtick ````text fence (A8): no
+ * Sanitize a value rendered inside a four-backtick text fence (A8): no
  * three-plus backtick runs, one line, control characters stripped.
  * @param {unknown} value
  * @returns {string}
  */
-const fenceSafe = value =>
-  stripControl(value)
+function fenceSafe(value) {
+  return stripControl(value)
     .replace(/`{3,}/g, m => "ʼ".repeat(m.length))
     .replace(/[\r\n]+/g, " ")
     .trim()
+}
 
 /**
  * A5 — identifier normalization: trailing-digit suffixes are ephemeral
@@ -227,14 +241,18 @@ const fenceSafe = value =>
  * @param {string} name
  * @returns {string}
  */
-export const normalizeIdentifier = name => String(name ?? "").replace(/\d+$/, "*")
+export function normalizeIdentifier(name) {
+  return String(name ?? "").replace(/\d+$/, "*")
+}
 
 /**
  * Is this process name a member of the GitHub runner chain (A4)?
  * @param {string} name
  * @returns {boolean}
  */
-const isRunnerChainProcess = name => RUNNER_CHAIN.has(normalizeIdentifier(String(name)))
+function isRunnerChainProcess(name) {
+  return RUNNER_CHAIN.has(normalizeIdentifier(String(name)))
+}
 
 /**
  * A1 — structural classification. Exactly one class per connection, typed on
@@ -307,14 +325,14 @@ export function summarizeProfile(profile) {
  * Never a github.com/actions URL.
  * @param {string} explicit
  * @param {{ run_id?: string }[]} jobRecords
- * @param {string} appUrl
+ * @param {string} appURL
  * @returns {string}
  */
-export function derivePermalink(explicit, jobRecords, appUrl) {
+export function derivePermalink(explicit, jobRecords, appURL) {
   if (explicit !== "") return explicit
-  const runId = (jobRecords ?? []).map(j => j?.run_id).find(isNonEmptyString)
-  if (runId === undefined || runId === "" || appUrl === "") return ""
-  return `${appUrl}/dashboard/runs/${encodeURIComponent(String(runId))}?utm_source=github&utm_medium=pr_comment`
+  const runID = (jobRecords ?? []).map(j => j?.run_id).find(isNonEmptyString)
+  if (runID === undefined || runID === "" || appURL === "") return ""
+  return `${appURL}/dashboard/runs/${encodeURIComponent(String(runID))}?utm_source=github&utm_medium=pr_comment`
 }
 
 /**
@@ -322,7 +340,9 @@ export function derivePermalink(explicit, jobRecords, appUrl) {
  * @param {{ ancestry: string[], domain: string, ip: string }} c
  * @returns {string}
  */
-const connectionKey = c => `${(c.ancestry ?? []).join("\u0000")}\u0001${c.domain}\u0001${c.ip}`
+function connectionKey(c) {
+  return `${(c.ancestry ?? []).join("\u0000")}\u0001${c.domain}\u0001${c.ip}`
+}
 
 /**
  * A5 — behavior signature for R0 comparison across pushes: normalized
@@ -331,29 +351,35 @@ const connectionKey = c => `${(c.ancestry ?? []).join("\u0000")}\u0001${c.domain
  * @param {{ ancestry?: string[], domain?: string, ip?: string }} c
  * @returns {string}
  */
-export const behaviorSignature = c =>
-  `${(c.ancestry ?? []).map(normalizeIdentifier).join("\u0000")}\u0001${firstNonEmptyString(c.domain, c.ip)}`
+export function behaviorSignature(c) {
+  return `${(c.ancestry ?? []).map(normalizeIdentifier).join("\u0000")}\u0001${firstNonEmptyString(c.domain, c.ip)}`
+}
 
 /**
  * A destination's display identity (domain when named, else address).
  * @param {{ domain: string, ip: string }} c
  * @returns {string}
  */
-const destName = c => firstNonEmptyString(c.domain, c.ip)
+function destName(c) {
+  return firstNonEmptyString(c.domain, c.ip)
+}
 
 /**
  * Display label for a destination under A1 (`dns` replaces the stub name).
  * @param {ReviewConnection} c
  * @returns {string}
  */
-const destLabel = c => (c.class === "dns" ? "dns" : destName(c))
+function destLabel(c) {
+  return c.class === "dns" ? "dns" : destName(c)
+}
 
 /**
  * @param {string[]} ancestry
  * @returns {boolean}
  */
-const tailHasNetworkTool = ancestry =>
-  ancestry.slice(-TAIL_DEPTH).some(step => NETWORK_TOOLS.some(re => re.test(String(step))))
+function tailHasNetworkTool(ancestry) {
+  return ancestry.slice(-TAIL_DEPTH).some(step => NETWORK_TOOLS.some(re => re.test(String(step))))
+}
 
 /**
  * A3 — the total selection order (salience order), applied to headline
@@ -381,9 +407,9 @@ function salienceComparator(uniqueDests) {
  * @param {{
  *   repo?: string
  *   sha?: string
- *   commitUrl?: string
+ *   commitURL?: string
  *   permalink?: string
- *   docsUrl?: string
+ *   docsURL?: string
  *   expectedJobs?: number
  *   renderedAt?: string | Date
  *   jobs: Partial<JobRecord>[]
@@ -391,6 +417,7 @@ function salienceComparator(uniqueDests) {
  * @returns {RunReview}
  */
 export function buildRunReview(input) {
+  const inputRecord = /** @type {Record<string, unknown>} */ (input)
   /** @type {ReviewJob[]} */
   let jobs = (input.jobs ?? []).filter(job => job !== undefined && job !== null).map((j, i) => ({
     id: i,
@@ -454,9 +481,9 @@ export function buildRunReview(input) {
     repo: firstNonEmptyString(input.repo),
     sha: firstNonEmptyString(input.sha),
     permalink: firstNonEmptyString(input.permalink),
-    docsUrl: firstNonEmptyString(input.docsUrl),
+    docsURL: firstNonEmptyString(input.docsURL, inputRecord["docsUrl"]),
     renderedAt: input.renderedAt !== undefined && input.renderedAt !== null ? new Date(input.renderedAt) : null,
-    commitUrl: firstNonEmptyString(input.commitUrl),
+    commitURL: firstNonEmptyString(input.commitURL, inputRecord["commitUrl"]),
     jobs,
     uniqueDests,
     lineageAbsent,
@@ -587,10 +614,10 @@ function describeConnection(job, c, suffix) {
   const ancestry = c.ancestry.filter(isNonEmptyString)
   const dest = destLabel(c)
   const tail = ancestry.slice(-TAIL_DEPTH)
-  const toolIdx = tail.findIndex(step => NETWORK_TOOLS.some(re => re.test(String(step))))
+  const toolIndex = tail.findIndex(step => NETWORK_TOOLS.some(re => re.test(String(step))))
   let action
-  const chainStart = ancestry.length - tail.length + toolIdx
-  if (toolIdx !== -1 && chainStart > 0) {
+  const chainStart = ancestry.length - tail.length + toolIndex
+  if (toolIndex !== -1 && chainStart > 0) {
     const parent = ancestry[chainStart - 1]
     const chain = ancestry.slice(chainStart).map(escapeCode).join(" → ")
     action = `\`${escapeCode(parent)}\` spawned \`${chain}\`, which reached \`${escapeCode(dest)}\``
@@ -857,7 +884,7 @@ export function freshnessStamp(date) {
 function metaLine(review) {
   const shaPrefix = review.sha.slice(0, 7)
   const sha7 = escapeCode(isNonEmptyString(shaPrefix) ? shaPrefix : "unknown")
-  const shaPart = isNonEmptyString(review.commitUrl) ? `[\`${sha7}\`](${review.commitUrl})` : `\`${sha7}\``
+  const shaPart = isNonEmptyString(review.commitURL) ? `[\`${sha7}\`](${review.commitURL})` : `\`${sha7}\``
   const coverage =
     review.counts.expectedJobs > review.counts.jobs
       ? `${review.counts.jobs} of ${review.counts.expectedJobs} job${review.counts.expectedJobs === 1 ? "" : "s"} recorded`
@@ -900,8 +927,8 @@ function renderFooter(review, lines) {
       : ""
   const missing = review.counts.expectedJobs - review.counts.jobs
   const growth =
-    missing > 0 && isNonEmptyString(review.docsUrl)
-      ? ` · ${missing} job${missing === 1 ? "" : "s"} not yet recorded — [add the step ↗](${review.docsUrl})`
+    missing > 0 && isNonEmptyString(review.docsURL)
+      ? ` · ${missing} job${missing === 1 ? "" : "s"} not yet recorded — [add the step ↗](${review.docsURL})`
       : ""
   lines.push(
     `<sub>What happened in this PR — each job's processes and where they reached.${capability}${growth}</sub>`,
@@ -981,11 +1008,11 @@ export function renderRunReview(review) {
   const ungrouped = grouped.length > 0 ? review.jobs.slice(0, GROUP_AFTER) : review.jobs
 
   /** @type {Set<number>} */
-  const collapsedIds = new Set()
+  const collapsedIDs = new Set()
   for (let attempts = 0; attempts <= review.jobs.length; attempts += 1) {
     const lines = renderHeader(review, { markers: true })
     for (const job of ungrouped) {
-      renderJobSection(review, job, lines, { collapsed: collapsedIds.has(job.id) })
+      renderJobSection(review, job, lines, { collapsed: collapsedIDs.has(job.id) })
     }
     if (grouped.length > 0) {
       const domains = new Set(grouped.flatMap(j => j.connections.map(destName)).filter(isNonEmptyString)).size
@@ -995,17 +1022,17 @@ export function renderRunReview(review) {
       )
       lines.push("")
       for (const job of grouped) {
-        renderJobSection(review, job, lines, { collapsed: collapsedIds.has(job.id) })
+        renderJobSection(review, job, lines, { collapsed: collapsedIDs.has(job.id) })
       }
       lines.push("</details>")
       lines.push("")
     }
     renderFooter(review, lines)
     const body = lines.join("\n")
-    if (body.length <= SIZE_BUDGET || collapsedIds.size === review.jobs.length) return body
-    const pruneId = pruneOrder[collapsedIds.size]
-    if (pruneId === undefined) return body
-    collapsedIds.add(pruneId)
+    if (body.length <= SIZE_BUDGET || collapsedIDs.size === review.jobs.length) return body
+    const pruneID = pruneOrder[collapsedIDs.size]
+    if (pruneID === undefined) return body
+    collapsedIDs.add(pruneID)
   }
   throw new Error("unreachable")
 }
@@ -1038,29 +1065,26 @@ export function renderStepSummary(review) {
  * the workload never ran). Says so plainly — no verdict, no glyph; the footer
  * carries the one growth CTA (A6). Markerless; callers prepend markers for
  * the PR-comment surface.
- * @param {{
- *   sha: string
- *   commitUrl: string
- *   expectedJobs: number
- *   docsUrl: string
- *   renderedAt: string | Date
- * }} input
+ * @param {NoRecordInput} input
  * @returns {string}
  */
 export function renderNoRecord(input) {
+  const inputRecord = /** @type {Record<string, unknown>} */ (input)
   const expected = Math.max(input.expectedJobs ?? 0, 1)
   const shaSource = isNonEmptyString(input.sha) ? input.sha : "unknown"
   const sha7 = escapeCode(String(shaSource).slice(0, 7))
   const stamp = freshnessStamp(new Date(input.renderedAt))
+  const commitURL = firstNonEmptyString(input.commitURL, inputRecord["commitUrl"])
+  const docsURL = firstNonEmptyString(input.docsURL, inputRecord["docsUrl"])
   return [
     "## Garnet Runtime Review",
-    `${isNonEmptyString(input.commitUrl) ? `[\`${sha7}\`](${input.commitUrl})` : `\`${sha7}\``} · 0 of ${expected} job${expected === 1 ? "" : "s"} recorded · ${stamp}`,
+    `${isNonEmptyString(commitURL) ? `[\`${sha7}\`](${commitURL})` : `\`${sha7}\``} · 0 of ${expected} job${expected === 1 ? "" : "s"} recorded · ${stamp}`,
     "",
     "No Run Profile was produced for this run.",
     "",
     "Confirm the Garnet action started Jibril successfully and that the workload ran before this step.",
     "",
     "---",
-    `<sub>What happened in this PR — each job's processes and where they reached. · ${expected} job${expected === 1 ? "" : "s"} not yet recorded — [add the step ↗](${input.docsUrl})</sub>`,
+    `<sub>What happened in this PR — each job's processes and where they reached. · ${expected} job${expected === 1 ? "" : "s"} not yet recorded — [add the step ↗](${docsURL})</sub>`,
   ].join("\n")
 }

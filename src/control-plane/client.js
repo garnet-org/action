@@ -153,9 +153,9 @@ export class ControlPlaneClient {
      * @returns {Promise<RequestTextResult>}
      */
     async requestText(options) {
-        const requestUrl = new URL(options.path, `${this.baseURL}/`)
+        const requestURL = new URL(options.path, `${this.baseURL}/`)
         if (options.query !== undefined) {
-            requestUrl.search = options.query.toString()
+            requestURL.search = options.query.toString()
         }
 
         /** @type {Record<string, string>} */
@@ -175,12 +175,12 @@ export class ControlPlaneClient {
         let response
         try {
             if (options.body === undefined) {
-                response = await fetch(requestUrl, {
+                response = await fetch(requestURL, {
                     method: options.method,
                     headers,
                 })
             } else {
-                response = await fetch(requestUrl, {
+                response = await fetch(requestURL, {
                     method: options.method,
                     headers,
                     body: JSON.stringify(options.body),
