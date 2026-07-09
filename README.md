@@ -2,7 +2,7 @@
 
 <div align="center">
   <a href="https://garnet.ai">
-    <img src="brand/garnet-logo.png" alt="Garnet" width="260" />
+    <img src="https://raw.githubusercontent.com/garnet-org/action/main/brand/garnet-logo.png" alt="Garnet" width="260" />
   </a>
 
   <p><strong>Runtime Review for your PRs</strong></p>
