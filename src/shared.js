@@ -38,6 +38,20 @@ export function getOptionalRecord(value) {
 }
 
 /**
+ * @param {...unknown} values
+ * @returns {string}
+ */
+export function firstNonEmptyString(...values) {
+  for (const value of values) {
+    if (typeof value === "string" && value !== "") {
+      return value
+    }
+  }
+
+  return ""
+}
+
+/**
  * @param {string} filePath
  * @returns {Promise<boolean>}
  */

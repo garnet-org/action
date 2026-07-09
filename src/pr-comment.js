@@ -32,8 +32,8 @@ const CREATE_RECHECK_SPREAD_MS = 1500
  * @typedef {{
  *   listComments(): Promise<PullRequestComment[]>
  *   createComment(body: string): Promise<PullRequestComment>
- *   updateComment(commentId: number, body: string): Promise<void>
- *   deleteComment(commentId: number): Promise<void>
+ *   updateComment(commentID: number, body: string): Promise<void>
+ *   deleteComment(commentID: number): Promise<void>
  * }} PublishCommentClient
  */
 
@@ -108,11 +108,11 @@ async function applyPublishPlan(client, plan) {
  * @param {PublishCommentClient} client
  * @param {NormalizedProfile} profile
  * @param {number} runAttempt
- * @param {number} createdCommentId
+ * @param {number} createdCommentID
  * @param {RenderOptions} renderOptions
  * @returns {Promise<"created" | "updated" | "skipped-stale" | "skipped-control-plane">}
  */
-async function reconcilePublishedComment(client, profile, runAttempt, createdCommentId, renderOptions) {
+async function reconcilePublishedComment(client, profile, runAttempt, createdCommentID, renderOptions) {
     const plan = planPullRequestComment(await client.listComments(), profile, runAttempt, renderOptions)
 
     if (plan.kind === "create") {
@@ -120,7 +120,7 @@ async function reconcilePublishedComment(client, profile, runAttempt, createdCom
     }
 
     if (plan.kind === "stale") {
-        await deleteComments(client, [createdCommentId])
+        await deleteComments(client, [createdCommentID])
         return "skipped-stale"
     }
 
@@ -129,12 +129,12 @@ async function reconcilePublishedComment(client, profile, runAttempt, createdCom
     }
 
     await applyUpdatePlan(client, plan)
-    return plan.comment.id === createdCommentId ? "created" : "updated"
+    return plan.comment.id === createdCommentID ? "created" : "updated"
 }
 
 /**
  * @param {PublishCommentClient} client
- * @param {{ kind: "update", comment: PullRequestComment, body: string, duplicateCommentIds: number[] }} plan
+ * @param {{ kind: "update", comment: PullRequestComment, body: string, duplicateCommentIDs: number[] }} plan
  * @returns {Promise<void>}
  */
 async function applyUpdatePlan(client, plan) {
@@ -142,17 +142,17 @@ async function applyUpdatePlan(client, plan) {
         await client.updateComment(plan.comment.id, plan.body)
     }
 
-    await deleteComments(client, plan.duplicateCommentIds)
+    await deleteComments(client, plan.duplicateCommentIDs)
 }
 
 /**
- * @param {{ deleteComment(commentId: number): Promise<void> }} client
- * @param {number[]} commentIds
+ * @param {{ deleteComment(commentID: number): Promise<void> }} client
+ * @param {number[]} commentIDs
  * @returns {Promise<void>}
  */
-async function deleteComments(client, commentIds) {
-    for (const commentId of new Set(commentIds)) {
-        await client.deleteComment(commentId)
+async function deleteComments(client, commentIDs) {
+    for (const commentID of new Set(commentIDs)) {
+        await client.deleteComment(commentID)
     }
 }
 

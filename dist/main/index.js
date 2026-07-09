@@ -31168,6 +31168,20 @@ function shared_getOptionalRecord(value) {
 }
 
 /**
+ * @param {...unknown} values
+ * @returns {string}
+ */
+function firstNonEmptyString(...values) {
+  for (const value of values) {
+    if (typeof value === "string" && value !== "") {
+      return value
+    }
+  }
+
+  return ""
+}
+
+/**
  * @param {string} filePath
  * @returns {Promise<boolean>}
  */
@@ -39309,9 +39323,9 @@ class ControlPlaneClient {
      * @returns {Promise<RequestTextResult>}
      */
     async requestText(options) {
-        const requestUrl = new URL(options.path, `${this.baseURL}/`)
+        const requestURL = new URL(options.path, `${this.baseURL}/`)
         if (options.query !== undefined) {
-            requestUrl.search = options.query.toString()
+            requestURL.search = options.query.toString()
         }
 
         /** @type {Record<string, string>} */
@@ -39331,12 +39345,12 @@ class ControlPlaneClient {
         let response
         try {
             if (options.body === undefined) {
-                response = await fetch(requestUrl, {
+                response = await fetch(requestURL, {
                     method: options.method,
                     headers,
                 })
             } else {
-                response = await fetch(requestUrl, {
+                response = await fetch(requestURL, {
                     method: options.method,
                     headers,
                     body: JSON.stringify(options.body),
@@ -39527,15 +39541,15 @@ async function run() {
 
         // Download jibril
         const jibrilPrefix = "https://github.com/garnet-org/jibril-releases/releases"
-        let jibrilUrl =
+        let jibrilURL =
             JIBRILVER === "latest"
                 ? `${jibrilPrefix}/latest/download/jibril`
                 : `${jibrilPrefix}/download/${JIBRILVER}/jibril`
 
-        info(`Downloading jibril: ${jibrilUrl}`)
+        info(`Downloading jibril: ${jibrilURL}`)
 
         const jibrilDest = external_node_path_namespaceObject.join(tmpDir, "jibril")
-        await downloadFile(jibrilUrl, jibrilDest)
+        await downloadFile(jibrilURL, jibrilDest)
         if (!(await pathExists(jibrilDest))) {
             throw new Error("Failed to download jibril binary")
         }
@@ -39553,8 +39567,8 @@ async function run() {
         const RUNNER_IP = getFirstIpv4() || "127.0.0.1"
 
         let SYSTEM_MACHINE_ID = external_node_os_namespaceObject.hostname()
-        const machineIdPaths = ["/etc/machine-id", "/var/lib/dbus/machine-id"]
-        for (const p of machineIdPaths) {
+        const machineIDPaths = ["/etc/machine-id", "/var/lib/dbus/machine-id"]
+        for (const p of machineIDPaths) {
             if (await pathExists(p)) {
                 SYSTEM_MACHINE_ID = (await promises_namespaceObject.readFile(p, "utf8")).trim()
                 break
@@ -39931,10 +39945,10 @@ async function execSudo(args, options = {}) {
  */
 async function downloadFile(url, destPath, opts = {}) {
     const { maxRedirects = 10, timeoutMs = 60_000, enforceHttps = true } = opts
-    const requestUrl = String(url || "")
+    const requestURL = String(url || "")
 
-    if (enforceHttps && !requestUrl.startsWith("https://")) {
-        throw new Error(`Refusing to download over non-HTTPS: ${requestUrl}`)
+    if (enforceHttps && !requestURL.startsWith("https://")) {
+        throw new Error(`Refusing to download over non-HTTPS: ${requestURL}`)
     }
 
     const client = new lib_HttpClient("garnet-action", undefined, {
@@ -39944,12 +39958,12 @@ async function downloadFile(url, destPath, opts = {}) {
     })
 
     try {
-        const response = await client.get(requestUrl)
+        const response = await client.get(requestURL)
         const statusCode = response.message.statusCode ?? 0
 
         if (statusCode !== 200) {
             response.message.resume()
-            throw new Error(`Failed to download ${requestUrl}: HTTP ${statusCode}`)
+            throw new Error(`Failed to download ${requestURL}: HTTP ${statusCode}`)
         }
 
         await (0,external_node_stream_promises_namespaceObject.pipeline)(response.message, (0,external_node_fs_namespaceObject.createWriteStream)(destPath, { mode: 0o600 }))
@@ -40569,7 +40583,7 @@ const stripControl = value => String(value ?? "").replace(/[\u0000-\u0008\u000B-
 const isNonEmptyString = value => typeof value === "string" && value !== ""
 
 /** @param {...unknown} values @returns {string} */
-const firstNonEmptyString = (...values) => {
+const runtime_review_firstNonEmptyString = (...values) => {
   for (const value of values) {
     if (isNonEmptyString(value)) return value
   }
@@ -40663,8 +40677,8 @@ const isRunnerChainProcess = name => RUNNER_CHAIN.has(normalizeIdentifier(String
  * @returns {string}
  */
 function classifyConnection(c) {
-  const domain = String(firstNonEmptyString(c.domain))
-  const ip = String(firstNonEmptyString(c.ip))
+  const domain = String(runtime_review_firstNonEmptyString(c.domain))
+  const ip = String(runtime_review_firstNonEmptyString(c.ip))
   if (LOOPBACK_RE.test(domain) || LOOPBACK_RE.test(ip)) return "dns"
   if (/^(?:[a-z0-9-]+-)?api\.garnet\.ai$/.test(domain)) return "garnet upload"
   const ancestry = (c.ancestry ?? []).filter(isNonEmptyString)
@@ -40714,7 +40728,7 @@ function summarizeProfile(profile) {
     // of IPs. The connection's domain is the first NAMED identity, if any.
     const names = /** @type {unknown[]} */ (peer?.remote_names ?? peer?.RemoteNames ?? []).filter(isNonEmptyString)
     const domain = names.find(n => !runtime_review_isAddressLike(String(n))) ?? ""
-    const ip = String(firstNonEmptyString(peer?.remote_address, peer?.RemoteAddress))
+    const ip = String(runtime_review_firstNonEmptyString(peer?.remote_address, peer?.RemoteAddress))
     const trees = /** @type {any[]} */ (peer?.proc_trees ?? peer?.ProcTrees ?? [])
     const ancestries =
       trees.length > 0
@@ -40726,11 +40740,11 @@ function summarizeProfile(profile) {
   }
 
   return {
-    name: firstNonEmptyString(github.job),
-    workflow: firstNonEmptyString(github.workflow),
-    sha: firstNonEmptyString(github.sha),
-    run_id: firstNonEmptyString(github.run_id),
-    run_number: firstNonEmptyString(github.run_number),
+    name: runtime_review_firstNonEmptyString(github.job),
+    workflow: runtime_review_firstNonEmptyString(github.workflow),
+    sha: runtime_review_firstNonEmptyString(github.sha),
+    run_id: runtime_review_firstNonEmptyString(github.run_id),
+    run_number: runtime_review_firstNonEmptyString(github.run_number),
     run_url:
       isNonEmptyString(github.run_id) && isNonEmptyString(github.repository)
         ? `${isNonEmptyString(github.server_url) ? github.server_url : "https://github.com"}/${github.repository}/actions/runs/${github.run_id}`
@@ -40774,14 +40788,14 @@ const connectionKey = c => `${(c.ancestry ?? []).join("\u0000")}\u0001${c.domain
  * @returns {string}
  */
 const behaviorSignature = c =>
-  `${(c.ancestry ?? []).map(normalizeIdentifier).join("\u0000")}\u0001${firstNonEmptyString(c.domain, c.ip)}`
+  `${(c.ancestry ?? []).map(normalizeIdentifier).join("\u0000")}\u0001${runtime_review_firstNonEmptyString(c.domain, c.ip)}`
 
 /**
  * A destination's display identity (domain when named, else address).
  * @param {{ domain: string, ip: string }} c
  * @returns {string}
  */
-const destName = c => firstNonEmptyString(c.domain, c.ip)
+const destName = c => runtime_review_firstNonEmptyString(c.domain, c.ip)
 
 /**
  * Display label for a destination (the `dns` class replaces the stub name in
@@ -40853,11 +40867,11 @@ function runtime_review_buildRunReview(input) {
     .filter(job => job !== undefined && job !== null)
     .map((j, i) => ({
       id: i,
-      name: firstNonEmptyString(j.name, `job-${i + 1}`),
-      workflow: firstNonEmptyString(j.workflow),
-      run_id: firstNonEmptyString(j.run_id),
-      run_number: firstNonEmptyString(j.run_number),
-      run_url: firstNonEmptyString(j.run_url),
+      name: runtime_review_firstNonEmptyString(j.name, `job-${i + 1}`),
+      workflow: runtime_review_firstNonEmptyString(j.workflow),
+      run_id: runtime_review_firstNonEmptyString(j.run_id),
+      run_number: runtime_review_firstNonEmptyString(j.run_number),
+      run_url: runtime_review_firstNonEmptyString(j.run_url),
       telemetry: j.telemetry ?? { domains: null, connections: null },
       connections: dedupeConnections(j.connections ?? []),
     }))
@@ -40920,13 +40934,13 @@ function runtime_review_buildRunReview(input) {
   const expected = Math.max(input.expectedJobs ?? 0, recorded)
 
   return {
-    repo: firstNonEmptyString(input.repo),
+    repo: runtime_review_firstNonEmptyString(input.repo),
     sha: String(input.sha ?? ""),
-    permalink: firstNonEmptyString(input.permalink),
-    appUrl: firstNonEmptyString(input.appUrl),
-    docsUrl: firstNonEmptyString(input.docsUrl),
+    permalink: runtime_review_firstNonEmptyString(input.permalink),
+    appUrl: runtime_review_firstNonEmptyString(input.appUrl),
+    docsUrl: runtime_review_firstNonEmptyString(input.docsUrl),
     renderedAt: input.renderedAt !== undefined && input.renderedAt !== null && input.renderedAt !== "" ? new Date(input.renderedAt) : null,
-    commitUrl: firstNonEmptyString(input.commitUrl),
+    commitUrl: runtime_review_firstNonEmptyString(input.commitUrl),
     firstRun: input.firstRun === true,
     // v6.2 actor-conditional heading: App mode (garnet-runtime-review[bot])
     // renders headerless — the actor row is the brand; standalone
@@ -40958,8 +40972,8 @@ function dedupeConnections(connections) {
   for (const raw of connections) {
     const c = {
       ancestry: (raw.ancestry ?? []).map(s => String(s)),
-      domain: String(firstNonEmptyString(raw.domain)),
-      ip: String(firstNonEmptyString(raw.ip)),
+      domain: String(runtime_review_firstNonEmptyString(raw.domain)),
+      ip: String(runtime_review_firstNonEmptyString(raw.ip)),
     }
     const key = connectionKey(c)
     const seen = byKey.get(key)
@@ -41132,7 +41146,7 @@ function stripRunnerPrefix(ancestry) {
  */
 function renderJobTree(job, opts = {}) {
   const elide = opts.elide !== false
-  const focus = firstNonEmptyString(opts.focus)
+  const focus = runtime_review_firstNonEmptyString(opts.focus)
   const html = opts.html === true
   // HTML (canonical) mode: the root is the JOB, not a process — annotate it
   // so it cannot be read as a parent process.
@@ -41447,7 +41461,7 @@ function freshnessStamp(date) {
  * @returns {string}
  */
 function provenanceLine(review) {
-  const sha7 = escapeCode(firstNonEmptyString(review.sha.slice(0, 7), "unknown"))
+  const sha7 = escapeCode(runtime_review_firstNonEmptyString(review.sha.slice(0, 7), "unknown"))
   const shaPart = isNonEmptyString(review.commitUrl)
     ? `commit [\`${sha7}\`](${review.commitUrl})`
     : `commit \`${sha7}\``
@@ -41695,9 +41709,9 @@ function renderNoRecord(input) {
     sha: String(isNonEmptyString(input.sha) ? input.sha : ""),
     permalink: "",
     appUrl: "",
-    docsUrl: firstNonEmptyString(input.docsUrl),
+    docsUrl: runtime_review_firstNonEmptyString(input.docsUrl),
     renderedAt: new Date(input.renderedAt),
-    commitUrl: firstNonEmptyString(input.commitUrl),
+    commitUrl: runtime_review_firstNonEmptyString(input.commitUrl),
     firstRun: input.firstRun !== false,
     appMode: false,
     jobs: [],
@@ -41799,13 +41813,13 @@ function normalizeProfileForReport(profile) {
     result: String(peer?.result ?? ""),
     detections: /** @type {unknown[]} */ (peer?.detections ?? peer?.Detections ?? []).filter(isNonEmptyString).map(String),
     remote_names: /** @type {unknown[]} */ (peer?.remote_names ?? peer?.RemoteNames ?? []).filter(isNonEmptyString).map(String),
-    remote_address: String(firstNonEmptyString(peer?.remote_address, peer?.RemoteAddress)),
+    remote_address: String(runtime_review_firstNonEmptyString(peer?.remote_address, peer?.RemoteAddress)),
     remote_port: toPortString(peer?.remote_ports ?? peer?.RemotePorts),
     proc_trees: /** @type {any[]} */ (peer?.proc_trees ?? peer?.ProcTrees ?? []).map(tree => ({
-      process: String(firstNonEmptyString(tree?.process, tree?.Process)),
-      command: String(firstNonEmptyString(tree?.arguments, tree?.Arguments)),
+      process: String(runtime_review_firstNonEmptyString(tree?.process, tree?.Process)),
+      command: String(runtime_review_firstNonEmptyString(tree?.arguments, tree?.Arguments)),
       pid: toPidString(tree?.pid, tree?.Pid),
-      step: String(firstNonEmptyString(tree?.github_step, tree?.GithubStep)),
+      step: String(runtime_review_firstNonEmptyString(tree?.github_step, tree?.GithubStep)),
       ancestry: /** @type {unknown[]} */ (tree?.ancestry ?? tree?.Ancestry ?? []).filter(isNonEmptyString).map(String),
     })),
   }))
@@ -41813,9 +41827,9 @@ function normalizeProfileForReport(profile) {
   const egress = p?.telemetry?.network?.egress ?? {}
   const rawAssertions = Array.isArray(p?.assertions) ? p.assertions : []
   const assertions = rawAssertions.map((/** @type {any} */ assertion) => ({
-    class_id: String(firstNonEmptyString(assertion?.class_id, assertion?.ClassId)),
-    id: String(firstNonEmptyString(assertion?.assertion_id, assertion?.id)),
-    result: String(firstNonEmptyString(assertion?.result, "unknown")),
+    class_id: String(runtime_review_firstNonEmptyString(assertion?.class_id, assertion?.ClassId)),
+    id: String(runtime_review_firstNonEmptyString(assertion?.assertion_id, assertion?.id)),
+    result: String(runtime_review_firstNonEmptyString(assertion?.result, "unknown")),
   }))
 
   return {
@@ -41983,7 +41997,7 @@ function assertionResultCell(result) {
   /** @type {Record<string, string>} */
   const markers = { PASS: "✅", FAIL: "🔴", ATTENTION: "🟡", WARN: "🟡", SKIP: "⚪", UNKNOWN: "⚪" }
   const marker = markers[enumValue] ?? "⚪"
-  return `${marker} \`${escapeMarkdownCell(firstNonEmptyString(enumValue, "UNKNOWN"))}\``
+  return `${marker} \`${escapeMarkdownCell(runtime_review_firstNonEmptyString(enumValue, "UNKNOWN"))}\``
 }
 
 /**
@@ -42008,14 +42022,14 @@ function networkEvidenceRows(p) {
     if (assertionPassed(peer.result)) continue
     const isLoopback = LOOPBACK_RE.test(peer.remote_names[0] ?? "") || LOOPBACK_RE.test(peer.remote_address)
     if (isLoopback) continue
-    const dest = firstNonEmptyString(peer.remote_names[0], peer.remote_address, "-")
+    const dest = runtime_review_firstNonEmptyString(peer.remote_names[0], peer.remote_address, "-")
     const proc = peer.proc_trees[0] ?? { process: "", command: "", pid: "", step: "", ancestry: [] }
     const detections = peer.detections.length > 0 ? peer.detections : ["flow"]
     for (const detection of detections) {
       rows.push([
         `\`${escapeMarkdownCell(detection)}\``,
         `\`${escapeMarkdownCell(dest)}\``,
-        `\`${escapeMarkdownCell(firstNonEmptyString(peer.remote_address, "-"))}\``,
+        `\`${escapeMarkdownCell(runtime_review_firstNonEmptyString(peer.remote_address, "-"))}\``,
         proc.process !== "" ? `\`${escapeMarkdownCell(proc.process)}\`` : "-",
         proc.command !== "" ? `\`${escapeMarkdownCell(proc.command)}\`` : "-",
         proc.step !== "" ? escapeMarkdownCell(proc.step) : "-",
@@ -42115,7 +42129,7 @@ function renderReportFooter(p, opts = {}) {
   // report URL (/public/runs/{run_id}?job={job}), derived from the run's own
   // id — report_link is only a fallback when the profile carries no run id
   // (legacy links may point at retired dashboard routes).
-  const permalink = stepSummaryPermalink(p, firstNonEmptyString(opts.appUrl, "https://app.garnet.ai"))
+  const permalink = stepSummaryPermalink(p, runtime_review_firstNonEmptyString(opts.appUrl, "https://app.garnet.ai"))
   const viewLink =
     permalink !== "" ? ` · <a href="${escapeHtmlAttr(permalink)}">${VOCAB.permalinkLabel}</a>` : ""
 

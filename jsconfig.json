@@ -1,4 +1,5 @@
 {
+  "$schema": "https://json.schemastore.org/jsconfig",
   "compilerOptions": {
     "allowJs": true,
     "checkJs": true,
@@ -12,15 +13,8 @@
     "module": "ESNext",
     "target": "ESNext",
     "moduleResolution": "Bundler",
-    "lib": [
-      "ESNext",
-    ]
+    "lib": ["ESNext"]
   },
-  "include": [
-    "src/**/*.js"
-  ],
-  "exclude": [
-    "node_modules",
-    "dist"
-  ]
+  "include": ["src/**/*.js"],
+  "exclude": ["node_modules", "dist"]
 }

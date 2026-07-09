@@ -13,12 +13,12 @@ import { CONTROL_PLANE_MARKERS, RUNTIME_REVIEW_MARKER } from "./runtime-review.j
  * @typedef {{
  *   kind: "create"
  *   body: string
- *   duplicateCommentIds: number[]
+ *   duplicateCommentIDs: number[]
  * } | {
  *   kind: "update"
  *   comment: PullRequestComment
  *   body: string
- *   duplicateCommentIds: number[]
+ *   duplicateCommentIDs: number[]
  * } | {
  *   kind: "stale"
  * } | {
@@ -54,7 +54,7 @@ export function planPullRequestComment(comments, profile, runAttempt, renderOpti
         return { kind: "stale" }
     }
 
-    const duplicateCommentIds = matchingComments.slice(0, -1).map(entry => entry.comment.id)
+    const duplicateCommentIDs = matchingComments.slice(0, -1).map(entry => entry.comment.id)
     const body = renderCommentBody(mergeResult.state, {
         ...renderOptions,
         firstRun: isFirstCommitLifecycle(comments, threadKey),
@@ -64,7 +64,7 @@ export function planPullRequestComment(comments, profile, runAttempt, renderOpti
         return {
             kind: "create",
             body,
-            duplicateCommentIds,
+            duplicateCommentIDs,
         }
     }
 
@@ -72,7 +72,7 @@ export function planPullRequestComment(comments, profile, runAttempt, renderOpti
         kind: "update",
         comment: primary.comment,
         body,
-        duplicateCommentIds,
+        duplicateCommentIDs,
     }
 }
 
