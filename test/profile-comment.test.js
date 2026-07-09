@@ -53,13 +53,14 @@ function stateFor(profile) {
 const worth = parseProfileJson(await loadProfileJson("worth-a-look-run.json"))
 const body = renderCommentBody(stateFor(worth), RENDER_OPTIONS)
 
-test("comment body: runtime-review marker first, then the action's state markers", () => {
+test("comment body: runtime-review markers first, then the action's state markers", () => {
     const lines = body.split("\n")
     assert.equal(lines[0], RUNTIME_REVIEW_MARKER)
     assert.equal(lines[1], COMMENT_MARKER)
-    assert.equal(lines[2], `<!-- ${ACTION_COMMENT_MARKER} -->`)
-    assert.ok(lines[3].startsWith(`<!-- ${COMMIT_MARKER_PREFIX}${worth.github.sha}`))
-    assert.ok(lines[4].startsWith("<!-- garnet-action-comment-state:"))
+    assert.equal(lines[2], `<!-- garnet:commit ${worth.github.sha} -->`)
+    assert.equal(lines[3], `<!-- ${ACTION_COMMENT_MARKER} -->`)
+    assert.ok(lines[4].startsWith(`<!-- ${COMMIT_MARKER_PREFIX}${worth.github.sha}`))
+    assert.ok(lines[5].startsWith("<!-- garnet-action-comment-state:"))
 })
 
 test("comment body: state marker round-trips through parseCommentState", () => {
@@ -85,16 +86,17 @@ test("comment body renders byte-identically to the reference render path", async
             jobs: [job],
         }),
     )
-    const markerPrefix = `${RUNTIME_REVIEW_MARKER}\n${COMMENT_MARKER}\n`
+    const markerPrefix = `${RUNTIME_REVIEW_MARKER}\n${COMMENT_MARKER}\n<!-- garnet:commit ${job.sha} -->\n`
     assert.ok(reference.startsWith(markerPrefix))
-    const content = body.split("\n").slice(5).join("\n")
+    const content = body.split("\n").slice(6).join("\n")
     assert.equal(content, reference.slice(markerPrefix.length))
 })
 
-test("comment body carries the v6.1 anatomy: ### heading, quoted meta, explainer, canonical tree", () => {
+test("comment body carries the v6.2 anatomy: ### heading, headline, quoted provenance, explainer, canonical tree", () => {
     assert.ok(body.includes("### Garnet Runtime Review"))
-    assert.match(body, /> \*commit \[`[0-9a-f]{7}`\]/)
-    assert.ok(body.includes("· 💡 how to read this"))
+    assert.ok(body.includes("**See what ran** — every process your jobs executed, and where they connected"))
+    assert.match(body, /> <sub>\*commit \[`[0-9a-f]{7}`\]/)
+    assert.ok(body.includes("💡 how to read this"))
     assert.ok(body.includes("<pre>"))
     assert.ok(!body.includes("````text"), "the canonical tree replaced the text fence")
     assert.ok(!body.includes("job log ↗"), "the separate run-link label is retired (A7)")
@@ -121,8 +123,8 @@ test("no control-plane comment: update path proceeds normally", () => {
     assert.equal(plan.kind, "update")
 })
 
-test("explainer opens through the first-commit lifecycle and collapses after (v6.1 §1.4)", () => {
-    const openExplainer = "<details open><summary><sub><i>What happened on this commit"
+test("explainer opens through the first-commit lifecycle and collapses after (v6.2 §1.4)", () => {
+    const openExplainer = "<details open><summary><sub>💡 how to read this"
 
     // First comment on the PR: firstRun — the explainer renders open.
     const createPlan = planPullRequestComment([], worth, 1, RENDER_OPTIONS)

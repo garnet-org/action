@@ -1,15 +1,29 @@
 <!-- garnet-runtime-review -->
 <!-- garnet-run-profile -->
+<!-- garnet:commit ef01a52517e7532ab34aadea58b952c9f1e79ece -->
 ### Garnet Runtime Review
-> *commit [`ef01a52`](https://github.com/garnet-org/runtime-review-testbed/commit/ef01a52517e7532ab34aadea58b952c9f1e79ece)* · *jobs recorded as of Jul 3 2026, 2:02 PM UTC*
+**See what ran** — every process your jobs executed, and where they connected
+
+> <sub>*commit [`ef01a52`](https://github.com/garnet-org/runtime-review-testbed/commit/ef01a52517e7532ab34aadea58b952c9f1e79ece) · recorded at the kernel · as of Jul 3 2026, 2:02 PM UTC*</sub>
+> <details><summary><sub>💡 how to read this</sub></summary>
 >
-> <details><summary><sub><i>What happened on this commit — each job's process tree and where it reached</i> · 💡 how to read this</sub></summary>
+> <sub><b>Each fold below is one CI job.</b> Its heading is <b>workflow / job ↗</b> — the job name links to its GitHub Actions run — followed by what Garnet's kernel-level sensor counted.</sub>
 >
-> <sub>Each row is one recorded CI job — <b>workflow / job ↗</b>, the job name linking to its GitHub Actions run — with the counts Garnet's sensor recorded at the kernel level. Open a job for its process tree: <b>bold</b> = a process the job ran, <i>italic</i> = runner scaffolding, <code>→</code> = destination reached. Notes like <i>(github infra)</i> mark platform plumbing; a bare IP means no domain was observed for that connection. Jobs that reached a destination unique to them in this commit start expanded; <i>View Run Profile in Garnet ↗</i> opens the full record.</sub>
+> <sub>Open a fold and read the tree top-down — exactly as it renders below:</sub>
+> <pre>
+> <i>Runner.Worker</i>                     ← italic = runner scaffolding
+>    └─ <b>bash</b>
+>       └─ <b>curl</b>                     ← bold = a process the job ran
+>          ├─ → httpbin.org         ← a place it reached
+>          └─ → localhost <i>(dns resolver)</i>  ← a note = expected plumbing
+> </pre>
+> <sub><i>Italics</i> are the runner's own scaffolding, not your code · a bare IP means no domain was observed for it · ×N = the same connection, N times · localhost lookups render in the tree but aren't counted as destinations · a job that reached a destination no other job reached starts open — a glance, not a verdict. For the full record, open <b>View Run Profile in Garnet ↗</b>.</sub>
 >
 > </details>
 
-<details open><summary><b><code>Garnet Runtime Review</code></b> / <a href="https://github.com/garnet-labs/runtime-review-testbed/actions/runs/28492112239"><b><code>runtime-review</code></b> ↗</a> — <i>9 processes · contacted 4 domains</i></summary>
+<sub><i>1 job recorded on this commit</i></sub>
+
+<details open><summary><b><code>Garnet Runtime Review</code></b> / <a href="https://github.com/garnet-labs/runtime-review-testbed/actions/runs/28492112239"><b><code>runtime-review</code></b> ↗</a> — <i>9 processes · reached 4 domains</i></summary>
 
 <br>
 

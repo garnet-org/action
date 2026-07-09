@@ -40335,8 +40335,13 @@ const RENDER_PHASES = {
  * verbatim; the spec gates in the test suite are coupled to this object.
  */
 const VOCAB = {
-  /** PR comment heading — the cross-job conversation surface. */
+  /** PR comment heading — standalone mode ONLY (the App-mode actor row
+   * `garnet-runtime-review[bot]` carries the brand, so App comments render
+   * headerless — v6.2 actor-conditional heading rule). */
   prCommentHeading: "Garnet Runtime Review",
+  /** v6.2 headline — the invariant ritual phrase, byte-locked. */
+  prHeadline:
+    "**See what ran** — every process your jobs executed, and where they connected",
   /** Step Summary heading — the per-run record surface. */
   stepSummaryHeading: "Garnet Runtime Summary",
   /** The one artifact name, everywhere. */
@@ -40529,6 +40534,7 @@ function isGithubOwnedIp(ip) {
  *   renderedAt: Date | null
  *   commitUrl: string
  *   firstRun: boolean
+ *   appMode: boolean
  *   jobs: ReviewJob[]
  *   notableJobs: Set<number>
  *   uniqueDests: Set<string>
@@ -40835,6 +40841,7 @@ function salienceComparator(uniqueDests) {
  *   docsUrl?: string
  *   expectedJobs?: number
  *   firstRun?: boolean
+ *   appMode?: boolean
  *   renderedAt?: string | Date
  *   jobs: Partial<JobRecord>[]
  * }} input
@@ -40921,6 +40928,10 @@ function runtime_review_buildRunReview(input) {
     renderedAt: input.renderedAt !== undefined && input.renderedAt !== null && input.renderedAt !== "" ? new Date(input.renderedAt) : null,
     commitUrl: firstNonEmptyString(input.commitUrl),
     firstRun: input.firstRun === true,
+    // v6.2 actor-conditional heading: App mode (garnet-runtime-review[bot])
+    // renders headerless — the actor row is the brand; standalone
+    // (github-actions[bot]) keeps the h3 title.
+    appMode: input.appMode === true,
     jobs,
     notableJobs,
     uniqueDests,
@@ -41361,7 +41372,7 @@ function jobSummaryLine(job, uniqueDests = new Set(), opts = {}) {
   const { processes, domains, destinations, allNamed } = jobTrueCounts(reviewJob)
   if (destinations === 0) {
     // Resolver-stub-only traffic (§1.5/A8): the dns leaf is uncounted, so
-    // the row states the fact — never "contacted 0 domains".
+    // the row states the fact — never "reached 0 domains".
     return `${ident} — no outbound connections.`
   }
   /** @type {string[]} */
@@ -41369,8 +41380,8 @@ function jobSummaryLine(job, uniqueDests = new Set(), opts = {}) {
   if (processes > 0) parts.push(`${processes} process${processes === 1 ? "" : "es"}`)
   parts.push(
     allNamed
-      ? `contacted ${domains} domain${domains === 1 ? "" : "s"}`
-      : `contacted ${destinations} destination${destinations === 1 ? "" : "s"}`,
+      ? `reached ${domains} domain${domains === 1 ? "" : "s"}`
+      : `reached ${destinations} destination${destinations === 1 ? "" : "s"}`,
   )
   const counts = parts.join(" · ")
   const telemetry = opts.html === true ? `<i>${counts}</i>` : `*${counts}*`
@@ -41410,8 +41421,8 @@ function jobRunProfileUrl(job, appUrl, opts = {}) {
 }
 
 /**
- * §1.2 — absolute-UTC freshness stamp with the year (comments outlive their
- * year): `jobs recorded as of Jul 8 2026, 5:36 AM UTC`.
+ * §1.2 — absolute-UTC freshness stamp date with the year (comments outlive
+ * their year): `Jul 8 2026, 5:36 AM UTC`.
  * @param {Date} date
  * @returns {string}
  */
@@ -41420,65 +41431,55 @@ function freshnessStamp(date) {
   const h12 = date.getUTCHours() % 12 === 0 ? 12 : date.getUTCHours() % 12
   const ampm = date.getUTCHours() >= 12 ? "PM" : "AM"
   const mm = String(date.getUTCMinutes()).padStart(2, "0")
-  return `jobs recorded as of ${MONTHS[date.getUTCMonth()]} ${date.getUTCDate()} ${date.getUTCFullYear()}, ${h12}:${mm} ${ampm} UTC`
+  return `${MONTHS[date.getUTCMonth()]} ${date.getUTCDate()} ${date.getUTCFullYear()}, ${h12}:${mm} ${ampm} UTC`
 }
 
 /**
- * §1.2 — canonical meta line, self-describing: *commit [`{sha}`](commit-url)*
- * · **{k} of {n} jobs recorded (only on a gap)** · *{w} workflows (when
- * w > 1)* · *jobs recorded as of {stamp}*. Timestamps absolute UTC, never
- * relative. No repo name, no permalink here.
+ * §1.2 — canonical provenance line (v6.2), a `<sub>` coordinates stamp:
+ * *commit [`{sha}`](commit-url) · recorded at the kernel · as of {Mon D
+ * YYYY}, {h:MM} {AM|PM} UTC*. The sha is a pure reference (the trigger),
+ * "recorded at the kernel" names the vantage point, "as of" carries the
+ * update-in-place freshness semantics. Waiting state (jobs = 0) swaps the
+ * middle segment for the fact: *no jobs recorded yet as of …*. Coverage
+ * fraction and the workflows qualifier live in the jobs-count line (§1.5a),
+ * never here.
  * @param {RunReview} review
- * @param {{ runProfile?: boolean }} [opts]
  * @returns {string}
  */
-function metaLine(review, { runProfile = false } = {}) {
+function provenanceLine(review) {
   const sha7 = escapeCode(firstNonEmptyString(review.sha.slice(0, 7), "unknown"))
   const shaPart = isNonEmptyString(review.commitUrl)
     ? `commit [\`${sha7}\`](${review.commitUrl})`
     : `commit \`${sha7}\``
-  // Coverage only carries signal when there is a gap — a complete run's job
-  // list speaks for itself, so the fraction drops and the meta line quiets
-  // to sha · stamp.
-  const complete = review.counts.expectedJobs > 0 && review.counts.jobs >= review.counts.expectedJobs
-  const parts = [`*${shaPart}*`]
-  // Waiting state (jobs = 0): no coverage fraction — a 0-of-n reads as a
-  // score. One italic phrase carries both the fact and the stamp (§2).
-  if (review.counts.jobs === 0 && review.renderedAt !== null) {
-    parts.push(`*no ${freshnessStamp(review.renderedAt).replace("recorded as of", "recorded yet as of")}*`)
-    return parts.join(" · ")
-  }
-  if (!complete) {
+  const parts = [shaPart]
+  if (review.counts.jobs === 0) {
     parts.push(
-      review.counts.expectedJobs === 0
-        ? `**${review.counts.jobs} jobs recorded yet**`
-        : `**${review.counts.jobs} of ${review.counts.expectedJobs} job${review.counts.expectedJobs === 1 ? "" : "s"} recorded**`,
+      review.renderedAt !== null ? `no jobs recorded yet as of ${freshnessStamp(review.renderedAt)}` : "no jobs recorded yet",
     )
+  } else {
+    parts.push("recorded at the kernel")
+    if (review.renderedAt !== null) parts.push(`as of ${freshnessStamp(review.renderedAt)}`)
   }
-  if (review.counts.workflows > 1) parts.push(`*${review.counts.workflows} workflows*`)
-  if (review.renderedAt !== null) parts.push(`*${freshnessStamp(review.renderedAt)}*`)
-  if (runProfile && isNonEmptyString(review.permalink) && !/github\.com\/[^ ]*\/actions\//.test(review.permalink)) {
-    parts.push(`[${VOCAB.permalinkLabel}](${review.permalink})`)
-  }
-  return parts.join(" · ")
+  return `<sub>*${parts.join(" · ")}*</sub>`
 }
 
 /**
- * Shared header lines: markers (optional), `###` title, quoted meta line.
- * The explainer (rendered by callers) continues this quote block — no blank
- * line after the meta line, so the preamble reads as one block (§1.3).
+ * Shared header lines (v6.2): markers (optional), the standalone-only h3
+ * title (App mode is headerless — the `garnet-runtime-review[bot]` actor row
+ * carries the brand), the full-contrast headline, then the quoted provenance
+ * line. The explainer (rendered by callers) continues the quote block with
+ * no blank line between, so provenance + 💡 fold read as ONE railed block.
  * @param {RunReview} review
- * @param {{ markers: boolean, headline?: boolean, runProfile?: boolean }} opts
+ * @param {{ markers: boolean }} opts
  * @returns {string[]}
  */
-function renderHeader(review, { markers, headline = false, runProfile = true }) {
+function renderHeader(review, { markers }) {
   const lines = markers ? [runtime_review_RUNTIME_REVIEW_MARKER, runtime_review_COMMENT_MARKER] : []
-  lines.push(`### ${VOCAB.prCommentHeading}`)
-  lines.push(`> ${metaLine(review, { runProfile })}`)
-  if (headline) {
-    lines.push(review.salience.headline)
-    lines.push("")
-  }
+  if (markers && isNonEmptyString(review.sha)) lines.push(`<!-- garnet:commit ${review.sha} -->`)
+  if (!review.appMode) lines.push(`### ${VOCAB.prCommentHeading}`)
+  lines.push(VOCAB.prHeadline)
+  lines.push("")
+  lines.push(`> ${provenanceLine(review)}`)
   return lines
 }
 
@@ -41493,13 +41494,41 @@ function renderHeader(review, { markers, headline = false, runProfile = true }) 
  */
 function renderExplainer(review) {
   return [
+    `> <details${review.firstRun === true ? " open" : ""}><summary><sub>💡 how to read this</sub></summary>`,
     ">",
-    `> <details${review.firstRun === true ? " open" : ""}><summary><sub><i>What happened on this commit — each job's process tree and where it reached</i> · 💡 how to read this</sub></summary>`,
+    "> <sub><b>Each fold below is one CI job.</b> Its heading is <b>workflow / job ↗</b> — the job name links to its GitHub Actions run — followed by what Garnet's kernel-level sensor counted.</sub>",
     ">",
-    "> <sub>Each row is one recorded CI job — <b>workflow / job ↗</b>, the job name linking to its GitHub Actions run — with the counts Garnet's sensor recorded at the kernel level. Open a job for its process tree: <b>bold</b> = a process the job ran, <i>italic</i> = runner scaffolding, <code>→</code> = destination reached. Notes like <i>(github infra)</i> mark platform plumbing; a bare IP means no domain was observed for that connection. Jobs that reached a destination unique to them in this commit start expanded; <i>View Run Profile in Garnet ↗</i> opens the full record.</sub>",
+    "> <sub>Open a fold and read the tree top-down — exactly as it renders below:</sub>",
+    "> <pre>",
+    "> <i>Runner.Worker</i>                     ← italic = runner scaffolding",
+    ">    └─ <b>bash</b>",
+    ">       └─ <b>curl</b>                     ← bold = a process the job ran",
+    ">          ├─ → httpbin.org         ← a place it reached",
+    ">          └─ → localhost <i>(dns resolver)</i>  ← a note = expected plumbing",
+    "> </pre>",
+    "> <sub><i>Italics</i> are the runner's own scaffolding, not your code · a bare IP means no domain was observed for it · ×N = the same connection, N times · localhost lookups render in the tree but aren't counted as destinations · a job that reached a destination no other job reached starts open — a glance, not a verdict. For the full record, open <b>View Run Profile in Garnet ↗</b>.</sub>",
     ">",
     "> </details>",
   ].join("\n")
+}
+
+/**
+ * §1.5a — the jobs-count line: one thin `<sub>` line between the railed
+ * preamble and the first job fold. It is the list opener (the visual
+ * boundary two adjacent <details> toggles need) AND the coverage surface:
+ * `{k} of {n}` only when there is a gap, `across {w} workflows` only when
+ * w > 1. Never renders in the waiting state (no list to open).
+ * @param {RunReview} review
+ * @returns {string}
+ */
+function jobsCountLine(review) {
+  const { jobs, expectedJobs, workflows } = review.counts
+  if (jobs === 0) return ""
+  const gap = expectedJobs > jobs
+  const n = gap ? expectedJobs : jobs
+  const count = gap ? `${jobs} of ${expectedJobs}` : `${jobs}`
+  const wf = workflows > 1 ? ` across ${workflows} workflows` : ""
+  return `<sub><i>${count} job${n === 1 ? "" : "s"}${wf} recorded on this commit</i></sub>`
 }
 
 /**
@@ -41609,8 +41638,10 @@ function runtime_review_renderRunReview(review) {
   // explicit aggregate line. Nothing ever disappears silently.
   const steps = review.jobs.length * 2
   for (let attempts = 0; attempts <= steps; attempts += 1) {
-    const lines = renderHeader(review, { markers: true, headline: false, runProfile: false })
+    const lines = renderHeader(review, { markers: true })
     lines.push(renderExplainer(review))
+    lines.push("")
+    lines.push(jobsCountLine(review))
     lines.push("")
     for (const job of review.jobs) {
       if (omittedIds.has(job.id)) continue
@@ -41668,6 +41699,7 @@ function renderNoRecord(input) {
     renderedAt: new Date(input.renderedAt),
     commitUrl: firstNonEmptyString(input.commitUrl),
     firstRun: input.firstRun !== false,
+    appMode: false,
     jobs: [],
     notableJobs: new Set(),
     uniqueDests: new Set(),
@@ -41675,7 +41707,7 @@ function renderNoRecord(input) {
     salience: { rule: "R3", jobRungs: new Map(), salientJobs: [], salientKey: "", headline: "" },
     counts: { jobs: 0, expectedJobs: expected, workflows: 0, domains: 0, connections: 0 },
   }
-  const lines = renderHeader(noRecord, { markers: false, headline: false, runProfile: false })
+  const lines = renderHeader(noRecord, { markers: false })
   lines.push(renderExplainer(noRecord))
   lines.push("")
   lines.push("⏳ Run Profiles for this commit are still being recorded — this comment updates in place as jobs finish.")
@@ -41698,8 +41730,9 @@ function renderNoRecord(input) {
  * Render the GitHub Step Summary (`Garnet Runtime Summary`): the full-detail
  * tabular report, one per raw parsed Jibril profile.
  * @param {unknown[]} profiles raw parsed Jibril profiles
- * @param {{ appUrl?: string }} [opts] appUrl backs the permalink fallback
- *   when a profile carries no report_link
+ * @param {{ appUrl?: string, preview?: boolean }} [opts] appUrl backs the
+ *   permalink fallback when a profile carries no report_link; preview gates
+ *   the assertions record (§8.5)
  * @returns {string}
  */
 function renderStepSummary(profiles, opts = {}) {
@@ -41708,34 +41741,39 @@ function renderStepSummary(profiles, opts = {}) {
 
 /**
  * @param {unknown} profile
- * @param {{ appUrl?: string }} [opts]
+ * @param {{ appUrl?: string, preview?: boolean }} [opts]
  * @returns {string}
  */
 function renderProfileReport(profile, opts = {}) {
   const p = normalizeProfileForReport(profile)
-  return [
+  const sections = [
     `### ${VOCAB.stepSummaryHeading}`,
     "",
     renderWorkloadSection(p),
     "",
     renderNetworkSection(p),
-    "",
-    renderAssertionSection(p),
-    "",
-    renderReportFooter(p, opts),
-  ].join("\n")
+  ]
+  // Assertions (and their evidence) are preview-gated: the prod default is
+  // the observation-only record — no status vocabulary anywhere.
+  if (opts.preview === true) {
+    sections.push("", renderAssertionSection(p))
+  }
+  sections.push("", renderReportFooter(p, opts))
+  return sections.join("\n")
 }
 
 /**
- * @typedef {{ process: string, command: string, pid: string, ancestry: string[] }} ReportProcTree
+ * @typedef {{ process: string, command: string, pid: string, step: string, ancestry: string[] }} ReportProcTree
  * @typedef {{
  *   result: string,
  *   detections: string[],
  *   remote_names: string[],
  *   remote_address: string,
+ *   remote_port: string,
  *   proc_trees: ReportProcTree[],
  * }} ReportPeer
  * @typedef {{
+ *   uuid: string,
  *   github: { workflow: string, repository: string, ref: string, sha: string,
  *             actor: string, run_id: string, job: string },
  *   egress_peers: ReportPeer[],
@@ -41762,10 +41800,12 @@ function normalizeProfileForReport(profile) {
     detections: /** @type {unknown[]} */ (peer?.detections ?? peer?.Detections ?? []).filter(isNonEmptyString).map(String),
     remote_names: /** @type {unknown[]} */ (peer?.remote_names ?? peer?.RemoteNames ?? []).filter(isNonEmptyString).map(String),
     remote_address: String(firstNonEmptyString(peer?.remote_address, peer?.RemoteAddress)),
+    remote_port: toPortString(peer?.remote_ports ?? peer?.RemotePorts),
     proc_trees: /** @type {any[]} */ (peer?.proc_trees ?? peer?.ProcTrees ?? []).map(tree => ({
       process: String(firstNonEmptyString(tree?.process, tree?.Process)),
       command: String(firstNonEmptyString(tree?.arguments, tree?.Arguments)),
       pid: toPidString(tree?.pid, tree?.Pid),
+      step: String(firstNonEmptyString(tree?.github_step, tree?.GithubStep)),
       ancestry: /** @type {unknown[]} */ (tree?.ancestry ?? tree?.Ancestry ?? []).filter(isNonEmptyString).map(String),
     })),
   }))
@@ -41779,6 +41819,7 @@ function normalizeProfileForReport(profile) {
   }))
 
   return {
+    uuid: String(p?.uuid ?? ""),
     github: {
       workflow: String(github.workflow ?? ""),
       repository: String(github.repository ?? ""),
@@ -41813,24 +41854,43 @@ function toPidString(pid, pidAlt) {
 }
 
 /**
+ * First recorded remote port, as a string; empty when absent (mirrors the
+ * reference renderer's `(peer?.remote_ports || [])[0]` rule).
+ * @param {unknown} ports
+ * @returns {string}
+ */
+function toPortString(ports) {
+  if (!Array.isArray(ports) || ports.length === 0) return ""
+  const first = ports[0]
+  if (first === null || first === undefined || first === "") return ""
+  return String(first)
+}
+
+/**
  * @param {ReportProfile} p
  * @returns {string}
  */
 function renderWorkloadSection(p) {
   const github = p.github
-  const empty = Object.values(github).every(value => value === "")
+  const empty = p.uuid === "" && Object.values(github).every(value => value === "")
   if (empty) {
     return ["#### Workload Summary", "", "No workload information available."].join("\n")
   }
 
-  const table = renderKeyValueTable([
+  /** @type {[string, string][]} */
+  const entries = []
+  if (p.uuid !== "") {
+    entries.push(["Garnet Profile UUID", p.uuid])
+  }
+  entries.push(
     ["Workflow", github.workflow],
     ["Repository", github.repository],
     ["Branch", github.ref],
     ["Commit", github.sha],
     ["Triggered by", github.actor],
     ["Run ID / Job", formatRunJob(github.run_id, github.job)],
-  ])
+  )
+  const table = renderKeyValueTable(entries)
 
   return ["#### Workload Summary", "", table].join("\n")
 }
@@ -41844,11 +41904,12 @@ function renderNetworkSection(p) {
     (n, peer) => n + peer.remote_names.filter(name => name !== "" && !runtime_review_isAddressLike(name)).length,
     0,
   )
+  const flows = p.egress_peers.length
   const telemetrySentence = `Network telemetry observed ${p.telemetry.total_domains} unique domain${
     p.telemetry.total_domains === 1 ? "" : "s"
-  }, ${totalDestinations} destination${totalDestinations === 1 ? "" : "s"}, and ${
+  }, ${totalDestinations} destination${totalDestinations === 1 ? "" : "s"}, ${
     p.telemetry.total_connections
-  } connection${p.telemetry.total_connections === 1 ? "" : "s"}.`
+  } connection${p.telemetry.total_connections === 1 ? "" : "s"}, and ${flows} flow${flows === 1 ? "" : "s"}.`
 
   const hasNetworkData =
     p.egress_peers.length > 0 || p.telemetry.total_domains > 0 || p.telemetry.total_connections > 0
@@ -41856,61 +41917,43 @@ function renderNetworkSection(p) {
     return ["#### Network Egress Summary", "", "No network information available."].join("\n")
   }
 
-  // Lineage-tree-first grouping (§8.3): one row per process tree (the
-  // uniqueness key), carrying the deterministic set of destinations it
-  // reached (first-seen order, deduped). When the sensor records a PID it
-  // joins the uniqueness key — the same lineage under two PIDs keeps two
-  // rows — and renders subordinate next to the tree.
-  /** @type {Map<string, { tree: string, pid: string, dests: Map<string, { addrs: string[], count: number }> }>} */
-  const byTree = new Map()
+  // Destination-first, faithful to the profile (§8.3): one row per recorded
+  // destination, in the profile's own `network.egress.peers[]` order — no
+  // re-sort, no dedupe-and-omit. Jibril bundles the resolved address into
+  // `remote_names`; drop address-shaped entries so a destination reads as its
+  // domain; an address-only peer (no DNS name) falls back to the recorded
+  // address. A peer with several recorded process trees keeps them all,
+  // <br>-stacked in the one row; a recorded PID renders code-styled next to
+  // its own tree.
+  /** @type {string[][]} */
+  const rows = []
   for (const peer of p.egress_peers) {
-    // Jibril bundles the resolved address into `remote_names`; drop
-    // address-shaped entries so a destination reads as its domain, with the
-    // recorded address kept in parentheses next to it. When a peer is
-    // address-only (no DNS name), fall back to the recorded address.
     const namedDests = peer.remote_names.filter(name => name !== "" && !runtime_review_isAddressLike(name))
     const dests = namedDests.length > 0 ? namedDests : peer.remote_address !== "" ? [peer.remote_address] : []
-    const treeEntries = peer.proc_trees
-      .map(t => ({ tree: renderReportProcessTree(t), pid: t.pid !== "" ? String(t.pid) : "" }))
-      .filter(t => t.tree.length > 0)
-    const treeKeys = treeEntries.length > 0 ? treeEntries : [{ tree: "-", pid: "" }]
-    for (const { tree, pid } of treeKeys) {
-      const key = `${tree}\u0000${pid}`
-      let entry = byTree.get(key)
-      if (entry === undefined) {
-        entry = { tree, pid, dests: new Map() }
-        byTree.set(key, entry)
-      }
-      for (const dest of dests) {
-        let rec = entry.dests.get(dest)
-        if (rec === undefined) {
-          rec = { addrs: [], count: 0 }
-          entry.dests.set(dest, rec)
+    const treeCells = peer.proc_trees
+      .map(t => {
+        const tree = renderReportProcessTree(t)
+        if (tree.length === 0) {
+          return ""
         }
-        rec.count += 1
-        const addr = peer.remote_address
-        if (addr !== "" && addr !== dest && !rec.addrs.includes(addr)) rec.addrs.push(addr)
-      }
+        return t.pid !== "" ? `${tree} \`(pid ${escapeMarkdownCell(String(t.pid))})\`` : tree
+      })
+      .filter(cell => cell.length > 0)
+    const treeCell = treeCells.length > 0 ? treeCells.join("<br>") : "-"
+    for (const dest of dests) {
+      rows.push([`\`${escapeMarkdownCell(dest)}\``, treeCell])
     }
   }
 
-  // ×N appears only when the recorded connection count is not already told
-  // by the listed addresses (two IPs shown ⇒ two connections is implied).
-  /** @type {(dest: string, rec: { addrs: string[], count: number }) => string} */
-  const destCell = (dest, rec) =>
-    `\`${escapeMarkdownCell(dest)}\`${rec.addrs.length > 0 ? ` (${rec.addrs.map(escapeMarkdownCell).join(", ")})` : ""}${rec.count > 1 && rec.count !== rec.addrs.length ? ` ×${rec.count}` : ""}`
-  const rows = [...byTree.values()].map(entry => [
-    entry.tree === "-" ? "-" : entry.pid !== "" ? `${entry.tree} <sub>pid ${escapeMarkdownCell(entry.pid)}</sub>` : entry.tree,
-    entry.dests.size > 0 ? [...entry.dests.entries()].map(([dest, rec]) => destCell(dest, rec)).join(", ") : "-",
-  ])
-
   const egressTable =
-    rows.length > 0 ? renderTable(["Lineage Tree", "Destinations"], rows) : "No egress peers information available."
+    rows.length > 0
+      ? renderTable(["Destination", "Process Tree"], rows)
+      : "No egress peers information available."
 
   return [
     "#### Network Egress Summary",
     "",
-    "Destinations are grouped by lineage tree.",
+    "One row per recorded destination, in the profile's own order.",
     "",
     egressTable,
     "",
@@ -41966,7 +42009,7 @@ function networkEvidenceRows(p) {
     const isLoopback = LOOPBACK_RE.test(peer.remote_names[0] ?? "") || LOOPBACK_RE.test(peer.remote_address)
     if (isLoopback) continue
     const dest = firstNonEmptyString(peer.remote_names[0], peer.remote_address, "-")
-    const proc = peer.proc_trees[0] ?? { process: "", command: "", pid: "", ancestry: [] }
+    const proc = peer.proc_trees[0] ?? { process: "", command: "", pid: "", step: "", ancestry: [] }
     const detections = peer.detections.length > 0 ? peer.detections : ["flow"]
     for (const detection of detections) {
       rows.push([
@@ -41975,6 +42018,7 @@ function networkEvidenceRows(p) {
         `\`${escapeMarkdownCell(firstNonEmptyString(peer.remote_address, "-"))}\``,
         proc.process !== "" ? `\`${escapeMarkdownCell(proc.process)}\`` : "-",
         proc.command !== "" ? `\`${escapeMarkdownCell(proc.command)}\`` : "-",
+        proc.step !== "" ? escapeMarkdownCell(proc.step) : "-",
       ])
     }
   }
@@ -41982,20 +42026,24 @@ function networkEvidenceRows(p) {
 }
 
 /**
- * §8.5 — assertions behind a collapsed-by-default `Assertions · beta` fold:
- * `Class | Check | Result | Evidence` with marker + verbatim enum cells,
- * plus a nested evidence fold for non-passing network checks built from the
- * profile's recorded evidence fields. Status markers appear ONLY here, on
- * either surface.
+ * §8.5 — assertions behind a collapsed-by-default `Assertions` fold —
+ * preview mode only (the prod default record carries no assertions,
+ * evidence, or status vocabulary): `Class | Assertion | Check | Result |
+ * Evidence` with the verbatim assertion_id and marker + verbatim enum cells,
+ * plus an `Evidence · {assertion_id}` fold for every assertion carrying
+ * events, built from the profile's recorded evidence fields. Status markers
+ * appear ONLY here, on either surface.
  * @param {ReportProfile} p
  * @returns {string}
  */
 function renderAssertionSection(p) {
   if (p.assertions.length === 0) {
-    return "<details><summary><strong>Assertions</strong> · beta</summary>\n\nNo assertions information available.\n\n</details>"
+    return "<details><summary><strong>Assertions</strong></summary>\n\nNo assertions information available.\n\n</details>"
   }
 
   const evidenceRows = networkEvidenceRows(p)
+  /** @type {{ id: string, rows: string[][] }[]} */
+  const evidenceFolds = []
   const rows = p.assertions.map(assertion => {
     // Curated check text is trusted static markdown (intentional `code`
     // spans), so it is passed through un-escaped; only the dynamic id
@@ -42003,8 +42051,10 @@ function renderAssertionSection(p) {
     const check = ASSERTION_CHECKS[assertion.id] ?? escapeMarkdownCell(displayValue(assertion.id, "-"))
     const isNetwork = assertion.class_id === "Network Egress"
     const count = isNetwork && !assertionPassed(assertion.result) ? evidenceRows.length : 0
+    if (count > 0) evidenceFolds.push({ id: assertion.id, rows: evidenceRows })
     return [
       escapeMarkdownCell(displayValue(assertion.class_id, "-")),
+      `\`${escapeMarkdownCell(displayValue(assertion.id, "-"))}\``,
       check,
       assertionResultCell(assertion.result),
       `${count} event${count === 1 ? "" : "s"}`,
@@ -42012,18 +42062,17 @@ function renderAssertionSection(p) {
   })
 
   const parts = [
-    "<details><summary><strong>Assertions</strong> · beta</summary>",
+    "<details><summary><strong>Assertions</strong></summary>",
     "",
-    renderTable(["Class", "Check", "Result", "Evidence"], rows),
+    renderTable(["Class", "Assertion", "Check", "Result", "Evidence"], rows),
   ]
 
-  if (evidenceRows.length > 0) {
-    const check = ASSERTION_CHECKS.no_bad_egress_domain ?? ""
+  for (const fold of evidenceFolds) {
     parts.push(
       "",
-      `<details><summary>Evidence · ${escapeHtml(check)}</summary>`,
+      `<details><summary>Evidence · <code>${escapeHtml(fold.id)}</code></summary>`,
       "",
-      renderTable(["Event Type", "Destination", "Remote Address", "Process", "Command"], evidenceRows),
+      renderTable(["Event Type", "Destination", "Remote Address", "Process", "Command", "Step"], fold.rows),
       "",
       "</details>",
     )
@@ -42035,8 +42084,8 @@ function renderAssertionSection(p) {
 
 /**
  * §8.6 — footer: right-aligned identity line, then `Powered by Garnet` +
- * the single garnet permalink (profile `report_link` when present, else
- * derived from the run's own id — run-level, no `?job=`).
+ * the single garnet permalink (the canonical public per-job report URL
+ * derived from the run's own id; profile `report_link` only as fallback).
  * @param {ReportProfile} p
  * @param {{ appUrl?: string }} [opts]
  * @returns {string}
@@ -42062,16 +42111,31 @@ function renderReportFooter(p, opts = {}) {
   }
 
   const header = parts.join(" · ")
-  // The one garnet permalink for this run: the wired-up report_link when the
-  // control plane provided it, else derived from the run's own id.
-  const permalink =
-    p.report_link !== ""
-      ? p.report_link
-      : runtime_review_derivePermalink("", [{ run_id: p.github.run_id }], firstNonEmptyString(opts.appUrl, "https://app.garnet.ai"))
+  // The one garnet permalink for this run: the canonical public per-job
+  // report URL (/public/runs/{run_id}?job={job}), derived from the run's own
+  // id — report_link is only a fallback when the profile carries no run id
+  // (legacy links may point at retired dashboard routes).
+  const permalink = stepSummaryPermalink(p, firstNonEmptyString(opts.appUrl, "https://app.garnet.ai"))
   const viewLink =
     permalink !== "" ? ` · <a href="${escapeHtmlAttr(permalink)}">${VOCAB.permalinkLabel}</a>` : ""
 
   return `<div align="right"><sub>${header}</sub><br><b>Powered by Garnet</b>${viewLink}</div>`
+}
+
+/**
+ * Canonical Step Summary permalink: the public per-job report URL, matching
+ * the PR comment's route family with this surface's own utm_medium.
+ * @param {ReportProfile} p
+ * @param {string} appUrl
+ * @returns {string}
+ */
+function stepSummaryPermalink(p, appUrl) {
+  if (p.github.run_id !== "" && appUrl !== "") {
+    const base = `${appUrl}/public/runs/${encodeURIComponent(p.github.run_id)}`
+    const job = p.github.job !== "" ? `?job=${encodeURIComponent(p.github.job)}&` : "?"
+    return `${base}${job}utm_source=github&utm_medium=action_summary`
+  }
+  return p.report_link
 }
 
 /**
@@ -42548,7 +42612,11 @@ function renderCommentBody(state, options = {}) {
     const review = buildProfileRunReview(profiles, options)
     const reviewBody = renderRunReview(review)
 
-    const markerPrefix = `${RUNTIME_REVIEW_MARKER}\n${COMMENT_MARKER}\n`
+    // v6.2 marker block: canonical marker, self marker, then the commit
+    // marker `<!-- garnet:commit {full sha} -->` (all emitted by the
+    // renderer), followed by the action's own state markers.
+    const commitMarker = commitSha !== "" ? `<!-- garnet:commit ${commitSha} -->\n` : ""
+    const markerPrefix = `${RUNTIME_REVIEW_MARKER}\n${COMMENT_MARKER}\n${commitMarker}`
     if (!reviewBody.startsWith(markerPrefix)) {
         throw new Error("rendered review body is missing the runtime-review markers")
     }
@@ -42556,6 +42624,7 @@ function renderCommentBody(state, options = {}) {
     return [
         RUNTIME_REVIEW_MARKER,
         COMMENT_MARKER,
+        ...(commitSha !== "" ? [`<!-- garnet:commit ${commitSha} -->`] : []),
         `<!-- ${ACTION_COMMENT_MARKER} -->`,
         `<!-- ${COMMIT_MARKER_PREFIX}${commitSha} -->`,
         `<!-- ${COMMENT_STATE_MARKER_PREFIX}${metadata} -->`,
@@ -42996,6 +43065,11 @@ async function main() {
         // Save debug state for later retrieval.
         const debug = getInput("debug") === "true"
         saveState("debug", debug ? "true" : "")
+
+        // Preview gates the Step Summary's assertions record (§8.5); the
+        // prod default renders the observation-only record.
+        const preview = getInput("preview") === "true"
+        saveState("preview", preview ? "true" : "")
 
         const githubToken = getInput("github_token")
         saveState("githubToken", githubToken)

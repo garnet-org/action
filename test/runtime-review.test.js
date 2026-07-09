@@ -124,18 +124,22 @@ for (const [name, md] of Object.entries({ ...STATES, canary: CANARY })) {
         assert.ok(md.startsWith(RUNTIME_REVIEW_MARKER), "starts with the canonical marker")
         assert.ok(md.includes(COMMENT_MARKER), "carries the self-marker (takeover window)")
     })
-    test(`[${name}] anatomy: title + quoted meta line (§1.2)`, () => {
+    test(`[${name}] anatomy: title (standalone) + v6.2 headline + quoted provenance line (§1.2)`, () => {
         assert.ok(md.includes("### Garnet Runtime Review"))
-        // Coverage fraction appears only when there is a gap (k < n).
+        assert.ok(md.includes(VOCAB.prHeadline), "the invariant headline renders verbatim")
+        // Coverage fraction never renders here — it lives in the jobs-count line.
         assert.match(
             md,
-            /> \*commit \[`[0-9a-f]{7}`\]\(https:\/\/github\.com\/[^)]+\/commit\/[^)]+\)\* · (\*\*\d+ (of \d+ )?jobs? recorded( yet)?\*\* · )?(\*\d+ workflows\* · )?\*(no )?jobs recorded( yet)? as of [A-Z][a-z]{2} \d{1,2} \d{4}, \d{1,2}:\d{2} (AM|PM) UTC\*/,
+            /> <sub>\*commit \[`[0-9a-f]{7}`\]\(https:\/\/github\.com\/[^)]+\/commit\/[^)]+\) · (recorded at the kernel · as of|no jobs recorded yet as of) [A-Z][a-z]{2} \d{1,2} \d{4}, \d{1,2}:\d{2} (AM|PM) UTC\*<\/sub>/,
         )
     })
     test(`[${name}] no banned vocabulary or status glyphs`, () => {
-        const hit = md.match(BANNED_WORDS_RE)
+        // The explainer's locked disclaimer "— a glance, not a verdict" is the one
+        // sanctioned use: it disclaims a verdict rather than issuing one.
+        const scanned = md.replaceAll("— a glance, not a verdict.", "")
+        const hit = scanned.match(BANNED_WORDS_RE)
         assert.ok(!hit, `found banned word "${hit && hit[0]}"`)
-        assert.ok(!BANNED_GLYPHS_RE.test(md), "found a status glyph")
+        assert.ok(!BANNED_GLYPHS_RE.test(scanned), "found a status glyph")
     })
     test(`[${name}] no tables, images, svg, color styling, or repo name in meta`, () => {
         assert.ok(!/^\s*\|/m.test(md), "markdown table found")
@@ -172,7 +176,7 @@ for (const [name, md] of Object.entries(STATES)) {
     test(`[${name}] fold heading = workflow / linked job name (bold, run href, no run number) + italic true counts ending at domains (§1.5)`, () => {
         assert.match(
             md,
-            /<details(?: open)?><summary><b><code>[^<]+<\/code><\/b> \/ <a href="https:\/\/github\.com\/[^"]+\/actions\/runs\/\d+"><b><code>[\w-]+<\/code><\/b> ↗<\/a> — <i>\d+ processes? · contacted \d+ (domains?|destinations?)<\/i><\/summary>/,
+            /<details(?: open)?><summary><b><code>[^<]+<\/code><\/b> \/ <a href="https:\/\/github\.com\/[^"]+\/actions\/runs\/\d+"><b><code>[\w-]+<\/code><\/b> ↗<\/a> — <i>\d+ processes? · reached \d+ (domains?|destinations?)<\/i><\/summary>/,
         )
         assert.ok(!/<a [^>]*>#?\d+ ↗<\/a>/.test(md), "no standalone run-number link renders anywhere")
         assert.ok(!/<\/i><\/summary>/.test(md.match(/<summary>[^\n]*connection[^\n]*<\/summary>/)?.[0] ?? ""), "heading counts stop at domains")
@@ -187,29 +191,37 @@ for (const [name, md] of Object.entries(STATES)) {
         assert.ok(!md.includes("/dashboard/runs/"), "the authed dashboard route never renders (§1.1)")
         assert.ok(!md.toLowerCase().includes("paste the tree into your review agent"), "paste cue retired from the subtext")
     })
-    test(`[${name}] preamble: thesis doubles as the explainer summary, one quote block, open only on firstRun (§1.3–§1.4)`, () => {
+    test(`[${name}] preamble: 💡 explainer summary, one quote block, open only on firstRun (§1.3–§1.4)`, () => {
+        assert.ok(md.includes("<summary><sub>💡 how to read this</sub></summary>"))
         assert.ok(
-            md.includes(
-                "<summary><sub><i>What happened on this commit — each job's process tree and where it reached</i> · 💡 how to read this</sub></summary>",
-            ),
+            md.includes("← italic = runner scaffolding") &&
+                md.includes("← bold = a process the job ran") &&
+                md.includes("← a place it reached") &&
+                md.includes("← a note = expected plumbing"),
+            "explainer teaches via the lineage-exact annotated mini-tree (vocab lock)",
         )
         assert.ok(
-            md.includes(
-                "<b>bold</b> = a process the job ran, <i>italic</i> = runner scaffolding, <code>→</code> = destination reached",
-            ),
-            "explainer body teaches the typography legend verbatim (vocab lock)",
+            md.includes("localhost lookups render in the tree but aren't counted as destinations"),
+            "explainer notes line carries the counting rule verbatim",
         )
         assert.ok(
-            !md.includes("<details open><summary><sub><i>What happened"),
+            !md.includes("<details open><summary><sub>💡 how to read this"),
             "explainer collapses when not the first run",
         )
-        assert.match(md, /^> \*commit [^\n]+\n>\n> <details/m, "the meta line and explainer share one quote block")
+        assert.match(md, /^> <sub>\*commit [^\n]+\n> <details/m, "the provenance line and explainer share one quote block")
+    })
+    test(`[${name}] jobs-count line opens the list (§1.5a)`, () => {
+        assert.match(
+            md,
+            /^<sub><i>\d+( of \d+)? jobs?( across \d+ workflows)? recorded on this commit<\/i><\/sub>$/m,
+            "the <sub> jobs-count line separates the railed preamble from the folds",
+        )
     })
 }
 
 test("counts invariant: every fold heading finger-counts against its own rendered tree (§1.5)", () => {
     const foldRe =
-        /<details(?: open)?><summary>[^\n]*— <i>(\d+) processes? · contacted (\d+) (?:domains?|destinations?)<\/i><\/summary>([\s\S]*?)<\/details>/g
+        /<details(?: open)?><summary>[^\n]*— <i>(\d+) processes? · reached (\d+) (?:domains?|destinations?)<\/i><\/summary>([\s\S]*?)<\/details>/g
     let checked = 0
     for (const [name, md] of Object.entries(STATES)) {
         for (const m of md.matchAll(foldRe)) {
@@ -274,7 +286,7 @@ test("A7: run link lives on the job name — every Actions-run link labels a bol
 test("18: resolver stub renders with its self-describing descriptor; excluded from candidacy, kept in counts", () => {
     assert.match(CANARY, /→ localhost <i>\(dns resolver\)<\/i>/)
     assert.ok(!/→ dns\b/.test(CANARY), "the bare `dns` tag is retired")
-    assert.match(CANARY, /<summary><b><code>[^<]+<\/code><\/b> \/ <a[^>]+><b><code>[\w-]+<\/code><\/b> ↗<\/a> — <i>\d+ processes · contacted \d+ (domains?|destinations?)<\/i><\/summary>/)
+    assert.match(CANARY, /<summary><b><code>[^<]+<\/code><\/b> \/ <a[^>]+><b><code>[\w-]+<\/code><\/b> ↗<\/a> — <i>\d+ processes · reached \d+ (domains?|destinations?)<\/i><\/summary>/)
 })
 test("19: the sensor's upload keeps its recorded name + descriptor in the canonical tree — no IP", () => {
     assert.match(CANARY, /→ api\.garnet\.ai <i>\(garnet sensor upload\)<\/i>/, "recorded name with self-describing descriptor")
@@ -326,7 +338,7 @@ test("22: fold heading carries true telemetry counts, no derived enumeration", (
     // The canary mixes named and unnamed egress (provjobd → 168.63.129.16),
     // so the heading noun widens to destination-first counting: 4 domains +
     // 1 IP.
-    assert.match(CANARY, /<b><code>Garnet Runtime Review<\/code><\/b> \/ <a[^>]+><b><code>runtime-review<\/code><\/b> ↗<\/a> — <i>\d+ processes · contacted 5 destinations<\/i>/)
+    assert.match(CANARY, /<b><code>Garnet Runtime Review<\/code><\/b> \/ <a[^>]+><b><code>runtime-review<\/code><\/b> ↗<\/a> — <i>\d+ processes · reached 5 destinations<\/i>/)
     assert.ok(!/ — reached <code>/.test(CANARY), "the heading never enumerates destinations")
 })
 test("23: R0 signatures normalize trailing digits; display shows the raw name", () => {
@@ -346,8 +358,8 @@ test("24: link policy — the garnet permalink never targets a github.com/action
     assert.ok(!/<a href="https:\/\/github\.com[^"]*">View Run Profile in Garnet ↗/.test(noCap), "never mislabels a github URL as the garnet permalink")
 })
 test("25: timestamps are absolute UTC, self-describing, and carry the year", () => {
-    assert.match(CANARY, /jobs recorded as of Jul 3 2026, 2:02 PM UTC/)
-    assert.equal(freshnessStamp(new Date(RENDERED_AT)), "jobs recorded as of Jul 3 2026, 2:02 PM UTC")
+    assert.match(CANARY, /as of Jul 3 2026, 2:02 PM UTC/)
+    assert.equal(freshnessStamp(new Date(RENDERED_AT)), "Jul 3 2026, 2:02 PM UTC")
 })
 test("26: hostile process name renders inert; byte-identical reruns", () => {
     const hostile = buildRunReview({
@@ -479,12 +491,12 @@ test("sensor upload classifies for dev API hosts too", () => {
 // Step Summary (§8): the full-detail tabular report, one per raw profile.
 // ---------------------------------------------------------------------------
 test("step summary renders the full-detail tabular report in the final spec shape (§8)", () => {
-    const summary = renderStepSummary([install, worth])
+    const summary = renderStepSummary([install, worth], { preview: true })
     const sections = [
         "### Garnet Runtime Summary",
         "#### Workload Summary",
         "#### Network Egress Summary",
-        "<summary><strong>Assertions</strong> · beta</summary>",
+        "<summary><strong>Assertions</strong></summary>",
         "<b>Powered by Garnet</b>",
     ]
     for (const section of sections) {
@@ -492,25 +504,45 @@ test("step summary renders the full-detail tabular report in the final spec shap
     }
     assert.ok(!summary.includes(COMMENT_MARKER), "markers are PR-comment-only")
     assert.ok(!summary.includes(RUNTIME_REVIEW_MARKER), "markers are PR-comment-only")
-    // Network egress is lineage-tree-first, not destination-first.
-    assert.ok(summary.includes("| Lineage Tree | Destinations |"), "egress table flips to lineage-tree-first")
-    assert.ok(summary.includes("Destinations are grouped by lineage tree."), "egress intro sentence")
+    // Workload Summary restores the profile UUID as the first row.
+    assert.match(summary, /#### Workload Summary\n\n\| Field \| Value \|\n\| --- \| --- \|\n\| Garnet Profile UUID \| [0-9a-f-]{36} \|/)
+    // Network egress is destination-first, faithful to the profile's own order.
+    assert.ok(summary.includes("| Destination | Process Tree |"), "egress table is destination-first, Djalal-original columns")
+    assert.ok(summary.includes("One row per recorded destination, in the profile's own order."), "egress intro sentence")
     assert.ok(summary.includes("`images.unsplash.com`"), "every destination present, un-elided")
-    // Telemetry is a deterministic sentence, not a table.
-    assert.match(summary, /Network telemetry observed \d+ unique domains?, \d+ destinations?, and \d+ connections?\./)
+    assert.match(summary, /`\(pid \d+\)`/, "recorded PID renders code-styled next to the process tree")
+    // Telemetry is a deterministic sentence, not a table — and carries flows.
+    assert.match(summary, /Network telemetry observed \d+ unique domains?, \d+ destinations?, \d+ connections?, and \d+ flows?\./)
     assert.ok(!summary.includes("##### Network Telemetry Summary"), "telemetry table removed")
-    // Assertions: beta fold, marker + verbatim enum, evidence sub-fold.
-    assert.ok(summary.includes("| Class | Check | Result | Evidence |"), "assertions carry the class/check/result/evidence columns")
+    // Assertions (preview only): plain fold, verbatim assertion_id, marker + enum, evidence per assertion.
+    assert.ok(!summary.includes("· beta"), "beta qualifier retired")
+    assert.ok(summary.includes("| Class | Assertion | Check | Result | Evidence |"), "assertions carry the class/assertion/check/result/evidence columns")
+    assert.ok(summary.includes("`no_bad_egress_domain`"), "assertion_id renders verbatim")
     assert.ok(summary.includes("A process contacted an unexpected network domain."), "review-oriented check wording")
     assert.ok(summary.includes("🟡 `ATTENTION`"), "attention keeps marker + verbatim enum")
-    assert.ok(summary.includes("<summary>Evidence · A process contacted an unexpected network domain.</summary>"), "evidence sub-fold present")
-    assert.ok(summary.includes("| Event Type | Destination | Remote Address | Process | Command |"), "evidence table columns")
+    assert.ok(summary.includes("<summary>Evidence · <code>no_bad_egress_domain</code></summary>"), "evidence sub-fold keyed by assertion_id")
+    assert.ok(summary.includes("| Event Type | Destination | Remote Address | Process | Command | Step |"), "evidence table columns include the workflow step")
     assert.ok(!/assertion\(s\) (passed|failed)/.test(summary), "no verdict headline")
     // Vocab lock: one garnet permalink per run, one label everywhere.
     assert.ok(summary.includes("View Run Profile in Garnet ↗"), "permalink label follows the vocab lock")
     assert.ok(!summary.includes("View full report"), "legacy label retired")
-    // The Step Summary permalink is run-level — never ?job= (ENG-1355).
-    assert.ok(!summary.includes("?job="), "run-level permalink without ?job=")
+    // The Step Summary permalink is the canonical public per-job report URL.
+    assert.match(
+        summary,
+        /https:\/\/app\.garnet\.ai\/public\/runs\/\d+\?job=[^"&]+&(?:amp;)?utm_source=github&(?:amp;)?utm_medium=action_summary/,
+        "per-job public permalink with the action_summary medium",
+    )
+})
+
+test("step summary prod default is the observation-only record — no assertions, evidence, or status vocabulary (§8.5)", () => {
+    const summary = renderStepSummary([install, worth])
+    assert.ok(!summary.includes("Assertions"), "no assertions fold in prod default")
+    assert.ok(!summary.includes("Evidence"), "no evidence folds in prod default")
+    assert.ok(!/`(PASS|FAIL|ATTENTION)`|✅|🔴|🟡/.test(summary), "no status vocabulary in prod default")
+    // The record itself is intact: workload, destination-first egress, telemetry, footer.
+    assert.ok(summary.includes("#### Workload Summary") && summary.includes("| Destination | Process Tree |"))
+    assert.match(summary, /Network telemetry observed \d+ unique domains?, \d+ destinations?, \d+ connections?, and \d+ flows?\./)
+    assert.ok(summary.includes("<b>Powered by Garnet</b>") && summary.includes("View Run Profile in Garnet ↗"))
 })
 
 test("step summary: future assertion enum values render verbatim, never coerced (§8.5)", () => {
@@ -521,7 +553,7 @@ test("step summary: future assertion enum values render verbatim, never coerced 
             { class_id: "Custom", assertion_id: "future_check", result: "escalated" },
         ],
         telemetry: { network: { egress: { total_domains: 0, total_connections: 0 } } },
-    }])
+    }], { preview: true })
     assert.ok(summary.includes("🟡 `WARN`"), "WARN keeps its verbatim enum with the attention marker")
     assert.ok(summary.includes("⚪ `ESCALATED`"), "unknown future enums render verbatim with the neutral marker")
 })
@@ -531,7 +563,7 @@ test("step summary: future assertion enum values render verbatim, never coerced 
 // ---------------------------------------------------------------------------
 test("S5: partial coverage renders k/n and the add-the-step growth CTA", () => {
     const md = STATES["partial-coverage"]
-    assert.match(md, /· \*\*1 of 6 jobs recorded\*\* ·/)
+    assert.match(md, /^<sub><i>1 of 6 jobs recorded on this commit<\/i><\/sub>$/m)
     assert.match(md, /5 jobs not yet recorded — \[add the step ↗\]\(/)
 })
 
@@ -550,9 +582,11 @@ test("S7: lineage-absent profile renders without trees or folds", () => {
         jobs: [{ name: "j", connections: [{ ancestry: [], domain: "httpbin.org", ip: "9.9.9.9" }] }],
     })
     const body = renderRunReview(review)
-    assert.ok(!body.includes("<pre>"), "no trees without lineage")
+    // The explainer's railed mini-tree (quoted `> <pre>`) is teaching material,
+    // not telemetry — only unquoted job trees are banned without lineage.
+    assert.ok(!/^<pre>/m.test(body), "no trees without lineage")
     assert.ok(!/<details( open)?><summary><b>/.test(body), "no job folds without lineage")
-    assert.match(body, /^\*\*`j`\*\* — \*contacted 1 domain\*$/m)
+    assert.match(body, /^\*\*`j`\*\* — \*reached 1 domain\*$/m)
 })
 
 // ---------------------------------------------------------------------------
@@ -643,11 +677,17 @@ test("§4: single recorded job with egress renders OPEN — the only evidence is
     // vacuously true for its unclassified egress — the fold opens.
     assert.match(STATES["registry-only"], /<details open><summary><b><code>/, "lone job with egress opens")
 })
-test("real leaves render the domain only — the recorded address lives in the Step Summary", () => {
+test("real leaves render the domain only — the recorded address lives in the preview evidence fold", () => {
     assert.match(STATES["workload-egress"], /→ images\.unsplash\.com$/m)
     assert.match(STATES["registry-only"], /→ registry\.npmjs\.org$/m)
     assert.ok(!STATES["workload-egress"].includes("146.75.94.208"), "IP drops when a domain exists")
-    assert.ok(renderStepSummary([worth]).includes("`images.unsplash.com` (146.75.94.208)"), "the Step Summary keeps domain (address)")
+    const summary = renderStepSummary([worth])
+    assert.ok(summary.includes("| `images.unsplash.com` |"), "the egress table keeps the bare backticked domain")
+    assert.ok(!summary.includes("(146.75.94.208)"), "no parenthesized address in the prod record")
+    assert.ok(
+        renderStepSummary([install], { preview: true }).includes("`104.16.5.34`"),
+        "the recorded address stays available in the preview evidence fold",
+    )
 })
 test("leaf grouping: same-destination siblings collapse to one deterministic line", () => {
     const ips = ["104.16.0.34", "104.16.1.34", "104.16.2.34", "104.16.3.34", "104.16.4.34"]
@@ -673,7 +713,7 @@ test("A8: IP-only egress reads N destinations, never 0 domains", () => {
             connections: [{ ancestry: ["a", "b"], domain: "", ip: "198.51.100.5" }] }],
     })
     const line = jobSummaryLine(r.jobs[0], r.uniqueDests, { html: true })
-    assert.match(line, /contacted 1 destination</)
+    assert.match(line, /reached 1 destination</)
     assert.ok(!/0 domains/.test(line))
 })
 test("A8: fully named egress keeps the domains noun; the resolver stub never shifts it", () => {
@@ -686,7 +726,7 @@ test("A8: fully named egress keeps the domains noun; the resolver stub never shi
             ] }],
     })
     const line = jobSummaryLine(r.jobs[0], r.uniqueDests, { html: true })
-    assert.match(line, /contacted 1 domain</, "resolver stub never shifts the noun")
+    assert.match(line, /reached 1 domain</, "resolver stub never shifts the noun")
 })
 test("A8: resolver-stub-only job reads the quiet line, never a fold", () => {
     const r = buildRunReview({
@@ -722,7 +762,7 @@ test("A8: a domainless, addressless record still counts as a destination", () =>
             connections: [{ ancestry: ["a", "b"], domain: "", ip: "" }] }],
     })
     const line = jobSummaryLine(r.jobs[0], r.uniqueDests, { html: true })
-    assert.match(line, /contacted 1 destination</, "real egress never reads as zero-egress")
+    assert.match(line, /reached 1 destination</, "real egress never reads as zero-egress")
     assert.ok(!/no outbound connections/.test(line))
 })
 
@@ -732,9 +772,9 @@ test("A8: a domainless, addressless record still counts as a destination", () =>
 // ---------------------------------------------------------------------------
 test("waiting state: meta variant, open explainer, diagnostics line, docs footer (§2)", () => {
     const md = STATES["no-record"]
-    assert.match(md, /> \*commit [^\n]+\* · \*no jobs recorded yet as of [A-Z][a-z]{2} \d{1,2} \d{4}, \d{1,2}:\d{2} (AM|PM) UTC\*/)
+    assert.match(md, /> <sub>\*commit [^\n]+ · no jobs recorded yet as of [A-Z][a-z]{2} \d{1,2} \d{4}, \d{1,2}:\d{2} (AM|PM) UTC\*<\/sub>/)
     assert.ok(!/\*\*0 of \d+/.test(md), "never a 0-of-n fraction — it reads as a score")
-    assert.ok(md.includes("<details open><summary><sub><i>What happened on this commit"), "explainer opens through the first-commit lifecycle")
+    assert.ok(md.includes("<details open><summary><sub>💡 how to read this"), "explainer opens through the first-commit lifecycle")
     assert.ok(md.includes("⏳ Run Profiles for this commit are still being recorded — this comment updates in place as jobs finish."))
     assert.ok(md.includes("<sub>Run already finished? Look in the job log for the Garnet step — the sensor must start before the workload runs.</sub>"))
     assert.match(md, /> <sub>1 job not yet recorded — \[add the step ↗\]\(/)
@@ -774,9 +814,9 @@ test("italic scaffolding is typographic only: counts, ordering, notability ident
 // ---------------------------------------------------------------------------
 test("noun rule on real record profiles: bare IP ⇒ destinations, all-named ⇒ domains", () => {
     const md = STATES["multi-job"]
-    assert.match(md, /<b><code>workload-egress<\/code><\/b> ↗<\/a> — <i>\d+ processes · contacted \d+ destinations<\/i>/, "bare 140.82.x IP leaf widens the noun")
-    assert.match(md, /<b><code>lint<\/code><\/b> ↗<\/a> — <i>\d+ processes · contacted \d+ destinations?<\/i>/)
-    assert.ok(!/contacted \d+ domains?<\/i>[^\n]*140\.82\./.test(md), "never `domains` over a bare-IP leaf")
+    assert.match(md, /<b><code>workload-egress<\/code><\/b> ↗<\/a> — <i>\d+ processes · reached \d+ destinations<\/i>/, "bare 140.82.x IP leaf widens the noun")
+    assert.match(md, /<b><code>lint<\/code><\/b> ↗<\/a> — <i>\d+ processes · reached \d+ destinations?<\/i>/)
+    assert.ok(!/reached \d+ domains?<\/i>[^\n]*140\.82\./.test(md), "never `domains` over a bare-IP leaf")
 })
 
 // ---------------------------------------------------------------------------

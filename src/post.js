@@ -151,7 +151,8 @@ async function appendRuntimeReviewSummary(profile, renderOptions) {
             firstRun: false,
         })
     } else {
-        content = renderStepSummary([profile.raw], { appUrl: resolveAppBaseUrl() })
+        const preview = core.getState("preview") === "true"
+        content = renderStepSummary([profile.raw], { appUrl: resolveAppBaseUrl(), preview })
     }
 
     await fs.appendFile(summaryFile, `\n${content}\n`)

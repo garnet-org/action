@@ -401,7 +401,11 @@ export function renderCommentBody(state, options = {}) {
     const review = buildProfileRunReview(profiles, options)
     const reviewBody = renderRunReview(review)
 
-    const markerPrefix = `${RUNTIME_REVIEW_MARKER}\n${COMMENT_MARKER}\n`
+    // v6.2 marker block: canonical marker, self marker, then the commit
+    // marker `<!-- garnet:commit {full sha} -->` (all emitted by the
+    // renderer), followed by the action's own state markers.
+    const commitMarker = commitSha !== "" ? `<!-- garnet:commit ${commitSha} -->\n` : ""
+    const markerPrefix = `${RUNTIME_REVIEW_MARKER}\n${COMMENT_MARKER}\n${commitMarker}`
     if (!reviewBody.startsWith(markerPrefix)) {
         throw new Error("rendered review body is missing the runtime-review markers")
     }
@@ -409,6 +413,7 @@ export function renderCommentBody(state, options = {}) {
     return [
         RUNTIME_REVIEW_MARKER,
         COMMENT_MARKER,
+        ...(commitSha !== "" ? [`<!-- garnet:commit ${commitSha} -->`] : []),
         `<!-- ${ACTION_COMMENT_MARKER} -->`,
         `<!-- ${COMMIT_MARKER_PREFIX}${commitSha} -->`,
         `<!-- ${COMMENT_STATE_MARKER_PREFIX}${metadata} -->`,

@@ -13,18 +13,12 @@
 
 #### Network Egress Summary
 
-Destinations are grouped by lineage tree.
+One row per recorded destination, in the profile's own order.
 
-| Lineage Tree | Destinations |
+| Destination | Process Tree |
 | --- | --- |
-| `systemd` → `...` → `Runner.Worker` → `bash` → `npm install` | `registry.npmjs.org` (104.16.5.34) |
+| `registry.npmjs.org` | `systemd` → `...` → `Runner.Worker` → `bash` → `npm install` |
 
-Network telemetry observed 1 unique domain, 1 destination, and 15 connections.
+Network telemetry observed 1 unique domain, 1 destination, 15 connections, and 1 flow.
 
-<details><summary><strong>Assertions</strong> · beta</summary>
-
-No assertions information available.
-
-</details>
-
-<div align="right"><sub>1 unique domain · 15 connections · workflow Garnet Runtime Review · run #28488074733 · job runtime-review</sub><br><b>Powered by Garnet</b> · <a href="https://app.garnet.ai/public/runs/28488074733?utm_source=github&amp;utm_medium=pr_comment">View Run Profile in Garnet ↗</a></div>
+<div align="right"><sub>1 unique domain · 15 connections · workflow Garnet Runtime Review · run #28488074733 · job runtime-review</sub><br><b>Powered by Garnet</b> · <a href="https://app.garnet.ai/public/runs/28488074733?job=runtime-review&amp;utm_source=github&amp;utm_medium=action_summary">View Run Profile in Garnet ↗</a></div>

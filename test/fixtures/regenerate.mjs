@@ -6,7 +6,7 @@
  *
  * Mirrors `cmd/garnet-runtime-review/render-states-real.mjs` (PR-comment
  * states) and `render-combined-real.mjs` (Step Summary reports) in
- * garnet-org/runtime-review-testbed at tag v6.1.0, with the action's one
+ * garnet-org/runtime-review-testbed at tag v6.2.0, with the action's one
  * deliberate delta: fold-subtext permalinks are RUN-LEVEL (no `?job=`
  * selector — ENG-1355). Inputs are the real captured Jibril profiles under
  * `profiles/` (vendored from the testbed at the same tag); render clocks are
@@ -78,6 +78,7 @@ export function renderNoRecordState(sha) {
     return [
         RUNTIME_REVIEW_MARKER,
         COMMENT_MARKER,
+        `<!-- garnet:commit ${sha} -->`,
         renderNoRecord({
             sha,
             commitUrl: `https://github.com/${REPO}/commit/${sha}`,
@@ -126,9 +127,11 @@ export async function renderStepSummaryStates() {
     const install = await loadProfile("npm-install-run.json")
     const worth = await loadProfile("worth-a-look-run.json")
 
+    // §8 preview gating: 2-install renders preview mode (assertions +
+    // evidence); the others render the prod default (observation-only).
     return {
         "1-registry-only.md": renderStepSummary([normal]),
-        "2-install-with-assertions.md": renderStepSummary([install]),
+        "2-install-with-assertions.md": renderStepSummary([install], { preview: true }),
         "3-workload-egress.md": renderStepSummary([worth]),
         "4-multi-job.md": renderStepSummary([install, worth]),
     }
