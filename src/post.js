@@ -131,9 +131,9 @@ async function appendRuntimeReviewSummary(profile, renderOptions) {
         const repository = getEnv("GITHUB_REPOSITORY")
         content = renderNoRecord({
             sha,
-            commitUrl: repository !== "" && sha !== "" ? `https://github.com/${repository}/commit/${sha}` : "",
+            commitURL: repository !== "" && sha !== "" ? `https://github.com/${repository}/commit/${sha}` : "",
             expectedJobs: renderOptions.expectedJobs ?? 1,
-            docsUrl: DOCS_URL,
+            docsURL: DOCS_URL,
             renderedAt: renderOptions.renderedAt ?? new Date(),
         })
     } else {

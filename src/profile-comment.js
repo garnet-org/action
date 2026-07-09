@@ -38,6 +38,29 @@ const COMMENT_STATE_MARKER_PREFIX = "garnet-action-comment-state:"
  */
 
 /**
+ * @typedef {{ ancestry?: unknown }} ProcTreeTransformInput
+ */
+
+/**
+ * @typedef {{
+ *   result: ProfileResult
+ *   remote_names?: unknown
+ *   remote_address?: string | undefined
+ *   proc_trees?: unknown
+ * }} PeerTransformInput
+ */
+
+/**
+ * @typedef {{
+ *   timestamp: string
+ *   scenarios: { github: GitHubScenario }
+ *   assertions: AssertionSummary[]
+ *   network?: unknown
+ *   telemetry?: unknown
+ * }} ProfileJsonTransformInput
+ */
+
+/**
  * @typedef {{
  *   remote_names: string[]
  *   remote_address: string
@@ -79,6 +102,26 @@ const COMMENT_STATE_MARKER_PREFIX = "garnet-action-comment-state:"
  */
 
 /**
+ * @typedef {{ kind: "stale" } | { kind: "updated", state: CommentState }} MergeCommentStateResult
+ */
+
+/**
+ * @typedef {{
+ *   repository: string
+ *   run_id: string
+ *   job: string
+ * }} ReportLinkInput
+ */
+
+/**
+ * @typedef {{
+ *   ancestry: string[]
+ *   domain: string
+ *   ip: string
+ * }} ProfileConnection
+ */
+
+/**
  * @typedef {{
  *   version: 1
  *   latest_run: WorkflowRun
@@ -98,8 +141,8 @@ const COMMENT_STATE_MARKER_PREFIX = "garnet-action-comment-state:"
  * Rendering knobs threaded from the action's inputs (all optional, additive).
  * @typedef {{
  *   expectedJobs?: number
- *   permalinkUrl?: string
- *   docsUrl?: string
+ *   permalinkURL?: string
+ *   docsURL?: string
  *   renderedAt?: string | Date
  * }} RenderOptions
  */
@@ -110,15 +153,13 @@ const DEFAULT_DOCS_URL = "https://github.com/garnet-org/action#readme"
 const UTM_SOURCE = "github"
 const UTM_MEDIUM = "pr_comment"
 
-const PROFILE_RESULT_SCHEMA = z.unknown().transform(value => normalizeResult(value))
+const PROFILE_RESULT_SCHEMA = z.unknown().transform(transformProfileResult)
 
 const PROC_TREE_SCHEMA = z
     .looseObject({
         ancestry: z.array(z.string()),
     })
-    .transform(procTree => ({
-        ancestry: procTree.ancestry.filter(entry => entry.length > 0),
-    }))
+    .transform(transformProcTree)
 
 const ASSERTION_SCHEMA = z.looseObject({
     id: z.string(),
@@ -132,12 +173,7 @@ const PEER_SCHEMA = z
         remote_address: z.string().optional(),
         proc_trees: z.array(PROC_TREE_SCHEMA),
     })
-    .transform(peer => ({
-        remote_names: peer.remote_names.filter(name => name.length > 0),
-        remote_address: peer.remote_address ?? "",
-        proc_trees: peer.proc_trees,
-        result: peer.result,
-    }))
+    .transform(transformPeer)
 
 const GITHUB_SCENARIO_SCHEMA = z.object({
     workflow: z.string(),
@@ -217,7 +253,49 @@ const PROFILE_JSON_SCHEMA = z
         network: PROFILE_NETWORK_SCHEMA,
         telemetry: PROFILE_NETWORK_TELEMETRY_SCHEMA,
     })
-    .transform(profile => ({
+    .transform(transformProfileJson)
+
+/**
+ * @param {unknown} value
+ * @returns {ProfileResult}
+ */
+function transformProfileResult(value) {
+    return normalizeResult(value)
+}
+
+/**
+ * @param {ProcTreeTransformInput} procTree
+ * @returns {ProcTree}
+ */
+function transformProcTree(procTree) {
+    const ancestry = Array.isArray(procTree.ancestry) ? procTree.ancestry : []
+    return {
+        ancestry: ancestry.filter(entry => typeof entry === "string" && entry.length > 0),
+    }
+}
+
+/**
+ * @param {PeerTransformInput} peer
+ * @returns {EgressPeer}
+ */
+function transformPeer(peer) {
+    const remoteNames = Array.isArray(peer.remote_names) ? peer.remote_names : []
+    const procTrees = Array.isArray(peer.proc_trees) ? peer.proc_trees : []
+
+    return {
+        remote_names: remoteNames.filter(name => typeof name === "string" && name.length > 0),
+        remote_address: peer.remote_address ?? "",
+        proc_trees: /** @type {ProcTree[]} */ (procTrees),
+        result: peer.result,
+    }
+}
+
+/**
+ * @param {ProfileJsonTransformInput} profile
+ * @returns {NormalizedProfile}
+ */
+function transformProfileJson(profile) {
+    return {
         timestamp: profile.timestamp,
         github: profile.scenarios.github,
         assertions: profile.assertions,
@@ -228,7 +306,8 @@ const PROFILE_JSON_SCHEMA = z
             run_id: profile.scenarios.github.run_id,
             job: profile.scenarios.github.job,
         }),
-    }))
+    }
+}
 
 /**
  * @returns {string}
@@ -264,14 +343,14 @@ export function parseProfileJson(content) {
  * @param {CommentState | null} existingState
  * @param {NormalizedProfile} incomingProfile
  * @param {number} runAttempt
- * @returns {{ kind: "stale" } | { kind: "updated", state: CommentState }}
+ * @returns {MergeCommentStateResult}
  */
 export function mergeCommentState(existingState, incomingProfile, runAttempt) {
-    const incomingRunId = incomingProfile.github.run_id
+    const incomingRunID = incomingProfile.github.run_id
     const incomingRunAttempt = Number.isSafeInteger(runAttempt) ? runAttempt : 1
     const workflowKey = getWorkflowKey(incomingProfile)
 
-    if (incomingRunId === "") {
+    if (incomingRunID === "") {
         throw new Error("profile JSON is missing the GitHub run id")
     }
 
@@ -282,7 +361,7 @@ export function mergeCommentState(existingState, incomingProfile, runAttempt) {
                 version: 2,
                 workflow_runs: {
                     [workflowKey]: {
-                        run_id: incomingRunId,
+                        run_id: incomingRunID,
                         run_attempt: incomingRunAttempt,
                     },
                 },
@@ -296,7 +375,7 @@ export function mergeCommentState(existingState, incomingProfile, runAttempt) {
         latestRun === null
             ? -1
             : compareRuns(latestRun, {
-                  run_id: incomingRunId,
+                  run_id: incomingRunID,
                   run_attempt: incomingRunAttempt,
               })
 
@@ -312,7 +391,7 @@ export function mergeCommentState(existingState, incomingProfile, runAttempt) {
                 workflow_runs: {
                     ...existingState.workflow_runs,
                     [workflowKey]: {
-                        run_id: incomingRunId,
+                        run_id: incomingRunID,
                         run_attempt: incomingRunAttempt,
                     },
                 },
@@ -421,18 +500,23 @@ export function renderCommentBody(state, options = {}) {
  * @returns {RunReview}
  */
 export function buildProfileRunReview(profiles, options = {}) {
+    const optionsRecord = /** @type {Record<string, unknown>} */ (options)
     const jobs = profiles.map(profile => profileToJobRecord(profile))
     const sha = getCommentCommitSha(profiles)
     const repository = getCommentRepository(profiles)
-    const commitUrl = repository !== "" && sha !== "" ? `https://github.com/${repository}/commit/${sha}` : ""
-    const permalink = derivePermalink(options.permalinkUrl ?? "", jobs, resolveAppBaseUrl())
+    const commitURL = repository !== "" && sha !== "" ? `https://github.com/${repository}/commit/${sha}` : ""
+    const permalink = derivePermalink(
+        firstNonEmptyString(options.permalinkURL, optionsRecord["permalinkUrl"]),
+        jobs,
+        resolveAppBaseURL(),
+    )
 
     return buildRunReview({
         repo: repository,
         sha,
-        commitUrl,
+        commitURL,
         permalink,
-        docsUrl: options.docsUrl ?? DEFAULT_DOCS_URL,
+        docsURL: firstNonEmptyString(options.docsURL, optionsRecord["docsUrl"], DEFAULT_DOCS_URL),
         expectedJobs: options.expectedJobs ?? 0,
         renderedAt: options.renderedAt ?? new Date(),
         jobs,
@@ -445,7 +529,7 @@ export function buildProfileRunReview(profiles, options = {}) {
  * @returns {JobRecord}
  */
 function profileToJobRecord(profile) {
-    /** @type {{ ancestry: string[], domain: string, ip: string }[]} */
+    /** @type {ProfileConnection[]} */
     const connections = []
     for (const peer of profile.egress_peers) {
         const domain = peer.remote_names[0] ?? ""
@@ -551,11 +635,11 @@ function getCommentCommitSha(profiles) {
 }
 
 /**
- * @param {{ repository: string, run_id: string, job: string }} values
+ * @param {ReportLinkInput} values
  * @returns {string}
  */
 export function buildReportLink(values) {
-    const baseURL = resolveAppBaseUrl()
+    const baseURL = resolveAppBaseURL()
     if (values.run_id === "") {
         return utmTrackedURL(baseURL)
     }
@@ -582,34 +666,34 @@ function utmTrackedURL(rawURL) {
 
 /**
  * @param {string} repository
- * @param {string} runId
+ * @param {string} runID
  * @returns {string}
  */
-function buildGitHubRunLink(repository, runId) {
+function buildGitHubRunLink(repository, runID) {
     const repositoryPath = repository
         .split("/")
         .filter(part => part !== "")
         .map(part => encodeURIComponent(part))
         .join("/")
 
-    if (repositoryPath === "" || !repositoryPath.includes("/") || runId === "") {
+    if (repositoryPath === "" || !repositoryPath.includes("/") || runID === "") {
         return ""
     }
 
-    return `https://github.com/${repositoryPath}/actions/runs/${encodeURIComponent(runId)}`
+    return `https://github.com/${repositoryPath}/actions/runs/${encodeURIComponent(runID)}`
 }
 
 /**
  * @returns {string}
  */
-function resolveAppBaseUrl() {
-    const apiUrl = getConfiguredApiUrl()
-    if (apiUrl === "") {
+function resolveAppBaseURL() {
+    const apiURL = getConfiguredApiURL()
+    if (apiURL === "") {
         return DEFAULT_APP_BASE_URL
     }
 
     try {
-        const url = new URL(apiUrl)
+        const url = new URL(apiURL)
         const appHost = mapApiHostToAppHost(url.host)
         return `${url.protocol}//${appHost}`
     } catch {
@@ -620,7 +704,7 @@ function resolveAppBaseUrl() {
 /**
  * @returns {string}
  */
-function getConfiguredApiUrl() {
+function getConfiguredApiURL() {
     if (typeof process.env.GARNET_API_URL === "string" && process.env.GARNET_API_URL !== "") {
         return process.env.GARNET_API_URL
     }
@@ -651,17 +735,17 @@ function mapApiHostToAppHost(host) {
 }
 
 /**
- * @param {{ run_id: string, run_attempt: number }} left
- * @param {{ run_id: string, run_attempt: number }} right
+ * @param {WorkflowRun} left
+ * @param {WorkflowRun} right
  * @returns {number}
  */
 function compareRuns(left, right) {
-    const leftRunId = toBigInt(left.run_id)
-    const rightRunId = toBigInt(right.run_id)
-    if (leftRunId > rightRunId) {
+    const leftRunID = toBigInt(left.run_id)
+    const rightRunID = toBigInt(right.run_id)
+    if (leftRunID > rightRunID) {
         return 1
     }
-    if (leftRunId < rightRunId) {
+    if (leftRunID < rightRunID) {
         return -1
     }
 
@@ -777,6 +861,19 @@ function getProfileNetworkTelemetry(profile) {
         total_domains: getNumber(egress?.total_domains),
         total_connections: getNumber(egress?.total_connections),
     }
+}
+
+/**
+ * @param {...unknown} values
+ * @returns {string}
+ */
+function firstNonEmptyString(...values) {
+    for (const value of values) {
+        if (typeof value === "string" && value !== "") {
+            return value
+        }
+    }
+    return ""
 }
 
 /**

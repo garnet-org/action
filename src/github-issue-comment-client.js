@@ -55,26 +55,26 @@ export class GitHubIssueCommentClient {
   }
 
   /**
-   * @param {number} commentId
+   * @param {number} commentID
    * @param {string} body
    * @returns {Promise<void>}
    */
-  async updateComment(commentId, body) {
+  async updateComment(commentID, body) {
     await this.octokit.rest.issues.updateComment({
       ...this.repo,
-      comment_id: commentId,
+      comment_id: commentID,
       body,
     })
   }
 
   /**
-   * @param {number} commentId
+   * @param {number} commentID
    * @returns {Promise<void>}
    */
-  async deleteComment(commentId) {
+  async deleteComment(commentID) {
     await this.octokit.rest.issues.deleteComment({
       ...this.repo,
-      comment_id: commentId,
+      comment_id: commentID,
     })
   }
 

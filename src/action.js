@@ -83,15 +83,15 @@ export async function run() {
 
         // Download jibril
         const jibrilPrefix = "https://github.com/garnet-org/jibril-releases/releases"
-        let jibrilUrl =
+        let jibrilURL =
             JIBRILVER === "latest"
                 ? `${jibrilPrefix}/latest/download/jibril`
                 : `${jibrilPrefix}/download/${JIBRILVER}/jibril`
 
-        core.info(`Downloading jibril: ${jibrilUrl}`)
+        core.info(`Downloading jibril: ${jibrilURL}`)
 
         const jibrilDest = path.join(tmpDir, "jibril")
-        await downloadFile(jibrilUrl, jibrilDest)
+        await downloadFile(jibrilURL, jibrilDest)
         if (!(await pathExists(jibrilDest))) {
             throw new Error("Failed to download jibril binary")
         }
@@ -109,8 +109,8 @@ export async function run() {
         const RUNNER_IP = getFirstIpv4() || "127.0.0.1"
 
         let SYSTEM_MACHINE_ID = os.hostname()
-        const machineIdPaths = ["/etc/machine-id", "/var/lib/dbus/machine-id"]
-        for (const p of machineIdPaths) {
+        const machineIDPaths = ["/etc/machine-id", "/var/lib/dbus/machine-id"]
+        for (const p of machineIDPaths) {
             if (await pathExists(p)) {
                 SYSTEM_MACHINE_ID = (await fs.readFile(p, "utf8")).trim()
                 break
@@ -487,10 +487,10 @@ async function execSudo(args, options = {}) {
  */
 async function downloadFile(url, destPath, opts = {}) {
     const { maxRedirects = 10, timeoutMs = 60_000, enforceHttps = true } = opts
-    const requestUrl = String(url || "")
+    const requestURL = String(url || "")
 
-    if (enforceHttps && !requestUrl.startsWith("https://")) {
-        throw new Error(`Refusing to download over non-HTTPS: ${requestUrl}`)
+    if (enforceHttps && !requestURL.startsWith("https://")) {
+        throw new Error(`Refusing to download over non-HTTPS: ${requestURL}`)
     }
 
     const client = new HttpClient("garnet-action", undefined, {
@@ -500,12 +500,12 @@ async function downloadFile(url, destPath, opts = {}) {
     })
 
     try {
-        const response = await client.get(requestUrl)
+        const response = await client.get(requestURL)
         const statusCode = response.message.statusCode ?? 0
 
         if (statusCode !== 200) {
             response.message.resume()
-            throw new Error(`Failed to download ${requestUrl}: HTTP ${statusCode}`)
+            throw new Error(`Failed to download ${requestURL}: HTTP ${statusCode}`)
         }
 
         await pipeline(response.message, createWriteStream(destPath, { mode: 0o600 }))

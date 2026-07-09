@@ -39309,9 +39309,9 @@ class ControlPlaneClient {
      * @returns {Promise<RequestTextResult>}
      */
     async requestText(options) {
-        const requestUrl = new URL(options.path, `${this.baseURL}/`)
+        const requestURL = new URL(options.path, `${this.baseURL}/`)
         if (options.query !== undefined) {
-            requestUrl.search = options.query.toString()
+            requestURL.search = options.query.toString()
         }
 
         /** @type {Record<string, string>} */
@@ -39331,12 +39331,12 @@ class ControlPlaneClient {
         let response
         try {
             if (options.body === undefined) {
-                response = await fetch(requestUrl, {
+                response = await fetch(requestURL, {
                     method: options.method,
                     headers,
                 })
             } else {
-                response = await fetch(requestUrl, {
+                response = await fetch(requestURL, {
                     method: options.method,
                     headers,
                     body: JSON.stringify(options.body),
@@ -39527,15 +39527,15 @@ async function run() {
 
         // Download jibril
         const jibrilPrefix = "https://github.com/garnet-org/jibril-releases/releases"
-        let jibrilUrl =
+        let jibrilURL =
             JIBRILVER === "latest"
                 ? `${jibrilPrefix}/latest/download/jibril`
                 : `${jibrilPrefix}/download/${JIBRILVER}/jibril`
 
-        info(`Downloading jibril: ${jibrilUrl}`)
+        info(`Downloading jibril: ${jibrilURL}`)
 
         const jibrilDest = external_node_path_namespaceObject.join(tmpDir, "jibril")
-        await downloadFile(jibrilUrl, jibrilDest)
+        await downloadFile(jibrilURL, jibrilDest)
         if (!(await pathExists(jibrilDest))) {
             throw new Error("Failed to download jibril binary")
         }
@@ -39553,8 +39553,8 @@ async function run() {
         const RUNNER_IP = getFirstIpv4() || "127.0.0.1"
 
         let SYSTEM_MACHINE_ID = external_node_os_namespaceObject.hostname()
-        const machineIdPaths = ["/etc/machine-id", "/var/lib/dbus/machine-id"]
-        for (const p of machineIdPaths) {
+        const machineIDPaths = ["/etc/machine-id", "/var/lib/dbus/machine-id"]
+        for (const p of machineIDPaths) {
             if (await pathExists(p)) {
                 SYSTEM_MACHINE_ID = (await promises_namespaceObject.readFile(p, "utf8")).trim()
                 break
@@ -39931,10 +39931,10 @@ async function execSudo(args, options = {}) {
  */
 async function downloadFile(url, destPath, opts = {}) {
     const { maxRedirects = 10, timeoutMs = 60_000, enforceHttps = true } = opts
-    const requestUrl = String(url || "")
+    const requestURL = String(url || "")
 
-    if (enforceHttps && !requestUrl.startsWith("https://")) {
-        throw new Error(`Refusing to download over non-HTTPS: ${requestUrl}`)
+    if (enforceHttps && !requestURL.startsWith("https://")) {
+        throw new Error(`Refusing to download over non-HTTPS: ${requestURL}`)
     }
 
     const client = new lib_HttpClient("garnet-action", undefined, {
@@ -39944,12 +39944,12 @@ async function downloadFile(url, destPath, opts = {}) {
     })
 
     try {
-        const response = await client.get(requestUrl)
+        const response = await client.get(requestURL)
         const statusCode = response.message.statusCode ?? 0
 
         if (statusCode !== 200) {
             response.message.resume()
-            throw new Error(`Failed to download ${requestUrl}: HTTP ${statusCode}`)
+            throw new Error(`Failed to download ${requestURL}: HTTP ${statusCode}`)
         }
 
         await (0,external_node_stream_promises_namespaceObject.pipeline)(response.message, (0,external_node_fs_namespaceObject.createWriteStream)(destPath, { mode: 0o600 }))
@@ -40252,9 +40252,9 @@ const GITHUB_OWNED_RE =
  *   repo: string
  *   sha: string
  *   permalink: string
- *   docsUrl: string
+ *   docsURL: string
  *   renderedAt: Date | null
- *   commitUrl: string
+ *   commitURL: string
  *   jobs: ReviewJob[]
  *   uniqueDests: Set<string>
  *   lineageAbsent: boolean
@@ -40278,17 +40278,37 @@ const GITHUB_OWNED_RE =
  */
 
 /**
+ * @typedef {{
+ *   sha: string
+ *   commitURL: string
+ *   expectedJobs: number
+ *   docsURL: string
+ *   renderedAt: string | Date
+ * }} NoRecordInput
+ */
+
+/**
  * Strip control characters from any evidence string (A8).
  * @param {unknown} value
  * @returns {string}
  */
-const stripControl = value => String(value ?? "").replace(/[\u0000-\u0008\u000B-\u001F\u007F]/g, "")
+function stripControl(value) {
+  return String(value ?? "").replace(/[\u0000-\u0008\u000B-\u001F\u007F]/g, "")
+}
 
-/** @param {unknown} value @returns {value is string} */
-const isNonEmptyString = value => value !== undefined && value !== null && value !== ""
+/**
+ * @param {unknown} value
+ * @returns {value is string}
+ */
+function isNonEmptyString(value) {
+  return value !== undefined && value !== null && value !== ""
+}
 
-/** @param {...unknown} values @returns {string} */
-const firstNonEmptyString = (...values) => {
+/**
+ * @param {...unknown} values
+ * @returns {string}
+ */
+function firstNonEmptyString(...values) {
   for (const value of values) {
     if (isNonEmptyString(value)) return value
   }
@@ -40301,36 +40321,39 @@ const firstNonEmptyString = (...values) => {
  * @param {unknown} value
  * @returns {string}
  */
-const escapeCode = value =>
-  stripControl(value)
+function escapeCode(value) {
+  return stripControl(value)
     .replace(/`/g, "ʼ")
     .replace(/[\r\n]+/g, " ")
     .trim()
+}
 
 /**
  * Escape a value destined for INSIDE an HTML element (A8).
  * @param {unknown} value
  * @returns {string}
  */
-const escapeHtml = value =>
-  stripControl(value)
+function escapeHtml(value) {
+  return stripControl(value)
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
     .replace(/[\r\n]+/g, " ")
     .trim()
+}
 
 /**
- * Sanitize a value rendered inside a four-backtick ````text fence (A8): no
+ * Sanitize a value rendered inside a four-backtick text fence (A8): no
  * three-plus backtick runs, one line, control characters stripped.
  * @param {unknown} value
  * @returns {string}
  */
-const fenceSafe = value =>
-  stripControl(value)
+function fenceSafe(value) {
+  return stripControl(value)
     .replace(/`{3,}/g, m => "ʼ".repeat(m.length))
     .replace(/[\r\n]+/g, " ")
     .trim()
+}
 
 /**
  * A5 — identifier normalization: trailing-digit suffixes are ephemeral
@@ -40339,14 +40362,18 @@ const fenceSafe = value =>
  * @param {string} name
  * @returns {string}
  */
-const normalizeIdentifier = name => String(name ?? "").replace(/\d+$/, "*")
+function normalizeIdentifier(name) {
+  return String(name ?? "").replace(/\d+$/, "*")
+}
 
 /**
  * Is this process name a member of the GitHub runner chain (A4)?
  * @param {string} name
  * @returns {boolean}
  */
-const isRunnerChainProcess = name => RUNNER_CHAIN.has(normalizeIdentifier(String(name)))
+function isRunnerChainProcess(name) {
+  return RUNNER_CHAIN.has(normalizeIdentifier(String(name)))
+}
 
 /**
  * A1 — structural classification. Exactly one class per connection, typed on
@@ -40419,14 +40446,14 @@ function summarizeProfile(profile) {
  * Never a github.com/actions URL.
  * @param {string} explicit
  * @param {{ run_id?: string }[]} jobRecords
- * @param {string} appUrl
+ * @param {string} appURL
  * @returns {string}
  */
-function runtime_review_derivePermalink(explicit, jobRecords, appUrl) {
+function runtime_review_derivePermalink(explicit, jobRecords, appURL) {
   if (explicit !== "") return explicit
-  const runId = (jobRecords ?? []).map(j => j?.run_id).find(isNonEmptyString)
-  if (runId === undefined || runId === "" || appUrl === "") return ""
-  return `${appUrl}/dashboard/runs/${encodeURIComponent(String(runId))}?utm_source=github&utm_medium=pr_comment`
+  const runID = (jobRecords ?? []).map(j => j?.run_id).find(isNonEmptyString)
+  if (runID === undefined || runID === "" || appURL === "") return ""
+  return `${appURL}/dashboard/runs/${encodeURIComponent(String(runID))}?utm_source=github&utm_medium=pr_comment`
 }
 
 /**
@@ -40434,7 +40461,9 @@ function runtime_review_derivePermalink(explicit, jobRecords, appUrl) {
  * @param {{ ancestry: string[], domain: string, ip: string }} c
  * @returns {string}
  */
-const connectionKey = c => `${(c.ancestry ?? []).join("\u0000")}\u0001${c.domain}\u0001${c.ip}`
+function connectionKey(c) {
+  return `${(c.ancestry ?? []).join("\u0000")}\u0001${c.domain}\u0001${c.ip}`
+}
 
 /**
  * A5 — behavior signature for R0 comparison across pushes: normalized
@@ -40443,29 +40472,35 @@ const connectionKey = c => `${(c.ancestry ?? []).join("\u0000")}\u0001${c.domain
  * @param {{ ancestry?: string[], domain?: string, ip?: string }} c
  * @returns {string}
  */
-const behaviorSignature = c =>
-  `${(c.ancestry ?? []).map(normalizeIdentifier).join("\u0000")}\u0001${firstNonEmptyString(c.domain, c.ip)}`
+function behaviorSignature(c) {
+  return `${(c.ancestry ?? []).map(normalizeIdentifier).join("\u0000")}\u0001${firstNonEmptyString(c.domain, c.ip)}`
+}
 
 /**
  * A destination's display identity (domain when named, else address).
  * @param {{ domain: string, ip: string }} c
  * @returns {string}
  */
-const destName = c => firstNonEmptyString(c.domain, c.ip)
+function destName(c) {
+  return firstNonEmptyString(c.domain, c.ip)
+}
 
 /**
  * Display label for a destination under A1 (`dns` replaces the stub name).
  * @param {ReviewConnection} c
  * @returns {string}
  */
-const destLabel = c => (c.class === "dns" ? "dns" : destName(c))
+function destLabel(c) {
+  return c.class === "dns" ? "dns" : destName(c)
+}
 
 /**
  * @param {string[]} ancestry
  * @returns {boolean}
  */
-const tailHasNetworkTool = ancestry =>
-  ancestry.slice(-TAIL_DEPTH).some(step => NETWORK_TOOLS.some(re => re.test(String(step))))
+function tailHasNetworkTool(ancestry) {
+  return ancestry.slice(-TAIL_DEPTH).some(step => NETWORK_TOOLS.some(re => re.test(String(step))))
+}
 
 /**
  * A3 — the total selection order (salience order), applied to headline
@@ -40493,9 +40528,9 @@ function salienceComparator(uniqueDests) {
  * @param {{
  *   repo?: string
  *   sha?: string
- *   commitUrl?: string
+ *   commitURL?: string
  *   permalink?: string
- *   docsUrl?: string
+ *   docsURL?: string
  *   expectedJobs?: number
  *   renderedAt?: string | Date
  *   jobs: Partial<JobRecord>[]
@@ -40503,6 +40538,7 @@ function salienceComparator(uniqueDests) {
  * @returns {RunReview}
  */
 function runtime_review_buildRunReview(input) {
+  const inputRecord = /** @type {Record<string, unknown>} */ (input)
   /** @type {ReviewJob[]} */
   let jobs = (input.jobs ?? []).filter(job => job !== undefined && job !== null).map((j, i) => ({
     id: i,
@@ -40566,9 +40602,9 @@ function runtime_review_buildRunReview(input) {
     repo: firstNonEmptyString(input.repo),
     sha: firstNonEmptyString(input.sha),
     permalink: firstNonEmptyString(input.permalink),
-    docsUrl: firstNonEmptyString(input.docsUrl),
+    docsURL: firstNonEmptyString(input.docsURL, inputRecord["docsUrl"]),
     renderedAt: input.renderedAt !== undefined && input.renderedAt !== null ? new Date(input.renderedAt) : null,
-    commitUrl: firstNonEmptyString(input.commitUrl),
+    commitURL: firstNonEmptyString(input.commitURL, inputRecord["commitUrl"]),
     jobs,
     uniqueDests,
     lineageAbsent,
@@ -40699,10 +40735,10 @@ function describeConnection(job, c, suffix) {
   const ancestry = c.ancestry.filter(isNonEmptyString)
   const dest = destLabel(c)
   const tail = ancestry.slice(-TAIL_DEPTH)
-  const toolIdx = tail.findIndex(step => NETWORK_TOOLS.some(re => re.test(String(step))))
+  const toolIndex = tail.findIndex(step => NETWORK_TOOLS.some(re => re.test(String(step))))
   let action
-  const chainStart = ancestry.length - tail.length + toolIdx
-  if (toolIdx !== -1 && chainStart > 0) {
+  const chainStart = ancestry.length - tail.length + toolIndex
+  if (toolIndex !== -1 && chainStart > 0) {
     const parent = ancestry[chainStart - 1]
     const chain = ancestry.slice(chainStart).map(escapeCode).join(" → ")
     action = `\`${escapeCode(parent)}\` spawned \`${chain}\`, which reached \`${escapeCode(dest)}\``
@@ -40969,7 +41005,7 @@ function freshnessStamp(date) {
 function metaLine(review) {
   const shaPrefix = review.sha.slice(0, 7)
   const sha7 = escapeCode(isNonEmptyString(shaPrefix) ? shaPrefix : "unknown")
-  const shaPart = isNonEmptyString(review.commitUrl) ? `[\`${sha7}\`](${review.commitUrl})` : `\`${sha7}\``
+  const shaPart = isNonEmptyString(review.commitURL) ? `[\`${sha7}\`](${review.commitURL})` : `\`${sha7}\``
   const coverage =
     review.counts.expectedJobs > review.counts.jobs
       ? `${review.counts.jobs} of ${review.counts.expectedJobs} job${review.counts.expectedJobs === 1 ? "" : "s"} recorded`
@@ -41012,8 +41048,8 @@ function renderFooter(review, lines) {
       : ""
   const missing = review.counts.expectedJobs - review.counts.jobs
   const growth =
-    missing > 0 && isNonEmptyString(review.docsUrl)
-      ? ` · ${missing} job${missing === 1 ? "" : "s"} not yet recorded — [add the step ↗](${review.docsUrl})`
+    missing > 0 && isNonEmptyString(review.docsURL)
+      ? ` · ${missing} job${missing === 1 ? "" : "s"} not yet recorded — [add the step ↗](${review.docsURL})`
       : ""
   lines.push(
     `<sub>What happened in this PR — each job's processes and where they reached.${capability}${growth}</sub>`,
@@ -41093,11 +41129,11 @@ function runtime_review_renderRunReview(review) {
   const ungrouped = grouped.length > 0 ? review.jobs.slice(0, GROUP_AFTER) : review.jobs
 
   /** @type {Set<number>} */
-  const collapsedIds = new Set()
+  const collapsedIDs = new Set()
   for (let attempts = 0; attempts <= review.jobs.length; attempts += 1) {
     const lines = renderHeader(review, { markers: true })
     for (const job of ungrouped) {
-      renderJobSection(review, job, lines, { collapsed: collapsedIds.has(job.id) })
+      renderJobSection(review, job, lines, { collapsed: collapsedIDs.has(job.id) })
     }
     if (grouped.length > 0) {
       const domains = new Set(grouped.flatMap(j => j.connections.map(destName)).filter(isNonEmptyString)).size
@@ -41107,17 +41143,17 @@ function runtime_review_renderRunReview(review) {
       )
       lines.push("")
       for (const job of grouped) {
-        renderJobSection(review, job, lines, { collapsed: collapsedIds.has(job.id) })
+        renderJobSection(review, job, lines, { collapsed: collapsedIDs.has(job.id) })
       }
       lines.push("</details>")
       lines.push("")
     }
     renderFooter(review, lines)
     const body = lines.join("\n")
-    if (body.length <= SIZE_BUDGET || collapsedIds.size === review.jobs.length) return body
-    const pruneId = pruneOrder[collapsedIds.size]
-    if (pruneId === undefined) return body
-    collapsedIds.add(pruneId)
+    if (body.length <= SIZE_BUDGET || collapsedIDs.size === review.jobs.length) return body
+    const pruneID = pruneOrder[collapsedIDs.size]
+    if (pruneID === undefined) return body
+    collapsedIDs.add(pruneID)
   }
   throw new Error("unreachable")
 }
@@ -41150,30 +41186,27 @@ function renderStepSummary(review) {
  * the workload never ran). Says so plainly — no verdict, no glyph; the footer
  * carries the one growth CTA (A6). Markerless; callers prepend markers for
  * the PR-comment surface.
- * @param {{
- *   sha: string
- *   commitUrl: string
- *   expectedJobs: number
- *   docsUrl: string
- *   renderedAt: string | Date
- * }} input
+ * @param {NoRecordInput} input
  * @returns {string}
  */
 function renderNoRecord(input) {
+  const inputRecord = /** @type {Record<string, unknown>} */ (input)
   const expected = Math.max(input.expectedJobs ?? 0, 1)
   const shaSource = isNonEmptyString(input.sha) ? input.sha : "unknown"
   const sha7 = escapeCode(String(shaSource).slice(0, 7))
   const stamp = freshnessStamp(new Date(input.renderedAt))
+  const commitURL = firstNonEmptyString(input.commitURL, inputRecord["commitUrl"])
+  const docsURL = firstNonEmptyString(input.docsURL, inputRecord["docsUrl"])
   return [
     "## Garnet Runtime Review",
-    `${isNonEmptyString(input.commitUrl) ? `[\`${sha7}\`](${input.commitUrl})` : `\`${sha7}\``} · 0 of ${expected} job${expected === 1 ? "" : "s"} recorded · ${stamp}`,
+    `${isNonEmptyString(commitURL) ? `[\`${sha7}\`](${commitURL})` : `\`${sha7}\``} · 0 of ${expected} job${expected === 1 ? "" : "s"} recorded · ${stamp}`,
     "",
     "No Run Profile was produced for this run.",
     "",
     "Confirm the Garnet action started Jibril successfully and that the workload ran before this step.",
     "",
     "---",
-    `<sub>What happened in this PR — each job's processes and where they reached. · ${expected} job${expected === 1 ? "" : "s"} not yet recorded — [add the step ↗](${input.docsUrl})</sub>`,
+    `<sub>What happened in this PR — each job's processes and where they reached. · ${expected} job${expected === 1 ? "" : "s"} not yet recorded — [add the step ↗](${docsURL})</sub>`,
   ].join("\n")
 }
 
@@ -41209,6 +41242,29 @@ const COMMENT_STATE_MARKER_PREFIX = "garnet-action-comment-state:"
 
 /**
  * @typedef {{ ancestry: string[] }} ProcTree
+ */
+
+/**
+ * @typedef {{ ancestry?: unknown }} ProcTreeTransformInput
+ */
+
+/**
+ * @typedef {{
+ *   result: ProfileResult
+ *   remote_names?: unknown
+ *   remote_address?: string | undefined
+ *   proc_trees?: unknown
+ * }} PeerTransformInput
+ */
+
+/**
+ * @typedef {{
+ *   timestamp: string
+ *   scenarios: { github: GitHubScenario }
+ *   assertions: AssertionSummary[]
+ *   network?: unknown
+ *   telemetry?: unknown
+ * }} ProfileJsonTransformInput
  */
 
 /**
@@ -41253,6 +41309,26 @@ const COMMENT_STATE_MARKER_PREFIX = "garnet-action-comment-state:"
  */
 
 /**
+ * @typedef {{ kind: "stale" } | { kind: "updated", state: CommentState }} MergeCommentStateResult
+ */
+
+/**
+ * @typedef {{
+ *   repository: string
+ *   run_id: string
+ *   job: string
+ * }} ReportLinkInput
+ */
+
+/**
+ * @typedef {{
+ *   ancestry: string[]
+ *   domain: string
+ *   ip: string
+ * }} ProfileConnection
+ */
+
+/**
  * @typedef {{
  *   version: 1
  *   latest_run: WorkflowRun
@@ -41272,8 +41348,8 @@ const COMMENT_STATE_MARKER_PREFIX = "garnet-action-comment-state:"
  * Rendering knobs threaded from the action's inputs (all optional, additive).
  * @typedef {{
  *   expectedJobs?: number
- *   permalinkUrl?: string
- *   docsUrl?: string
+ *   permalinkURL?: string
+ *   docsURL?: string
  *   renderedAt?: string | Date
  * }} RenderOptions
  */
@@ -41284,14 +41360,12 @@ const DEFAULT_DOCS_URL = "https://github.com/garnet-org/action#readme"
 const UTM_SOURCE = "github"
 const UTM_MEDIUM = "pr_comment"
 
-const PROFILE_RESULT_SCHEMA = unknown().transform(value => normalizeResult(value))
+const PROFILE_RESULT_SCHEMA = unknown().transform(transformProfileResult)
 
 const PROC_TREE_SCHEMA = looseObject({
         ancestry: array(schemas_string()),
     })
-    .transform(procTree => ({
-        ancestry: procTree.ancestry.filter(entry => entry.length > 0),
-    }))
+    .transform(transformProcTree)
 
 const ASSERTION_SCHEMA = looseObject({
     id: schemas_string(),
@@ -41304,12 +41378,7 @@ const PEER_SCHEMA = looseObject({
         remote_address: schemas_string().optional(),
         proc_trees: array(PROC_TREE_SCHEMA),
     })
-    .transform(peer => ({
-        remote_names: peer.remote_names.filter(name => name.length > 0),
-        remote_address: peer.remote_address ?? "",
-        proc_trees: peer.proc_trees,
-        result: peer.result,
-    }))
+    .transform(transformPeer)
 
 const GITHUB_SCENARIO_SCHEMA = object({
     workflow: schemas_string(),
@@ -41383,7 +41452,49 @@ const PROFILE_JSON_SCHEMA = looseObject({
         network: PROFILE_NETWORK_SCHEMA,
         telemetry: PROFILE_NETWORK_TELEMETRY_SCHEMA,
     })
-    .transform(profile => ({
+    .transform(transformProfileJson)
+
+/**
+ * @param {unknown} value
+ * @returns {ProfileResult}
+ */
+function transformProfileResult(value) {
+    return normalizeResult(value)
+}
+
+/**
+ * @param {ProcTreeTransformInput} procTree
+ * @returns {ProcTree}
+ */
+function transformProcTree(procTree) {
+    const ancestry = Array.isArray(procTree.ancestry) ? procTree.ancestry : []
+    return {
+        ancestry: ancestry.filter(entry => typeof entry === "string" && entry.length > 0),
+    }
+}
+
+/**
+ * @param {PeerTransformInput} peer
+ * @returns {EgressPeer}
+ */
+function transformPeer(peer) {
+    const remoteNames = Array.isArray(peer.remote_names) ? peer.remote_names : []
+    const procTrees = Array.isArray(peer.proc_trees) ? peer.proc_trees : []
+
+    return {
+        remote_names: remoteNames.filter(name => typeof name === "string" && name.length > 0),
+        remote_address: peer.remote_address ?? "",
+        proc_trees: /** @type {ProcTree[]} */ (procTrees),
+        result: peer.result,
+    }
+}
+
+/**
+ * @param {ProfileJsonTransformInput} profile
+ * @returns {NormalizedProfile}
+ */
+function transformProfileJson(profile) {
+    return {
         timestamp: profile.timestamp,
         github: profile.scenarios.github,
         assertions: profile.assertions,
@@ -41394,7 +41505,8 @@ const PROFILE_JSON_SCHEMA = looseObject({
             run_id: profile.scenarios.github.run_id,
             job: profile.scenarios.github.job,
         }),
-    }))
+    }
+}
 
 /**
  * @returns {string}
@@ -41430,14 +41542,14 @@ function parseProfileJson(content) {
  * @param {CommentState | null} existingState
  * @param {NormalizedProfile} incomingProfile
  * @param {number} runAttempt
- * @returns {{ kind: "stale" } | { kind: "updated", state: CommentState }}
+ * @returns {MergeCommentStateResult}
  */
 function mergeCommentState(existingState, incomingProfile, runAttempt) {
-    const incomingRunId = incomingProfile.github.run_id
+    const incomingRunID = incomingProfile.github.run_id
     const incomingRunAttempt = Number.isSafeInteger(runAttempt) ? runAttempt : 1
     const workflowKey = getWorkflowKey(incomingProfile)
 
-    if (incomingRunId === "") {
+    if (incomingRunID === "") {
         throw new Error("profile JSON is missing the GitHub run id")
     }
 
@@ -41448,7 +41560,7 @@ function mergeCommentState(existingState, incomingProfile, runAttempt) {
                 version: 2,
                 workflow_runs: {
                     [workflowKey]: {
-                        run_id: incomingRunId,
+                        run_id: incomingRunID,
                         run_attempt: incomingRunAttempt,
                     },
                 },
@@ -41462,7 +41574,7 @@ function mergeCommentState(existingState, incomingProfile, runAttempt) {
         latestRun === null
             ? -1
             : compareRuns(latestRun, {
-                  run_id: incomingRunId,
+                  run_id: incomingRunID,
                   run_attempt: incomingRunAttempt,
               })
 
@@ -41478,7 +41590,7 @@ function mergeCommentState(existingState, incomingProfile, runAttempt) {
                 workflow_runs: {
                     ...existingState.workflow_runs,
                     [workflowKey]: {
-                        run_id: incomingRunId,
+                        run_id: incomingRunID,
                         run_attempt: incomingRunAttempt,
                     },
                 },
@@ -41587,18 +41699,23 @@ function renderCommentBody(state, options = {}) {
  * @returns {RunReview}
  */
 function buildProfileRunReview(profiles, options = {}) {
+    const optionsRecord = /** @type {Record<string, unknown>} */ (options)
     const jobs = profiles.map(profile => profileToJobRecord(profile))
     const sha = getCommentCommitSha(profiles)
     const repository = getCommentRepository(profiles)
-    const commitUrl = repository !== "" && sha !== "" ? `https://github.com/${repository}/commit/${sha}` : ""
-    const permalink = derivePermalink(options.permalinkUrl ?? "", jobs, resolveAppBaseUrl())
+    const commitURL = repository !== "" && sha !== "" ? `https://github.com/${repository}/commit/${sha}` : ""
+    const permalink = derivePermalink(
+        profile_comment_firstNonEmptyString(options.permalinkURL, optionsRecord["permalinkUrl"]),
+        jobs,
+        resolveAppBaseURL(),
+    )
 
     return buildRunReview({
         repo: repository,
         sha,
-        commitUrl,
+        commitURL,
         permalink,
-        docsUrl: options.docsUrl ?? DEFAULT_DOCS_URL,
+        docsURL: profile_comment_firstNonEmptyString(options.docsURL, optionsRecord["docsUrl"], DEFAULT_DOCS_URL),
         expectedJobs: options.expectedJobs ?? 0,
         renderedAt: options.renderedAt ?? new Date(),
         jobs,
@@ -41611,7 +41728,7 @@ function buildProfileRunReview(profiles, options = {}) {
  * @returns {JobRecord}
  */
 function profileToJobRecord(profile) {
-    /** @type {{ ancestry: string[], domain: string, ip: string }[]} */
+    /** @type {ProfileConnection[]} */
     const connections = []
     for (const peer of profile.egress_peers) {
         const domain = peer.remote_names[0] ?? ""
@@ -41717,11 +41834,11 @@ function getCommentCommitSha(profiles) {
 }
 
 /**
- * @param {{ repository: string, run_id: string, job: string }} values
+ * @param {ReportLinkInput} values
  * @returns {string}
  */
 function buildReportLink(values) {
-    const baseURL = resolveAppBaseUrl()
+    const baseURL = resolveAppBaseURL()
     if (values.run_id === "") {
         return utmTrackedURL(baseURL)
     }
@@ -41748,34 +41865,34 @@ function utmTrackedURL(rawURL) {
 
 /**
  * @param {string} repository
- * @param {string} runId
+ * @param {string} runID
  * @returns {string}
  */
-function buildGitHubRunLink(repository, runId) {
+function buildGitHubRunLink(repository, runID) {
     const repositoryPath = repository
         .split("/")
         .filter(part => part !== "")
         .map(part => encodeURIComponent(part))
         .join("/")
 
-    if (repositoryPath === "" || !repositoryPath.includes("/") || runId === "") {
+    if (repositoryPath === "" || !repositoryPath.includes("/") || runID === "") {
         return ""
     }
 
-    return `https://github.com/${repositoryPath}/actions/runs/${encodeURIComponent(runId)}`
+    return `https://github.com/${repositoryPath}/actions/runs/${encodeURIComponent(runID)}`
 }
 
 /**
  * @returns {string}
  */
-function resolveAppBaseUrl() {
-    const apiUrl = getConfiguredApiUrl()
-    if (apiUrl === "") {
+function resolveAppBaseURL() {
+    const apiURL = getConfiguredApiURL()
+    if (apiURL === "") {
         return DEFAULT_APP_BASE_URL
     }
 
     try {
-        const url = new URL(apiUrl)
+        const url = new URL(apiURL)
         const appHost = mapApiHostToAppHost(url.host)
         return `${url.protocol}//${appHost}`
     } catch {
@@ -41786,7 +41903,7 @@ function resolveAppBaseUrl() {
 /**
  * @returns {string}
  */
-function getConfiguredApiUrl() {
+function getConfiguredApiURL() {
     if (typeof process.env.GARNET_API_URL === "string" && process.env.GARNET_API_URL !== "") {
         return process.env.GARNET_API_URL
     }
@@ -41817,17 +41934,17 @@ function mapApiHostToAppHost(host) {
 }
 
 /**
- * @param {{ run_id: string, run_attempt: number }} left
- * @param {{ run_id: string, run_attempt: number }} right
+ * @param {WorkflowRun} left
+ * @param {WorkflowRun} right
  * @returns {number}
  */
 function compareRuns(left, right) {
-    const leftRunId = toBigInt(left.run_id)
-    const rightRunId = toBigInt(right.run_id)
-    if (leftRunId > rightRunId) {
+    const leftRunID = toBigInt(left.run_id)
+    const rightRunID = toBigInt(right.run_id)
+    if (leftRunID > rightRunID) {
         return 1
     }
-    if (leftRunId < rightRunId) {
+    if (leftRunID < rightRunID) {
         return -1
     }
 
@@ -41943,6 +42060,19 @@ function getProfileNetworkTelemetry(profile) {
         total_domains: getNumber(egress?.total_domains),
         total_connections: getNumber(egress?.total_connections),
     }
+}
+
+/**
+ * @param {...unknown} values
+ * @returns {string}
+ */
+function profile_comment_firstNonEmptyString(...values) {
+    for (const value of values) {
+        if (typeof value === "string" && value !== "") {
+            return value
+        }
+    }
+    return ""
 }
 
 /**
