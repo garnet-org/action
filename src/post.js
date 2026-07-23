@@ -2,23 +2,28 @@ import * as core from "@actions/core"
 import * as exec from "@actions/exec"
 import * as fs from "node:fs/promises"
 import * as os from "node:os"
-import { firstNonEmptyString, getEnv, getErrorMessage, isSupportedArch, isSupportedPlatform, pathExists } from "./shared.js"
+import { getEnv, getErrorMessage, isSupportedArch, isSupportedPlatform, pathExists } from "./shared.js"
 import { getPullRequestNumberFromEvent } from "./github-event.js"
 import { uploadJibrilArtifacts } from "./post-artifacts.js"
-import { buildProfileRunReview, getDefaultJsonProfileFile, parseProfileJson } from "./profile-comment.js"
+import { getDefaultJsonProfileFile, parseProfileJson, resolveAppBaseUrl } from "./profile-comment.js"
 import { renderNoRecord, renderStepSummary } from "./runtime-review.js"
 import { publishPullRequestComment } from "./pr-comment.js"
 
 /** @typedef {import("./profile-comment.js").NormalizedProfile} NormalizedProfile */
 /** @typedef {import("./profile-comment.js").RenderOptions} RenderOptions */
 
+/**
+ * @typedef {{ normalized: NormalizedProfile, raw: unknown }} LoadedProfile
+ */
+
 const JSON_PROFILE_LABEL = "JSON profile"
 const DOCS_URL = "https://github.com/garnet-org/action#readme"
 
 // This is the post step for the action. It is called by the GitHub Actions
 // runtime. It stops the Jibril service so the daemon flushes all pending events
-// and writes the JSON profile before we read it. It then renders the Runtime
-// Review Step Summary and publishes the PR comment from the same Run Profile.
+// and writes the JSON profile before we read it. It then renders the Garnet
+// Runtime Summary (Step Summary) and publishes the Garnet Runtime Review PR
+// comment from the same Run Profile.
 
 async function run() {
     const platform = os.platform()
@@ -61,12 +66,12 @@ async function run() {
             await uploadJibrilArtifacts()
         }
 
-        const profile = await readNormalizedProfile(debug === "true")
+        const profile = await readProfile(debug === "true")
         const renderOptions = getRenderOptions()
 
         await appendRuntimeReviewSummary(profile, renderOptions)
         if (profile !== null) {
-            await publishProfilerComment(profile, renderOptions)
+            await publishProfilerComment(profile.normalized, renderOptions)
         }
     } catch (err) {
         // Never fail the job because of the Runtime Review step.
@@ -76,12 +81,14 @@ async function run() {
 
 /**
  * Reads and parses the JSON profile produced by Jibril, or null when the
- * profile is missing or unreadable.
+ * profile is missing or unreadable. Returns both the raw parsed JSON (the
+ * Step Summary renders the full-detail report from it, v6.1 §8) and the
+ * normalized shape used by the PR-comment state machinery.
  * @param {boolean} debug
- * @returns {Promise<NormalizedProfile | null>}
+ * @returns {Promise<LoadedProfile | null>}
  */
-async function readNormalizedProfile(debug) {
-    const jsonProfilerFile = firstNonEmptyString(core.getState("jsonProfilerFile"), getDefaultJsonProfileFile())
+async function readProfile(debug) {
+    const jsonProfilerFile = firstNonEmptyString([core.getState("jsonProfilerFile"), getDefaultJsonProfileFile()])
 
     try {
         const jsonProfile = await readOptionalRootFile(jsonProfilerFile)
@@ -95,7 +102,10 @@ async function readNormalizedProfile(debug) {
             core.info(jsonProfile)
         }
 
-        return parseProfileJson(jsonProfile)
+        return {
+            normalized: parseProfileJson(jsonProfile),
+            raw: JSON.parse(jsonProfile),
+        }
     } catch (error) {
         core.warning(`failed to read ${JSON_PROFILE_LABEL}: ${getErrorMessage(error)}`)
         return null
@@ -112,9 +122,12 @@ function getRenderOptions() {
 }
 
 /**
- * Writes the full-detail Runtime Review snapshot to the GitHub Step Summary
- * (no elision, no folds, no markers).
- * @param {NormalizedProfile | null} profile
+ * Writes the Garnet Runtime Summary — the per-run full-detail tabular
+ * record (v6.1 §8) — to the GitHub Step Summary, rendered from the RAW
+ * parsed profile. When no profile was produced, the waiting-state body
+ * (v6.1 §2) is written instead, markerless and with the explainer
+ * collapsed.
+ * @param {LoadedProfile | null} profile
  * @param {RenderOptions} renderOptions
  * @returns {Promise<void>}
  */
@@ -131,18 +144,19 @@ async function appendRuntimeReviewSummary(profile, renderOptions) {
         const repository = getEnv("GITHUB_REPOSITORY")
         content = renderNoRecord({
             sha,
-            commitURL: repository !== "" && sha !== "" ? `https://github.com/${repository}/commit/${sha}` : "",
+            commitUrl: repository !== "" && sha !== "" ? `https://github.com/${repository}/commit/${sha}` : "",
             expectedJobs: renderOptions.expectedJobs ?? 1,
-            docsURL: DOCS_URL,
+            docsUrl: DOCS_URL,
             renderedAt: renderOptions.renderedAt ?? new Date(),
+            firstRun: false,
         })
     } else {
-        const review = buildProfileRunReview([profile], renderOptions)
-        content = renderStepSummary(review)
+        const preview = core.getState("preview") === "true"
+        content = renderStepSummary([profile.raw], { appUrl: resolveAppBaseUrl(), preview })
     }
 
     await fs.appendFile(summaryFile, `\n${content}\n`)
-    core.info("Runtime Review written to job summary")
+    core.info("Garnet Runtime Summary written to job summary")
 }
 
 /**
@@ -163,7 +177,7 @@ async function publishProfilerComment(profile, renderOptions) {
         return
     }
 
-    const token = firstNonEmptyString(core.getState("githubToken"), getEnv("GITHUB_TOKEN"))
+    const token = firstNonEmptyString([core.getState("githubToken"), getEnv("GITHUB_TOKEN")])
     if (token === "") {
         core.warning("github_token is not set, skipping PR comment")
         return
@@ -206,6 +220,20 @@ async function readOptionalRootFile(filePath) {
     } catch {
         return ""
     }
+}
+
+/**
+ * @param {string[]} values
+ * @returns {string}
+ */
+function firstNonEmptyString(values) {
+    for (const value of values) {
+        if (value !== "") {
+            return value
+        }
+    }
+
+    return ""
 }
 
 /**

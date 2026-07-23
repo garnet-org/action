@@ -23,6 +23,10 @@ inputs:
         description: "Enable debug mode"
         required: false
         default: "false"
+    preview:
+        description: "Render the full-fidelity Step Summary record (assertions + evidence). Preview shape is unstable and may change without a major version bump"
+        required: false
+        default: "false"
 outputs:
     profile_result:
         description: "Reserved for the companion GitHub App and control plane; this action records the Runtime Review"
