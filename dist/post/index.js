@@ -78398,16 +78398,16 @@ function file_command_issueFileCommand(command, message) {
     if (!filePath) {
         throw new Error(`Unable to find environment variable for file command ${command}`);
     }
-    if (!fs.existsSync(filePath)) {
+    if (!external_fs_.existsSync(filePath)) {
         throw new Error(`Missing file at path: ${filePath}`);
     }
-    fs.appendFileSync(filePath, `${toCommandValue(message)}${os.EOL}`, {
+    external_fs_.appendFileSync(filePath, `${utils_toCommandValue(message)}${external_os_namespaceObject.EOL}`, {
         encoding: 'utf8'
     });
 }
 function file_command_prepareKeyValueMessage(key, value) {
-    const delimiter = `ghadelimiter_${crypto.randomUUID()}`;
-    const convertedValue = toCommandValue(value);
+    const delimiter = `ghadelimiter_${external_crypto_namespaceObject.randomUUID()}`;
+    const convertedValue = utils_toCommandValue(value);
     // These should realistically never happen, but just in case someone finds a
     // way to exploit uuid generation let's not allow keys or values that contain
     // the delimiter.
@@ -78417,7 +78417,7 @@ function file_command_prepareKeyValueMessage(key, value) {
     if (convertedValue.includes(delimiter)) {
         throw new Error(`Unexpected input: value should not contain the delimiter "${delimiter}"`);
     }
-    return `${key}<<${delimiter}${os.EOL}${convertedValue}${os.EOL}${delimiter}`;
+    return `${key}<<${delimiter}${external_os_namespaceObject.EOL}${convertedValue}${external_os_namespaceObject.EOL}${delimiter}`;
 }
 //# sourceMappingURL=file-command.js.map
 // EXTERNAL MODULE: external "path"
@@ -81041,10 +81041,10 @@ function getBooleanInput(name, options) {
 function setOutput(name, value) {
     const filePath = process.env['GITHUB_OUTPUT'] || '';
     if (filePath) {
-        return issueFileCommand('OUTPUT', prepareKeyValueMessage(name, value));
+        return file_command_issueFileCommand('OUTPUT', file_command_prepareKeyValueMessage(name, value));
     }
-    process.stdout.write(os.EOL);
-    issueCommand('set-output', { name }, toCommandValue(value));
+    process.stdout.write(external_os_namespaceObject.EOL);
+    command_issueCommand('set-output', { name }, utils_toCommandValue(value));
 }
 /**
  * Enables or disables the echoing of commands into stdout for the rest of the step.
@@ -81210,7 +81210,7 @@ const external_node_os_namespaceObject = __WEBPACK_EXTERNAL_createRequire(import
  * @param {string=} def
  * @returns {string}
  */
-function getEnv(name, def = "") {
+function shared_getEnv(name, def = "") {
   return process.env[name] ?? def
 }
 
@@ -81260,7 +81260,7 @@ function shared_firstNonEmptyString(...values) {
  * @param {string} filePath
  * @returns {Promise<boolean>}
  */
-async function pathExists(filePath) {
+async function shared_pathExists(filePath) {
   try {
     await promises_.access(filePath)
     return true
@@ -81295,6 +81295,262 @@ function isSupportedPlatform(platform) {
  */
 function isSupportedArch(arch) {
   return arch === "x64" || arch === "x86_64"
+}
+
+;// CONCATENATED MODULE: external "node:https"
+const external_node_https_namespaceObject = __WEBPACK_EXTERNAL_createRequire(import.meta.url)("node:https");
+;// CONCATENATED MODULE: ./src/coverage.js
+
+
+
+
+
+
+// Coverage instrumentation for the Garnet action.
+//
+// Jibril's network capture relies on kernel eBPF features (CO-RE/BTF via
+// /sys/kernel/btf/vmlinux, cgroup v2 for cgroup/skb attachment). Alternative
+// CI runner providers (Blacksmith, Namespace, Depot, WarpBuild, ...) boot
+// custom guest kernels inside Firecracker/other microVMs where those features
+// are not guaranteed. The daemon can stay "active" while individual probes
+// silently fail, producing a Run Profile with process telemetry but zero
+// network flows — coverage silently degrades.
+//
+// This module gives the action an explicit, honest signal:
+//   1. main step  — collectRunnerEnvironment(): record kernel/BTF/cgroup/provider facts.
+//   2. main step  — emitCanaryFlow(): make one known egress connection while
+//                   Jibril is recording, so every job has at least one expected flow.
+//   3. post step  — assessCoverage(): compare the parsed profile against the
+//                   canary and environment; classify full | degraded | none.
+
+const CANARY_TIMEOUT_MS = 5000
+
+/**
+ * @typedef {{
+ *   kernel: string
+ *   btfPresent: boolean
+ *   cgroupV2: boolean
+ *   provider: string
+ * }} RunnerEnvironment
+ */
+
+/**
+ * @typedef {{
+ *   status: "full" | "degraded" | "none"
+ *   reasons: string[]
+ *   totalDomains: number
+ *   totalConnections: number
+ *   canaryObserved: boolean
+ * }} CoverageAssessment
+ */
+
+/**
+ * Best-effort detection of the runner provider. GitHub-hosted runners set
+ * RUNNER_ENVIRONMENT=github-hosted; alternative providers leak their identity
+ * through environment variables or the runner name.
+ * @returns {string}
+ */
+function detectRunnerProvider() {
+    const envKeys = Object.keys(process.env)
+    const runnerName = getEnv("RUNNER_NAME", "").toLowerCase()
+
+    const providers = [
+        { name: "blacksmith", match: /^BLACKSMITH/i },
+        { name: "namespace", match: /^NSC_/i },
+        { name: "depot", match: /^DEPOT_/i },
+        { name: "warpbuild", match: /^WARPBUILD/i },
+        { name: "buildjet", match: /^BUILDJET/i },
+    ]
+
+    for (const provider of providers) {
+        if (envKeys.some(key => provider.match.test(key)) || runnerName.includes(provider.name)) {
+            return provider.name
+        }
+    }
+
+    if (getEnv("RUNNER_ENVIRONMENT", "") === "github-hosted") {
+        return "github-hosted"
+    }
+
+    return "self-hosted-or-unknown"
+}
+
+/**
+ * Collects kernel facts relevant to Jibril's eBPF capture. Read-only sysfs
+ * checks; never throws.
+ * @returns {Promise<RunnerEnvironment>}
+ */
+async function collectRunnerEnvironment() {
+    const environment = {
+        kernel: os.release(),
+        btfPresent: false,
+        cgroupV2: false,
+        provider: detectRunnerProvider(),
+    }
+
+    try {
+        environment.btfPresent = await pathExists("/sys/kernel/btf/vmlinux")
+    } catch (_) {}
+
+    try {
+        environment.cgroupV2 = await pathExists("/sys/fs/cgroup/cgroup.controllers")
+    } catch (_) {}
+
+    return environment
+}
+
+/**
+ * Serializes the runner environment into a single log-friendly line.
+ * @param {RunnerEnvironment} environment
+ * @returns {string}
+ */
+function formatRunnerEnvironment(environment) {
+    return (
+        `kernel=${environment.kernel} ` +
+        `btf=${environment.btfPresent ? "present" : "absent"} ` +
+        `cgroup_v2=${environment.cgroupV2 ? "present" : "absent"} ` +
+        `provider=${environment.provider}`
+    )
+}
+
+/**
+ * Emits one known egress flow while Jibril is recording, by making an HTTPS
+ * request to the Garnet API host. The response status is irrelevant — the
+ * TCP+TLS connection itself is the canary. Returns the canary hostname, or
+ * "" when the connection could not be made (in which case the post step
+ * skips the canary check rather than reporting a false degradation).
+ * @param {string} baseURL
+ * @returns {Promise<string>}
+ */
+async function emitCanaryFlow(baseURL) {
+    let hostname = ""
+    try {
+        hostname = new URL(baseURL).hostname
+    } catch (_) {
+        return ""
+    }
+
+    return new Promise(resolve => {
+        const request = https.get(`https://${hostname}/`, { timeout: CANARY_TIMEOUT_MS }, response => {
+            // Drain and discard; the connection is all we need.
+            response.resume()
+            response.on("end", () => resolve(hostname))
+            response.on("error", () => resolve(hostname))
+        })
+        request.on("timeout", () => {
+            request.destroy()
+            resolve("")
+        })
+        // TLS handshake completing means the egress flow happened even if the
+        // request errors afterwards.
+        request.on("error", () => resolve(""))
+    })
+}
+
+/**
+ * Returns the set of remote names observed in the profile's egress peers.
+ * @param {import("./profile-comment.js").NormalizedProfile} profile
+ * @returns {Set<string>}
+ */
+function getEgressNames(profile) {
+    const names = new Set()
+    for (const peer of profile.egress_peers) {
+        for (const name of peer.remote_names) {
+            names.add(name.toLowerCase())
+        }
+        if (peer.remote_address !== "") {
+            names.add(peer.remote_address.toLowerCase())
+        }
+    }
+    return names
+}
+
+/**
+ * Classifies runtime coverage for this job.
+ *   - none:     no profile was produced at all.
+ *   - degraded: a profile exists but network capture is missing evidence it
+ *               should have (zero egress, or the canary flow is absent).
+ *   - full:     egress telemetry present and consistent with the canary.
+ * @param {import("./profile-comment.js").NormalizedProfile | null} profile
+ * @param {{ canaryDomain: string, environment: RunnerEnvironment | null }} context
+ * @returns {CoverageAssessment}
+ */
+function assessCoverage(profile, context) {
+    if (profile === null) {
+        return {
+            status: "none",
+            reasons: ["no Run Profile was produced by the Jibril daemon"],
+            totalDomains: 0,
+            totalConnections: 0,
+            canaryObserved: false,
+        }
+    }
+
+    const totalDomains = profile.telemetry.total_domains
+    const totalConnections = profile.telemetry.total_connections
+    const egressNames = getEgressNames(profile)
+    const canaryDomain = context.canaryDomain.toLowerCase()
+    const canaryObserved = canaryDomain !== "" && egressNames.has(canaryDomain)
+
+    const reasons = []
+    if (totalDomains === 0 && egressNames.size === 0) {
+        reasons.push("profile contains zero network egress flows")
+    }
+    if (canaryDomain !== "" && !canaryObserved && egressNames.size === 0) {
+        reasons.push(
+            `canary flow to ${canaryDomain} (made while the daemon was recording) is absent from the profile`,
+        )
+    }
+
+    if (context.environment !== null && reasons.length > 0) {
+        if (!context.environment.btfPresent) {
+            reasons.push("kernel BTF (/sys/kernel/btf/vmlinux) is absent — eBPF CO-RE programs cannot load")
+        }
+        if (!context.environment.cgroupV2) {
+            reasons.push("cgroup v2 is not mounted — cgroup/skb network probes cannot attach")
+        }
+    }
+
+    return {
+        status: reasons.length > 0 ? "degraded" : "full",
+        reasons,
+        totalDomains,
+        totalConnections,
+        canaryObserved,
+    }
+}
+
+/**
+ * Renders the degraded-coverage banner prepended to the Runtime Review
+ * step summary.
+ * @param {CoverageAssessment} assessment
+ * @param {RunnerEnvironment | null} environment
+ * @param {string} docsURL
+ * @returns {string}
+ */
+function renderCoverageBanner(assessment, environment, docsURL) {
+    if (assessment.status !== "degraded") {
+        return ""
+    }
+
+    const lines = [
+        "> [!WARNING]",
+        "> **Degraded runtime coverage** — Jibril ran and produced a Run Profile, but network",
+        "> flow capture looks incomplete on this runner:",
+    ]
+    for (const reason of assessment.reasons) {
+        lines.push(`> - ${reason}`)
+    }
+    if (environment !== null) {
+        lines.push(`> - runner environment: \`${formatRunnerEnvironment(environment)}\``)
+    }
+    lines.push(
+        "> ",
+        "> Process and file telemetry may still be present. This usually indicates the runner's",
+        "> kernel lacks eBPF features Jibril needs (common on custom microVM kernels used by",
+        `> alternative CI providers). See ${docsURL} for supported-runner requirements.`,
+    )
+    return `${lines.join("\n")}\n\n`
 }
 
 ;// CONCATENATED MODULE: ./src/github-event.js
@@ -84719,8 +84975,6 @@ function restError_isRestError(e) {
 //# sourceMappingURL=restError.js.map
 // EXTERNAL MODULE: external "node:http"
 var external_node_http_ = __nccwpck_require__(7067);
-;// CONCATENATED MODULE: external "node:https"
-const external_node_https_namespaceObject = __WEBPACK_EXTERNAL_createRequire(import.meta.url)("node:https");
 // EXTERNAL MODULE: external "node:zlib"
 var external_node_zlib_ = __nccwpck_require__(8522);
 // EXTERNAL MODULE: external "node:stream"
@@ -138181,7 +138435,7 @@ async function copyReadableLogFile(artifactDir, src, destName) {
     await exec_exec("sudo", ["chmod", "a+r", destPath], {
       ignoreReturnCode: true,
     })
-    return await pathExists(destPath)
+    return await shared_pathExists(destPath)
   } catch {
     return false
   }
@@ -138197,7 +138451,7 @@ async function findExistingArtifactFiles(artifactDir, fileNames) {
   const existing = []
 
   for (const fileName of fileNames) {
-    if (await pathExists(external_node_path_.join(artifactDir, fileName))) {
+    if (await shared_pathExists(external_node_path_.join(artifactDir, fileName))) {
       existing.push(fileName)
     }
   }
@@ -138209,8 +138463,8 @@ async function findExistingArtifactFiles(artifactDir, fileNames) {
  * @returns {string}
  */
 function getDebugArtifactName() {
-  const jobName = getEnv("GITHUB_JOB")
-  const runAttempt = getEnv("GITHUB_RUN_ATTEMPT")
+  const jobName = shared_getEnv("GITHUB_JOB")
+  const runAttempt = shared_getEnv("GITHUB_RUN_ATTEMPT")
 
   const artifactNameParts = [DEBUG_ARTIFACT_NAME]
   if (jobName !== "") {
@@ -148397,6 +148651,7 @@ function getCreateRecheckDelayMs(profile) {
 
 
 
+
 /** @typedef {import("./profile-comment.js").NormalizedProfile} NormalizedProfile */
 /** @typedef {import("./profile-comment.js").RenderOptions} RenderOptions */
 
@@ -148452,7 +148707,8 @@ async function run() {
         const profile = await readNormalizedProfile(debug === "true")
         const renderOptions = getRenderOptions()
 
-        await appendRuntimeReviewSummary(profile, renderOptions)
+        const coverage = assessRuntimeCoverage(profile)
+        await appendRuntimeReviewSummary(profile, renderOptions, coverage)
         if (profile !== null) {
             await publishProfilerComment(profile, renderOptions)
         }
@@ -148460,6 +148716,50 @@ async function run() {
         // Never fail the job because of the Runtime Review step.
         warning(`failed to write Runtime Review summary: ${getErrorMessage(err)}`)
     }
+}
+
+/**
+ * @typedef {{
+ *   assessment: import("./coverage.js").CoverageAssessment
+ *   environment: import("./coverage.js").RunnerEnvironment | null
+ * }} RuntimeCoverage
+ */
+
+/**
+ * Classifies runtime coverage for this job from the parsed profile plus the
+ * environment facts and canary flow recorded by the main step. Emits the
+ * greppable coverage log line, the degraded-coverage warning annotation, and
+ * the `coverage` output.
+ * @param {NormalizedProfile | null} profile
+ * @returns {RuntimeCoverage}
+ */
+function assessRuntimeCoverage(profile) {
+    /** @type {import("./coverage.js").RunnerEnvironment | null} */
+    let environment = null
+    try {
+        const rawEnvironment = getState("runnerEnvironment")
+        if (rawEnvironment !== "") {
+            environment = JSON.parse(rawEnvironment)
+        }
+    } catch (_) {}
+
+    const canaryDomain = getState("coverageCanaryDomain")
+    const assessment = assessCoverage(profile, { canaryDomain, environment })
+
+    setOutput("coverage", assessment.status)
+    info(
+        `runtime coverage: ${assessment.status} ` +
+            `(egress domains=${assessment.totalDomains}, connections=${assessment.totalConnections}, ` +
+            `canary=${assessment.canaryObserved ? "observed" : "missing"})`,
+    )
+    if (assessment.status === "degraded") {
+        const environmentSuffix = environment !== null ? ` [${formatRunnerEnvironment(environment)}]` : ""
+        warning(
+            `Garnet runtime coverage is degraded on this runner: ${assessment.reasons.join("; ")}${environmentSuffix}`,
+        )
+    }
+
+    return { assessment, environment }
 }
 
 /**
@@ -148504,10 +148804,11 @@ function getRenderOptions() {
  * (no elision, no folds, no markers).
  * @param {NormalizedProfile | null} profile
  * @param {RenderOptions} renderOptions
+ * @param {RuntimeCoverage} coverage
  * @returns {Promise<void>}
  */
-async function appendRuntimeReviewSummary(profile, renderOptions) {
-    const summaryFile = getEnv("GITHUB_STEP_SUMMARY")
+async function appendRuntimeReviewSummary(profile, renderOptions, coverage) {
+    const summaryFile = shared_getEnv("GITHUB_STEP_SUMMARY")
     if (summaryFile === "") {
         warning("GITHUB_STEP_SUMMARY is not set, cannot write summary")
         return
@@ -148515,8 +148816,8 @@ async function appendRuntimeReviewSummary(profile, renderOptions) {
 
     let content
     if (profile === null) {
-        const sha = getEnv("GITHUB_SHA")
-        const repository = getEnv("GITHUB_REPOSITORY")
+        const sha = shared_getEnv("GITHUB_SHA")
+        const repository = shared_getEnv("GITHUB_REPOSITORY")
         content = renderNoRecord({
             sha,
             commitURL: repository !== "" && sha !== "" ? `https://github.com/${repository}/commit/${sha}` : "",
@@ -148529,6 +148830,11 @@ async function appendRuntimeReviewSummary(profile, renderOptions) {
         content = renderStepSummary(review)
     }
 
+    const banner = renderCoverageBanner(coverage.assessment, coverage.environment, DOCS_URL)
+    if (banner !== "") {
+        content = `${banner}${content}`
+    }
+
     await promises_.appendFile(summaryFile, `\n${content}\n`)
     info("Runtime Review written to job summary")
 }
@@ -148539,19 +148845,19 @@ async function appendRuntimeReviewSummary(profile, renderOptions) {
  * @returns {Promise<void>}
  */
 async function publishProfilerComment(profile, renderOptions) {
-    const eventPath = getEnv("GITHUB_EVENT_PATH")
+    const eventPath = shared_getEnv("GITHUB_EVENT_PATH")
     if (eventPath === "") {
         info("GITHUB_EVENT_PATH is not set, skipping PR comment")
         return
     }
 
-    const repository = getEnv("GITHUB_REPOSITORY")
+    const repository = shared_getEnv("GITHUB_REPOSITORY")
     if (repository === "") {
         warning("GITHUB_REPOSITORY is not set, skipping PR comment")
         return
     }
 
-    const token = shared_firstNonEmptyString(getState("githubToken"), getEnv("GITHUB_TOKEN"))
+    const token = shared_firstNonEmptyString(getState("githubToken"), shared_getEnv("GITHUB_TOKEN"))
     if (token === "") {
         warning("github_token is not set, skipping PR comment")
         return
@@ -148563,7 +148869,7 @@ async function publishProfilerComment(profile, renderOptions) {
         return
     }
 
-    const runAttempt = post_parseRunAttempt(getEnv("GITHUB_RUN_ATTEMPT"))
+    const runAttempt = post_parseRunAttempt(shared_getEnv("GITHUB_RUN_ATTEMPT"))
 
     try {
         const result = await publishPullRequestComment({

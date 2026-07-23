@@ -3,6 +3,7 @@ import * as exec from "@actions/exec"
 import * as fs from "node:fs/promises"
 import * as os from "node:os"
 import { firstNonEmptyString, getEnv, getErrorMessage, isSupportedArch, isSupportedPlatform, pathExists } from "./shared.js"
+import { assessCoverage, formatRunnerEnvironment, renderCoverageBanner } from "./coverage.js"
 import { getPullRequestNumberFromEvent } from "./github-event.js"
 import { uploadJibrilArtifacts } from "./post-artifacts.js"
 import { buildProfileRunReview, getDefaultJsonProfileFile, parseProfileJson } from "./profile-comment.js"
@@ -64,7 +65,8 @@ async function run() {
         const profile = await readNormalizedProfile(debug === "true")
         const renderOptions = getRenderOptions()
 
-        await appendRuntimeReviewSummary(profile, renderOptions)
+        const coverage = assessRuntimeCoverage(profile)
+        await appendRuntimeReviewSummary(profile, renderOptions, coverage)
         if (profile !== null) {
             await publishProfilerComment(profile, renderOptions)
         }
@@ -72,6 +74,50 @@ async function run() {
         // Never fail the job because of the Runtime Review step.
         core.warning(`failed to write Runtime Review summary: ${getErrorMessage(err)}`)
     }
+}
+
+/**
+ * @typedef {{
+ *   assessment: import("./coverage.js").CoverageAssessment
+ *   environment: import("./coverage.js").RunnerEnvironment | null
+ * }} RuntimeCoverage
+ */
+
+/**
+ * Classifies runtime coverage for this job from the parsed profile plus the
+ * environment facts and canary flow recorded by the main step. Emits the
+ * greppable coverage log line, the degraded-coverage warning annotation, and
+ * the `coverage` output.
+ * @param {NormalizedProfile | null} profile
+ * @returns {RuntimeCoverage}
+ */
+function assessRuntimeCoverage(profile) {
+    /** @type {import("./coverage.js").RunnerEnvironment | null} */
+    let environment = null
+    try {
+        const rawEnvironment = core.getState("runnerEnvironment")
+        if (rawEnvironment !== "") {
+            environment = JSON.parse(rawEnvironment)
+        }
+    } catch (_) {}
+
+    const canaryDomain = core.getState("coverageCanaryDomain")
+    const assessment = assessCoverage(profile, { canaryDomain, environment })
+
+    core.setOutput("coverage", assessment.status)
+    core.info(
+        `runtime coverage: ${assessment.status} ` +
+            `(egress domains=${assessment.totalDomains}, connections=${assessment.totalConnections}, ` +
+            `canary=${assessment.canaryObserved ? "observed" : "missing"})`,
+    )
+    if (assessment.status === "degraded") {
+        const environmentSuffix = environment !== null ? ` [${formatRunnerEnvironment(environment)}]` : ""
+        core.warning(
+            `Garnet runtime coverage is degraded on this runner: ${assessment.reasons.join("; ")}${environmentSuffix}`,
+        )
+    }
+
+    return { assessment, environment }
 }
 
 /**
@@ -116,9 +162,10 @@ function getRenderOptions() {
  * (no elision, no folds, no markers).
  * @param {NormalizedProfile | null} profile
  * @param {RenderOptions} renderOptions
+ * @param {RuntimeCoverage} coverage
  * @returns {Promise<void>}
  */
-async function appendRuntimeReviewSummary(profile, renderOptions) {
+async function appendRuntimeReviewSummary(profile, renderOptions, coverage) {
     const summaryFile = getEnv("GITHUB_STEP_SUMMARY")
     if (summaryFile === "") {
         core.warning("GITHUB_STEP_SUMMARY is not set, cannot write summary")
@@ -139,6 +186,11 @@ async function appendRuntimeReviewSummary(profile, renderOptions) {
     } else {
         const review = buildProfileRunReview([profile], renderOptions)
         content = renderStepSummary(review)
+    }
+
+    const banner = renderCoverageBanner(coverage.assessment, coverage.environment, DOCS_URL)
+    if (banner !== "") {
+        content = `${banner}${content}`
     }
 
     await fs.appendFile(summaryFile, `\n${content}\n`)
