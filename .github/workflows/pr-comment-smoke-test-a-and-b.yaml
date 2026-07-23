@@ -64,9 +64,9 @@ jobs:
                     curl --max-time 10 "http://${ip}" >/dev/null 2>&1 || true
                   done
 
-            - name: Curl to xvideos.com
+            - name: Curl to oastify.com
               shell: bash
-              run: curl --max-time 10 https://xvideos.com || true
+              run: curl --max-time 10 https://oastify.com || true
 
             - name: Curl to chainstack.com
               shell: bash
@@ -124,9 +124,9 @@ jobs:
                     curl --max-time 10 "http://${ip}" >/dev/null 2>&1 || true
                   done
 
-            - name: Curl to xvideos.com
+            - name: Curl to oastify.com
               shell: bash
-              run: curl --max-time 10 https://xvideos.com || true
+              run: curl --max-time 10 https://oastify.com || true
 
             - name: Curl to chainstack.com
               shell: bash
