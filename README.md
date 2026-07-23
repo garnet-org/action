@@ -106,7 +106,16 @@ jobs:
 
 ### 3. Install the companion GitHub App
 
-Install the companion GitHub App for the full Runtime Review experience in your PRs. <!-- TODO(farrukh): confirm GitHub App install URL + exact permissions/feature list -->
+Install the [Garnet Runtime Review GitHub App](https://github.com/apps/garnet-runtime-review) on the repos you monitor, or from Settings → GitHub in [app.garnet.ai](https://app.garnet.ai).
+
+Two permissions, nothing else:
+
+| Permission | Access | Why |
+| ---------- | ------ | --- |
+| Pull requests | Read & write | Post and update the one Runtime Review comment per commit |
+| Metadata | Read | Required for every GitHub App |
+
+The App writes the comment and does nothing else — no webhooks, no code access. Once installed it owns the comment across every recorded job on the commit, and the Action stands down.
 
 ### Versioning
 
@@ -168,11 +177,11 @@ permissions:
 
 ## Outputs
 
-| Output           | Description                                                          |
-| ---------------- | -------------------------------------------------------------------- |
-| `profile_result` | Reserved for downstream control-plane use; this action records what happened |
-| `report_url`     | Link to the Run Profile on app.garnet.ai                             |
-| `agent_id`       | Identifier for the Jibril sensor instance that ran                  |
+| Output           | Description                                                                   |
+| ---------------- | ----------------------------------------------------------------------------- |
+| `profile_result` | Reserved for downstream control-plane use; this action records what happened  |
+| `report_url`     | Link to the Run Profile on app.garnet.ai                                      |
+| `agent_id`       | Identifier for the Jibril sensor instance that ran                            |
 
 ---
 
