@@ -38,6 +38,22 @@ export function getOptionalRecord(value) {
 }
 
 /**
+ * @param {unknown} value
+ * @returns {string | undefined}
+ */
+export function getOptionalString(value) {
+  return typeof value === "string" && value !== "" ? value : undefined
+}
+
+/**
+ * @param {unknown} value
+ * @returns {number | undefined}
+ */
+export function getOptionalNumber(value) {
+  return typeof value === "number" ? value : undefined
+}
+
+/**
  * @param {...unknown} values
  * @returns {string}
  */
