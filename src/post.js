@@ -2,7 +2,17 @@ import * as core from "@actions/core"
 import * as exec from "@actions/exec"
 import * as fs from "node:fs/promises"
 import * as os from "node:os"
-import { firstNonEmptyString, getEnv, getErrorMessage, isSupportedArch, isSupportedPlatform, pathExists } from "./shared.js"
+import {
+    firstNonEmptyString,
+    getEnv,
+    getErrorMessage,
+    getOptionalNumber,
+    getOptionalRecord,
+    getOptionalString,
+    isSupportedArch,
+    isSupportedPlatform,
+    pathExists,
+} from "./shared.js"
 import { getPullRequestNumberFromEvent } from "./github-event.js"
 import { uploadJibrilArtifacts } from "./post-artifacts.js"
 import { buildProfileRunReview, getDefaultJsonProfileFile, parseProfileJson } from "./profile-comment.js"
@@ -11,6 +21,13 @@ import { publishPullRequestComment } from "./pr-comment.js"
 
 /** @typedef {import("./profile-comment.js").NormalizedProfile} NormalizedProfile */
 /** @typedef {import("./profile-comment.js").RenderOptions} RenderOptions */
+
+/**
+ * @typedef {{
+ *   statusCode?: number
+ *   apiCode?: string
+ * }} GitHubApiErrorDetails
+ */
 
 const JSON_PROFILE_LABEL = "JSON profile"
 const DOCS_URL = "https://github.com/garnet-org/action#readme"
@@ -188,8 +205,106 @@ async function publishProfilerComment(profile, renderOptions) {
         })
         core.info(`PR comment ${result}`)
     } catch (error) {
-        core.warning(`failed to publish PR comment: ${getErrorMessage(error)}`)
+        core.warning(`failed to publish PR comment: ${formatPullRequestCommentPublishError(error)}`)
     }
+}
+
+/**
+ * @param {unknown} error
+ * @returns {string}
+ */
+function formatPullRequestCommentPublishError(error) {
+    const details = getGitHubApiErrorDetails(error)
+    const messageParts = [getErrorMessage(error)]
+
+    if (details.statusCode !== undefined) {
+        messageParts.push(`status=${details.statusCode}`)
+    }
+    if (details.apiCode !== undefined) {
+        messageParts.push(`api_code=${details.apiCode}`)
+    }
+
+    if (details.statusCode === 403 && getErrorMessage(error).includes("Resource not accessible by integration")) {
+        messageParts.push(
+            "hint=The token cannot comment on this PR. Ensure `permissions` include `pull-requests: write` (or `issues: write`) and note that fork PR workflows may still run with read-only tokens.",
+        )
+    }
+
+    return messageParts.join("; ")
+}
+
+/**
+ * @param {unknown} error
+ * @returns {GitHubApiErrorDetails}
+ */
+function getGitHubApiErrorDetails(error) {
+    const errorRecord = getOptionalRecord(error)
+    if (errorRecord === null) {
+        return {}
+    }
+
+    const details = {}
+
+    const statusCode = getOptionalNumber(errorRecord.status)
+    if (statusCode !== undefined) {
+        details.statusCode = statusCode
+    }
+
+    const response = getOptionalRecord(errorRecord.response)
+    if (response !== null) {
+        if (details.statusCode === undefined) {
+            const responseStatus = getOptionalNumber(response.status)
+            if (responseStatus !== undefined) {
+                details.statusCode = responseStatus
+            }
+        }
+
+        const responseData = getOptionalRecord(response.data)
+        if (responseData !== null) {
+            const directCode = getOptionalString(responseData.code)
+            if (directCode !== undefined) {
+                details.apiCode = directCode
+            } else {
+                const nestedCode = getApiCodeFromErrorList(responseData.errors)
+                if (nestedCode !== undefined) {
+                    details.apiCode = nestedCode
+                }
+            }
+        }
+    }
+
+    if (details.apiCode === undefined) {
+        const topLevelCode = getOptionalString(errorRecord.code)
+        if (topLevelCode !== undefined) {
+            details.apiCode = topLevelCode
+        }
+    }
+
+    return details
+}
+
+/**
+ * @param {unknown} value
+ * @returns {string | undefined}
+ */
+function getApiCodeFromErrorList(value) {
+    if (!Array.isArray(value)) {
+        return undefined
+    }
+
+    for (const item of value) {
+        const record = getOptionalRecord(item)
+        if (record === null) {
+            continue
+        }
+
+        const code = getOptionalString(record.code)
+        if (code !== undefined) {
+            return code
+        }
+    }
+
+    return undefined
 }
 
 /**
