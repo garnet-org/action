@@ -13,6 +13,7 @@ import {
     isSupportedPlatform,
     pathExists,
 } from "./shared.js"
+import { assessCoverage, formatRunnerEnvironment, renderCoverageBanner } from "./coverage.js"
 import { getPullRequestNumberFromEvent } from "./github-event.js"
 import { uploadJibrilArtifacts } from "./post-artifacts.js"
 import { getDefaultJsonProfileFile, parseProfileJson, resolveAppBaseURL } from "./profile-comment.js"
@@ -29,6 +30,7 @@ import { publishPullRequestComment } from "./pr-comment.js"
  */
 
 const JSON_PROFILE_LABEL = "JSON profile"
+const DOCS_URL = "https://docs.garnet.ai"
 
 // This is the post step for the action. It is called by the GitHub Actions
 // runtime. It stops the Jibril service so the daemon flushes all pending
@@ -79,7 +81,8 @@ async function run() {
 
         const profile = await readJobRecord(debug === "true")
 
-        await appendExecutionSummary(profile)
+        const coverage = assessRuntimeCoverage(profile)
+        await appendExecutionSummary(profile, coverage)
         if (profile !== null) {
             await publishProfilerComment(profile)
         }
@@ -87,6 +90,52 @@ async function run() {
         // Never fail the job because of the reporting step.
         core.warning(`failed to write execution summary: ${getErrorMessage(err)}`)
     }
+}
+
+/**
+ * @typedef {{
+ *   assessment: import("./coverage.js").CoverageAssessment
+ *   environment: import("./coverage.js").RunnerEnvironment | null
+ * }} RuntimeCoverage
+ */
+
+/**
+ * Classifies runtime coverage for this job from the parsed record plus the
+ * environment facts and canary connection recorded by the main step. Emits
+ * the greppable coverage log line, the degraded-coverage warning annotation,
+ * and the `coverage` output.
+ * @param {JobRecord | null} profile
+ * @returns {RuntimeCoverage}
+ */
+function assessRuntimeCoverage(profile) {
+    /** @type {import("./coverage.js").RunnerEnvironment | null} */
+    let environment = null
+    try {
+        const rawEnvironment = core.getState("runnerEnvironment")
+        if (rawEnvironment !== "") {
+            environment = JSON.parse(rawEnvironment)
+        }
+    } catch {
+        environment = null
+    }
+
+    const canaryDomain = core.getState("coverageCanaryDomain")
+    const assessment = assessCoverage(profile, { canaryDomain, environment })
+
+    core.setOutput("coverage", assessment.status)
+    core.info(
+        `runtime coverage: ${assessment.status} ` +
+            `(destinations=${assessment.destinations}, connections=${assessment.connections}, ` +
+            `canary=${assessment.canaryObserved ? "observed" : "missing"})`,
+    )
+    if (assessment.status === "degraded") {
+        const environmentSuffix = environment !== null ? ` [${formatRunnerEnvironment(environment)}]` : ""
+        core.warning(
+            `Garnet runtime coverage is degraded on this runner: ${assessment.reasons.join("; ")}${environmentSuffix}`,
+        )
+    }
+
+    return { assessment, environment }
 }
 
 /**
@@ -122,9 +171,10 @@ async function readJobRecord(debug) {
  * Summary (the evidence register: every chain, PID-distinct, no folds, no
  * markers).
  * @param {JobRecord | null} profile
+ * @param {RuntimeCoverage} coverage
  * @returns {Promise<void>}
  */
-async function appendExecutionSummary(profile) {
+async function appendExecutionSummary(profile, coverage) {
     const summaryFile = getEnv("GITHUB_STEP_SUMMARY")
     if (summaryFile === "") {
         core.warning("GITHUB_STEP_SUMMARY is not set, cannot write summary")
@@ -136,6 +186,11 @@ async function appendExecutionSummary(profile) {
         content = renderNoRecordSummary()
     } else {
         content = renderStepSummary([profile], { appURL: resolveAppBaseURL() })
+    }
+
+    const banner = renderCoverageBanner(coverage.assessment, coverage.environment, DOCS_URL)
+    if (banner !== "") {
+        content = `${banner}${content}`
     }
 
     await fs.appendFile(summaryFile, `\n${content}\n`)

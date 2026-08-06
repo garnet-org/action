@@ -40263,6 +40263,285 @@ async function dumpJibrilLogs() {
     } catch (_) {}
 }
 
+;// CONCATENATED MODULE: external "node:https"
+const external_node_https_namespaceObject = __WEBPACK_EXTERNAL_createRequire(import.meta.url)("node:https");
+;// CONCATENATED MODULE: ./src/coverage.js
+
+
+
+
+// Coverage instrumentation for the Garnet action.
+//
+// Jibril's network capture relies on kernel eBPF features (CO-RE/BTF via
+// /sys/kernel/btf/vmlinux, cgroup v2 for cgroup/skb attachment). Alternative
+// CI runner providers (Blacksmith, Namespace, Depot, WarpBuild, ...) boot
+// custom guest kernels inside Firecracker/other microVMs where those features
+// are not guaranteed. The daemon can stay "active" while individual probes
+// silently fail, producing a record with process telemetry but zero outbound
+// connections — coverage silently degrades.
+//
+// This module gives the action an explicit, honest signal:
+//   1. main step  — collectRunnerEnvironment(): record kernel/BTF/cgroup/provider facts.
+//   2. main step  — emitCanaryConnection(): make one known outbound connection
+//                   while Jibril is recording, so every job has at least one
+//                   expected connection in its record.
+//   3. post step  — assessCoverage(): compare the parsed record against the
+//                   canary and environment; classify full | degraded | none.
+
+const CANARY_TIMEOUT_MS = 5000
+
+/**
+ * @typedef {{
+ *   kernel: string
+ *   btfPresent: boolean
+ *   cgroupV2: boolean
+ *   provider: string
+ * }} RunnerEnvironment
+ */
+
+/**
+ * @typedef {{
+ *   status: "full" | "degraded" | "none"
+ *   reasons: string[]
+ *   destinations: number
+ *   connections: number
+ *   canaryObserved: boolean
+ * }} CoverageAssessment
+ */
+
+/**
+ * Best-effort detection of the runner provider. GitHub-hosted runners set
+ * RUNNER_ENVIRONMENT=github-hosted; alternative providers leak their identity
+ * through environment variables or the runner name.
+ * @returns {string}
+ */
+function detectRunnerProvider() {
+    const envKeys = Object.keys(process.env)
+    const runnerName = getEnv("RUNNER_NAME", "").toLowerCase()
+
+    const providers = [
+        { name: "blacksmith", match: /^BLACKSMITH/i },
+        { name: "namespace", match: /^NSC_/i },
+        { name: "depot", match: /^DEPOT_/i },
+        { name: "warpbuild", match: /^WARPBUILD/i },
+        { name: "buildjet", match: /^BUILDJET/i },
+    ]
+
+    for (const provider of providers) {
+        if (envKeys.some(key => provider.match.test(key)) || runnerName.includes(provider.name)) {
+            return provider.name
+        }
+    }
+
+    if (getEnv("RUNNER_ENVIRONMENT", "") === "github-hosted") {
+        return "github-hosted"
+    }
+
+    return "self-hosted-or-unknown"
+}
+
+/**
+ * Collects kernel facts relevant to Jibril's eBPF capture. Read-only sysfs
+ * checks; never throws.
+ * @returns {Promise<RunnerEnvironment>}
+ */
+async function collectRunnerEnvironment() {
+    const environment = {
+        kernel: external_node_os_namespaceObject.release(),
+        btfPresent: false,
+        cgroupV2: false,
+        provider: detectRunnerProvider(),
+    }
+
+    try {
+        environment.btfPresent = await pathExists("/sys/kernel/btf/vmlinux")
+    } catch {
+        environment.btfPresent = false
+    }
+
+    try {
+        environment.cgroupV2 = await pathExists("/sys/fs/cgroup/cgroup.controllers")
+    } catch {
+        environment.cgroupV2 = false
+    }
+
+    return environment
+}
+
+/**
+ * Serializes the runner environment into a single log-friendly line.
+ * @param {RunnerEnvironment} environment
+ * @returns {string}
+ */
+function formatRunnerEnvironment(environment) {
+    return (
+        `kernel=${environment.kernel} ` +
+        `btf=${environment.btfPresent ? "present" : "absent"} ` +
+        `cgroup_v2=${environment.cgroupV2 ? "present" : "absent"} ` +
+        `provider=${environment.provider}`
+    )
+}
+
+/**
+ * Makes one known outbound connection while Jibril is recording, via an HTTPS
+ * request to the Garnet API host. The response status is irrelevant — the
+ * TCP+TLS connection itself is the canary. Returns the canary hostname, or
+ * "" when the connection could not be made (in which case the post step
+ * skips the canary check rather than reporting a false degradation).
+ * @param {string} baseURL
+ * @returns {Promise<string>}
+ */
+async function emitCanaryConnection(baseURL) {
+    let hostname = ""
+    try {
+        hostname = new URL(baseURL).hostname
+    } catch {
+        return ""
+    }
+
+    return new Promise(resolve => {
+        const request = external_node_https_namespaceObject.get(`https://${hostname}/`, { timeout: CANARY_TIMEOUT_MS }, response => {
+            // Drain and discard; the connection is all we need.
+            response.resume()
+            response.on("end", () => resolve(hostname))
+            response.on("error", () => resolve(hostname))
+        })
+        request.on("timeout", () => {
+            request.destroy()
+            resolve("")
+        })
+        // TLS handshake completing means the outbound connection happened even
+        // if the request errors afterwards.
+        request.on("error", () => resolve(""))
+    })
+}
+
+/**
+ * Returns the set of destination identities recorded in the job's
+ * associations (names and addresses, lowercased).
+ * @param {import("./runtime-review.js").JobRecord} record
+ * @returns {Set<string>}
+ */
+function recordedDestinationIdentities(record) {
+    const identities = new Set()
+    for (const edge of record.edges) {
+        for (const name of edge.remote_names) {
+            if (name !== "") {
+                identities.add(name.toLowerCase())
+            }
+        }
+        if (edge.remote_address !== "") {
+            identities.add(edge.remote_address.toLowerCase())
+        }
+    }
+    return identities
+}
+
+/**
+ * Distinct recorded destination addresses in the record.
+ * @param {import("./runtime-review.js").JobRecord} record
+ * @returns {number}
+ */
+function countDestinations(record) {
+    const addresses = new Set()
+    for (const edge of record.edges) {
+        if (edge.remote_address !== "") {
+            addresses.add(edge.remote_address)
+        }
+    }
+    return addresses.size
+}
+
+/**
+ * Classifies runtime coverage for this job.
+ *   - none:     no record was produced at all.
+ *   - degraded: a record exists but outbound-connection capture is missing
+ *               evidence it should have (zero destinations, or the canary
+ *               connection is absent).
+ *   - full:     outbound connections present and consistent with the canary.
+ * @param {import("./runtime-review.js").JobRecord | null} record
+ * @param {{ canaryDomain: string, environment: RunnerEnvironment | null }} context
+ * @returns {CoverageAssessment}
+ */
+function assessCoverage(record, context) {
+    if (record === null) {
+        return {
+            status: "none",
+            reasons: ["the Jibril daemon produced no record for this job"],
+            destinations: 0,
+            connections: 0,
+            canaryObserved: false,
+        }
+    }
+
+    const destinations = countDestinations(record)
+    const connections = record.telemetry.total_connections !== null ? record.telemetry.total_connections : record.flow_count
+    const identities = recordedDestinationIdentities(record)
+    const canaryDomain = context.canaryDomain.toLowerCase()
+    const canaryObserved = canaryDomain !== "" && identities.has(canaryDomain)
+
+    const reasons = []
+    if (identities.size === 0) {
+        reasons.push("the record contains zero outbound connections")
+    }
+    if (canaryDomain !== "" && !canaryObserved && identities.size === 0) {
+        reasons.push(
+            `the canary connection to ${canaryDomain} (made while the daemon was recording) is absent from the record`,
+        )
+    }
+
+    if (context.environment !== null && reasons.length > 0) {
+        if (!context.environment.btfPresent) {
+            reasons.push("kernel BTF (/sys/kernel/btf/vmlinux) is absent — eBPF CO-RE programs cannot load")
+        }
+        if (!context.environment.cgroupV2) {
+            reasons.push("cgroup v2 is not mounted — cgroup/skb network probes cannot attach")
+        }
+    }
+
+    return {
+        status: reasons.length > 0 ? "degraded" : "full",
+        reasons,
+        destinations,
+        connections,
+        canaryObserved,
+    }
+}
+
+/**
+ * Renders the incomplete-capture banner prepended to the Garnet Execution
+ * Summary when coverage is degraded.
+ * @param {CoverageAssessment} assessment
+ * @param {RunnerEnvironment | null} environment
+ * @param {string} docsURL
+ * @returns {string}
+ */
+function renderCoverageBanner(assessment, environment, docsURL) {
+    if (assessment.status !== "degraded") {
+        return ""
+    }
+
+    const lines = [
+        "> [!WARNING]",
+        "> **Incomplete network recording** — the sensor ran and recorded this job's",
+        "> processes, but outbound-connection capture looks incomplete on this runner:",
+    ]
+    for (const reason of assessment.reasons) {
+        lines.push(`> - ${reason}`)
+    }
+    if (environment !== null) {
+        lines.push(`> - runner environment: \`${formatRunnerEnvironment(environment)}\``)
+    }
+    lines.push(
+        "> ",
+        "> Process telemetry may still be present. This usually means the runner's",
+        "> kernel lacks eBPF features the sensor needs (common on custom microVM",
+        `> kernels used by alternative CI providers). See ${docsURL} for`,
+        "> supported-runner requirements.",
+    )
+    return `${lines.join("\n")}\n\n`
+}
+
 // EXTERNAL MODULE: external "node:net"
 var external_node_net_ = __nccwpck_require__(7030);
 ;// CONCATENATED MODULE: ./src/contract/vocab.json
@@ -43181,6 +43460,7 @@ function getDisplayValue(value, fallback) {
 
 
 
+
 // This is the main entry point for the action. It is called by the GitHub Actions
 // runtime. The action installs the Jibril security scanner and sets it up as a
 // systemd service. It retrieves the network policy for the repository and places
@@ -43245,6 +43525,21 @@ async function main() {
         const jibrilStarted = await run()
         if (jibrilStarted) {
             saveState("jibrilStarted", "true")
+
+            // Coverage instrumentation: record kernel facts and make one known
+            // outbound connection while Jibril is recording, so the post step
+            // can verify that network capture actually works on this runner
+            // (custom microVM kernels on alternative CI providers may lack the
+            // eBPF features Jibril needs while the daemon stays "active").
+            const environment = await collectRunnerEnvironment()
+            info(`Runner environment: ${formatRunnerEnvironment(environment)}`)
+            saveState("runnerEnvironment", JSON.stringify(environment))
+
+            const canaryDomain = await emitCanaryConnection(getEnv("GARNET_API_URL", "https://api.garnet.ai"))
+            if (canaryDomain === "") {
+                info("coverage canary connection could not be made; post step will rely on recorded totals only")
+            }
+            saveState("coverageCanaryDomain", canaryDomain)
         }
     } catch (err) {
         if (err instanceof Error) {

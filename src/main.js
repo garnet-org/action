@@ -1,6 +1,7 @@
 import * as core from "@actions/core"
 import * as os from "node:os"
 import { run } from "./action.js"
+import { collectRunnerEnvironment, emitCanaryConnection, formatRunnerEnvironment } from "./coverage.js"
 import { buildReportLink } from "./profile-comment.js"
 import { getEnv, isSupportedArch, isSupportedPlatform } from "./shared.js"
 
@@ -68,6 +69,21 @@ async function main() {
         const jibrilStarted = await run()
         if (jibrilStarted) {
             core.saveState("jibrilStarted", "true")
+
+            // Coverage instrumentation: record kernel facts and make one known
+            // outbound connection while Jibril is recording, so the post step
+            // can verify that network capture actually works on this runner
+            // (custom microVM kernels on alternative CI providers may lack the
+            // eBPF features Jibril needs while the daemon stays "active").
+            const environment = await collectRunnerEnvironment()
+            core.info(`Runner environment: ${formatRunnerEnvironment(environment)}`)
+            core.saveState("runnerEnvironment", JSON.stringify(environment))
+
+            const canaryDomain = await emitCanaryConnection(getEnv("GARNET_API_URL", "https://api.garnet.ai"))
+            if (canaryDomain === "") {
+                core.info("coverage canary connection could not be made; post step will rely on recorded totals only")
+            }
+            core.saveState("coverageCanaryDomain", canaryDomain)
         }
     } catch (err) {
         if (err instanceof Error) {

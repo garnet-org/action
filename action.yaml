@@ -28,6 +28,8 @@ outputs:
         description: "Reserved for the companion GitHub App and control plane; the action does not set it"
     report_url:
         description: "The run's page on app.garnet.ai (https://app.garnet.ai/dashboard/runs/<run-id>). Emitted by the main step so later steps in the same job can read it; the app resolves the run server-side and shows logged-out visitors the public run report"
+    coverage:
+        description: "Runtime coverage classification for this job, set by the post step: 'full' (outbound connections recorded), 'degraded' (a record exists but network capture is missing evidence it should have), or 'none' (no record was produced)"
     agent_id:
         description: "Identifier for the Jibril sensor instance; declared for forward compatibility — the action does not currently set it"
 runs:
