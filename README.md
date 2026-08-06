@@ -108,7 +108,16 @@ jobs:
 
 ### 3. Install the companion GitHub App
 
-[Install Garnet Runtime Review](https://github.com/apps/garnet-runtime-review/installations/select_target) on the repos you want recorded, for the full Runtime Review experience in your PRs.
+[Install Garnet Runtime Review](https://github.com/apps/garnet-runtime-review/installations/select_target) on the repos you want recorded, or from Settings → GitHub in [app.garnet.ai](https://app.garnet.ai).
+
+Two permissions, nothing else:
+
+| Permission | Access | Why |
+| ---------- | ------ | --- |
+| Pull requests | Read & write | Post and update the one Runtime Review comment per commit |
+| Metadata | Read | Required for every GitHub App |
+
+The App writes the comment and does nothing else — no webhooks, no code access. Once installed it owns the comment across every recorded job on the commit, and the Action stands down.
 
 ### Versioning
 
