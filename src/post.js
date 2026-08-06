@@ -2,28 +2,39 @@ import * as core from "@actions/core"
 import * as exec from "@actions/exec"
 import * as fs from "node:fs/promises"
 import * as os from "node:os"
-import { getEnv, getErrorMessage, isSupportedArch, isSupportedPlatform, pathExists } from "./shared.js"
+import {
+    firstNonEmptyString,
+    getEnv,
+    getErrorMessage,
+    getOptionalNumber,
+    getOptionalRecord,
+    getOptionalString,
+    isSupportedArch,
+    isSupportedPlatform,
+    pathExists,
+} from "./shared.js"
 import { getPullRequestNumberFromEvent } from "./github-event.js"
 import { uploadJibrilArtifacts } from "./post-artifacts.js"
-import { getDefaultJsonProfileFile, parseProfileJson, resolveAppBaseUrl } from "./profile-comment.js"
-import { renderNoRecord, renderStepSummary } from "./runtime-review.js"
+import { getDefaultJsonProfileFile, parseProfileJson, resolveAppBaseURL } from "./profile-comment.js"
+import { renderNoRecordSummary, renderStepSummary } from "./runtime-review.js"
 import { publishPullRequestComment } from "./pr-comment.js"
 
-/** @typedef {import("./profile-comment.js").NormalizedProfile} NormalizedProfile */
-/** @typedef {import("./profile-comment.js").RenderOptions} RenderOptions */
+/** @typedef {import("./runtime-review.js").JobRecord} JobRecord */
 
 /**
- * @typedef {{ normalized: NormalizedProfile, raw: unknown }} LoadedProfile
+ * @typedef {{
+ *   statusCode?: number
+ *   apiCode?: string
+ * }} GitHubApiErrorDetails
  */
 
 const JSON_PROFILE_LABEL = "JSON profile"
-const DOCS_URL = "https://github.com/garnet-org/action#readme"
 
 // This is the post step for the action. It is called by the GitHub Actions
-// runtime. It stops the Jibril service so the daemon flushes all pending events
-// and writes the JSON profile before we read it. It then renders the Garnet
-// Runtime Summary (Step Summary) and publishes the Garnet Runtime Review PR
-// comment from the same Run Profile.
+// runtime. It stops the Jibril service so the daemon flushes all pending
+// events and writes the JSON profile before we read it. It then writes the
+// Garnet Execution Summary to the job's Step Summary and publishes the
+// fallback PR comment from the same record.
 
 async function run() {
     const platform = os.platform()
@@ -66,29 +77,26 @@ async function run() {
             await uploadJibrilArtifacts()
         }
 
-        const profile = await readProfile(debug === "true")
-        const renderOptions = getRenderOptions()
+        const profile = await readJobRecord(debug === "true")
 
-        await appendRuntimeReviewSummary(profile, renderOptions)
+        await appendExecutionSummary(profile)
         if (profile !== null) {
-            await publishProfilerComment(profile.normalized, renderOptions)
+            await publishProfilerComment(profile)
         }
     } catch (err) {
-        // Never fail the job because of the Runtime Review step.
-        core.warning(`failed to write Runtime Review summary: ${getErrorMessage(err)}`)
+        // Never fail the job because of the reporting step.
+        core.warning(`failed to write execution summary: ${getErrorMessage(err)}`)
     }
 }
 
 /**
  * Reads and parses the JSON profile produced by Jibril, or null when the
- * profile is missing or unreadable. Returns both the raw parsed JSON (the
- * Step Summary renders the full-detail report from it, v6.1 §8) and the
- * normalized shape used by the PR-comment state machinery.
+ * profile is missing or unreadable.
  * @param {boolean} debug
- * @returns {Promise<LoadedProfile | null>}
+ * @returns {Promise<JobRecord | null>}
  */
-async function readProfile(debug) {
-    const jsonProfilerFile = firstNonEmptyString([core.getState("jsonProfilerFile"), getDefaultJsonProfileFile()])
+async function readJobRecord(debug) {
+    const jsonProfilerFile = firstNonEmptyString(core.getState("jsonProfilerFile"), getDefaultJsonProfileFile())
 
     try {
         const jsonProfile = await readOptionalRootFile(jsonProfilerFile)
@@ -102,10 +110,7 @@ async function readProfile(debug) {
             core.info(jsonProfile)
         }
 
-        return {
-            normalized: parseProfileJson(jsonProfile),
-            raw: JSON.parse(jsonProfile),
-        }
+        return parseProfileJson(jsonProfile)
     } catch (error) {
         core.warning(`failed to read ${JSON_PROFILE_LABEL}: ${getErrorMessage(error)}`)
         return null
@@ -113,25 +118,13 @@ async function readProfile(debug) {
 }
 
 /**
- * Render options for this publish flow; the clock is pinned once so every
- * render in the flow produces identical bytes.
- * @returns {RenderOptions}
- */
-function getRenderOptions() {
-    return { renderedAt: new Date() }
-}
-
-/**
- * Writes the Garnet Runtime Summary — the per-run full-detail tabular
- * record (v6.1 §8) — to the GitHub Step Summary, rendered from the RAW
- * parsed profile. When no profile was produced, the waiting-state body
- * (v6.1 §2) is written instead, markerless and with the explainer
- * collapsed.
- * @param {LoadedProfile | null} profile
- * @param {RenderOptions} renderOptions
+ * Writes the full-detail Garnet Execution Summary to the GitHub Step
+ * Summary (the evidence register: every chain, PID-distinct, no folds, no
+ * markers).
+ * @param {JobRecord | null} profile
  * @returns {Promise<void>}
  */
-async function appendRuntimeReviewSummary(profile, renderOptions) {
+async function appendExecutionSummary(profile) {
     const summaryFile = getEnv("GITHUB_STEP_SUMMARY")
     if (summaryFile === "") {
         core.warning("GITHUB_STEP_SUMMARY is not set, cannot write summary")
@@ -140,31 +133,20 @@ async function appendRuntimeReviewSummary(profile, renderOptions) {
 
     let content
     if (profile === null) {
-        const sha = getEnv("GITHUB_SHA")
-        const repository = getEnv("GITHUB_REPOSITORY")
-        content = renderNoRecord({
-            sha,
-            commitUrl: repository !== "" && sha !== "" ? `https://github.com/${repository}/commit/${sha}` : "",
-            expectedJobs: renderOptions.expectedJobs ?? 1,
-            docsUrl: DOCS_URL,
-            renderedAt: renderOptions.renderedAt ?? new Date(),
-            firstRun: false,
-        })
+        content = renderNoRecordSummary()
     } else {
-        const preview = core.getState("preview") === "true"
-        content = renderStepSummary([profile.raw], { appUrl: resolveAppBaseUrl(), preview })
+        content = renderStepSummary([profile], { appURL: resolveAppBaseURL() })
     }
 
     await fs.appendFile(summaryFile, `\n${content}\n`)
-    core.info("Garnet Runtime Summary written to job summary")
+    core.info("execution summary written to job summary")
 }
 
 /**
- * @param {NormalizedProfile} profile
- * @param {RenderOptions} renderOptions
+ * @param {JobRecord} profile
  * @returns {Promise<void>}
  */
-async function publishProfilerComment(profile, renderOptions) {
+async function publishProfilerComment(profile) {
     const eventPath = getEnv("GITHUB_EVENT_PATH")
     if (eventPath === "") {
         core.info("GITHUB_EVENT_PATH is not set, skipping PR comment")
@@ -177,7 +159,7 @@ async function publishProfilerComment(profile, renderOptions) {
         return
     }
 
-    const token = firstNonEmptyString([core.getState("githubToken"), getEnv("GITHUB_TOKEN")])
+    const token = firstNonEmptyString(core.getState("githubToken"), getEnv("GITHUB_TOKEN"))
     if (token === "") {
         core.warning("github_token is not set, skipping PR comment")
         return
@@ -198,12 +180,109 @@ async function publishProfilerComment(profile, renderOptions) {
             token,
             profile,
             runAttempt,
-            renderOptions,
         })
         core.info(`PR comment ${result}`)
     } catch (error) {
-        core.warning(`failed to publish PR comment: ${getErrorMessage(error)}`)
+        core.warning(`failed to publish PR comment: ${formatPullRequestCommentPublishError(error)}`)
     }
+}
+
+/**
+ * @param {unknown} error
+ * @returns {string}
+ */
+function formatPullRequestCommentPublishError(error) {
+    const details = getGitHubApiErrorDetails(error)
+    const messageParts = [getErrorMessage(error)]
+
+    if (details.statusCode !== undefined) {
+        messageParts.push(`status=${details.statusCode}`)
+    }
+    if (details.apiCode !== undefined) {
+        messageParts.push(`api_code=${details.apiCode}`)
+    }
+
+    if (details.statusCode === 403 && getErrorMessage(error).includes("Resource not accessible by integration")) {
+        messageParts.push(
+            "hint=The token cannot comment on this PR. Ensure `permissions` include `pull-requests: write` (or `issues: write`) and note that fork PR workflows may still run with read-only tokens.",
+        )
+    }
+
+    return messageParts.join("; ")
+}
+
+/**
+ * @param {unknown} error
+ * @returns {GitHubApiErrorDetails}
+ */
+function getGitHubApiErrorDetails(error) {
+    const errorRecord = getOptionalRecord(error)
+    if (errorRecord === null) {
+        return {}
+    }
+
+    const details = {}
+
+    const statusCode = getOptionalNumber(errorRecord.status)
+    if (statusCode !== undefined) {
+        details.statusCode = statusCode
+    }
+
+    const response = getOptionalRecord(errorRecord.response)
+    if (response !== null) {
+        if (details.statusCode === undefined) {
+            const responseStatus = getOptionalNumber(response.status)
+            if (responseStatus !== undefined) {
+                details.statusCode = responseStatus
+            }
+        }
+
+        const responseData = getOptionalRecord(response.data)
+        if (responseData !== null) {
+            const directCode = getOptionalString(responseData.code)
+            if (directCode !== undefined) {
+                details.apiCode = directCode
+            } else {
+                const nestedCode = getApiCodeFromErrorList(responseData.errors)
+                if (nestedCode !== undefined) {
+                    details.apiCode = nestedCode
+                }
+            }
+        }
+    }
+
+    if (details.apiCode === undefined) {
+        const topLevelCode = getOptionalString(errorRecord.code)
+        if (topLevelCode !== undefined) {
+            details.apiCode = topLevelCode
+        }
+    }
+
+    return details
+}
+
+/**
+ * @param {unknown} value
+ * @returns {string | undefined}
+ */
+function getApiCodeFromErrorList(value) {
+    if (!Array.isArray(value)) {
+        return undefined
+    }
+
+    for (const item of value) {
+        const record = getOptionalRecord(item)
+        if (record === null) {
+            continue
+        }
+
+        const code = getOptionalString(record.code)
+        if (code !== undefined) {
+            return code
+        }
+    }
+
+    return undefined
 }
 
 /**
@@ -220,20 +299,6 @@ async function readOptionalRootFile(filePath) {
     } catch {
         return ""
     }
-}
-
-/**
- * @param {string[]} values
- * @returns {string}
- */
-function firstNonEmptyString(values) {
-    for (const value of values) {
-        if (value !== "") {
-            return value
-        }
-    }
-
-    return ""
 }
 
 /**

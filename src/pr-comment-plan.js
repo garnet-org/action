@@ -1,8 +1,8 @@
 import { mergeCommentState, mergeCommentStates, parseCommentState, renderCommentBody } from "./profile-comment.js"
-import { CONTROL_PLANE_MARKERS, RUNTIME_REVIEW_MARKER } from "./runtime-review.js"
+import { CONTROL_PLANE_MARKERS } from "./runtime-review.js"
 
 /**
- * @typedef {import("./profile-comment.js").NormalizedProfile} NormalizedProfile
+ * @typedef {import("./runtime-review.js").JobRecord} JobRecord
  */
 
 /**
@@ -32,7 +32,7 @@ import { CONTROL_PLANE_MARKERS, RUNTIME_REVIEW_MARKER } from "./runtime-review.j
 
 /**
  * @param {PullRequestComment[]} comments
- * @param {NormalizedProfile} profile
+ * @param {JobRecord} profile
  * @param {number} runAttempt
  * @param {RenderOptions} [renderOptions]
  * @returns {PublishCommentPlan}
@@ -55,9 +55,11 @@ export function planPullRequestComment(comments, profile, runAttempt, renderOpti
     }
 
     const duplicateCommentIDs = matchingComments.slice(0, -1).map(entry => entry.comment.id)
+    // The explainer and job folds render open on a first-profile comment and
+    // collapse on later updates.
     const body = renderCommentBody(mergeResult.state, {
         ...renderOptions,
-        firstRun: isFirstCommitLifecycle(comments, threadKey),
+        explainerOpen: renderOptions.explainerOpen ?? primary === null,
     })
 
     if (primary === null) {
@@ -74,29 +76,6 @@ export function planPullRequestComment(comments, profile, runAttempt, renderOpti
         body,
         duplicateCommentIDs,
     }
-}
-
-/**
- * The explainer's open state (v6.1 §1.4): open through the PR's ENTIRE
- * first-commit lifecycle, collapsed from the second commit onward. The
- * comment state marker retains the commit sha, so "still on the PR's first
- * commit" means every prior Garnet comment on the PR belongs to the SAME
- * commit as the incoming profile (vacuously true when none exist). A Garnet
- * comment we cannot attribute to a commit (canonical marker but no parseable
- * state) counts as prior history, so the explainer collapses.
- * @param {PullRequestComment[]} comments
- * @param {string} threadKey
- * @returns {boolean}
- */
-function isFirstCommitLifecycle(comments, threadKey) {
-    return comments.every(comment => {
-        const state = parseCommentState(comment.body)
-        if (state !== null) {
-            return isMatchingThread(state, threadKey)
-        }
-
-        return !comment.body.includes(RUNTIME_REVIEW_MARKER)
-    })
 }
 
 /**
@@ -119,15 +98,15 @@ function getManagedCommentsForThread(comments, threadKey) {
 }
 
 /**
- * @param {NormalizedProfile} profile
+ * @param {JobRecord} profile
  * @returns {string}
  */
 function getProfileThreadKey(profile) {
-    if (profile.github.sha === "") {
+    if (profile.sha === "") {
         throw new Error("profile JSON is missing the GitHub commit sha")
     }
 
-    return profile.github.sha
+    return profile.sha
 }
 
 /**
@@ -136,12 +115,12 @@ function getProfileThreadKey(profile) {
  * @returns {boolean}
  */
 function isMatchingThread(state, threadKey) {
-    const firstProfile = state.profiles[0]
-    if (firstProfile === undefined || firstProfile.github.sha !== threadKey) {
+    const firstJob = state.jobs[0]
+    if (firstJob === undefined || firstJob.sha !== threadKey) {
         return false
     }
 
-    return state.profiles.every(profile => profile.github.sha === threadKey)
+    return state.jobs.every(job => job.sha === threadKey)
 }
 
 /**

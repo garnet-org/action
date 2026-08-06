@@ -30,11 +30,6 @@ async function main() {
         const debug = core.getInput("debug") === "true"
         core.saveState("debug", debug ? "true" : "")
 
-        // Preview gates the Step Summary's assertions record (§8.5); the
-        // prod default renders the observation-only record.
-        const preview = core.getInput("preview") === "true"
-        core.saveState("preview", preview ? "true" : "")
-
         const githubToken = core.getInput("github_token")
         core.saveState("githubToken", githubToken)
 
@@ -49,10 +44,10 @@ async function main() {
         process.env.JIBRIL_VERSION = core.getInput("jibril_version")
         process.env.DEBUG = core.getInput("debug")
 
-        // The Run Profile permalink derives from the run id and the configured
-        // API host, so it is known up front — emit the declared report_url output
-        // here where later steps in the same job can consume it (post-step
-        // outputs are not visible to them).
+        // The report_url output derives from the run id and the configured
+        // API host, so it is known up front — emit it here where later steps
+        // in the same job can consume it (post-step outputs are not visible
+        // to them).
         core.setOutput(
             "report_url",
             buildReportLink({
@@ -62,7 +57,7 @@ async function main() {
             }),
         )
 
-        // Set the default Run Profile printer file paths.
+        // Set the default profile printer file paths.
         const profilerFile = process.env.JIBRIL_PROFILER_FILE || "/var/log/jibril.profiler.out"
         const jsonProfilerFile = process.env.JIBRIL_JSONPROFILER_FILE || "/var/log/jibril.profile.json"
         process.env.JIBRIL_PROFILER_FILE = profilerFile

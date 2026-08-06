@@ -1,76 +1,21 @@
 import { z } from "zod"
-import { getOptionalRecord } from "./shared.js"
 import {
     buildRunReview,
-    derivePermalink,
-    isAddressLike,
     renderRunReview,
+    summarizeProfile,
     COMMENT_MARKER,
     RUNTIME_REVIEW_MARKER,
 } from "./runtime-review.js"
 
 /** @typedef {import("./runtime-review.js").RunReview} RunReview */
 /** @typedef {import("./runtime-review.js").JobRecord} JobRecord */
+/** @typedef {import("./runtime-review.js").Edge} Edge */
 
 export const ACTION_COMMENT_MARKER = "garnet-action-pr-comment:v1"
 export const COMMIT_MARKER_PREFIX = "garnet-pr-commit:"
 export const LEGACY_COMMENT_STATE_MARKER = "garnet-runtime-visibility"
 
 const COMMENT_STATE_MARKER_PREFIX = "garnet-action-comment-state:"
-
-/**
- * @typedef {"pass" | "attention" | "fail" | "unknown"} ProfileResult
- */
-
-/**
- * @typedef {{
- *   workflow: string
- *   repository: string
- *   ref: string
- *   sha: string
- *   actor: string
- *   run_id: string
- *   job: string
- * }} GitHubScenario
- */
-
-/**
- * @typedef {{ ancestry: string[] }} ProcTree
- */
-
-/**
- * @typedef {{
- *   remote_names: string[]
- *   remote_address: string
- *   proc_trees: ProcTree[]
- *   result: ProfileResult
- * }} EgressPeer
- */
-
-/**
- * @typedef {{
- *   total_domains: number
- *   total_connections: number
- * }} NetworkTelemetry
- */
-
-/**
- * @typedef {{
- *   id: string
- *   result: ProfileResult
- * }} AssertionSummary
- */
-
-/**
- * @typedef {{
- *   timestamp: string
- *   github: GitHubScenario
- *   assertions: AssertionSummary[]
- *   egress_peers: EgressPeer[]
- *   telemetry: NetworkTelemetry
- *   report_link: string
- * }} NormalizedProfile
- */
 
 /**
  * @typedef {{
@@ -80,70 +25,94 @@ const COMMENT_STATE_MARKER_PREFIX = "garnet-action-comment-state:"
  */
 
 /**
- * @typedef {{
- *   version: 1
- *   latest_run: WorkflowRun
- *   profiles: NormalizedProfile[]
- * }} LegacyCommentState
+ * @typedef {{ kind: "stale" } | { kind: "updated", state: CommentState }} MergeCommentStateResult
  */
 
 /**
  * @typedef {{
- *   version: 2
+ *   repository: string
+ *   run_id: string
+ *   job: string
+ * }} ReportLinkInput
+ */
+
+/**
+ * The comment state carried in the state marker (version 3): one collapsed
+ * job record per workflow/job, in the renderer's own shape. Versions 1 and 2
+ * carried normalized profiles from the pre-v6.6.1 renderer; both upgrade in
+ * place so an existing comment updates instead of duplicating.
+ * @typedef {{
+ *   version: 3
  *   workflow_runs: Record<string, WorkflowRun>
- *   profiles: NormalizedProfile[]
+ *   jobs: JobRecord[]
  * }} CommentState
  */
 
 /**
- * Rendering knobs threaded from the action's inputs (all optional, additive).
- * `firstRun` drives the explainer's open state (v6.1 §1.4): true through the
- * PR's first-commit lifecycle, false on every update after.
+ * Rendering knobs threaded from the publish flow (all optional, additive).
  * @typedef {{
- *   expectedJobs?: number
- *   permalinkUrl?: string
- *   docsUrl?: string
- *   renderedAt?: string | Date
- *   firstRun?: boolean
+ *   explainerOpen?: boolean
  * }} RenderOptions
  */
 
 const DEFAULT_JSON_PROFILE_FILE = "/var/log/jibril.profile.json"
 const DEFAULT_APP_BASE_URL = "https://app.garnet.ai"
-const DEFAULT_DOCS_URL = "https://github.com/garnet-org/action#readme"
-const UTM_SOURCE = "github"
-const UTM_MEDIUM = "pr_comment"
 
-const PROFILE_RESULT_SCHEMA = z.unknown().transform(value => normalizeResult(value))
-
-const PROC_TREE_SCHEMA = z
-    .looseObject({
-        ancestry: z.array(z.string()),
-    })
-    .transform(procTree => ({
-        ancestry: procTree.ancestry.filter(entry => entry.length > 0),
-    }))
-
-const ASSERTION_SCHEMA = z.looseObject({
-    id: z.string(),
-    result: PROFILE_RESULT_SCHEMA,
+const WORKFLOW_RUN_SCHEMA = z.object({
+    run_id: z.string(),
+    run_attempt: z.number(),
 })
 
-const PEER_SCHEMA = z
-    .looseObject({
-        result: PROFILE_RESULT_SCHEMA,
-        remote_names: z.array(z.string()),
-        remote_address: z.string().optional(),
-        proc_trees: z.array(PROC_TREE_SCHEMA),
-    })
-    .transform(peer => ({
-        remote_names: peer.remote_names.filter(name => name.length > 0),
-        remote_address: peer.remote_address ?? "",
-        proc_trees: peer.proc_trees,
-        result: peer.result,
-    }))
+const EDGE_SCHEMA = z.object({
+    flow_id: z.number(),
+    tree_index: z.number(),
+    remote_address: z.string(),
+    remote_names: z.array(z.string()),
+    remote_ports: z.array(z.string()),
+    protocol: z.string(),
+    result: z.string(),
+    detections: z.array(z.string()),
+    lineage_recorded: z.boolean(),
+    pid: z.string(),
+    process: z.string(),
+    ancestry: z.array(z.string()),
+    github_step: z.string(),
+})
 
-const GITHUB_SCENARIO_SCHEMA = z.object({
+const JOB_RECORD_SCHEMA = z.object({
+    name: z.string(),
+    workflow: z.string(),
+    repository: z.string(),
+    sha: z.string(),
+    run_id: z.string(),
+    run_url: z.string(),
+    job_url: z.string(),
+    profile_id: z.string(),
+    uuid: z.string(),
+    timestamp: z.string(),
+    ref: z.string(),
+    actor: z.string(),
+    job_index: z.string(),
+    flow_count: z.number(),
+    telemetry: z.object({
+        total_domains: z.number().nullable(),
+        total_connections: z.number().nullable(),
+    }),
+    assertions: z.array(z.unknown()).transform(() => /** @type {import("./runtime-review.js").AssertionRecord[]} */ ([])),
+    edges: z.array(EDGE_SCHEMA),
+})
+
+const COMMENT_STATE_SCHEMA = z.object({
+    version: z.literal(3),
+    workflow_runs: z.record(z.string(), WORKFLOW_RUN_SCHEMA),
+    jobs: z.array(JOB_RECORD_SCHEMA),
+})
+
+// Versions 1 and 2 carried normalized profiles (the pre-v6.6.1 comment
+// state). Their shared profile shape upgrades to a job record, so an
+// existing managed comment keeps updating in place across the renderer
+// migration instead of gaining a duplicate.
+const LEGACY_GITHUB_SCENARIO_SCHEMA = z.object({
     workflow: z.string(),
     repository: z.string(),
     ref: z.string(),
@@ -153,86 +122,35 @@ const GITHUB_SCENARIO_SCHEMA = z.object({
     job: z.string(),
 })
 
-const PROFILE_NETWORK_SCHEMA = z
-    .object({
-        egress: z
-            .object({
-                peers: z.array(PEER_SCHEMA).optional(),
-            })
-            .optional(),
-    })
-    .optional()
-
-const PROFILE_NETWORK_TELEMETRY_SCHEMA = z
-    .object({
-        network: z
-            .object({
-                egress: z
-                    .object({
-                        total_domains: z.number().optional(),
-                        total_connections: z.number().optional(),
-                    })
-                    .optional(),
-            })
-            .optional(),
-    })
-    .optional()
-
-const NORMALIZED_PROFILE_SCHEMA = z.object({
+const LEGACY_PROFILE_SCHEMA = z.looseObject({
     timestamp: z.string(),
-    github: GITHUB_SCENARIO_SCHEMA,
-    assertions: z.array(ASSERTION_SCHEMA),
-    egress_peers: z.array(PEER_SCHEMA),
+    github: LEGACY_GITHUB_SCENARIO_SCHEMA,
+    egress_peers: z.array(
+        z.looseObject({
+            remote_names: z.array(z.string()),
+            remote_address: z.string().optional(),
+            proc_trees: z.array(z.looseObject({ ancestry: z.array(z.string()) })),
+        }),
+    ),
     telemetry: z.object({
         total_domains: z.number(),
         total_connections: z.number(),
     }),
-    report_link: z.string(),
 })
 
-const LEGACY_COMMENT_STATE_SCHEMA = z.object({
+const LEGACY_COMMENT_STATE_V1_SCHEMA = z.object({
     version: z.literal(1),
-    latest_run: z.object({
-        run_id: z.string(),
-        run_attempt: z.number(),
-    }),
-    profiles: z.array(NORMALIZED_PROFILE_SCHEMA),
+    latest_run: WORKFLOW_RUN_SCHEMA,
+    profiles: z.array(LEGACY_PROFILE_SCHEMA),
 })
 
-const COMMENT_STATE_SCHEMA = z.object({
+const LEGACY_COMMENT_STATE_V2_SCHEMA = z.object({
     version: z.literal(2),
-    workflow_runs: z.record(
-        z.string(),
-        z.object({
-            run_id: z.string(),
-            run_attempt: z.number(),
-        }),
-    ),
-    profiles: z.array(NORMALIZED_PROFILE_SCHEMA),
+    workflow_runs: z.record(z.string(), WORKFLOW_RUN_SCHEMA),
+    profiles: z.array(LEGACY_PROFILE_SCHEMA),
 })
 
-const PROFILE_JSON_SCHEMA = z
-    .looseObject({
-        timestamp: z.string(),
-        scenarios: z.object({
-            github: GITHUB_SCENARIO_SCHEMA,
-        }),
-        assertions: z.array(ASSERTION_SCHEMA),
-        network: PROFILE_NETWORK_SCHEMA,
-        telemetry: PROFILE_NETWORK_TELEMETRY_SCHEMA,
-    })
-    .transform(profile => ({
-        timestamp: profile.timestamp,
-        github: profile.scenarios.github,
-        assertions: profile.assertions,
-        egress_peers: getProfileNetworkPeers(profile),
-        telemetry: getProfileNetworkTelemetry(profile),
-        report_link: buildReportLink({
-            repository: profile.scenarios.github.repository,
-            run_id: profile.scenarios.github.run_id,
-            job: profile.scenarios.github.job,
-        }),
-    }))
+/** @typedef {z.infer<typeof LEGACY_PROFILE_SCHEMA>} LegacyProfile */
 
 /**
  * @returns {string}
@@ -246,36 +164,51 @@ export function getDefaultJsonProfileFile() {
     return DEFAULT_JSON_PROFILE_FILE
 }
 
+const PROFILE_JSON_GATE_SCHEMA = z.looseObject({
+    timestamp: z.string(),
+    scenarios: z.object({
+        github: LEGACY_GITHUB_SCENARIO_SCHEMA.loose(),
+    }),
+})
+
 /**
+ * Parse the Jibril JSON profile into a collapsed job record. The gate schema
+ * validates the identity fields the publish flow depends on; the record
+ * collapse itself is tolerant of optional sections.
  * @param {string} content
- * @returns {NormalizedProfile}
+ * @returns {JobRecord}
  */
 export function parseProfileJson(content) {
     const parsedContent = JSON.parse(content)
-    const result = PROFILE_JSON_SCHEMA.safeParse(parsedContent)
-    if (result.success) {
-        return result.data
+    const result = PROFILE_JSON_GATE_SCHEMA.safeParse(parsedContent)
+    if (!result.success) {
+        const issues = result.error.issues.map(issue => {
+            const path = issue.path.length > 0 ? issue.path.join(".") : "<root>"
+            return `${path}: ${issue.message}`
+        })
+        throw new Error(`Invalid profile JSON: ${issues.join("; ")}`)
     }
 
-    const issues = result.error.issues.map(issue => {
-        const path = issue.path.length > 0 ? issue.path.join(".") : "<root>"
-        return `${path}: ${issue.message}`
-    })
-    throw new Error(`Invalid profile JSON: ${issues.join("; ")}`)
+    const job = summarizeProfile(parsedContent)
+    if (job === null) {
+        throw new Error("Invalid profile JSON: not an object")
+    }
+
+    return job
 }
 
 /**
  * @param {CommentState | null} existingState
- * @param {NormalizedProfile} incomingProfile
+ * @param {JobRecord} incomingJob
  * @param {number} runAttempt
- * @returns {{ kind: "stale" } | { kind: "updated", state: CommentState }}
+ * @returns {MergeCommentStateResult}
  */
-export function mergeCommentState(existingState, incomingProfile, runAttempt) {
-    const incomingRunId = incomingProfile.github.run_id
+export function mergeCommentState(existingState, incomingJob, runAttempt) {
+    const incomingRunID = incomingJob.run_id
     const incomingRunAttempt = Number.isSafeInteger(runAttempt) ? runAttempt : 1
-    const workflowKey = getWorkflowKey(incomingProfile)
+    const workflowKey = getWorkflowKey(incomingJob)
 
-    if (incomingRunId === "") {
+    if (incomingRunID === "") {
         throw new Error("profile JSON is missing the GitHub run id")
     }
 
@@ -283,14 +216,14 @@ export function mergeCommentState(existingState, incomingProfile, runAttempt) {
         return {
             kind: "updated",
             state: {
-                version: 2,
+                version: 3,
                 workflow_runs: {
                     [workflowKey]: {
-                        run_id: incomingRunId,
+                        run_id: incomingRunID,
                         run_attempt: incomingRunAttempt,
                     },
                 },
-                profiles: [incomingProfile],
+                jobs: [incomingJob],
             },
         }
     }
@@ -300,7 +233,7 @@ export function mergeCommentState(existingState, incomingProfile, runAttempt) {
         latestRun === null
             ? -1
             : compareRuns(latestRun, {
-                  run_id: incomingRunId,
+                  run_id: incomingRunID,
                   run_attempt: incomingRunAttempt,
               })
 
@@ -312,32 +245,31 @@ export function mergeCommentState(existingState, incomingProfile, runAttempt) {
         return {
             kind: "updated",
             state: {
-                version: 2,
+                version: 3,
                 workflow_runs: {
                     ...existingState.workflow_runs,
                     [workflowKey]: {
-                        run_id: incomingRunId,
+                        run_id: incomingRunID,
                         run_attempt: incomingRunAttempt,
                     },
                 },
-                profiles: [
-                    ...existingState.profiles.filter(profile => getWorkflowKey(profile) !== workflowKey),
-                    incomingProfile,
-                ].sort(compareProfiles),
+                jobs: [...existingState.jobs.filter(job => getWorkflowKey(job) !== workflowKey), incomingJob].sort(
+                    compareJobs,
+                ),
             },
         }
     }
 
-    const profiles = existingState.profiles.filter(profile => getProfileKey(profile) !== getProfileKey(incomingProfile))
-    profiles.push(incomingProfile)
-    profiles.sort(compareProfiles)
+    const jobs = existingState.jobs.filter(job => getJobKey(job) !== getJobKey(incomingJob))
+    jobs.push(incomingJob)
+    jobs.sort(compareJobs)
 
     return {
         kind: "updated",
         state: {
-            version: 2,
+            version: 3,
             workflow_runs: existingState.workflow_runs,
-            profiles,
+            jobs,
         },
     }
 }
@@ -363,49 +295,45 @@ export function mergeCommentStates(states) {
         }
     }
 
-    /** @type {Map<string, NormalizedProfile>} */
-    const profiles = new Map()
+    /** @type {Map<string, JobRecord>} */
+    const jobs = new Map()
 
     for (const state of states) {
-        for (const profile of state.profiles) {
-            const workflowKey = getWorkflowKey(profile)
+        for (const job of state.jobs) {
+            const workflowKey = getWorkflowKey(job)
             const workflowRun = state.workflow_runs[workflowKey] ?? null
             const latestRun = workflowRuns[workflowKey] ?? null
             if (workflowRun === null || latestRun === null || compareRuns(workflowRun, latestRun) !== 0) {
                 continue
             }
 
-            profiles.set(getProfileKey(profile), profile)
+            jobs.set(getJobKey(job), job)
         }
     }
 
     return {
-        version: 2,
+        version: 3,
         workflow_runs: workflowRuns,
-        profiles: [...profiles.values()].sort(compareProfiles),
+        jobs: [...jobs.values()].sort(compareJobs),
     }
 }
 
 /**
- * Render the Garnet Runtime Review PR comment body. The runtime-review
- * marker is the FIRST line (canonical sticky marker, A8), followed by the
- * action's own state markers, then the rendered review.
+ * Render the Garnet execution PR comment body. The runtime-review marker is
+ * the FIRST line (canonical sticky marker), followed by the action's own
+ * state markers, then the rendered review.
  * @param {CommentState} state
  * @param {RenderOptions} [options]
  * @returns {string}
  */
 export function renderCommentBody(state, options = {}) {
     const metadata = encodeCommentState(state)
-    const profiles = [...state.profiles].sort(compareProfiles)
-    const commitSha = getCommentCommitSha(profiles)
-    const review = buildProfileRunReview(profiles, options)
-    const reviewBody = renderRunReview(review)
+    const jobs = [...state.jobs].sort(compareJobs)
+    const commitSha = getCommentCommitSha(jobs)
+    const review = buildProfileRunReview(jobs)
+    const reviewBody = renderRunReview(review, { explainerOpen: options.explainerOpen === true })
 
-    // v6.2 marker block: canonical marker, self marker, then the commit
-    // marker `<!-- garnet:commit {full sha} -->` (all emitted by the
-    // renderer), followed by the action's own state markers.
-    const commitMarker = commitSha !== "" ? `<!-- garnet:commit ${commitSha} -->\n` : ""
-    const markerPrefix = `${RUNTIME_REVIEW_MARKER}\n${COMMENT_MARKER}\n${commitMarker}`
+    const markerPrefix = `${RUNTIME_REVIEW_MARKER}\n${COMMENT_MARKER}\n`
     if (!reviewBody.startsWith(markerPrefix)) {
         throw new Error("rendered review body is missing the runtime-review markers")
     }
@@ -413,7 +341,6 @@ export function renderCommentBody(state, options = {}) {
     return [
         RUNTIME_REVIEW_MARKER,
         COMMENT_MARKER,
-        ...(commitSha !== "" ? [`<!-- garnet:commit ${commitSha} -->`] : []),
         `<!-- ${ACTION_COMMENT_MARKER} -->`,
         `<!-- ${COMMIT_MARKER_PREFIX}${commitSha} -->`,
         `<!-- ${COMMENT_STATE_MARKER_PREFIX}${metadata} -->`,
@@ -422,80 +349,34 @@ export function renderCommentBody(state, options = {}) {
 }
 
 /**
- * Build the run review object from normalized profiles (one per job).
- * Shared by the PR comment and the Step Summary so both surfaces render
- * from the same review.
- * @param {NormalizedProfile[]} profiles
- * @param {RenderOptions} [options]
+ * Build the run review from collapsed job records (one per job). Shared by
+ * the PR comment and the Step Summary so both surfaces render from the same
+ * review model.
+ * @param {JobRecord[]} jobs
  * @returns {RunReview}
  */
-export function buildProfileRunReview(profiles, options = {}) {
-    const jobs = profiles.map(profile => profileToJobRecord(profile))
-    const sha = getCommentCommitSha(profiles)
-    const repository = getCommentRepository(profiles)
-    const commitUrl = repository !== "" && sha !== "" ? `https://github.com/${repository}/commit/${sha}` : ""
-    const appUrl = resolveAppBaseUrl()
-    const permalink = derivePermalink(options.permalinkUrl ?? "", jobs, appUrl)
+export function buildProfileRunReview(jobs) {
+    const sha = getCommentCommitSha(jobs)
+    const repository = getCommentRepository(jobs)
+    const commitURL = repository !== "" && sha !== "" ? `https://github.com/${repository}/commit/${sha}` : ""
 
     return buildRunReview({
         repo: repository,
         sha,
-        commitUrl,
-        permalink,
-        appUrl,
-        docsUrl: options.docsUrl ?? DEFAULT_DOCS_URL,
-        expectedJobs: options.expectedJobs ?? 0,
-        renderedAt: options.renderedAt ?? new Date(),
-        firstRun: options.firstRun === true,
+        commitURL,
+        appURL: resolveAppBaseURL(),
         jobs,
     })
 }
 
 /**
- * Collapse one normalized profile into the renderer's job-record shape.
- * @param {NormalizedProfile} profile
- * @returns {JobRecord}
- */
-function profileToJobRecord(profile) {
-    /** @type {{ ancestry: string[], domain: string, ip: string }[]} */
-    const connections = []
-    for (const peer of profile.egress_peers) {
-        // A recorded remote_names entry can be the peer's bare address — an
-        // address-like "name" is NOT a domain, or the fold-heading noun rule
-        // (v6.1 §1.5) would read `domains` over a tree of IPs. The
-        // connection's domain is the first NAMED identity, if any.
-        const domain = peer.remote_names.find(name => !isAddressLike(name)) ?? ""
-        const ip = peer.remote_address
-        const ancestries =
-            peer.proc_trees.length > 0 ? peer.proc_trees.map(tree => tree.ancestry.filter(entry => entry !== "")) : [[]]
-        for (const ancestry of ancestries) {
-            connections.push({ ancestry, domain, ip })
-        }
-    }
-
-    return {
-        name: profile.github.job,
-        workflow: profile.github.workflow,
-        sha: profile.github.sha,
-        run_id: profile.github.run_id,
-        run_number: "",
-        run_url: buildGitHubRunLink(profile.github.repository, profile.github.run_id),
-        telemetry: {
-            domains: profile.telemetry.total_domains,
-            connections: profile.telemetry.total_connections,
-        },
-        connections,
-    }
-}
-
-/**
- * @param {NormalizedProfile[]} profiles
+ * @param {JobRecord[]} jobs
  * @returns {string}
  */
-function getCommentRepository(profiles) {
-    for (const profile of profiles) {
-        if (profile.github.repository !== "") {
-            return profile.github.repository
+function getCommentRepository(jobs) {
+    for (const job of jobs) {
+        if (job.repository !== "") {
+            return job.repository
         }
     }
 
@@ -522,10 +403,85 @@ export function parseCommentState(body) {
             return result.data
         }
 
-        const legacyResult = LEGACY_COMMENT_STATE_SCHEMA.safeParse(parsed)
-        return legacyResult.success ? upgradeLegacyCommentState(legacyResult.data) : null
+        const legacyV2 = LEGACY_COMMENT_STATE_V2_SCHEMA.safeParse(parsed)
+        if (legacyV2.success) {
+            return {
+                version: 3,
+                workflow_runs: legacyV2.data.workflow_runs,
+                jobs: legacyV2.data.profiles.map(upgradeLegacyProfile).sort(compareJobs),
+            }
+        }
+
+        const legacyV1 = LEGACY_COMMENT_STATE_V1_SCHEMA.safeParse(parsed)
+        if (legacyV1.success) {
+            /** @type {Record<string, WorkflowRun>} */
+            const workflowRuns = {}
+            const jobs = legacyV1.data.profiles.map(upgradeLegacyProfile).sort(compareJobs)
+            for (const job of jobs) {
+                workflowRuns[getWorkflowKey(job)] = legacyV1.data.latest_run
+            }
+            return { version: 3, workflow_runs: workflowRuns, jobs }
+        }
+
+        return null
     } catch {
         return null
+    }
+}
+
+/**
+ * Upgrade a version-1/2 normalized profile to a collapsed job record. Fields
+ * the old state never carried (ports, protocol, detections, step
+ * attribution, PID) upgrade empty; the next run of that job replaces the
+ * record wholesale.
+ * @param {LegacyProfile} profile
+ * @returns {JobRecord}
+ */
+function upgradeLegacyProfile(profile) {
+    /** @type {Edge[]} */
+    const edges = []
+    profile.egress_peers.forEach((peer, flowID) => {
+        const trees = peer.proc_trees.length > 0 ? peer.proc_trees : [null]
+        trees.forEach((tree, treeIndex) => {
+            edges.push({
+                flow_id: flowID,
+                tree_index: treeIndex,
+                remote_address: peer.remote_address ?? "",
+                remote_names: peer.remote_names,
+                remote_ports: [],
+                protocol: "",
+                result: "",
+                detections: [],
+                lineage_recorded: tree !== null,
+                pid: "",
+                process: "",
+                ancestry: tree !== null ? tree.ancestry : [],
+                github_step: "",
+            })
+        })
+    })
+
+    return {
+        name: profile.github.job,
+        workflow: profile.github.workflow,
+        repository: profile.github.repository,
+        sha: profile.github.sha,
+        run_id: profile.github.run_id,
+        run_url: buildGitHubRunLink(profile.github.repository, profile.github.run_id),
+        job_url: "",
+        profile_id: "",
+        uuid: "",
+        timestamp: profile.timestamp,
+        ref: profile.github.ref,
+        actor: profile.github.actor,
+        job_index: "",
+        flow_count: profile.egress_peers.length,
+        telemetry: {
+            total_domains: profile.telemetry.total_domains,
+            total_connections: profile.telemetry.total_connections,
+        },
+        assertions: [],
+        edges,
     }
 }
 
@@ -558,13 +514,13 @@ function parseCommentMarkerValue(body, markerPrefix) {
 }
 
 /**
- * @param {NormalizedProfile[]} profiles
+ * @param {JobRecord[]} jobs
  * @returns {string}
  */
-function getCommentCommitSha(profiles) {
-    for (const profile of profiles) {
-        if (profile.github.sha !== "") {
-            return profile.github.sha
+function getCommentCommitSha(jobs) {
+    for (const job of jobs) {
+        if (job.sha !== "") {
+            return job.sha
         }
     }
 
@@ -572,69 +528,56 @@ function getCommentCommitSha(profiles) {
 }
 
 /**
- * @param {{ repository: string, run_id: string, job: string }} values
+ * The `report_url` output: the run's Execution Profile on the Garnet app.
+ * The exact `?profile=` selector needs the control-plane envelope
+ * Profile.ID, which is unknown when this output is emitted (the main step
+ * runs before the sensor records anything), so the output is the
+ * `/dashboard/runs/<run-id>` run route — the app resolves it server-side
+ * and redirects logged-out visitors to the public run route. The output URL
+ * carries no UTM parameters: the contract's mediums (`pr_comment`,
+ * `step_summary`) name rendered surfaces, and this output is neither.
+ * @param {ReportLinkInput} values
  * @returns {string}
  */
 export function buildReportLink(values) {
-    const baseURL = resolveAppBaseUrl()
+    const baseURL = resolveAppBaseURL()
     if (values.run_id === "") {
-        return utmTrackedURL(baseURL)
+        return baseURL
     }
 
-    // The tokenless PUBLIC report route (v6.1 §1.1) — never the authed
-    // dashboard, which would wall cold PR traffic behind a login. Run-level:
-    // no `?job=` selector (per-job `?job=` permalinks are the control-plane
-    // GitHub App comment's job — ENG-1355).
-    return utmTrackedURL(`${baseURL}/public/runs/${encodeURIComponent(values.run_id)}`)
-}
-
-/**
- * @param {string} rawURL
- * @returns {string}
- */
-function utmTrackedURL(rawURL) {
-    try {
-        const url = new URL(rawURL)
-        url.searchParams.set("utm_source", UTM_SOURCE)
-        url.searchParams.set("utm_medium", UTM_MEDIUM)
-        return url.toString()
-    } catch {
-        return rawURL
-    }
+    return `${baseURL}/dashboard/runs/${encodeURIComponent(values.run_id)}`
 }
 
 /**
  * @param {string} repository
- * @param {string} runId
+ * @param {string} runID
  * @returns {string}
  */
-function buildGitHubRunLink(repository, runId) {
+function buildGitHubRunLink(repository, runID) {
     const repositoryPath = repository
         .split("/")
         .filter(part => part !== "")
         .map(part => encodeURIComponent(part))
         .join("/")
 
-    if (repositoryPath === "" || !repositoryPath.includes("/") || runId === "") {
+    if (repositoryPath === "" || !repositoryPath.includes("/") || runID === "") {
         return ""
     }
 
-    return `https://github.com/${repositoryPath}/actions/runs/${encodeURIComponent(runId)}`
+    return `https://github.com/${repositoryPath}/actions/runs/${encodeURIComponent(runID)}`
 }
 
 /**
- * The Garnet app base URL for permalinks, mapped from the configured API
- * host (dev-api → dev-app, …).
  * @returns {string}
  */
-export function resolveAppBaseUrl() {
-    const apiUrl = getConfiguredApiUrl()
-    if (apiUrl === "") {
+export function resolveAppBaseURL() {
+    const apiURL = getConfiguredApiURL()
+    if (apiURL === "") {
         return DEFAULT_APP_BASE_URL
     }
 
     try {
-        const url = new URL(apiUrl)
+        const url = new URL(apiURL)
         const appHost = mapApiHostToAppHost(url.host)
         return `${url.protocol}//${appHost}`
     } catch {
@@ -645,7 +588,7 @@ export function resolveAppBaseUrl() {
 /**
  * @returns {string}
  */
-function getConfiguredApiUrl() {
+function getConfiguredApiURL() {
     if (typeof process.env.GARNET_API_URL === "string" && process.env.GARNET_API_URL !== "") {
         return process.env.GARNET_API_URL
     }
@@ -676,17 +619,17 @@ function mapApiHostToAppHost(host) {
 }
 
 /**
- * @param {{ run_id: string, run_attempt: number }} left
- * @param {{ run_id: string, run_attempt: number }} right
+ * @param {WorkflowRun} left
+ * @param {WorkflowRun} right
  * @returns {number}
  */
 function compareRuns(left, right) {
-    const leftRunId = toBigInt(left.run_id)
-    const rightRunId = toBigInt(right.run_id)
-    if (leftRunId > rightRunId) {
+    const leftRunID = toBigInt(left.run_id)
+    const rightRunID = toBigInt(right.run_id)
+    if (leftRunID > rightRunID) {
         return 1
     }
-    if (leftRunId < rightRunId) {
+    if (leftRunID < rightRunID) {
         return -1
     }
 
@@ -701,48 +644,33 @@ function compareRuns(left, right) {
 }
 
 /**
- * @param {LegacyCommentState} state
- * @returns {CommentState}
- */
-function upgradeLegacyCommentState(state) {
-    return {
-        version: 2,
-        workflow_runs: state.profiles.reduce((accumulator, profile) => {
-            accumulator[getWorkflowKey(profile)] = state.latest_run
-            return accumulator
-        }, /** @type {Record<string, WorkflowRun>} */ ({})),
-        profiles: [...state.profiles].sort(compareProfiles),
-    }
-}
-
-/**
- * @param {NormalizedProfile} profile
+ * @param {JobRecord} job
  * @returns {string}
  */
-function getWorkflowKey(profile) {
-    return getDisplayValue(profile.github.workflow, "unknown-workflow")
+function getWorkflowKey(job) {
+    return getDisplayValue(job.workflow, "unknown-workflow")
 }
 
 /**
- * @param {NormalizedProfile} profile
+ * @param {JobRecord} job
  * @returns {string}
  */
-function getProfileKey(profile) {
-    return `${getWorkflowKey(profile)}\u0000${getDisplayValue(profile.github.job, "unknown-job")}`
+function getJobKey(job) {
+    return `${getWorkflowKey(job)}\u0000${getDisplayValue(job.name, "unknown-job")}`
 }
 
 /**
- * @param {NormalizedProfile} left
- * @param {NormalizedProfile} right
+ * @param {JobRecord} left
+ * @param {JobRecord} right
  * @returns {number}
  */
-function compareProfiles(left, right) {
+function compareJobs(left, right) {
     const workflowCompare = getWorkflowKey(left).localeCompare(getWorkflowKey(right))
     if (workflowCompare !== 0) {
         return workflowCompare
     }
 
-    return left.github.job.localeCompare(right.github.job)
+    return left.name.localeCompare(right.name)
 }
 
 /**
@@ -758,53 +686,6 @@ function toBigInt(value) {
 }
 
 /**
- * @param {unknown} value
- * @returns {ProfileResult}
- */
-function normalizeResult(value) {
-    const normalized = getString(value).toLowerCase()
-    if (normalized === "pass" || normalized === "attention" || normalized === "fail") {
-        return normalized
-    }
-    return "unknown"
-}
-
-/**
- * @param {unknown} value
- * @returns {number}
- */
-function getNumber(value) {
-    return typeof value === "number" ? value : 0
-}
-
-/**
- * @param {unknown} profile
- * @returns {EgressPeer[]}
- */
-function getProfileNetworkPeers(profile) {
-    const root = getOptionalRecord(profile)
-    const network = getOptionalRecord(root?.network)
-    const egress = getOptionalRecord(network?.egress)
-    return Array.isArray(egress?.peers) ? egress.peers : []
-}
-
-/**
- * @param {unknown} profile
- * @returns {NetworkTelemetry}
- */
-function getProfileNetworkTelemetry(profile) {
-    const root = getOptionalRecord(profile)
-    const telemetry = getOptionalRecord(root?.telemetry)
-    const network = getOptionalRecord(telemetry?.network)
-    const egress = getOptionalRecord(network?.egress)
-
-    return {
-        total_domains: getNumber(egress?.total_domains),
-        total_connections: getNumber(egress?.total_connections),
-    }
-}
-
-/**
  * @param {string} value
  * @param {string} fallback
  * @returns {string}
@@ -812,12 +693,3 @@ function getProfileNetworkTelemetry(profile) {
 function getDisplayValue(value, fallback) {
     return value !== "" ? value : fallback
 }
-
-/**
- * @param {unknown} value
- * @returns {string}
- */
-function getString(value) {
-    return typeof value === "string" ? value : ""
-}
-
