@@ -79,7 +79,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  monitor:
+  record:
     runs-on: ubuntu-latest
 
     permissions:
@@ -128,7 +128,7 @@ One comment per PR, one fold per job, updated in place as each job's profile lan
 
 - **Headline** — `Execution Profiles recorded for N job(s), triggered by <sha7>`, linking the commit.
 - **Metadata line** — an italic blockquote: `N execution chains · N destinations · recorded at the kernel by Garnet · <UTC timestamp>`, one fact per `·` segment.
-- **One fold per job** — headed `workflow / job ↗`, linking to its Actions run. Inside: the job's execution tree — only processes with recorded egress, destinations as `→ name` leaves under the process that opened them, defanged at the final dot. Workload lineage renders **bold**, runner scaffolding *italic*; resolver chatter and unattributed runner chains sit in a nested `dns + runner substrate` fold.
+- **One fold per job** — headed `workflow / job ↗`, linking to its Actions run. Inside: the job's execution tree — only processes with recorded egress, destinations as `→ name` leaves under the process that opened them, defanged at the final dot. Workload processes render **bold**, runner scaffolding *italic*; resolver chatter and unattributed runner chains sit in a nested `dns + runner substrate` fold.
 - **Per-job permalink** — `View this job's Execution Profile in Garnet →`, opening the job's [public run report](https://app.garnet.ai/public/runs/30675075813?profile=019fbaad-dda5-71c3-a8e5-3a4cd96fea21) (`?profile=` selector required — a bare run URL returns 404).
 - **The explainer** — a `💡 How to read this` fold at the bottom teaches the tree with an annotated example:
 
@@ -177,7 +177,7 @@ The same full-detail record is appended to the GitHub Actions Job Summary as the
 
 ### What Garnet records
 
-Every recorded job produces one **Execution Profile**: the job's execution chains and the destinations they reached, recorded at the kernel. An execution chain is one path through the process tree, from the runner's root to an action — today, an outbound connection. The record carries no verdicts; you review it.
+Every recorded job produces one **Execution Profile**: the job's execution chains and the destinations they reached, recorded at the kernel. An execution chain is one path through the process tree, from the runner's root to an action — today, an outbound connection.
 
 ### Why Runtime Review matters
 
