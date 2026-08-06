@@ -1,9 +1,8 @@
 /**
- * Spec gate for the observation-only Garnet Runtime Review renderer
- * (Comment v5.2), ported from the locked reference test suite in
- * garnet-labs/runtime-review-testbed (review.test.mjs): v5.1 acceptance
- * tests 18–27, the v5.2 readability invariants, the banned-vocabulary/glyph
- * hard gate, and byte-comparison against the checked-in real-data mockups.
+ * Spec gate for the Garnet execution renderer (contract v6.6.1), locked
+ * against the reference goldens from garnet-org/runtime-review-testbed
+ * (checked in under fixtures/goldens/, rendered from the captured real
+ * profiles under fixtures/profiles/).
  *
  *   node --test test/
  */
@@ -16,16 +15,20 @@ import {
     buildRunReview,
     renderRunReview,
     renderStepSummary,
+    renderNoRecordSummary,
     renderJobTree,
-    jobSummaryLine,
     summarizeProfile,
-    classifyConnection,
-    derivePermalink,
-    behaviorSignature,
-    normalizeIdentifier,
-    freshnessStamp,
-    renderNoRecord as renderNoRecordBody,
+    profilePermalink,
+    jobPermalink,
+    defangHostname,
+    partitionCommentEdges,
+    addressNameMap,
+    destinationIdentity,
+    lintRenderedSurface,
+    edgeCounts,
     SIZE_BUDGET,
+    STEP_SUMMARY_BUDGET,
+    VOCAB,
     COMMENT_MARKER,
     RUNTIME_REVIEW_MARKER,
 } from "../src/runtime-review.js"
@@ -33,486 +36,278 @@ import {
 const here = dirname(fileURLToPath(import.meta.url))
 const fixturesDir = join(here, "fixtures")
 
-const REPO = "garnet-labs/runtime-review-testbed"
+const REPO = "garnet-org/runtime-review-testbed"
+const APP_URL = "https://app.garnet.ai"
 
-/** Pinned render clock so renders stay byte-identical (A7 freshness stamp). */
-const RENDERED_AT = "2026-07-03T14:02:00Z"
+/** Envelope Profile.IDs captured alongside the real profiles. */
+const envelopes = JSON.parse(await readFile(join(fixturesDir, "profiles", "profile-envelopes.json"), "utf8"))
 
-/** Example capability link (A6): the tokenless public Run Profile page. */
-const CAPABILITY_LINK = "https://app.garnet.ai/p/runtime-review-testbed"
-
-const DOCS_URL = "https://github.com/garnet-org/action#readme"
-
+/**
+ * Load a captured profile, wrapped in its control-plane envelope when the
+ * capture recorded one (the shape the app's profile download returns).
+ * @param {string} name
+ */
 async function loadProfile(name) {
-    return JSON.parse(await readFile(join(fixturesDir, "profiles", name), "utf8"))
+    const data = JSON.parse(await readFile(join(fixturesDir, "profiles", name), "utf8"))
+    const id = envelopes[name]?.id
+    return typeof id === "string" && id !== "" ? { id, data } : data
+}
+
+/** @param {string} name */
+async function loadGolden(name) {
+    return readFile(join(fixturesDir, "goldens", name), "utf8")
 }
 
 /** Render one or more real profiles through the exact CI code path. */
-function renderFromProfiles(profiles, { permalink = "", expectedJobs = profiles.length } = {}) {
-    const jobs = profiles.map(summarizeProfile).filter(Boolean)
+function reviewFor(jobs) {
     const sha = jobs[0]?.sha || ""
-    const review = buildRunReview({
+    return buildRunReview({
         repo: REPO,
         sha,
-        commitUrl: sha ? `https://github.com/${REPO}/commit/${sha}` : "",
-        permalink,
-        docsUrl: DOCS_URL,
-        expectedJobs,
-        renderedAt: RENDERED_AT,
+        commitURL: sha !== "" ? `https://github.com/${REPO}/commit/${sha}` : "",
+        appURL: APP_URL,
         jobs,
     })
-    return { review, body: renderRunReview(review) }
-}
-
-/** The no-record placeholder body with the PR-comment markers prepended. */
-function renderNoRecord(sha) {
-    return [
-        RUNTIME_REVIEW_MARKER,
-        COMMENT_MARKER,
-        renderNoRecordBody({
-            sha,
-            commitUrl: `https://github.com/${REPO}/commit/${sha}`,
-            expectedJobs: 1,
-            docsUrl: DOCS_URL,
-            renderedAt: RENDERED_AT,
-        }),
-    ].join("\n")
 }
 
 // ---------------------------------------------------------------------------
 // Real inputs — captured from live CI runs of the testbed repo.
 // ---------------------------------------------------------------------------
-const normal = await loadProfile("normal-run.json") // run 28488074733 — plain npm install
-const install = await loadProfile("npm-install-run.json") // run 28488074733 — install + resolver
-const worth = await loadProfile("worth-a-look-run.json") // run 28492112239 — unsplash fetch in npm test
-const sample = await loadProfile("sample-profile.json")
+const normal = await loadProfile("normal-run.json")
+const worth = await loadProfile("worth-a-look-run.json")
+const multiJobProfiles = await Promise.all(
+    [
+        "record-workload-egress.json",
+        "record-docs-build.json",
+        "record-install-only.json",
+        "record-lint.json",
+        "record-typecheck.json",
+    ].map(loadProfile),
+)
 
 const STATES = {
-    "no-record": renderNoRecord("ef01a52517e7532ab34aadea58b952c9f1e79ece"),
-    "registry-only": renderFromProfiles([normal]).body,
-    "workload-egress": renderFromProfiles([worth]).body,
-    "multi-job": renderFromProfiles([install, worth]).body,
-    "partial-coverage": renderFromProfiles([worth], { expectedJobs: 6 }).body,
+    "registry-only": [normal].map(summarizeProfile),
+    "workload-egress": [worth].map(summarizeProfile),
+    "multi-job": multiJobProfiles.map(summarizeProfile),
 }
 
-// Synthetic jobs used only where no real profile can produce the edge case.
-const CANARY_JOB = {
-    name: "runtime-review",
-    workflow: "Garnet Runtime Review",
-    run_url: "https://github.com/garnet-labs/runtime-review-testbed/actions/runs/1",
-    connections: [
-        { ancestry: ["systemd", "hosted-compute-agent", "Runner.Listener", "Runner.Worker", "bash", "node", "dash", "node", "dash", "curl"], domain: "httpbin.org", ip: "98.95.76.254" },
-        { ancestry: ["systemd", "hosted-compute-agent", "Runner.Listener", "Runner.Worker", "bash", "node", "dash", "node", "dash", "curl"], domain: "localhost", ip: "127.0.0.53" },
-        { ancestry: ["systemd", "hosted-compute-agent", "Runner.Listener", "Runner.Worker", "bash", "node", "dash", "node"], domain: "registry.npmjs.org", ip: "104.16.6.34" },
-        { ancestry: ["systemd", "hosted-compute-agent", "Runner.Listener", "Runner.Worker", "bash", "node", "dash", "node"], domain: "api.garnet.ai", ip: "104.26.11.16" },
-        { ancestry: ["systemd", "hosted-compute-agent", "Runner.Listener", "Runner.Worker", "bash", "node", "dash", "node"], domain: "localhost", ip: "127.0.0.53" },
-        { ancestry: ["systemd", "hosted-compute-agent", "Runner.Listener", "Runner.Worker", "bash", "node", "dash", "node"], domain: "github.com", ip: "140.82.116.3" },
-        { ancestry: ["systemd", "hosted-compute-agent", "Runner.Listener", "Runner.Worker", "bash", "node"], domain: "registry.npmjs.org", ip: "104.16.4.34" },
-        { ancestry: ["systemd", "hosted-compute-agent", "Runner.Listener", "Runner.Worker", "bash", "node"], domain: "localhost", ip: "127.0.0.53" },
-        { ancestry: ["systemd", "hosted-compute-agent", "sudo", "provjobd128037216"], domain: "", ip: "168.63.129.16" },
-    ],
-}
-
-const canaryReview = () =>
-    buildRunReview({
-        repo: "garnet-labs/runtime-review-testbed",
-        sha: "ac543cb0000000000000000000000000000000000",
-        commitUrl: "https://github.com/garnet-labs/runtime-review-testbed/commit/ac543cb",
-        permalink: "https://app.garnet.ai/p/runtime-review-testbed",
-        docsUrl: DOCS_URL,
-        renderedAt: RENDERED_AT,
-        jobs: [CANARY_JOB],
+// ---------------------------------------------------------------------------
+// Byte parity with the reference goldens — PR comment and Step Summary.
+// ---------------------------------------------------------------------------
+for (const [name, jobs] of Object.entries(STATES)) {
+    test(`[${name}] PR comment matches the reference golden byte-for-byte`, async () => {
+        const body = renderRunReview(reviewFor(jobs)) + "\n"
+        assert.equal(body, await loadGolden(`${name}.pr-comment.md`))
     })
-
-const CANARY = renderRunReview(canaryReview())
+    test(`[${name}] Step Summary matches the reference golden byte-for-byte`, async () => {
+        const summary = renderStepSummary(jobs, { appURL: APP_URL }) + "\n"
+        assert.equal(summary, await loadGolden(`${name}.step-summary.md`))
+    })
+}
 
 // ---------------------------------------------------------------------------
-// Spec §1 banned vocabulary — observations, never verdicts (hard gate).
+// Contract vocabulary — v6.6.1 hard gate on every rendered surface.
 // ---------------------------------------------------------------------------
-const BANNED_WORDS = [
-    "pass", "passed", "fail", "failed", "attention", "clean", "routine",
-    "usual", "check", "detection", "verdict", "risk", "severity", "threat",
-    "malicious", "suspicious", "block",
+const BANNED_TERMS = [
+    "process chain",
+    "baseline",
+    "lineage",
+    "trace",
+    "Run Profile",
+    "Runtime Review",
+    "Runtime Summary",
+    "safe",
+    "secure",
+    "malicious",
+    "threat",
+    "verdict",
+    "monitoring",
+    "clean",
+    "score",
+    "detected",
+    "flagged",
+    "as of",
+    "github infra",
+    "garnet sensor upload",
+    "expected plumbing",
 ]
-const BANNED_WORDS_RE = new RegExp(`\\b(${BANNED_WORDS.join("|")})(s|es|ed|ing)?\\b`, "i")
-const BANNED_GLYPHS_RE = /[✅🛑🔍🔴⚠⏳]/u
 
-for (const [name, md] of Object.entries({ ...STATES, canary: CANARY })) {
-    test(`[${name}] canonical marker first, self-marker second`, () => {
-        assert.ok(md.startsWith(RUNTIME_REVIEW_MARKER), "starts with the canonical marker")
-        assert.ok(md.includes(COMMENT_MARKER), "carries the self-marker (takeover window)")
+const SURFACES = {}
+for (const [name, jobs] of Object.entries(STATES)) {
+    SURFACES[`${name} pr-comment`] = { surface: renderRunReview(reviewFor(jobs)), jobs }
+    SURFACES[`${name} step-summary`] = { surface: renderStepSummary(jobs, { appURL: APP_URL }), jobs }
+}
+SURFACES["no-record step-summary"] = { surface: renderNoRecordSummary(), jobs: [] }
+
+for (const [name, { surface, jobs }] of Object.entries(SURFACES)) {
+    test(`[${name}] no banned vocabulary in visible copy`, () => {
+        // Recorded data (the captured workflow name) is evidence, not copy;
+        // only the renderer's own words are gated.
+        let visible = surface.replace(/<!--[\s\S]*?-->/g, "")
+        for (const job of jobs) {
+            if (job.workflow !== "") {
+                visible = visible.replaceAll(job.workflow, "")
+            }
+        }
+        for (const term of BANNED_TERMS) {
+            const re = new RegExp(`\\b${term}\\b`, "i")
+            assert.ok(!re.test(visible), `found banned term "${term}"`)
+        }
     })
-    test(`[${name}] anatomy: title + A7 meta line`, () => {
-        assert.ok(md.includes("## Garnet Runtime Review"))
-        assert.match(
-            md,
-            /\[`[0-9a-f]{7}`\]\(https:\/\/github\.com\/[^)]+\/commit\/[^)]+\) · (?:\d+ of \d+ jobs? recorded|\d+ jobs? recorded) · updated \d{2}:\d{2} UTC · [A-Z][a-z]{2} \d{1,2}/,
-        )
+    test(`[${name}] link targets stay on garnet.ai / github.com`, () => {
+        for (const match of surface.matchAll(/\]\((https?:\/\/[^)]+)\)/g)) {
+            const host = new URL(match[1]).host
+            assert.ok(
+                host === "github.com" || host === "garnet.ai" || host.endsWith(".garnet.ai"),
+                `link target ${match[1]} is off-policy`,
+            )
+        }
     })
-    test(`[${name}] no banned vocabulary or status glyphs`, () => {
-        const hit = md.match(BANNED_WORDS_RE)
-        assert.ok(!hit, `found banned word "${hit && hit[0]}"`)
-        assert.ok(!BANNED_GLYPHS_RE.test(md), "found a status glyph")
-    })
-    test(`[${name}] no tables, images, svg, color styling, or repo name in meta`, () => {
-        assert.ok(!/^\s*\|/m.test(md), "markdown table found")
-        assert.ok(!/!\[|<svg|style=|color:/i.test(md))
-        assert.ok(!/^`garnet-labs\//m.test(md), "repo name must not lead the meta line (A7)")
-    })
-    test(`[${name}] footer <sub> present, no relative time`, () => {
-        assert.match(md, /<sub>What happened in this PR — each job's processes and where they reached\./)
-        assert.ok(!/\bago\b/.test(md), "the string 'ago' never appears (test 25)")
+    test(`[${name}] semantic surface linter is clean`, () => {
+        const kind = name.endsWith("step-summary") ? "step-summary" : "pr"
+        assert.deepEqual(lintRenderedSurface(surface, kind), [])
     })
 }
 
-for (const [name, md] of Object.entries(STATES)) {
-    if (name === "no-record") continue
-    test(`[${name}] lineage trees are four-backtick-fenced with → leaf annotations`, () => {
-        assert.ok(md.includes("````text"), "four-backtick fences (A8)")
-        assert.match(md, /^\s*[├└]─ → [\w.-]+/m)
-    })
-    test(`[${name}] job row: summary line IS the fold summary; named slots + totals`, () => {
-        assert.match(md, /<details( open)?><summary><b><code>[\w-]+<\/code><\/b> — reached .*· \d+ connections?<\/summary>/)
-        assert.match(md, /\[job log ↗\]\(https:\/\/github\.com\/[^)]+\/actions\/runs\/\d+\)/)
-    })
-    test(`[${name}] agent-prompt hint + job log live inside the fold (D6)`, () => {
-        assert.match(md, /<sub>Paste the tree into your review agent · full detail in the Step Summary · \[job log ↗\][^<]*<\/sub>/)
-    })
-}
+test("PR comment carries the markers first and the v6.6.1 headline", () => {
+    const body = renderRunReview(reviewFor(STATES["workload-egress"]))
+    assert.ok(body.startsWith(`${RUNTIME_REVIEW_MARKER}\n${COMMENT_MARKER}\n`))
+    assert.ok(body.includes(VOCAB.headlineLead))
+})
+
+test("Step Summary heading is the Garnet Execution Summary", () => {
+    const summary = renderStepSummary(STATES["registry-only"], { appURL: APP_URL })
+    assert.ok(summary.includes(`## ${VOCAB.stepSummaryHeading}`))
+    assert.equal(VOCAB.stepSummaryHeading, "Garnet Execution Summary")
+})
+
+test("no-record Step Summary says so plainly, with no substitute clock", () => {
+    const summary = renderNoRecordSummary()
+    assert.ok(summary.includes(`## ${VOCAB.stepSummaryHeading}`))
+    assert.ok(summary.includes(VOCAB.noRunProfile))
+    assert.ok(!/\d{2}:\d{2} UTC/.test(summary), "no clock in the no-record summary")
+})
 
 // ---------------------------------------------------------------------------
-// v5.1 acceptance tests 18–27.
+// Permalinks — canonical exact selector, honest fallback, distinct UTM.
 // ---------------------------------------------------------------------------
-test("18: resolver stub renders → dns, never localhost; excluded from candidacy, kept in counts", () => {
-    assert.match(CANARY, /→ dns · 127\.0\.0\.53/)
-    assert.ok(!/`localhost`/.test(CANARY), "localhost never named in prose")
-    assert.match(CANARY, /<summary><b><code>[\w-]+<\/code><\/b> — reached .*· 9 connections<\/summary>/)
+test("envelope-wrapped profile keeps the envelope Profile.ID", () => {
+    const job = summarizeProfile(worth)
+    assert.equal(job.profile_id, envelopes["worth-a-look-run.json"].id)
 })
-test("19: the sensor's upload renders — garnet upload, excluded from candidacy, kept in counts", () => {
-    assert.match(CANARY, /→ api\.garnet\.ai · 104\.26\.11\.16 — garnet upload/)
-    assert.ok(!CANARY.includes("`api.garnet.ai`"), "garnet upload never headlines or enumerates")
+
+test("bare profile (no envelope) has no profile_id and never fabricates one", async () => {
+    const raw = JSON.parse(await readFile(join(fixturesDir, "profiles", "sample-profile.json"), "utf8"))
+    const job = summarizeProfile(raw)
+    assert.equal(job.profile_id, "")
+    assert.equal(profilePermalink(job, APP_URL, "pr_comment"), "")
 })
-test("20: runner ancestry compresses to one line; deviation cancels elision", () => {
-    assert.match(CANARY, /└─ GitHub runner ┄ \d+ processes(?: · \d+ connections? → GitHub-owned addresses)?/)
-    assert.ok(!/^\s*[├└]─ systemd$/m.test(CANARY), "systemd never renders as its own node")
-    // Cancellation: a runner-chain member reaching an unclassified destination
-    // renders that branch in full.
-    const cancel = buildRunReview({
-        sha: "ac543cb", renderedAt: RENDERED_AT,
-        jobs: [{ name: "j", connections: [
-            { ancestry: ["systemd", "sudo", "provjobd99"], domain: "transfer.sh", ip: "1.2.3.4" },
-        ] }],
-    })
-    const tree = renderJobTree(cancel.jobs[0])
-    assert.ok(tree.includes("provjobd99"), "member reaching non-GitHub destination renders in full")
-    assert.ok(tree.includes("transfer.sh"))
+
+test("canonical permalink: /public/runs/<run-id>?profile=<profile-id>", () => {
+    const job = summarizeProfile(worth)
+    assert.equal(
+        profilePermalink(job, APP_URL, "pr_comment"),
+        `${APP_URL}/public/runs/${job.run_id}?profile=${job.profile_id}&utm_source=github&utm_medium=pr_comment`,
+    )
 })
-test("21: headline destination is never a classified connection (the stub can never headline)", () => {
-    assert.match(CANARY, /In `runtime-review`, `dash` spawned `curl`, which reached `httpbin\.org`\./)
+
+test("fallback permalink: /dashboard/runs/<run-id> when the envelope ID is unknown", () => {
+    const job = { run_id: "28492112239", profile_id: "" }
+    assert.equal(
+        jobPermalink(job, APP_URL, "step_summary"),
+        `${APP_URL}/dashboard/runs/28492112239?utm_source=github&utm_medium=step_summary`,
+    )
+    assert.equal(jobPermalink({ run_id: "", profile_id: "" }, APP_URL, "step_summary"), "")
 })
-test("22: named enumeration slots are never all classified/high-frequency entries", () => {
-    assert.match(CANARY, /<b><code>runtime-review<\/code><\/b> — reached <code>httpbin\.org<\/code>, <code>github\.com<\/code>, <code>registry\.npmjs\.org<\/code> and \d+ more · 9 connections/)
-    assert.ok(!/reached <code>registry\.npmjs\.org<\/code>, <code>api\.garnet\.ai<\/code>/.test(CANARY), "slots are salience-ordered, not first-seen")
+
+test("UTM media are distinct per surface: pr_comment vs step_summary", () => {
+    const jobs = STATES["workload-egress"]
+    const comment = renderRunReview(reviewFor(jobs))
+    const summary = renderStepSummary(jobs, { appURL: APP_URL })
+    assert.ok(comment.includes("utm_medium=pr_comment"))
+    assert.ok(!comment.includes("utm_medium=step_summary"))
+    assert.ok(summary.includes("utm_medium=step_summary"))
+    assert.ok(!summary.includes("utm_medium=pr_comment"))
 })
-test("23: R0 signatures normalize trailing digits; display shows the raw name", () => {
-    assert.equal(normalizeIdentifier("provjobd128037216"), "provjobd*")
-    const a = behaviorSignature({ ancestry: ["sudo", "provjobd128037216"], domain: "x.com" })
-    const b = behaviorSignature({ ancestry: ["sudo", "provjobd131111111"], domain: "x.com" })
-    assert.equal(a, b)
+
+// ---------------------------------------------------------------------------
+// Hostname defanging — final dot only, address literals unchanged.
+// ---------------------------------------------------------------------------
+test("defangHostname breaks the final dot of ordinary hostnames only", () => {
+    assert.equal(defangHostname("registry.npmjs.org"), "registry.npmjs[.]org")
+    assert.equal(defangHostname("github.com"), "github[.]com")
+    assert.equal(defangHostname("140.82.116.3"), "140.82.116.3")
+    assert.equal(defangHostname("localhost"), "localhost")
 })
-test("24: link policy — Run Profile ↗ never targets a github.com/actions URL; omitted when absent", () => {
-    assert.ok(!/\[Run Profile ↗\]\(https:\/\/github\.com\/[^)]*\/actions\//.test(CANARY))
-    const noCap = renderRunReview(buildRunReview({
-        sha: "ac543cb", renderedAt: RENDERED_AT,
-        permalink: "https://github.com/garnet-labs/runtime-review-testbed/actions/runs/1",
-        jobs: [CANARY_JOB],
-    }))
-    assert.ok(!noCap.includes("Run Profile ↗"), "footer omits the link rather than mislabeling")
+
+test("PR comment defangs recorded hostnames", () => {
+    const body = renderRunReview(reviewFor(STATES["registry-only"]))
+    assert.ok(body.includes("registry.npmjs[.]org"))
 })
-test("25: timestamps are absolute UTC", () => {
-    assert.match(CANARY, /updated 14:02 UTC · Jul 3/)
-    assert.equal(freshnessStamp(new Date(RENDERED_AT)), "updated 14:02 UTC · Jul 3")
+
+// ---------------------------------------------------------------------------
+// Structure invariants.
+// ---------------------------------------------------------------------------
+test("edge counts reconcile with the recorded edges", () => {
+    for (const [name, jobs] of Object.entries(STATES)) {
+        for (const job of jobs) {
+            const counts = edgeCounts(job.edges, job.flow_count)
+            assert.equal(counts.associations, job.edges.length, `${name}/${job.name}: associations`)
+            assert.ok(counts.destinations >= 1, `${name}/${job.name}: at least one destination`)
+            assert.equal(counts.flows, job.flow_count, `${name}/${job.name}: flows pin to the sensor count`)
+        }
+    }
 })
-test("26: hostile process name renders inert inside an intact four-backtick fence; byte-identical reruns", () => {
-    const hostile = buildRunReview({
-        sha: "ac543cb", renderedAt: RENDERED_AT,
-        jobs: [{ name: "j", connections: [
-            { ancestry: ["bash", "```](https://x.com)\u0007"], domain: "example.com", ip: "9.9.9.9" },
-        ] }],
-    })
-    const one = renderRunReview(hostile)
-    const two = renderRunReview(hostile)
+
+test("the comment partition keeps every destination identity visible", () => {
+    for (const jobs of Object.values(STATES)) {
+        for (const job of jobs) {
+            const { shown, substrate } = partitionCommentEdges(job.edges)
+            const names = addressNameMap(job.edges)
+            const rendered = new Set([...shown, ...substrate].map(edge => destinationIdentity(edge, names)))
+            for (const edge of job.edges) {
+                assert.ok(rendered.has(destinationIdentity(edge, names)), `identity of ${edge.remote_address} dropped`)
+            }
+        }
+    }
+})
+
+test("hostile process names render inert; reruns are byte-identical", () => {
+    const hostile = summarizeProfile(worth)
+    hostile.edges[0].ancestry = ["bash", "```](https://x.com)\u0007"]
+    const review = reviewFor([hostile])
+    const one = renderRunReview(review)
+    const two = renderRunReview(review)
     assert.equal(one, two, "byte-identical across reruns")
-    assert.ok(!/```\]/.test(one), "backtick run neutralized")
     assert.ok(!one.includes("\u0007"), "control characters stripped")
-    const fences = one.match(/````/g) || []
-    assert.equal(fences.length % 2, 0, "fences stay balanced")
+    assert.ok(!/```\]/.test(one), "backtick run neutralized")
 })
-test("27: a 500-process profile renders under the size budget with explicit collapse markers", () => {
+
+test("large profiles stay under the size budgets", () => {
+    const job = summarizeProfile(worth)
     const big = {
-        name: "big-job",
-        connections: Array.from({ length: 500 }, (_, i) => ({
-            ancestry: ["bash", `orchestrator-process-${i}`, `worker-subprocess-${i}`, `network-helper-tool-${i}`],
-            domain: `long-destination-hostname-${i}.example-service.example.com`,
-            ip: `10.0.${Math.floor(i / 250)}.${i % 250}`,
+        ...job,
+        edges: Array.from({ length: 500 }, (_, i) => ({
+            ...job.edges[0],
+            flow_id: i,
+            remote_names: [`long-destination-hostname-${i}.example-service.example.com`],
+            remote_address: `10.0.${Math.floor(i / 250)}.${i % 250}`,
         })),
+        flow_count: 500,
     }
-    const review = buildRunReview({ sha: "ac543cb", renderedAt: RENDERED_AT, jobs: [big] })
-    const body = renderRunReview(review)
-    assert.ok(body.length <= SIZE_BUDGET, `body is ${body.length} chars`)
-    assert.ok(body.includes("full tree in the Step Summary"), "collapse marker present")
-    assert.ok(body.includes("## Garnet Runtime Review"))
-    assert.match(body, /<summary><b><code>big-job<\/code><\/b> — reached/, "job line intact")
+    const body = renderRunReview(reviewFor([big]))
+    assert.ok(body.length <= SIZE_BUDGET, `PR comment is ${body.length} chars (budget ${SIZE_BUDGET})`)
+    const summary = renderStepSummary([big], { appURL: APP_URL })
+    assert.ok(summary.length <= STEP_SUMMARY_BUDGET, `Step Summary is ${summary.length} chars`)
 })
 
-// ---------------------------------------------------------------------------
-// v5.2 readability invariants.
-// ---------------------------------------------------------------------------
-test("v5.2: headline is the only prose above the folds — no meta-chatter", () => {
-    assert.ok(!CANARY.includes("all shown below"), "no fold-summary meta-chatter")
-    assert.ok(!CANARY.includes("paste into your review agent</summary>"), "prompt lives inside the fold")
-    assert.match(CANARY, /<sub>Paste the tree into your review agent · full detail in the Step Summary/)
-})
-test("v5.2: salient job's tree focuses on the salient branch; siblings compress", () => {
-    const review = buildRunReview({
-        sha: "ac543cb", renderedAt: RENDERED_AT,
-        jobs: [
-            { name: "e2e", connections: [
-                { ancestry: ["bash", "node", "sh -c", "curl"], domain: "img-cdn-assets.com", ip: "45.137.21.88" },
-                { ancestry: ["bash", "node"], domain: "registry.npmjs.org", ip: "104.16.10.34" },
-                { ancestry: ["bash", "make", "wget"], domain: "cache.example.com", ip: "1.1.1.1" },
-                { ancestry: ["bash", "make", "wget"], domain: "mirror.example.com", ip: "1.1.1.2" },
-            ] },
-            { name: "docs", connections: [
-                { ancestry: ["bash", "node"], domain: "registry.npmjs.org", ip: "104.16.10.34" },
-            ] },
-        ],
-    })
-    const body = renderRunReview(review)
-    assert.ok(body.includes("img-cdn-assets.com"), "salient branch fully expanded")
-    assert.match(body, /┄ \d+ more destinations? · \d+ connections? — full tree in the Step Summary ↗/, "off-path siblings compress to one aggregate line")
-    const fences = body.match(/````text[\s\S]*?````/g) || []
-    assert.ok(!fences[0].includes("cache.example.com") && !fences[0].includes("mirror.example.com"), "non-salient subtree does not enumerate in the salient tree")
-    const summary = renderStepSummary(review)
-    assert.ok(summary.includes("cache.example.com") && summary.includes("mirror.example.com"), "step summary keeps full detail")
-})
-test("v5.2: 4+ jobs — top jobs render individually, the rest group into one fold", () => {
-    const mkJob = (name, dest) => ({
-        name,
-        connections: [{ ancestry: ["bash", "node"], domain: dest, ip: "9.9.9.9" }],
-    })
-    const review = buildRunReview({
-        sha: "ac543cb", renderedAt: RENDERED_AT,
-        jobs: [
-            mkJob("alpha", "one.example.com"),
-            mkJob("beta", "shared.example.com"),
-            mkJob("gamma", "shared.example.com"),
-            mkJob("delta", "shared.example.com"),
-            mkJob("epsilon", "shared.example.com"),
-            mkJob("zeta", "shared.example.com"),
-        ],
-    })
-    const body = renderRunReview(review)
-    assert.match(body, /<details><summary>3 more jobs · \d+ domains? · \d+ connections?<\/summary>/)
-    const three = buildRunReview({
-        sha: "ac543cb", renderedAt: RENDERED_AT,
-        jobs: [mkJob("a", "x.example.com"), mkJob("b", "y.example.com"), mkJob("c", "z.example.com")],
-    })
-    assert.ok(!/more jobs ·/.test(renderRunReview(three)), "no group fold under 5 jobs")
-    // The headline-picked job always renders individually, never inside the
-    // group fold, even when many jobs share its rung and it sorts late by name.
-    const spawn = (name, dest) => ({
-        name,
-        connections: [{ ancestry: ["bash", "sh -c", "curl"], domain: dest, ip: "9.9.9.9" }],
-    })
-    const tie = buildRunReview({
-        sha: "ac543cb", renderedAt: RENDERED_AT,
-        jobs: [
-            spawn("alpha", "shared.example.com"),
-            spawn("beta", "shared.example.com"),
-            spawn("gamma", "shared.example.com"),
-            spawn("delta", "shared.example.com"),
-            spawn("zeta", "aaa-unique.example.com"),
-        ],
-    })
-    const tieBody = renderRunReview(tie)
-    const foldAt = tieBody.indexOf("more jobs ·")
-    const zetaAt = tieBody.indexOf("<b><code>zeta</code></b>")
-    assert.ok(foldAt !== -1 && zetaAt !== -1 && zetaAt < foldAt, "salient job renders before the group fold")
-})
-test("A6: Run Profile permalink derives from the profile's run_id when not explicit", () => {
-    assert.equal(
-        derivePermalink("", [{ run_id: "28674550787" }], "https://app.garnet.ai"),
-        "https://app.garnet.ai/dashboard/runs/28674550787?utm_source=github&utm_medium=pr_comment",
-    )
-    assert.equal(
-        derivePermalink("https://app.garnet.ai/p/x", [{ run_id: "1" }], "https://app.garnet.ai"),
-        "https://app.garnet.ai/p/x",
-        "explicit permalink wins",
-    )
-    assert.equal(derivePermalink("", [{}], "https://app.garnet.ai"), "", "no run_id → omitted")
-    const { review } = renderFromProfiles([worth], {
-        permalink: derivePermalink("", [{ run_id: "99" }], "https://app.garnet.ai"),
-    })
-    assert.match(
-        renderRunReview(review),
-        /\[Run Profile ↗\]\(https:\/\/app\.garnet\.ai\/dashboard\/runs\/99\?utm_source=github&utm_medium=pr_comment\)/,
-    )
-})
-test("v5.2: sensor upload classifies for dev API hosts too", () => {
-    assert.equal(classifyConnection({ ancestry: ["node"], domain: "dev-api.garnet.ai", ip: "1.2.3.4" }), "garnet upload")
-    assert.equal(classifyConnection({ ancestry: ["node"], domain: "api.garnet.ai", ip: "1.2.3.4" }), "garnet upload")
-    assert.equal(classifyConnection({ ancestry: ["node"], domain: "not-garnet.ai", ip: "1.2.3.4" }), "")
-})
-
-// ---------------------------------------------------------------------------
-// Progressive disclosure: the Step Summary is the FULL-detail snapshot —
-// every job's complete tree inline (no elision), nothing folded, no markers.
-// ---------------------------------------------------------------------------
-test("step summary renders full detail: trees inline, no folds, no elision, no markers", () => {
-    const { review } = renderFromProfiles([install, worth])
-    const summary = renderStepSummary(review)
-    assert.ok(summary.includes("## Garnet Runtime Review"))
-    assert.ok(!summary.includes("<details"), "step summary must not fold anything")
-    assert.ok(!summary.includes(COMMENT_MARKER), "markers are PR-comment-only")
-    assert.ok(!summary.includes("GitHub runner ┄"), "step summary is the un-elided floor")
-    const trees = summary.match(/````text/g) || []
-    assert.equal(trees.length, review.jobs.filter(j => j.connections.length > 0).length)
-})
-
-// ---------------------------------------------------------------------------
-// S5 — partial coverage: k of n + the one growth CTA.
-// ---------------------------------------------------------------------------
-test("S5: partial coverage renders k of n and the add-the-step growth CTA", () => {
-    const md = STATES["partial-coverage"]
-    assert.match(md, /· 1 of 6 jobs recorded ·/)
-    assert.match(md, /5 jobs not yet recorded — \[add the step ↗\]\(/)
-})
-
-test("S5: unknown coverage degrades to the recorded-only meta line with no CTA", () => {
-    const baseReview = buildRunReview({
-        sha: "ac543cb",
-        renderedAt: RENDERED_AT,
-        jobs: [summarizeProfile(normal)],
-    })
-    const equalReview = buildRunReview({
-        sha: "ac543cb",
-        renderedAt: RENDERED_AT,
-        expectedJobs: 1,
-        jobs: [summarizeProfile(normal)],
-    })
-    const body = renderRunReview(baseReview)
-    const equalBody = renderRunReview(equalReview)
-    assert.match(body, /· 1 job recorded ·/)
-    assert.ok(!body.includes("of 1 job"), "unknown coverage does not invent n")
-    assert.ok(!body.includes("not yet recorded — [add the step ↗]"), "unknown coverage suppresses the CTA")
-    assert.equal(body, equalBody, "absent and equal coverage render the same degraded meta line")
-})
-
-// ---------------------------------------------------------------------------
-// S7 — lineage-absent degradation: no trees, no folds, sentences survive.
-// ---------------------------------------------------------------------------
-test("S7: lineage-absent profile renders without trees or folds", () => {
-    const review = buildRunReview({
-        sha: "ac543cb", renderedAt: RENDERED_AT,
-        jobs: [{ name: "j", connections: [{ ancestry: [], domain: "httpbin.org", ip: "9.9.9.9" }] }],
-    })
-    const body = renderRunReview(review)
-    assert.ok(!body.includes("<details"))
-    assert.ok(!body.includes("````text"))
-    assert.match(body, /^\*\*`j`\*\* — reached `httpbin\.org`/m)
-})
-
-// ---------------------------------------------------------------------------
-// A1 — classification unit coverage.
-// ---------------------------------------------------------------------------
-test("A1: classes derive from identity/provenance only", () => {
-    assert.equal(classifyConnection({ ancestry: [], domain: "localhost", ip: "127.0.0.53" }), "dns")
-    assert.equal(classifyConnection({ ancestry: [], domain: "api.garnet.ai", ip: "1.1.1.1" }), "garnet upload")
-    assert.equal(
-        classifyConnection({ ancestry: ["systemd", "Runner.Worker"], domain: "github.com", ip: "1.1.1.1" }),
-        "github infra",
-    )
-    assert.equal(
-        classifyConnection({ ancestry: ["systemd", "sudo", "provjobd12"], domain: "", ip: "168.63.129.16" }),
-        "github infra",
-    )
-    // Ownership alone is not provenance: GitHub-owned destinations reached from
-    // user code stay unclassified (enumerable evidence).
-    assert.equal(classifyConnection({ ancestry: ["bash", "node"], domain: "github.com", ip: "1.1.1.1" }), "")
-    assert.equal(classifyConnection({ ancestry: ["bash"], domain: "httpbin.org", ip: "9.9.9.9" }), "")
-})
-
-// ---------------------------------------------------------------------------
-// Determinism: same profile payload + render clock in → same comment out.
-// ---------------------------------------------------------------------------
-test("deterministic render: identical bytes across repeated renders", () => {
-    for (let i = 0; i < 3; i++) {
-        assert.equal(renderFromProfiles([install, worth]).body, STATES["multi-job"])
-        assert.equal(renderFromProfiles([worth]).body, STATES["workload-egress"])
+test("renderJobTree keeps every recorded chain of the job", () => {
+    const job = summarizeProfile(worth)
+    const tree = renderJobTree(job)
+    for (const edge of job.edges) {
+        const name = edge.remote_names[0] ?? edge.remote_address
+        if (name !== "") {
+            assert.ok(tree.includes(defangHostname(name)) || tree.includes(name), `tree misses ${name}`)
+        }
     }
-})
-
-// ---------------------------------------------------------------------------
-// Real-data salience expectations and leaf annotations.
-// ---------------------------------------------------------------------------
-test("R1: multi-job headline names a within-run-unique, unclassified destination", () => {
-    assert.match(STATES["multi-job"], /In `runtime-review`.* — a destination no other job in this run reached\./)
-    assert.ok(!/reached `dns`|reached `api\.garnet\.ai`/.test(STATES["multi-job"].split("\n")[5]))
-})
-test("S4: single-job uniform run falls back to the inventory sentence, fold closed", () => {
-    assert.match(STATES["registry-only"], /In `runtime-review`, \d+ processes reached 1 domain over 1 connection\./)
-    assert.ok(!STATES["registry-only"].includes("<details open>"), "R3 fold renders closed")
-})
-test("real leaf annotated with → domain · ip", () => {
-    assert.ok(STATES["workload-egress"].includes("→ images.unsplash.com · 146.75.94.208"))
-    assert.ok(STATES["registry-only"].includes("→ registry.npmjs.org · 104.16.5.34"))
-})
-
-// ---------------------------------------------------------------------------
-// summarizeProfile over a real captured profile (Phase 1: lineage + egress).
-// ---------------------------------------------------------------------------
-test("summarizeProfile extracts job identity + connections from a real profile", () => {
-    const s = summarizeProfile(worth)
-    assert.equal(s.name, "runtime-review")
-    assert.equal(s.workflow, "Garnet Runtime Review")
-    assert.ok(s.connections.some(c => c.domain === "images.unsplash.com"))
-    assert.ok(s.connections.every(c => Array.isArray(c.ancestry) && c.ancestry.length > 0))
-})
-test("summarizeProfile handles the agentic sample profile", () => {
-    const s = summarizeProfile(sample)
-    assert.equal(s.name, "agentic-coding-session")
-    assert.ok(s.connections.some(c => c.domain === "google.com"))
-})
-
-// ---------------------------------------------------------------------------
-// Vendored fixtures stay in sync with the renderer: the checked-in testbed
-// mockups (mockups/real/*.md at testbed commit b7f2940) must match fresh
-// renders byte-for-byte.
-// ---------------------------------------------------------------------------
-test("fixtures/mockups/*.md match fresh renders byte-for-byte", async () => {
-    const expected = {
-        "1-no-record.md": renderNoRecord(worth.scenarios?.github?.sha || "ef01a52"),
-        "2-registry-only.md": renderFromProfiles([normal], { permalink: CAPABILITY_LINK }).body,
-        "3-workload-egress.md": renderFromProfiles([worth], { permalink: CAPABILITY_LINK }).body,
-        "4-multi-job.md": renderFromProfiles([install, worth], { permalink: CAPABILITY_LINK }).body,
-        "5-updated-commit.md": renderFromProfiles([normal], { permalink: CAPABILITY_LINK }).body,
-        "6-partial-coverage.md": renderFromProfiles([worth], { permalink: CAPABILITY_LINK, expectedJobs: 6 }).body,
-    }
-    for (const [file, body] of Object.entries(expected)) {
-        const onDisk = await readFile(join(fixturesDir, "mockups", file), "utf8")
-        assert.equal(onDisk, `${body}\n`, `${file} diverges from the vendored renderer`)
-    }
-})
-
-// buildRunReview is exercised end-to-end above; assert Phase 1 scope directly.
-test("Phase 1 scope: review carries lineage + egress only", () => {
-    const { review } = renderFromProfiles([worth])
-    assert.ok(Array.isArray(review.jobs))
-    for (const j of review.jobs) {
-        assert.ok(!("files" in j) || !j.files, "files must not render in Phase 1")
-        assert.ok(!("assertions" in j) || !j.assertions, "assertions must not render in Phase 1")
-    }
-    assert.equal(typeof buildRunReview, "function")
-    assert.equal(typeof jobSummaryLine, "function")
 })

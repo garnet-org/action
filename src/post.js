@@ -15,12 +15,11 @@ import {
 } from "./shared.js"
 import { getPullRequestNumberFromEvent } from "./github-event.js"
 import { uploadJibrilArtifacts } from "./post-artifacts.js"
-import { buildProfileRunReview, getDefaultJsonProfileFile, parseProfileJson } from "./profile-comment.js"
-import { renderNoRecord, renderStepSummary } from "./runtime-review.js"
+import { getDefaultJsonProfileFile, parseProfileJson, resolveAppBaseURL } from "./profile-comment.js"
+import { renderNoRecordSummary, renderStepSummary } from "./runtime-review.js"
 import { publishPullRequestComment } from "./pr-comment.js"
 
-/** @typedef {import("./profile-comment.js").NormalizedProfile} NormalizedProfile */
-/** @typedef {import("./profile-comment.js").RenderOptions} RenderOptions */
+/** @typedef {import("./runtime-review.js").JobRecord} JobRecord */
 
 /**
  * @typedef {{
@@ -30,12 +29,12 @@ import { publishPullRequestComment } from "./pr-comment.js"
  */
 
 const JSON_PROFILE_LABEL = "JSON profile"
-const DOCS_URL = "https://github.com/garnet-org/action#readme"
 
 // This is the post step for the action. It is called by the GitHub Actions
-// runtime. It stops the Jibril service so the daemon flushes all pending events
-// and writes the JSON profile before we read it. It then renders the Runtime
-// Review Step Summary and publishes the PR comment from the same Run Profile.
+// runtime. It stops the Jibril service so the daemon flushes all pending
+// events and writes the JSON profile before we read it. It then writes the
+// Garnet Execution Summary to the job's Step Summary and publishes the
+// fallback PR comment from the same record.
 
 async function run() {
     const platform = os.platform()
@@ -78,16 +77,15 @@ async function run() {
             await uploadJibrilArtifacts()
         }
 
-        const profile = await readNormalizedProfile(debug === "true")
-        const renderOptions = getRenderOptions()
+        const profile = await readJobRecord(debug === "true")
 
-        await appendRuntimeReviewSummary(profile, renderOptions)
+        await appendExecutionSummary(profile)
         if (profile !== null) {
-            await publishProfilerComment(profile, renderOptions)
+            await publishProfilerComment(profile)
         }
     } catch (err) {
-        // Never fail the job because of the Runtime Review step.
-        core.warning(`failed to write Runtime Review summary: ${getErrorMessage(err)}`)
+        // Never fail the job because of the reporting step.
+        core.warning(`failed to write execution summary: ${getErrorMessage(err)}`)
     }
 }
 
@@ -95,9 +93,9 @@ async function run() {
  * Reads and parses the JSON profile produced by Jibril, or null when the
  * profile is missing or unreadable.
  * @param {boolean} debug
- * @returns {Promise<NormalizedProfile | null>}
+ * @returns {Promise<JobRecord | null>}
  */
-async function readNormalizedProfile(debug) {
+async function readJobRecord(debug) {
     const jsonProfilerFile = firstNonEmptyString(core.getState("jsonProfilerFile"), getDefaultJsonProfileFile())
 
     try {
@@ -120,22 +118,13 @@ async function readNormalizedProfile(debug) {
 }
 
 /**
- * Render options for this publish flow; the clock is pinned once so every
- * render in the flow produces identical bytes.
- * @returns {RenderOptions}
- */
-function getRenderOptions() {
-    return { renderedAt: new Date() }
-}
-
-/**
- * Writes the full-detail Runtime Review snapshot to the GitHub Step Summary
- * (no elision, no folds, no markers).
- * @param {NormalizedProfile | null} profile
- * @param {RenderOptions} renderOptions
+ * Writes the full-detail Garnet Execution Summary to the GitHub Step
+ * Summary (the evidence register: every chain, PID-distinct, no folds, no
+ * markers).
+ * @param {JobRecord | null} profile
  * @returns {Promise<void>}
  */
-async function appendRuntimeReviewSummary(profile, renderOptions) {
+async function appendExecutionSummary(profile) {
     const summaryFile = getEnv("GITHUB_STEP_SUMMARY")
     if (summaryFile === "") {
         core.warning("GITHUB_STEP_SUMMARY is not set, cannot write summary")
@@ -144,30 +133,20 @@ async function appendRuntimeReviewSummary(profile, renderOptions) {
 
     let content
     if (profile === null) {
-        const sha = getEnv("GITHUB_SHA")
-        const repository = getEnv("GITHUB_REPOSITORY")
-        content = renderNoRecord({
-            sha,
-            commitURL: repository !== "" && sha !== "" ? `https://github.com/${repository}/commit/${sha}` : "",
-            expectedJobs: renderOptions.expectedJobs ?? 1,
-            docsURL: DOCS_URL,
-            renderedAt: renderOptions.renderedAt ?? new Date(),
-        })
+        content = renderNoRecordSummary()
     } else {
-        const review = buildProfileRunReview([profile], renderOptions)
-        content = renderStepSummary(review)
+        content = renderStepSummary([profile], { appURL: resolveAppBaseURL() })
     }
 
     await fs.appendFile(summaryFile, `\n${content}\n`)
-    core.info("Runtime Review written to job summary")
+    core.info("execution summary written to job summary")
 }
 
 /**
- * @param {NormalizedProfile} profile
- * @param {RenderOptions} renderOptions
+ * @param {JobRecord} profile
  * @returns {Promise<void>}
  */
-async function publishProfilerComment(profile, renderOptions) {
+async function publishProfilerComment(profile) {
     const eventPath = getEnv("GITHUB_EVENT_PATH")
     if (eventPath === "") {
         core.info("GITHUB_EVENT_PATH is not set, skipping PR comment")
@@ -201,7 +180,6 @@ async function publishProfilerComment(profile, renderOptions) {
             token,
             profile,
             runAttempt,
-            renderOptions,
         })
         core.info(`PR comment ${result}`)
     } catch (error) {

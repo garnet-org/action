@@ -1,0 +1,24 @@
+{
+  "$provenance": "Control-plane profile envelope IDs retrieved from the authenticated profile API on 2026-07-13. Raw Jibril records remain unchanged in their source fixture files.",
+  "normal-run.json": {
+    "id": "019f1b61-9f3c-7ac8-a8ed-0c07bf1546af"
+  },
+  "worth-a-look-run.json": {
+    "id": "019f1bca-e403-7ef6-ae2d-74c191dbff8e"
+  },
+  "record-workload-egress.json": {
+    "id": "019f5de7-5992-7409-89cf-6d88e0fb46ea"
+  },
+  "record-docs-build.json": {
+    "id": "019f5de7-59af-7208-a4f7-6cfecaae0c59"
+  },
+  "record-install-only.json": {
+    "id": "019f5de7-571c-78d6-8a61-dd43f61c441c"
+  },
+  "record-lint.json": {
+    "id": "019f5de7-54b9-704c-a002-a7d9d70b271b"
+  },
+  "record-typecheck.json": {
+    "id": "019f5de7-5ca7-7f9d-bfb3-c59ccde51111"
+  }
+}

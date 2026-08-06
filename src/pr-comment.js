@@ -3,7 +3,7 @@ import { planPullRequestComment } from "./pr-comment-plan.js"
 import { waitForDelay } from "./shared.js"
 
 /**
- * @typedef {import("./profile-comment.js").NormalizedProfile} NormalizedProfile
+ * @typedef {import("./runtime-review.js").JobRecord} JobRecord
  */
 
 /**
@@ -22,7 +22,7 @@ const CREATE_RECHECK_SPREAD_MS = 1500
  *   repository: string
  *   pullRequestNumber: number
  *   token: string
- *   profile: NormalizedProfile
+ *   profile: JobRecord
  *   runAttempt: number
  *   renderOptions?: RenderOptions
  * }} PublishCommentOptions
@@ -55,7 +55,7 @@ export async function publishPullRequestComment(options) {
 
 /**
  * @param {PublishCommentClient} client
- * @param {NormalizedProfile} profile
+ * @param {JobRecord} profile
  * @param {number} runAttempt
  * @param {PublishWithClientOptions} [options]
  * @returns {Promise<"created" | "updated" | "skipped-stale" | "skipped-control-plane">}
@@ -106,7 +106,7 @@ async function applyPublishPlan(client, plan) {
 
 /**
  * @param {PublishCommentClient} client
- * @param {NormalizedProfile} profile
+ * @param {JobRecord} profile
  * @param {number} runAttempt
  * @param {number} createdCommentID
  * @param {RenderOptions} renderOptions
@@ -157,11 +157,11 @@ async function deleteComments(client, commentIDs) {
 }
 
 /**
- * @param {NormalizedProfile} profile
+ * @param {JobRecord} profile
  * @returns {number}
  */
 function getCreateRecheckDelayMs(profile) {
-    const seed = `${profile.github.workflow}\u0000${profile.github.job}`
+    const seed = `${profile.workflow}\u0000${profile.name}`
     let hash = 0
 
     for (const character of seed) {

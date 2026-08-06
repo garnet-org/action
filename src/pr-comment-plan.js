@@ -2,7 +2,7 @@ import { mergeCommentState, mergeCommentStates, parseCommentState, renderComment
 import { CONTROL_PLANE_MARKERS } from "./runtime-review.js"
 
 /**
- * @typedef {import("./profile-comment.js").NormalizedProfile} NormalizedProfile
+ * @typedef {import("./runtime-review.js").JobRecord} JobRecord
  */
 
 /**
@@ -32,7 +32,7 @@ import { CONTROL_PLANE_MARKERS } from "./runtime-review.js"
 
 /**
  * @param {PullRequestComment[]} comments
- * @param {NormalizedProfile} profile
+ * @param {JobRecord} profile
  * @param {number} runAttempt
  * @param {RenderOptions} [renderOptions]
  * @returns {PublishCommentPlan}
@@ -55,7 +55,12 @@ export function planPullRequestComment(comments, profile, runAttempt, renderOpti
     }
 
     const duplicateCommentIDs = matchingComments.slice(0, -1).map(entry => entry.comment.id)
-    const body = renderCommentBody(mergeResult.state, renderOptions)
+    // The explainer and job folds render open on a first-profile comment and
+    // collapse on later updates.
+    const body = renderCommentBody(mergeResult.state, {
+        ...renderOptions,
+        explainerOpen: renderOptions.explainerOpen ?? primary === null,
+    })
 
     if (primary === null) {
         return {
@@ -93,15 +98,15 @@ function getManagedCommentsForThread(comments, threadKey) {
 }
 
 /**
- * @param {NormalizedProfile} profile
+ * @param {JobRecord} profile
  * @returns {string}
  */
 function getProfileThreadKey(profile) {
-    if (profile.github.sha === "") {
+    if (profile.sha === "") {
         throw new Error("profile JSON is missing the GitHub commit sha")
     }
 
-    return profile.github.sha
+    return profile.sha
 }
 
 /**
@@ -110,12 +115,12 @@ function getProfileThreadKey(profile) {
  * @returns {boolean}
  */
 function isMatchingThread(state, threadKey) {
-    const firstProfile = state.profiles[0]
-    if (firstProfile === undefined || firstProfile.github.sha !== threadKey) {
+    const firstJob = state.jobs[0]
+    if (firstJob === undefined || firstJob.sha !== threadKey) {
         return false
     }
 
-    return state.profiles.every(profile => profile.github.sha === threadKey)
+    return state.jobs.every(job => job.sha === threadKey)
 }
 
 /**
