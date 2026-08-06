@@ -1,5 +1,5 @@
 name: "Garnet Runtime Review"
-description: "Records what each job in your workflow did at runtime — processes and network egress — and posts the Runtime Review from the Action stage"
+description: "Records what each job in your workflow did at runtime — processes and network egress — and posts the Execution Profile from the Action stage"
 branding:
     icon: "activity"
     color: "purple"
@@ -16,7 +16,7 @@ inputs:
         required: false
         default: "https://api.garnet.ai"
     jibril_version:
-        description: "Jibril version (v2.10.8, v0.0, or 'latest')"
+        description: "Jibril version (an exact release such as v2.16.0, or 'latest'). Empty resolves from the action ref: @v2 pins v2.10.8, @v0 tracks daily builds, other refs use 'latest'"
         required: false
         default: ""
     debug:
@@ -25,11 +25,11 @@ inputs:
         default: "false"
 outputs:
     profile_result:
-        description: "Reserved for the companion GitHub App and control plane; this action records the Runtime Review"
+        description: "Reserved for the companion GitHub App and control plane; the action does not set it"
     report_url:
-        description: "Link to the Run Profile permalink on app.garnet.ai"
+        description: "The run's page on app.garnet.ai (https://app.garnet.ai/dashboard/runs/<run-id>). Emitted by the main step so later steps in the same job can read it; the app resolves the run server-side and shows logged-out visitors the public run report"
     agent_id:
-        description: "Identifier for the Jibril sensor instance that recorded this Runtime Review"
+        description: "Identifier for the Jibril sensor instance; declared for forward compatibility — the action does not currently set it"
 runs:
     using: "node24"
     main: "dist/main/index.js"

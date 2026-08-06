@@ -26,7 +26,7 @@
 
 Runtime review for CI/CD and agentic workflows in GitHub Actions.
 
-Garnet is powered by [Jibril](https://jibril.garnet.ai), an eBPF sensor that attaches to your CI runner and captures every process spawn, outbound connection, and file access — with full lineage. The Action stage posts a Runtime Review comment and the GitHub Step Summary for the jobs it can see. The companion GitHub App owns the authoritative Runtime Review comment when installed.
+Garnet is powered by [Jibril](https://jibril.garnet.ai), an eBPF sensor that attaches to your CI runner and records every process spawn and outbound connection — the full execution tree. The Action stage posts a PR comment and the Garnet Execution Summary in the GitHub job UI for the jobs it can see. The companion GitHub App owns the authoritative PR comment when installed.
 
 One YAML step. No code changes and minimal overhead.
 
@@ -34,9 +34,9 @@ Get your API token at [app.garnet.ai](https://app.garnet.ai). Start with the Act
 
 ## What you get
 
-- **Action stage**: Add the workflow step and Jibril records runtime from that job. The action self-posts a Runtime Review PR comment plus the GitHub Step Summary. Because the Action only knows its own jobs, the coverage line reads `k jobs recorded`, and the Run Profile permalink is derived from the run_id.
-- **Companion GitHub App stage**: Install the companion GitHub App for the full PR experience. The App owns the authoritative Runtime Review comment, can show true coverage (`k of n`), richer capability permalinks, Slack alerts, and cross-run management.
-- **Lineage-based evidence**: When something unexpected runs, you don't just see a domain name — you see the full chain.
+- **Action stage**: Add the workflow step and Jibril records runtime from that job. The action self-posts a PR comment plus the Garnet Execution Summary. Because the Action only knows its own jobs, the headline says how many jobs it recorded. Each job links to its Execution Profile on app.garnet.ai: `https://app.garnet.ai/public/runs/<run-id>?profile=<profile-id>` when the profile's envelope ID is recorded, or the run page `https://app.garnet.ai/dashboard/runs/<run-id>` otherwise — the app resolves either server-side and shows logged-out visitors the public report.
+- **Companion GitHub App stage**: Install the companion GitHub App for the full PR experience. The App owns the authoritative PR comment across all jobs in the run, plus Slack alerts and cross-run management.
+- **Execution-chain evidence**: When something unexpected runs, you don't just see a domain name — you see the execution chain behind the connection, from the runner's root to the action.
 
 <p align="center">
   <img
@@ -58,7 +58,7 @@ Get your API token at [app.garnet.ai](https://app.garnet.ai). Start with the Act
 | Mode | Permission | Why |
 | ---- | ---------- | --- |
 | Standalone Action | `contents: read` | Access workflow context and repository metadata |
-| Standalone Action | `pull-requests: write` | Post and update the Runtime Review comment from the workflow |
+| Standalone Action | `pull-requests: write` | Post and update the PR comment from the workflow |
 | App-installed | `contents: read` | The Action still reads the workflow context and the Jibril profile |
 | App-installed | `pull-requests: write` | Not used by the Action when the companion GitHub App owns the comment |
 
@@ -116,14 +116,14 @@ Install the companion GitHub App for the full Runtime Review experience in your 
 
 ## Action vs. GitHub App
 
-The Action is the standalone entry point: it records runtime, posts the Runtime Review comment and Step Summary, and only knows the jobs it observed in that run. The companion GitHub App is the full experience: it owns the authoritative Runtime Review comment, can observe true coverage, and can add cross-run management.
+**Standalone mode** (Action only): the action records runtime, posts the PR comment and the Garnet Execution Summary, and only knows the jobs it observed in that run.
 
-When the App is installed, the action stands down on both create and update — it stops posting or updating its own comment. The App owns the authoritative Runtime Review comment and reconciles any comment the action had already posted, so the PR converges to a single Runtime Review comment.
+**App-installed mode**: the companion GitHub App owns the authoritative PR comment. The App marks its comment with an environment-scoped marker (`<!-- garnet-control-plane-pr-comment:v1 -->`); when the action sees that marker it stands down on both create and update — it stops posting or updating its own comment, so the PR converges to a single comment with no duplicates. The action keeps posting the Garnet Execution Summary for its own job in both modes — the Step Summary is the job's own projection and the App does not replace it.
 
 ## Comment anatomy
 
-- **PR comment**: A headline, then one line per job. Each job opens into a `<details>` fold with the job's full Runtime Review.
-- **GitHub job summary**: The same full-detail Runtime Review is appended at the end of the job (see this [example GitHub Actions run](https://github.com/garnet-org/action/actions/runs/23175135499)).
+- **PR comment**: A headline (`Execution Profiles recorded for N job(s)…`), a count-shaped metadata line, then one `<details>` fold per job with the job's execution tree and outbound destinations.
+- **Garnet Execution Summary**: A distinct projection of the same recorded evidence, appended to the job's Step Summary in the GitHub job UI (see this [example GitHub Actions run](https://github.com/garnet-org/action/actions/runs/23175135499)). It renders per job, keeps full destination detail, and appears in both standalone and App-installed modes.
 - **Pull request comment lifecycle**: On pull request workflows, Garnet posts one comment per push, merging jobs and workflows from the same push into a single comment. When the GitHub App is installed, the action defers so the App keeps ownership of that comment.
 
   <img
@@ -132,17 +132,17 @@ When the App is installed, the action stands down on both create and update — 
     alt="Garnet PR comment example"
   />
 
-- **Garnet UI**: Linked from in-line results through a Run Profile permalink for in-depth investigation and additional management features, such as Slack alerts.
-- **Run Profile page**: An artifact showing the behavioral profile for a run, shareable through the UI (see an example from the recent [telnyx TeamPCP incident](https://app.garnet.ai/public/runs/23662517211)).
+- **Garnet UI**: Each job fold links to its Execution Profile for in-depth investigation and additional management features, such as Slack alerts.
+- **Execution Profile page**: The recorded profile for a job, shareable through the UI — for example [this recorded run](https://app.garnet.ai/public/runs/30027944022?profile=019f8ff1-3110-7cb4-b304-7e5ec8ce7911). The canonical link shape is `https://app.garnet.ai/public/runs/<run-id>?profile=<profile-id>`; a bare run URL without the `?profile=` selector is not a stable permalink.
 
 ## Under the hood
 
-- **Main step**: Downloads `jibril`, creates a Garnet agent via the control-plane API, fetches your merged network policy from the API, and starts Jibril as a `systemd` service on the runner. If Jibril crashes during startup, the action logs diagnostics and continues so later workflow steps still run.
-- **Post step (always)**: Stops Jibril so it flushes events, appends the generated Run Profile to `GITHUB_STEP_SUMMARY`, and creates or updates the pull request comment for the current push when the workflow runs for a PR. When `debug=true`, it also uploads Jibril logs as build artifacts.
+- **Main step**: Downloads `jibril`, registers the sensor with the control-plane API, fetches your merged network policy from the API, and starts Jibril as a `systemd` service on the runner. If Jibril crashes during startup, the action logs diagnostics and continues so later workflow steps still run.
+- **Post step (always)**: Stops Jibril so it flushes events, appends the Garnet Execution Summary to `GITHUB_STEP_SUMMARY`, and creates or updates the pull request comment for the current push when the workflow runs for a PR. When `debug=true`, it also uploads Jibril logs as build artifacts.
 
 ## Pull request comments
 
-For PR workflows in standalone Action mode, the action reads Jibril's JSON profile and rebuilds the Markdown into a single comment per push. Multiple jobs and workflows from the same push are merged into that comment so the PR stays readable while still preserving history across pushes. When the companion GitHub App is installed, the action stands down and the App owns that comment.
+For PR workflows in standalone Action mode, the action reads Jibril's JSON profile and rebuilds the Markdown into a single comment per push. Multiple jobs and workflows from the same push are merged into that comment so the PR stays readable while still preserving history across pushes. When the companion GitHub App is installed, the action stands down and the App owns that comment (see [Action vs. GitHub App](#action-vs-github-app)).
 
 In standalone mode, grant the workflow token write access to pull requests:
 
@@ -161,7 +161,7 @@ permissions:
 | `api_token`         | Yes      | —                       | Your Garnet API token from app.garnet.ai       |
 | `github_token`      | No       | `${{ github.token }}`   | GitHub token used for pull request comments    |
 | `api_url`           | No       | `https://api.garnet.ai` | Garnet API base URL                            |
-| `jibril_version`    | No       | `""` (auto)             | Jibril version (`v2.10.8` or `latest`)         |
+| `jibril_version`    | No       | `""` (auto)             | Jibril version (`v2.16.0` or `latest`); empty resolves from the action ref (`@v2` pins `v2.10.8`) |
 | `debug`             | No       | `false`                 | Enable debug mode and upload logs as artifacts |
 
 ---
@@ -170,9 +170,9 @@ permissions:
 
 | Output           | Description                                                          |
 | ---------------- | -------------------------------------------------------------------- |
-| `profile_result` | Reserved for downstream control-plane use; this action records what happened |
-| `report_url`     | Link to the Run Profile on app.garnet.ai                             |
-| `agent_id`       | Identifier for the Jibril sensor instance that ran                  |
+| `profile_result` | Reserved for the companion GitHub App and control plane; the action does not set it |
+| `report_url`     | The run's page on app.garnet.ai (`https://app.garnet.ai/dashboard/runs/<run-id>`). Emitted by the main step, before the sensor has recorded anything, so later steps in the same job can read it — it is a run link, not a per-profile permalink. The app resolves it server-side and shows logged-out visitors the public run report. |
+| `agent_id`       | Declared for forward compatibility; the action does not currently set it |
 
 ---
 
@@ -180,7 +180,7 @@ permissions:
 
 ### Observation scope
 
-The current observation scope is `known_bad_egress`, which highlights outbound connections to domains from Garnet's managed threat feed. Future scopes will cover hidden binary execution, sensitive file access, and anomalous process spawns.
+The current observation scope is `known_bad_egress`, which marks outbound connections to domains on Garnet's managed known-bad domain list. Future scopes will cover hidden binary execution, sensitive file access, and anomalous process spawns.
 
 ### Why Runtime Review matters
 
@@ -210,6 +210,7 @@ Your team reviews the code; your CI runs it. Between `git push` and production, 
 | No PR comment appearing                   | The action posts comments only on `pull_request` events — confirm your workflow includes that trigger. |
 | PR comment says "Resource not accessible" | Add `pull-requests: write` to the workflow `permissions` block.                                        |
 | No summary output                         | Enable `debug: "true"` to upload Jibril logs as artifacts, then inspect `jibril.log` and `jibril.err`. |
+| Comment posted by `garnet-runtime-review[bot]` instead of `github-actions[bot]` | The companion GitHub App is installed and owns the PR comment; the action stands down. This is expected — the App comment covers all jobs in the run. |
 | Restrictive permissions                   | This action works with `permissions: contents: read` — ensure the job can read repository contents.    |
 
 ### Security & license
