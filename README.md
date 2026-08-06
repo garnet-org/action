@@ -34,7 +34,7 @@ Get your API token at [app.garnet.ai](https://app.garnet.ai). Start with the Act
 
 ## What you get
 
-- **Action stage**: Add the workflow step and Jibril records runtime from that job. The action self-posts a Runtime Review PR comment plus the GitHub Step Summary. Because the Action only knows its own jobs, the coverage line reads `k jobs recorded`, and the Run Profile permalink is derived from the run_id.
+- **Action stage**: Add the workflow step and Jibril records runtime from that job. The action self-posts a Runtime Review PR comment plus the GitHub Step Summary. Because the Action only knows its own jobs, the coverage line reads `k jobs recorded`, and the Execution Profile permalink is derived from the run_id.
 - **Companion GitHub App stage**: Install the companion GitHub App for the full PR experience. The App owns the authoritative Runtime Review comment, can show true coverage (`k of n`), richer capability permalinks, Slack alerts, and cross-run management.
 - **Lineage-based evidence**: When something unexpected runs, you don't just see a domain name — you see the full chain.
 
@@ -132,13 +132,13 @@ When the App is installed, the action stands down on both create and update — 
     alt="Garnet PR comment example"
   />
 
-- **Garnet UI**: Linked from in-line results through a Run Profile permalink for in-depth investigation and additional management features, such as Slack alerts.
-- **Run Profile page**: An artifact showing the behavioral profile for a run, shareable through the UI (see an example from the recent [telnyx TeamPCP incident](https://app.garnet.ai/public/runs/23662517211)).
+- **Garnet UI**: Linked from in-line results through an Execution Profile permalink for in-depth investigation and additional management features, such as Slack alerts.
+- **Execution Profile page**: An artifact showing the behavioral profile for a run, shareable through the UI (see an example from the recent [telnyx TeamPCP incident](https://app.garnet.ai/public/runs/23662517211)).
 
 ## Under the hood
 
 - **Main step**: Downloads `jibril`, creates a Garnet agent via the control-plane API, fetches your merged network policy from the API, and starts Jibril as a `systemd` service on the runner. If Jibril crashes during startup, the action logs diagnostics and continues so later workflow steps still run.
-- **Post step (always)**: Stops Jibril so it flushes events, appends the generated Run Profile to `GITHUB_STEP_SUMMARY`, and creates or updates the pull request comment for the current push when the workflow runs for a PR. When `debug=true`, it also uploads Jibril logs as build artifacts.
+- **Post step (always)**: Stops Jibril so it flushes events, appends the Garnet Execution Summary to `GITHUB_STEP_SUMMARY`, and creates or updates the pull request comment for the current push when the workflow runs for a PR. When `debug=true`, it also uploads Jibril logs as build artifacts.
 
 ## Pull request comments
 
@@ -161,8 +161,9 @@ permissions:
 | `api_token`         | Yes      | —                       | Your Garnet API token from app.garnet.ai       |
 | `github_token`      | No       | `${{ github.token }}`   | GitHub token used for pull request comments    |
 | `api_url`           | No       | `https://api.garnet.ai` | Garnet API base URL                            |
-| `jibril_version`    | No       | `""` (auto)             | Jibril version (`v2.10.8` or `latest`)         |
+| `jibril_version`    | No       | `""` (auto)             | Jibril version (for example `v2.15.0` or `latest`); empty resolves from the action tag |
 | `debug`             | No       | `false`                 | Enable debug mode and upload logs as artifacts |
+| `preview`           | No       | `false`                 | Render the full-fidelity Step Summary record (assertions + evidence); preview shape is unstable and may change without a major version bump |
 
 ---
 
@@ -171,7 +172,7 @@ permissions:
 | Output           | Description                                                          |
 | ---------------- | -------------------------------------------------------------------- |
 | `profile_result` | Reserved for downstream control-plane use; this action records what happened |
-| `report_url`     | Link to the Run Profile on app.garnet.ai                             |
+| `report_url`     | Link to the run's Execution Profiles on app.garnet.ai                 |
 | `agent_id`       | Identifier for the Jibril sensor instance that ran                  |
 
 ---
@@ -198,9 +199,19 @@ Your team reviews the code; your CI runs it. Between `git push` and production, 
 
 ### Requirements
 
-- `runs-on: ubuntu-latest` — Linux runner with systemd
+- Linux x86_64 runner with systemd (`runs-on: ubuntu-latest` or another supported label below)
 - `sudo` access to install binaries and configure the Jibril service
 - `GARNET_API_TOKEN` set as a repository secret
+
+### Supported runners
+
+| Runner | Labels | Notes |
+| ------ | ------ | ----- |
+| GitHub-hosted Linux | `ubuntu-latest`, `ubuntu-24.04`, `ubuntu-22.04` | x86_64 only |
+| [Blacksmith](https://www.blacksmith.sh) Linux | for example `blacksmith-8vcpu-ubuntu-2404` | Runs in production on [pnpm/pnpm](https://github.com/pnpm/pnpm) CI |
+| [Depot](https://depot.dev/docs/github-actions/runner-types) Linux | for example `depot-ubuntu-24.04` | Intel (x86_64) labels only; `-arm` labels are skipped (Jibril ships amd64 binaries) |
+
+On unsupported platforms (Windows, macOS, arm64) the action logs a warning and skips monitoring; your workflow continues unaffected.
 
 ### Troubleshooting
 
