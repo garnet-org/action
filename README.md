@@ -98,7 +98,7 @@ jobs:
         run: npm test
 ```
 
-> **Tip:** Major tags such as `@v2` track the latest `v2.x.x` release automatically. Use `@main` only if you want the latest unreleased code, or pin to a full commit SHA for maximum supply-chain safety:
+> **Tip:** Major tags such as `@v2` track the latest `v2.x.x` release automatically. For maximum supply-chain safety, pin to a full commit SHA (Dependabot keeps SHA pins up to date):
 >
 > ```yaml
 > - uses: garnet-org/action@<commit-sha>
@@ -111,8 +111,8 @@ Install the companion GitHub App for the full Runtime Review experience in your 
 ### Versioning
 
 - `garnet-org/action@v2` tracks the latest `v2.x.x` release.
-- `garnet-org/action@main` tracks the latest unreleased code on the default branch.
 - Exact tags such as `garnet-org/action@v2.3.0` remain available when you want a fully pinned released version.
+- Pinning to a full commit SHA is the recommended posture for supply-chain safety; Dependabot bumps SHA pins automatically.
 
 ## Action vs. GitHub App
 
