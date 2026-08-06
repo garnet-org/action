@@ -143,14 +143,6 @@ Once a pull request has two recorded commits, the comment compares against the p
 
 The same full-detail record is appended to the GitHub Actions Job Summary as the **Garnet Execution Summary** (see this [example run](https://github.com/garnet-org/action/actions/runs/23175135499)).
 
-<p align="center">
-  <img
-    src="docs/images/pr-comment-v661-mobile.png"
-    width="390"
-    alt="The same Garnet Runtime Review comment at phone width"
-  />
-</p>
-
 ## Under the hood
 
 - **Main step**: Downloads `jibril`, creates a Garnet agent via the control-plane API, fetches your merged network policy from the API, and starts Jibril as a `systemd` service on the runner. If Jibril crashes during startup, the action logs diagnostics and continues so later workflow steps still run.
