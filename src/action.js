@@ -423,7 +423,7 @@ function resolveJibrilVersion(inputVersion, actionRef) {
     // - action@v1 stays pinned (do not change)
     if (ref === "v0") return "v0.0"
     if (ref === "v1") return "v2.10.4"
-    if (ref === "v2") return "v2.10.8"
+    if (ref === "v2") return "v2.15.0"
 
     // Default for other refs (branch/SHA/etc).
     return "latest"

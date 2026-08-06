@@ -1,0 +1,58 @@
+{
+  "$comment": "Adversarial v6.4.0 fixture — HTML/Markdown payloads in every record-sourced string surface (process, ancestry, github_step, remote_names, workflow/job). All payloads must render inert on every renderer-owned surface.",
+  "uuid": "11111111-2222-4333-8444-555555555555",
+  "timestamp": "2026-07-08T06:00:00Z",
+  "metadata": { "version": "0.2.0" },
+  "scenarios": {
+    "github": {
+      "scenario_type": "github",
+      "workflow": "wf<script>alert(1)</script>",
+      "job": "job](https://evil.example)<img src=x onerror=alert(2)>",
+      "repository": "garnet-org/runtime-review-testbed",
+      "run_id": "31000000002",
+      "sha": "bb22cc33dd44ee55ff6677889900aabbccddeeff",
+      "server_url": "https://github.com"
+    }
+  },
+  "network": {
+    "egress": {
+      "peers": [
+        {
+          "protocol": "tcp",
+          "remote_address": "198.51.100.66",
+          "remote_names": [
+            "evil.example<details open><summary>x</summary>",
+            "[click me](https://evil.example)"
+          ],
+          "remote_ports": ["443<b>bold</b>"],
+          "proc_trees": [
+            {
+              "pid": 5201,
+              "process": "</pre><img src=x onerror=alert(3)>",
+              "executable": "/tmp/</pre>payload",
+              "arguments": "run --secret",
+              "github_step": "${{ matrix.job_name }}<script>alert(4)</script>",
+              "ancestry": [
+                "systemd",
+                "`inline`*emphasis*_under_",
+                "</pre><details><summary>fold</summary>",
+                "a|b\\c"
+              ]
+            },
+            {
+              "pid": 5202,
+              "process": "![exfil](//evil.example/x.png)",
+              "executable": "/tmp/payload2",
+              "arguments": "run",
+              "github_step": "",
+              "ancestry": ["systemd", "![lnk](//evil.example/a)"]
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "telemetry": {
+    "network": { "egress": { "total_domains": 1, "total_connections": 1 } }
+  }
+}

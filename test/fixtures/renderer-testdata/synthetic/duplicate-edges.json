@@ -1,0 +1,45 @@
+{
+  "$comment": "Synthetic v6.4.0 contract fixture — two byte-identical recorded peer × proc_tree edges (same address, names, ports, protocol, PID, ancestry). The record is rendered faithfully: identical duplicates keep their multiplicity and are never Set-collapsed, deduplicated, or given ×N counts.",
+  "uuid": "dddddddd-0000-4000-8000-00000000000d",
+  "timestamp": "2026-07-09T12:00:00Z",
+  "metadata": {
+    "kind": "profile",
+    "name": "profile",
+    "format": "profile",
+    "version": "0.2.0"
+  },
+  "scenarios": {
+    "github": {
+      "repository": "garnet-org/runtime-review-testbed",
+      "workflow": "ci",
+      "job": "duplicate-edges",
+      "sha": "dddddddddddddddddddddddddddddddddddddddd",
+      "run_id": "31000000010"
+    }
+  },
+  "network": {
+    "egress": {
+      "peers": [
+        {
+          "remote_address": "203.0.113.77",
+          "remote_names": ["dup.example.com"],
+          "remote_ports": ["443"],
+          "protocol": "tcp",
+          "proc_trees": [
+            { "pid": 4242, "process": "curl", "ancestry": ["bash", "curl"] },
+            { "pid": 4242, "process": "curl", "ancestry": ["bash", "curl"] }
+          ]
+        },
+        {
+          "remote_address": "203.0.113.77",
+          "remote_names": ["dup.example.com"],
+          "remote_ports": ["443"],
+          "protocol": "tcp",
+          "proc_trees": [
+            { "pid": 4242, "process": "curl", "ancestry": ["bash", "curl"] }
+          ]
+        }
+      ]
+    }
+  }
+}

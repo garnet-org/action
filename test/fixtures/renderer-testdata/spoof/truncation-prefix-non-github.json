@@ -1,0 +1,47 @@
+{
+  "_comment": "v6.3 spoof: a process deliberately named as the 15-char TASK_COMM_LEN truncation prefix of hosted-compute-agent (hosted-compute-) reaches a non-GitHub destination. Truncation-tolerant runner-chain matching may treat it as scaffolding for italics, but ownership is still required — the leaf stays unclassified (anti-spoof).",
+  "uuid": "spoof-truncation-prefix-non-github-0001",
+  "timestamp": "2026-07-09T00:00:00.000Z",
+  "scenarios": {
+    "github": {
+      "scenario_type": "github",
+      "job": "spoof-truncation",
+      "workflow": "Garnet Runtime Review",
+      "repository": "garnet-org/runtime-review-testbed",
+      "run_id": "90000000001",
+      "run_number": "1",
+      "server_url": "https://github.com",
+      "sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    }
+  },
+  "network": {
+    "egress": {
+      "peers": [
+        {
+          "protocol": "TCP",
+          "remote_address": "93.184.216.34",
+          "remote_names": ["example.com"],
+          "remote_ports": ["443 (https)"],
+          "proc_trees": [
+            {
+              "pid": 4242,
+              "process": "hosted-compute-",
+              "ancestry": [
+                "systemd",
+                "hosted-compute-"
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "telemetry": {
+    "network": {
+      "egress": {
+        "total_domains": 1,
+        "total_connections": 1
+      }
+    }
+  }
+}

@@ -1,0 +1,373 @@
+{
+  "uuid": "7b857d9d-cf37-5c09-bfc6-3e8883a7cb65",
+  "timestamp": "2026-07-13T23:54:23.482467029Z",
+  "metadata": {
+    "kind": "profile",
+    "name": "profile",
+    "format": "profile",
+    "version": "0.2.0",
+    "description": "Informational profile event",
+    "documentation": "https://jibril.garnet.ai/"
+  },
+  "scenarios": {
+    "github": {
+      "scenario_type": "github",
+      "action": "99. Runner Processes",
+      "id": "",
+      "actor": "devin-ai-integration[bot]",
+      "actor_id": "158243242",
+      "event_name": "pull_request",
+      "job": "runtime-review-dev",
+      "ref": "refs/pull/76/merge",
+      "ref_name": "76/merge",
+      "ref_protected": "false",
+      "ref_type": "branch",
+      "repository": "garnet-org/runtime-review-testbed",
+      "repository_id": "1272424980",
+      "repository_owner": "garnet-org",
+      "repository_owner_id": "101288723",
+      "run_attempt": "1",
+      "run_id": "29294366365",
+      "run_number": "185",
+      "runner_arch": "X64",
+      "runner_os": "Linux",
+      "server_url": "https://github.com",
+      "sha": "6e5d0d4cf00a92a9e1fe697efe0e41b3ae61533e",
+      "triggering_actor": "devin-ai-integration[bot]",
+      "workflow": "Garnet Runtime Review (dev)",
+      "workflow_ref": "garnet-org/runtime-review-testbed/.github/workflows/garnet-runtime-review-dev.yml@refs/pull/76/merge",
+      "workflow_sha": "6e5d0d4cf00a92a9e1fe697efe0e41b3ae61533e",
+      "workspace": "/home/runner/work/runtime-review-testbed/runtime-review-testbed",
+      "created_at": "0001-01-01T00:00:00Z",
+      "updated_at": "0001-01-01T00:00:00Z"
+    }
+  },
+  "network": {
+    "egress": {
+      "peers": [
+        {
+          "result": "attention",
+          "detections": [
+            "exec_from_unusual_dir",
+            "flow"
+          ],
+          "protocol": "TCP",
+          "local_address": "10.1.0.148",
+          "remote_address": "104.16.6.34",
+          "local_names": [
+            "runnervm5mmn9",
+            "runnervm5mmn9.dtyrjvhj1jdubpegzc4liecpve.ex.internal.cloudapp.net"
+          ],
+          "remote_names": [
+            "registry.npmjs.org"
+          ],
+          "remote_ports": [
+            "443 (https)"
+          ],
+          "proc_trees": [
+            {
+              "pid": 2375,
+              "process": "node",
+              "executable": "/opt/hostedtoolcache/node/20.20.2/x64/bin/node",
+              "github_step": "4. Install dependencies",
+              "ancestry": [
+                "systemd",
+                "hosted-compute-agent",
+                "Runner.Listener",
+                "Runner.Worker",
+                "bash",
+                "node",
+                "dash",
+                "node"
+              ]
+            },
+            {
+              "pid": 2351,
+              "process": "node",
+              "executable": "/opt/hostedtoolcache/node/20.20.2/x64/bin/node",
+              "github_step": "0. Check for dev project token",
+              "ancestry": [
+                "systemd",
+                "hosted-compute-agent",
+                "Runner.Listener",
+                "Runner.Worker",
+                "bash",
+                "node"
+              ]
+            }
+          ]
+        },
+        {
+          "result": "attention",
+          "detections": [
+            "exec_from_unusual_dir",
+            "flow"
+          ],
+          "protocol": "TCP",
+          "local_address": "10.1.0.148",
+          "remote_address": "104.26.10.16",
+          "local_names": [
+            "runnervm5mmn9",
+            "runnervm5mmn9.dtyrjvhj1jdubpegzc4liecpve.ex.internal.cloudapp.net"
+          ],
+          "remote_names": [
+            "api.garnet.ai"
+          ],
+          "remote_ports": [
+            "443 (https)"
+          ],
+          "proc_trees": [
+            {
+              "pid": 2375,
+              "process": "node",
+              "executable": "/opt/hostedtoolcache/node/20.20.2/x64/bin/node",
+              "github_step": "4. Install dependencies",
+              "ancestry": [
+                "systemd",
+                "hosted-compute-agent",
+                "Runner.Listener",
+                "Runner.Worker",
+                "bash",
+                "node",
+                "dash",
+                "node"
+              ]
+            }
+          ]
+        },
+        {
+          "result": "attention",
+          "detections": [
+            "exec_from_unusual_dir",
+            "flow"
+          ],
+          "protocol": "UDP",
+          "local_address": "127.0.0.1",
+          "remote_address": "127.0.0.53",
+          "local_names": [
+            "localhost"
+          ],
+          "remote_names": [
+            "localhost"
+          ],
+          "remote_ports": [
+            "53 (dns)"
+          ],
+          "proc_trees": [
+            {
+              "pid": 2375,
+              "process": "node",
+              "executable": "/opt/hostedtoolcache/node/20.20.2/x64/bin/node",
+              "github_step": "4. Install dependencies",
+              "ancestry": [
+                "systemd",
+                "hosted-compute-agent",
+                "Runner.Listener",
+                "Runner.Worker",
+                "bash",
+                "node",
+                "dash",
+                "node"
+              ]
+            },
+            {
+              "pid": 2351,
+              "process": "node",
+              "executable": "/opt/hostedtoolcache/node/20.20.2/x64/bin/node",
+              "github_step": "0. Check for dev project token",
+              "ancestry": [
+                "systemd",
+                "hosted-compute-agent",
+                "Runner.Listener",
+                "Runner.Worker",
+                "bash",
+                "node"
+              ]
+            },
+            {
+              "pid": 2387,
+              "process": "curl",
+              "executable": "/usr/bin/curl",
+              "github_step": "4. Install dependencies",
+              "ancestry": [
+                "systemd",
+                "hosted-compute-agent",
+                "Runner.Listener",
+                "Runner.Worker",
+                "bash",
+                "node",
+                "dash",
+                "node",
+                "dash",
+                "curl"
+              ]
+            },
+            {
+              "pid": 1884,
+              "process": "provjobd3748322371",
+              "executable": "/tmp/provjobd3748322371",
+              "github_step": "99. Runner Processes",
+              "ancestry": [
+                "systemd",
+                "hosted-compute-agent",
+                "sudo",
+                "provjobd3748322371"
+              ]
+            }
+          ]
+        },
+        {
+          "result": "pass",
+          "detections": [
+            "flow"
+          ],
+          "protocol": "TCP",
+          "local_address": "10.1.0.148",
+          "remote_address": "140.82.112.23",
+          "local_names": [
+            "runnervm5mmn9",
+            "runnervm5mmn9.dtyrjvhj1jdubpegzc4liecpve.ex.internal.cloudapp.net"
+          ],
+          "remote_names": [
+            "hosted-compute-watchdog-prod-iad-01.githubapp",
+            "glb-2a3c35-public-internal.githubapp.com"
+          ],
+          "remote_ports": [
+            "443 (https)"
+          ],
+          "proc_trees": [
+            {
+              "pid": 1884,
+              "process": "provjobd3748322371",
+              "executable": "/tmp/provjobd3748322371",
+              "github_step": "99. Runner Processes",
+              "ancestry": [
+                "systemd",
+                "hosted-compute-agent",
+                "sudo",
+                "provjobd3748322371"
+              ]
+            }
+          ]
+        },
+        {
+          "result": "attention",
+          "detections": [
+            "exec_from_unusual_dir",
+            "flow"
+          ],
+          "protocol": "TCP",
+          "local_address": "10.1.0.148",
+          "remote_address": "140.82.112.4",
+          "local_names": [
+            "runnervm5mmn9",
+            "runnervm5mmn9.dtyrjvhj1jdubpegzc4liecpve.ex.internal.cloudapp.net"
+          ],
+          "remote_names": [
+            "github.com"
+          ],
+          "remote_ports": [
+            "443 (https)"
+          ],
+          "proc_trees": [
+            {
+              "pid": 2375,
+              "process": "node",
+              "executable": "/opt/hostedtoolcache/node/20.20.2/x64/bin/node",
+              "github_step": "4. Install dependencies",
+              "ancestry": [
+                "systemd",
+                "hosted-compute-agent",
+                "Runner.Listener",
+                "Runner.Worker",
+                "bash",
+                "node",
+                "dash",
+                "node"
+              ]
+            }
+          ]
+        },
+        {
+          "result": "pass",
+          "detections": [
+            "flow"
+          ],
+          "protocol": "TCP",
+          "local_address": "10.1.0.148",
+          "remote_address": "3.217.23.77",
+          "local_names": [
+            "runnervm5mmn9",
+            "runnervm5mmn9.dtyrjvhj1jdubpegzc4liecpve.ex.internal.cloudapp.net"
+          ],
+          "remote_names": [
+            "httpbin.org"
+          ],
+          "remote_ports": [
+            "443 (https)"
+          ],
+          "proc_trees": [
+            {
+              "pid": 2387,
+              "process": "curl",
+              "executable": "/usr/bin/curl",
+              "github_step": "4. Install dependencies",
+              "ancestry": [
+                "systemd",
+                "hosted-compute-agent",
+                "Runner.Listener",
+                "Runner.Worker",
+                "bash",
+                "node",
+                "dash",
+                "node",
+                "dash",
+                "curl"
+              ]
+            }
+          ]
+        }
+      ],
+      "domains": [
+        "api.garnet.ai",
+        "github.com",
+        "glb-2a3c35-public-internal.githubapp.com",
+        "hosted-compute-watchdog-prod-iad-01.githubapp",
+        "httpbin.org",
+        "localhost",
+        "registry.npmjs.org"
+      ]
+    }
+  },
+  "telemetry": {
+    "network": {
+      "egress": {
+        "total_domains": 7,
+        "total_connections": 6
+      }
+    }
+  },
+  "assertions": [
+    {
+      "class_id": "Network Egress",
+      "assertion_id": "no_bad_egress_domain",
+      "result": "attention",
+      "description": "A process contacted a bad network domain.",
+      "id": "no_bad_egress_domain"
+    },
+    {
+      "class_id": "Stealth",
+      "assertion_id": "no_binary_execution_and_deletion",
+      "result": "pass",
+      "description": "A program was executed, and then its file was deleted.",
+      "id": ""
+    },
+    {
+      "class_id": "Privilege Escalation",
+      "assertion_id": "no_code_injection_via_proc_memory",
+      "result": "pass",
+      "description": "A process initiated code injection via /proc/{pid}/mem access.",
+      "id": ""
+    }
+  ]
+}

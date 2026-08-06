@@ -30,6 +30,11 @@ async function main() {
         const debug = core.getInput("debug") === "true"
         core.saveState("debug", debug ? "true" : "")
 
+        // Preview gates the Step Summary's assertions record (§8.5); the
+        // prod default renders the observation-only record.
+        const preview = core.getInput("preview") === "true"
+        core.saveState("preview", preview ? "true" : "")
+
         const githubToken = core.getInput("github_token")
         core.saveState("githubToken", githubToken)
 
