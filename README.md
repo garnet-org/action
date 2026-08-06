@@ -101,7 +101,10 @@ jobs:
 > **Tip:** Major tags such as `@v2` track the latest `v2.x.x` release automatically. For maximum supply-chain safety, pin to a full commit SHA (Dependabot keeps SHA pins up to date):
 >
 > ```yaml
-> - uses: garnet-org/action@<commit-sha>
+> # Pinned to v2.2.0
+> - uses: garnet-org/action@3d47f4a9004f7356c980a0e8d420ef5984750e3c
+>   with:
+>     api_token: ${{ secrets.GARNET_API_TOKEN }}
 > ```
 >
 > The canonical SHA of the latest release is always at [garnet.ai/pins](https://garnet.ai/pins).
@@ -124,6 +127,24 @@ The App writes the comment and does nothing else — no webhooks, no code access
 - `garnet-org/action@v2` tracks the latest `v2.x.x` release.
 - Exact tags such as `garnet-org/action@v2.3.0` remain available when you want a fully pinned released version.
 - Pinning to a full commit SHA is the recommended posture for supply-chain safety; Dependabot bumps SHA pins automatically.
+
+## Not using GitHub Actions?
+
+This action is the easiest way to get Garnet Runtime Review into a GitHub workflow, but it is not the only way to run Garnet. The same eBPF sensor works anywhere your code executes.
+
+- **`garnetctl` CLI + Jibril agent (any CI or host):** Install the [`garnetctl`](https://github.com/garnet-org/garnetctl-releases) CLI and the [`jibril`](https://github.com/garnet-org/jibril-releases) agent to record runtime on GitLab CI, Jenkins, Buildkite, self-hosted runners, or a bare Linux host (kernel 5.10+, root/eBPF required). Point it at `https://api.garnet.ai` with your API token — the same Execution Profiles you get from this action.
+
+  ```bash
+  # Point garnetctl at the Garnet API and authenticate
+  garnetctl config set-baseurl https://api.garnet.ai
+  garnetctl config set-token <your-api-token>
+  # Verify connectivity, then run the jibril agent on the host
+  garnetctl version
+  ```
+
+- **Docker / Kubernetes:** Run Jibril as a container or via the [Garnet Helm charts](https://github.com/garnet-org/helm-charts) for cluster-wide runtime visibility.
+
+Full installation guides for every path are in the [Garnet docs](https://docs.garnet.ai).
 
 ## Action vs. GitHub App
 
