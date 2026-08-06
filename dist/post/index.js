@@ -81346,7 +81346,7 @@ const external_node_os_namespaceObject = __WEBPACK_EXTERNAL_createRequire(import
  * @param {string=} def
  * @returns {string}
  */
-function shared_getEnv(name, def = "") {
+function getEnv(name, def = "") {
   return process.env[name] ?? def
 }
 
@@ -81412,7 +81412,7 @@ function firstNonEmptyString(...values) {
  * @param {string} filePath
  * @returns {Promise<boolean>}
  */
-async function shared_pathExists(filePath) {
+async function pathExists(filePath) {
   try {
     await promises_.access(filePath)
     return true
@@ -81449,13 +81449,7 @@ function isSupportedArch(arch) {
   return arch === "x64" || arch === "x86_64"
 }
 
-;// CONCATENATED MODULE: external "node:https"
-const external_node_https_namespaceObject = __WEBPACK_EXTERNAL_createRequire(import.meta.url)("node:https");
 ;// CONCATENATED MODULE: ./src/coverage.js
-
-
-
-
 // Coverage instrumentation for the Garnet action.
 //
 // Jibril's network capture relies on kernel eBPF features (CO-RE/BTF via
@@ -81473,8 +81467,9 @@ const external_node_https_namespaceObject = __WEBPACK_EXTERNAL_createRequire(imp
 //                   expected connection in its record.
 //   3. post step  — assessCoverage(): compare the parsed record against the
 //                   canary and environment; classify full | degraded | none.
-
-const CANARY_TIMEOUT_MS = 5000
+//
+// The main-step probes (steps 1 and 2) live in src/coverage-probe.js so the
+// post-step bundle carries only the assessment half.
 
 /**
  * @typedef {{
@@ -81496,65 +81491,6 @@ const CANARY_TIMEOUT_MS = 5000
  */
 
 /**
- * Best-effort detection of the runner provider. GitHub-hosted runners set
- * RUNNER_ENVIRONMENT=github-hosted; alternative providers leak their identity
- * through environment variables or the runner name.
- * @returns {string}
- */
-function detectRunnerProvider() {
-    const envKeys = Object.keys(process.env)
-    const runnerName = getEnv("RUNNER_NAME", "").toLowerCase()
-
-    const providers = [
-        { name: "blacksmith", match: /^BLACKSMITH/i },
-        { name: "namespace", match: /^NSC_/i },
-        { name: "depot", match: /^DEPOT_/i },
-        { name: "warpbuild", match: /^WARPBUILD/i },
-        { name: "buildjet", match: /^BUILDJET/i },
-    ]
-
-    for (const provider of providers) {
-        if (envKeys.some(key => provider.match.test(key)) || runnerName.includes(provider.name)) {
-            return provider.name
-        }
-    }
-
-    if (getEnv("RUNNER_ENVIRONMENT", "") === "github-hosted") {
-        return "github-hosted"
-    }
-
-    return "self-hosted-or-unknown"
-}
-
-/**
- * Collects kernel facts relevant to Jibril's eBPF capture. Read-only sysfs
- * checks; never throws.
- * @returns {Promise<RunnerEnvironment>}
- */
-async function collectRunnerEnvironment() {
-    const environment = {
-        kernel: os.release(),
-        btfPresent: false,
-        cgroupV2: false,
-        provider: detectRunnerProvider(),
-    }
-
-    try {
-        environment.btfPresent = await pathExists("/sys/kernel/btf/vmlinux")
-    } catch {
-        environment.btfPresent = false
-    }
-
-    try {
-        environment.cgroupV2 = await pathExists("/sys/fs/cgroup/cgroup.controllers")
-    } catch {
-        environment.cgroupV2 = false
-    }
-
-    return environment
-}
-
-/**
  * Serializes the runner environment into a single log-friendly line.
  * @param {RunnerEnvironment} environment
  * @returns {string}
@@ -81566,40 +81502,6 @@ function formatRunnerEnvironment(environment) {
         `cgroup_v2=${environment.cgroupV2 ? "present" : "absent"} ` +
         `provider=${environment.provider}`
     )
-}
-
-/**
- * Makes one known outbound connection while Jibril is recording, via an HTTPS
- * request to the Garnet API host. The response status is irrelevant — the
- * TCP+TLS connection itself is the canary. Returns the canary hostname, or
- * "" when the connection could not be made (in which case the post step
- * skips the canary check rather than reporting a false degradation).
- * @param {string} baseURL
- * @returns {Promise<string>}
- */
-async function emitCanaryConnection(baseURL) {
-    let hostname = ""
-    try {
-        hostname = new URL(baseURL).hostname
-    } catch {
-        return ""
-    }
-
-    return new Promise(resolve => {
-        const request = https.get(`https://${hostname}/`, { timeout: CANARY_TIMEOUT_MS }, response => {
-            // Drain and discard; the connection is all we need.
-            response.resume()
-            response.on("end", () => resolve(hostname))
-            response.on("error", () => resolve(hostname))
-        })
-        request.on("timeout", () => {
-            request.destroy()
-            resolve("")
-        })
-        // TLS handshake completing means the outbound connection happened even
-        // if the request errors afterwards.
-        request.on("error", () => resolve(""))
-    })
 }
 
 /**
@@ -81639,6 +81541,14 @@ function countDestinations(record) {
 }
 
 /**
+ * Inputs recorded by the main step for the post-step assessment.
+ * @typedef {{
+ *   canaryDomain: string
+ *   environment: RunnerEnvironment | null
+ * }} CoverageContext
+ */
+
+/**
  * Classifies runtime coverage for this job.
  *   - none:     no record was produced at all.
  *   - degraded: a record exists but outbound-connection capture is missing
@@ -81646,7 +81556,7 @@ function countDestinations(record) {
  *               connection is absent).
  *   - full:     outbound connections present and consistent with the canary.
  * @param {import("./runtime-review.js").JobRecord | null} record
- * @param {{ canaryDomain: string, environment: RunnerEnvironment | null }} context
+ * @param {CoverageContext} context
  * @returns {CoverageAssessment}
  */
 function assessCoverage(record, context) {
@@ -85150,6 +85060,8 @@ function restError_isRestError(e) {
 //# sourceMappingURL=restError.js.map
 // EXTERNAL MODULE: external "node:http"
 var external_node_http_ = __nccwpck_require__(7067);
+;// CONCATENATED MODULE: external "node:https"
+const external_node_https_namespaceObject = __WEBPACK_EXTERNAL_createRequire(import.meta.url)("node:https");
 // EXTERNAL MODULE: external "node:zlib"
 var external_node_zlib_ = __nccwpck_require__(8522);
 // EXTERNAL MODULE: external "node:stream"
@@ -139087,7 +138999,7 @@ async function copyReadableLogFile(artifactDir, src, destName) {
     await exec_exec("sudo", ["chmod", "a+r", destPath], {
       ignoreReturnCode: true,
     })
-    return await shared_pathExists(destPath)
+    return await pathExists(destPath)
   } catch {
     return false
   }
@@ -139103,7 +139015,7 @@ async function findExistingArtifactFiles(artifactDir, fileNames) {
   const existing = []
 
   for (const fileName of fileNames) {
-    if (await shared_pathExists(external_node_path_.join(artifactDir, fileName))) {
+    if (await pathExists(external_node_path_.join(artifactDir, fileName))) {
       existing.push(fileName)
     }
   }
@@ -139115,8 +139027,8 @@ async function findExistingArtifactFiles(artifactDir, fileNames) {
  * @returns {string}
  */
 function getDebugArtifactName() {
-  const jobName = shared_getEnv("GITHUB_JOB")
-  const runAttempt = shared_getEnv("GITHUB_RUN_ATTEMPT")
+  const jobName = getEnv("GITHUB_JOB")
+  const runAttempt = getEnv("GITHUB_RUN_ATTEMPT")
 
   const artifactNameParts = [DEBUG_ARTIFACT_NAME]
   if (jobName !== "") {
@@ -150413,7 +150325,7 @@ async function readJobRecord(debug) {
  * @returns {Promise<void>}
  */
 async function appendExecutionSummary(profile, coverage) {
-    const summaryFile = shared_getEnv("GITHUB_STEP_SUMMARY")
+    const summaryFile = getEnv("GITHUB_STEP_SUMMARY")
     if (summaryFile === "") {
         warning("GITHUB_STEP_SUMMARY is not set, cannot write summary")
         return
@@ -150440,19 +150352,19 @@ async function appendExecutionSummary(profile, coverage) {
  * @returns {Promise<void>}
  */
 async function publishProfilerComment(profile) {
-    const eventPath = shared_getEnv("GITHUB_EVENT_PATH")
+    const eventPath = getEnv("GITHUB_EVENT_PATH")
     if (eventPath === "") {
         info("GITHUB_EVENT_PATH is not set, skipping PR comment")
         return
     }
 
-    const repository = shared_getEnv("GITHUB_REPOSITORY")
+    const repository = getEnv("GITHUB_REPOSITORY")
     if (repository === "") {
         warning("GITHUB_REPOSITORY is not set, skipping PR comment")
         return
     }
 
-    const token = firstNonEmptyString(getState("githubToken"), shared_getEnv("GITHUB_TOKEN"))
+    const token = firstNonEmptyString(getState("githubToken"), getEnv("GITHUB_TOKEN"))
     if (token === "") {
         warning("github_token is not set, skipping PR comment")
         return
@@ -150464,7 +150376,7 @@ async function publishProfilerComment(profile) {
         return
     }
 
-    const runAttempt = post_parseRunAttempt(shared_getEnv("GITHUB_RUN_ATTEMPT"))
+    const runAttempt = post_parseRunAttempt(getEnv("GITHUB_RUN_ATTEMPT"))
 
     try {
         const result = await publishPullRequestComment({

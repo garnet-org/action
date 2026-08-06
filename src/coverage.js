@@ -1,7 +1,3 @@
-import * as https from "node:https"
-import * as os from "node:os"
-import { getEnv, pathExists } from "./shared.js"
-
 // Coverage instrumentation for the Garnet action.
 //
 // Jibril's network capture relies on kernel eBPF features (CO-RE/BTF via
@@ -19,8 +15,9 @@ import { getEnv, pathExists } from "./shared.js"
 //                   expected connection in its record.
 //   3. post step  — assessCoverage(): compare the parsed record against the
 //                   canary and environment; classify full | degraded | none.
-
-const CANARY_TIMEOUT_MS = 5000
+//
+// The main-step probes (steps 1 and 2) live in src/coverage-probe.js so the
+// post-step bundle carries only the assessment half.
 
 /**
  * @typedef {{
@@ -42,65 +39,6 @@ const CANARY_TIMEOUT_MS = 5000
  */
 
 /**
- * Best-effort detection of the runner provider. GitHub-hosted runners set
- * RUNNER_ENVIRONMENT=github-hosted; alternative providers leak their identity
- * through environment variables or the runner name.
- * @returns {string}
- */
-export function detectRunnerProvider() {
-    const envKeys = Object.keys(process.env)
-    const runnerName = getEnv("RUNNER_NAME", "").toLowerCase()
-
-    const providers = [
-        { name: "blacksmith", match: /^BLACKSMITH/i },
-        { name: "namespace", match: /^NSC_/i },
-        { name: "depot", match: /^DEPOT_/i },
-        { name: "warpbuild", match: /^WARPBUILD/i },
-        { name: "buildjet", match: /^BUILDJET/i },
-    ]
-
-    for (const provider of providers) {
-        if (envKeys.some(key => provider.match.test(key)) || runnerName.includes(provider.name)) {
-            return provider.name
-        }
-    }
-
-    if (getEnv("RUNNER_ENVIRONMENT", "") === "github-hosted") {
-        return "github-hosted"
-    }
-
-    return "self-hosted-or-unknown"
-}
-
-/**
- * Collects kernel facts relevant to Jibril's eBPF capture. Read-only sysfs
- * checks; never throws.
- * @returns {Promise<RunnerEnvironment>}
- */
-export async function collectRunnerEnvironment() {
-    const environment = {
-        kernel: os.release(),
-        btfPresent: false,
-        cgroupV2: false,
-        provider: detectRunnerProvider(),
-    }
-
-    try {
-        environment.btfPresent = await pathExists("/sys/kernel/btf/vmlinux")
-    } catch {
-        environment.btfPresent = false
-    }
-
-    try {
-        environment.cgroupV2 = await pathExists("/sys/fs/cgroup/cgroup.controllers")
-    } catch {
-        environment.cgroupV2 = false
-    }
-
-    return environment
-}
-
-/**
  * Serializes the runner environment into a single log-friendly line.
  * @param {RunnerEnvironment} environment
  * @returns {string}
@@ -112,40 +50,6 @@ export function formatRunnerEnvironment(environment) {
         `cgroup_v2=${environment.cgroupV2 ? "present" : "absent"} ` +
         `provider=${environment.provider}`
     )
-}
-
-/**
- * Makes one known outbound connection while Jibril is recording, via an HTTPS
- * request to the Garnet API host. The response status is irrelevant — the
- * TCP+TLS connection itself is the canary. Returns the canary hostname, or
- * "" when the connection could not be made (in which case the post step
- * skips the canary check rather than reporting a false degradation).
- * @param {string} baseURL
- * @returns {Promise<string>}
- */
-export async function emitCanaryConnection(baseURL) {
-    let hostname = ""
-    try {
-        hostname = new URL(baseURL).hostname
-    } catch {
-        return ""
-    }
-
-    return new Promise(resolve => {
-        const request = https.get(`https://${hostname}/`, { timeout: CANARY_TIMEOUT_MS }, response => {
-            // Drain and discard; the connection is all we need.
-            response.resume()
-            response.on("end", () => resolve(hostname))
-            response.on("error", () => resolve(hostname))
-        })
-        request.on("timeout", () => {
-            request.destroy()
-            resolve("")
-        })
-        // TLS handshake completing means the outbound connection happened even
-        // if the request errors afterwards.
-        request.on("error", () => resolve(""))
-    })
 }
 
 /**
@@ -185,6 +89,14 @@ function countDestinations(record) {
 }
 
 /**
+ * Inputs recorded by the main step for the post-step assessment.
+ * @typedef {{
+ *   canaryDomain: string
+ *   environment: RunnerEnvironment | null
+ * }} CoverageContext
+ */
+
+/**
  * Classifies runtime coverage for this job.
  *   - none:     no record was produced at all.
  *   - degraded: a record exists but outbound-connection capture is missing
@@ -192,7 +104,7 @@ function countDestinations(record) {
  *               connection is absent).
  *   - full:     outbound connections present and consistent with the canary.
  * @param {import("./runtime-review.js").JobRecord | null} record
- * @param {{ canaryDomain: string, environment: RunnerEnvironment | null }} context
+ * @param {CoverageContext} context
  * @returns {CoverageAssessment}
  */
 export function assessCoverage(record, context) {

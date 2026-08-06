@@ -1,7 +1,8 @@
 import * as core from "@actions/core"
 import * as os from "node:os"
 import { run } from "./action.js"
-import { collectRunnerEnvironment, emitCanaryConnection, formatRunnerEnvironment } from "./coverage.js"
+import { formatRunnerEnvironment } from "./coverage.js"
+import { collectRunnerEnvironment, emitCanaryConnection } from "./coverage-probe.js"
 import { buildReportLink } from "./profile-comment.js"
 import { getEnv, isSupportedArch, isSupportedPlatform } from "./shared.js"
 
