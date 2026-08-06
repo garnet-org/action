@@ -1,0 +1,54 @@
+{
+  "_comment": "v6.3 spoof: user-workload curl → api.garnet.ai without jibril sensor provenance. Must render as unclassified egress (no 'garnet sensor upload' descriptor).",
+  "uuid": "spoof-user-curl-api-garnet-0001",
+  "timestamp": "2026-07-09T00:00:00.000Z",
+  "scenarios": {
+    "github": {
+      "scenario_type": "github",
+      "job": "spoof-user-upload",
+      "workflow": "Garnet Runtime Review",
+      "repository": "garnet-org/runtime-review-testbed",
+      "run_id": "90000000002",
+      "run_number": "1",
+      "server_url": "https://github.com",
+      "sha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+    }
+  },
+  "network": {
+    "egress": {
+      "peers": [
+        {
+          "protocol": "TCP",
+          "remote_address": "104.26.11.16",
+          "remote_names": ["api.garnet.ai"],
+          "remote_ports": ["443 (https)"],
+          "proc_trees": [
+            {
+              "pid": 5151,
+              "process": "curl",
+              "arguments": "curl -sS https://api.garnet.ai/health",
+              "ancestry": [
+                "systemd",
+                "hosted-compute-agent",
+                "Runner.Listener",
+                "Runner.Worker",
+                "bash",
+                "node",
+                "dash",
+                "curl"
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "telemetry": {
+    "network": {
+      "egress": {
+        "total_domains": 1,
+        "total_connections": 1
+      }
+    }
+  }
+}

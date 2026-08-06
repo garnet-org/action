@@ -1,0 +1,163 @@
+{
+  "scenarios": {
+    "github": {
+      "workflow": "Garnet Runtime Review",
+      "repository": "garnet-labs/runtime-review-testbed",
+      "ref": "refs/pull/22/merge",
+      "sha": "ef01a52517e7532ab34aadea58b952c9f1e79ece",
+      "actor": "devin-ai-integration[bot]",
+      "run_id": "28492112239",
+      "job": "runtime-review",
+      "server_url": "https://github.com"
+    }
+  },
+  "network": {
+    "egress": {
+      "peers": [
+        {
+          "remote_names": [
+            "api.garnet.ai",
+            "104.26.11.16"
+          ],
+          "remote_address": "104.26.11.16",
+          "remote_ports": [
+            443
+          ],
+          "result": "",
+          "detections": [],
+          "remote_geo_info": {},
+          "proc_trees": [
+            {
+              "ancestry": [
+                "systemd",
+                "hosted-compute-agent",
+                "Runner.Listener",
+                "Runner.Worker",
+                "bash",
+                "npm test",
+                "sh",
+                "node"
+              ],
+              "arguments": "node src/test.js",
+              "github_step": ""
+            }
+          ]
+        },
+        {
+          "remote_names": [
+            "images.unsplash.com",
+            "146.75.94.208",
+            "dualstack.com.imgix.map.fastly.net",
+            "unsplash.imgix.net"
+          ],
+          "remote_address": "146.75.94.208",
+          "remote_ports": [
+            443
+          ],
+          "result": "",
+          "detections": [],
+          "remote_geo_info": {
+            "org": "Fastly"
+          },
+          "proc_trees": [
+            {
+              "ancestry": [
+                "systemd",
+                "hosted-compute-agent",
+                "Runner.Listener",
+                "Runner.Worker",
+                "bash",
+                "npm test",
+                "sh",
+                "node"
+              ],
+              "arguments": "node src/test.js",
+              "github_step": ""
+            }
+          ]
+        },
+        {
+          "remote_names": [
+            "registry.npmjs.org",
+            "104.16.8.34"
+          ],
+          "remote_address": "104.16.8.34",
+          "remote_ports": [
+            443
+          ],
+          "result": "",
+          "detections": [],
+          "remote_geo_info": {},
+          "proc_trees": [
+            {
+              "ancestry": [
+                "systemd",
+                "hosted-compute-agent",
+                "Runner.Listener",
+                "Runner.Worker",
+                "bash",
+                "npm test",
+                "sh",
+                "node"
+              ],
+              "arguments": "node src/test.js",
+              "github_step": ""
+            },
+            {
+              "ancestry": [
+                "systemd",
+                "hosted-compute-agent",
+                "Runner.Listener",
+                "Runner.Worker",
+                "bash",
+                "npm install"
+              ],
+              "arguments": "node /opt/hostedtoolcache/node/20.20.2/x64/bin/npm install",
+              "github_step": ""
+            }
+          ]
+        },
+        {
+          "remote_names": [
+            "github.com",
+            "140.82.113.3"
+          ],
+          "remote_address": "140.82.113.3",
+          "remote_ports": [
+            443
+          ],
+          "result": "",
+          "detections": [],
+          "remote_geo_info": {
+            "org": "GitHub"
+          },
+          "proc_trees": [
+            {
+              "ancestry": [
+                "systemd",
+                "hosted-compute-agent",
+                "Runner.Listener",
+                "Runner.Worker",
+                "bash",
+                "npm test",
+                "sh",
+                "node"
+              ],
+              "arguments": "node src/test.js",
+              "github_step": ""
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "assertions": [],
+  "telemetry": {
+    "network": {
+      "egress": {
+        "total_domains": 4,
+        "total_connections": 19
+      }
+    }
+  }
+}

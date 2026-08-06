@@ -1,0 +1,1001 @@
+{
+  "contractVersion": "6.6.1",
+  "repo": "garnet-org/runtime-review-testbed",
+  "sha": "6e5d0d4cf00a92a9e1fe697efe0e41b3ae61533e",
+  "commitUrl": "https://github.com/garnet-org/runtime-review-testbed/commit/6e5d0d4cf00a92a9e1fe697efe0e41b3ae61533e",
+  "appUrl": "https://app.garnet.ai",
+  "appMode": true,
+  "recordedThrough": "2026-07-13 23:54:31 UTC",
+  "counts": {
+    "jobs": 5,
+    "associations": 25,
+    "destinations": 12
+  },
+  "jobs": [
+    {
+      "name": "docs-build",
+      "workflow": "ci",
+      "run_id": "29294366437",
+      "run_url": "https://github.com/garnet-org/runtime-review-testbed/actions/runs/29294366437",
+      "job_url": "",
+      "profile_id": "019f5de7-59af-7208-a4f7-6cfecaae0c59",
+      "uuid": "667d54a1-3dbf-569d-a20c-3803bb209dac",
+      "timestamp": "2026-07-13T23:54:30.648457511Z",
+      "repository": "garnet-org/runtime-review-testbed",
+      "sha": "6e5d0d4cf00a92a9e1fe697efe0e41b3ae61533e",
+      "ref": "refs/pull/76/merge",
+      "actor": "devin-ai-integration[bot]",
+      "job_index": "2",
+      "flow_count": 2,
+      "telemetry": {
+        "total_domains": 2,
+        "total_connections": 2
+      },
+      "telemetryDiscrepancies": [],
+      "assertions": [
+        {
+          "class_id": "Network Egress",
+          "id": "no_bad_egress_domain",
+          "description": "A process contacted a bad network domain.",
+          "result": "attention",
+          "evidence": []
+        },
+        {
+          "class_id": "Stealth",
+          "id": "no_binary_execution_and_deletion",
+          "description": "A program was executed, and then its file was deleted.",
+          "result": "pass",
+          "evidence": []
+        },
+        {
+          "class_id": "Privilege Escalation",
+          "id": "no_code_injection_via_proc_memory",
+          "description": "A process initiated code injection via /proc/{pid}/mem access.",
+          "result": "pass",
+          "evidence": []
+        }
+      ],
+      "counts": {
+        "associations": 3,
+        "processes": 2,
+        "destinations": 2,
+        "primary_names": 2,
+        "domains": 2,
+        "flows": 2
+      },
+      "edges": [
+        {
+          "remote_address": "104.16.6.34",
+          "remote_names": [
+            "registry.npmjs.org"
+          ],
+          "remote_ports": [
+            "443 (https)"
+          ],
+          "protocol": "TCP",
+          "result": "attention",
+          "detections": [
+            "exec_from_unusual_dir",
+            "flow"
+          ],
+          "lineage_recorded": true,
+          "pid": "2384",
+          "process": "node",
+          "ancestry": [
+            "systemd",
+            "hosted-compute-agent",
+            "Runner.Listener",
+            "Runner.Worker",
+            "bash",
+            "node"
+          ],
+          "github_step": "4. Run workload (${{ matrix.job_name }})",
+          "notes": [
+            "detection: exec_from_unusual_dir"
+          ]
+        },
+        {
+          "remote_address": "127.0.0.53",
+          "remote_names": [
+            "localhost"
+          ],
+          "remote_ports": [
+            "53 (dns)"
+          ],
+          "protocol": "UDP",
+          "result": "attention",
+          "detections": [
+            "exec_from_unusual_dir",
+            "flow"
+          ],
+          "lineage_recorded": true,
+          "pid": "2384",
+          "process": "node",
+          "ancestry": [
+            "systemd",
+            "hosted-compute-agent",
+            "Runner.Listener",
+            "Runner.Worker",
+            "bash",
+            "node"
+          ],
+          "github_step": "4. Run workload (${{ matrix.job_name }})",
+          "notes": [
+            "dns resolver",
+            "detection: exec_from_unusual_dir"
+          ]
+        },
+        {
+          "remote_address": "127.0.0.53",
+          "remote_names": [
+            "localhost"
+          ],
+          "remote_ports": [
+            "53 (dns)"
+          ],
+          "protocol": "UDP",
+          "result": "attention",
+          "detections": [
+            "exec_from_unusual_dir",
+            "flow"
+          ],
+          "lineage_recorded": true,
+          "pid": "1867",
+          "process": "provjobd920019609",
+          "ancestry": [
+            "systemd",
+            "hosted-compute-agent",
+            "sudo",
+            "provjobd920019609"
+          ],
+          "github_step": "99. Runner Processes",
+          "notes": [
+            "dns resolver",
+            "detection: exec_from_unusual_dir"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "install-only",
+      "workflow": "ci",
+      "run_id": "29294366437",
+      "run_url": "https://github.com/garnet-org/runtime-review-testbed/actions/runs/29294366437",
+      "job_url": "",
+      "profile_id": "019f5de7-571c-78d6-8a61-dd43f61c441c",
+      "uuid": "3d4d03e1-9387-550c-ad43-7f6e3e335898",
+      "timestamp": "2026-07-13T23:54:30.006663364Z",
+      "repository": "garnet-org/runtime-review-testbed",
+      "sha": "6e5d0d4cf00a92a9e1fe697efe0e41b3ae61533e",
+      "ref": "refs/pull/76/merge",
+      "actor": "devin-ai-integration[bot]",
+      "job_index": "1",
+      "flow_count": 4,
+      "telemetry": {
+        "total_domains": 4,
+        "total_connections": 4
+      },
+      "telemetryDiscrepancies": [],
+      "assertions": [
+        {
+          "class_id": "Network Egress",
+          "id": "no_bad_egress_domain",
+          "description": "A process contacted a bad network domain.",
+          "result": "attention",
+          "evidence": []
+        },
+        {
+          "class_id": "Stealth",
+          "id": "no_binary_execution_and_deletion",
+          "description": "A program was executed, and then its file was deleted.",
+          "result": "pass",
+          "evidence": []
+        },
+        {
+          "class_id": "Privilege Escalation",
+          "id": "no_code_injection_via_proc_memory",
+          "description": "A process initiated code injection via /proc/{pid}/mem access.",
+          "result": "pass",
+          "evidence": []
+        }
+      ],
+      "counts": {
+        "associations": 5,
+        "processes": 3,
+        "destinations": 4,
+        "primary_names": 4,
+        "domains": 3,
+        "flows": 4
+      },
+      "edges": [
+        {
+          "remote_address": "140.82.112.23",
+          "remote_names": [
+            "140.82.112.23"
+          ],
+          "remote_ports": [
+            "443 (https)"
+          ],
+          "protocol": "TCP",
+          "result": "pass",
+          "detections": [
+            "flow"
+          ],
+          "lineage_recorded": true,
+          "pid": "1878",
+          "process": "hosted-compute-agent",
+          "ancestry": [
+            "systemd",
+            "hosted-compute-agent"
+          ],
+          "github_step": "99. Runner Processes",
+          "notes": []
+        },
+        {
+          "remote_address": "104.16.6.34",
+          "remote_names": [
+            "registry.npmjs.org"
+          ],
+          "remote_ports": [
+            "443 (https)"
+          ],
+          "protocol": "TCP",
+          "result": "attention",
+          "detections": [
+            "exec_from_unusual_dir",
+            "flow"
+          ],
+          "lineage_recorded": true,
+          "pid": "2371",
+          "process": "node",
+          "ancestry": [
+            "systemd",
+            "hosted-compute-agent",
+            "Runner.Listener",
+            "Runner.Worker",
+            "bash",
+            "node"
+          ],
+          "github_step": "4. Run workload (${{ matrix.job_name }})",
+          "notes": [
+            "detection: exec_from_unusual_dir"
+          ]
+        },
+        {
+          "remote_address": "127.0.0.53",
+          "remote_names": [
+            "localhost"
+          ],
+          "remote_ports": [
+            "53 (dns)"
+          ],
+          "protocol": "UDP",
+          "result": "attention",
+          "detections": [
+            "exec_from_unusual_dir",
+            "flow"
+          ],
+          "lineage_recorded": true,
+          "pid": "2371",
+          "process": "node",
+          "ancestry": [
+            "systemd",
+            "hosted-compute-agent",
+            "Runner.Listener",
+            "Runner.Worker",
+            "bash",
+            "node"
+          ],
+          "github_step": "4. Run workload (${{ matrix.job_name }})",
+          "notes": [
+            "dns resolver",
+            "detection: exec_from_unusual_dir"
+          ]
+        },
+        {
+          "remote_address": "127.0.0.53",
+          "remote_names": [
+            "localhost"
+          ],
+          "remote_ports": [
+            "53 (dns)"
+          ],
+          "protocol": "UDP",
+          "result": "attention",
+          "detections": [
+            "exec_from_unusual_dir",
+            "flow"
+          ],
+          "lineage_recorded": true,
+          "pid": "1893",
+          "process": "provjobd1326539233",
+          "ancestry": [
+            "systemd",
+            "hosted-compute-agent",
+            "sudo",
+            "provjobd1326539233"
+          ],
+          "github_step": "99. Runner Processes",
+          "notes": [
+            "dns resolver",
+            "detection: exec_from_unusual_dir"
+          ]
+        },
+        {
+          "remote_address": "140.82.114.23",
+          "remote_names": [
+            "hosted-compute-watchdog-prod-iad-01.githubapp",
+            "glb-2a3c35-public-internal.githubapp.com"
+          ],
+          "remote_ports": [
+            "443 (https)"
+          ],
+          "protocol": "TCP",
+          "result": "pass",
+          "detections": [
+            "flow"
+          ],
+          "lineage_recorded": true,
+          "pid": "1893",
+          "process": "provjobd1326539233",
+          "ancestry": [
+            "systemd",
+            "hosted-compute-agent",
+            "sudo",
+            "provjobd1326539233"
+          ],
+          "github_step": "99. Runner Processes",
+          "notes": []
+        }
+      ]
+    },
+    {
+      "name": "lint",
+      "workflow": "ci",
+      "run_id": "29294366437",
+      "run_url": "https://github.com/garnet-org/runtime-review-testbed/actions/runs/29294366437",
+      "job_url": "",
+      "profile_id": "019f5de7-54b9-704c-a002-a7d9d70b271b",
+      "uuid": "cb98647e-f8b3-5c8a-bc50-319f1afb3cfd",
+      "timestamp": "2026-07-13T23:54:29.393096083Z",
+      "repository": "garnet-org/runtime-review-testbed",
+      "sha": "6e5d0d4cf00a92a9e1fe697efe0e41b3ae61533e",
+      "ref": "refs/pull/76/merge",
+      "actor": "devin-ai-integration[bot]",
+      "job_index": "3",
+      "flow_count": 3,
+      "telemetry": {
+        "total_domains": 3,
+        "total_connections": 3
+      },
+      "telemetryDiscrepancies": [],
+      "assertions": [
+        {
+          "class_id": "Network Egress",
+          "id": "no_bad_egress_domain",
+          "description": "A process contacted a bad network domain.",
+          "result": "pass",
+          "evidence": []
+        },
+        {
+          "class_id": "Stealth",
+          "id": "no_binary_execution_and_deletion",
+          "description": "A program was executed, and then its file was deleted.",
+          "result": "pass",
+          "evidence": []
+        },
+        {
+          "class_id": "Privilege Escalation",
+          "id": "no_code_injection_via_proc_memory",
+          "description": "A process initiated code injection via /proc/{pid}/mem access.",
+          "result": "pass",
+          "evidence": []
+        }
+      ],
+      "counts": {
+        "associations": 3,
+        "processes": 2,
+        "destinations": 3,
+        "primary_names": 3,
+        "domains": 2,
+        "flows": 3
+      },
+      "edges": [
+        {
+          "remote_address": "140.82.113.24",
+          "remote_names": [
+            "140.82.113.24"
+          ],
+          "remote_ports": [
+            "443 (https)"
+          ],
+          "protocol": "TCP",
+          "result": "pass",
+          "detections": [
+            "flow"
+          ],
+          "lineage_recorded": true,
+          "pid": "1854",
+          "process": "hosted-compute-agent",
+          "ancestry": [
+            "systemd",
+            "hosted-compute-agent"
+          ],
+          "github_step": "99. Runner Processes",
+          "notes": []
+        },
+        {
+          "remote_address": "127.0.0.53",
+          "remote_names": [
+            "localhost"
+          ],
+          "remote_ports": [
+            "53 (dns)"
+          ],
+          "protocol": "UDP",
+          "result": "pass",
+          "detections": [
+            "flow"
+          ],
+          "lineage_recorded": true,
+          "pid": "1868",
+          "process": "provjobd1278877480",
+          "ancestry": [
+            "systemd",
+            "hosted-compute-agent",
+            "sudo",
+            "provjobd1278877480"
+          ],
+          "github_step": "99. Runner Processes",
+          "notes": [
+            "dns resolver"
+          ]
+        },
+        {
+          "remote_address": "140.82.112.23",
+          "remote_names": [
+            "hosted-compute-watchdog-prod-iad-02.githubapp",
+            "glb-2a3c35-public-internal.githubapp.com"
+          ],
+          "remote_ports": [
+            "443 (https)"
+          ],
+          "protocol": "TCP",
+          "result": "pass",
+          "detections": [
+            "flow"
+          ],
+          "lineage_recorded": true,
+          "pid": "1868",
+          "process": "provjobd1278877480",
+          "ancestry": [
+            "systemd",
+            "hosted-compute-agent",
+            "sudo",
+            "provjobd1278877480"
+          ],
+          "github_step": "99. Runner Processes",
+          "notes": []
+        }
+      ]
+    },
+    {
+      "name": "typecheck",
+      "workflow": "ci",
+      "run_id": "29294366437",
+      "run_url": "https://github.com/garnet-org/runtime-review-testbed/actions/runs/29294366437",
+      "job_url": "",
+      "profile_id": "019f5de7-5ca7-7f9d-bfb3-c59ccde51111",
+      "uuid": "f0148ce1-8bd4-5c94-bdda-8cdedde04333",
+      "timestamp": "2026-07-13T23:54:31.40044757Z",
+      "repository": "garnet-org/runtime-review-testbed",
+      "sha": "6e5d0d4cf00a92a9e1fe697efe0e41b3ae61533e",
+      "ref": "refs/pull/76/merge",
+      "actor": "devin-ai-integration[bot]",
+      "job_index": "4",
+      "flow_count": 3,
+      "telemetry": {
+        "total_domains": 3,
+        "total_connections": 3
+      },
+      "telemetryDiscrepancies": [],
+      "assertions": [
+        {
+          "class_id": "Network Egress",
+          "id": "no_bad_egress_domain",
+          "description": "A process contacted a bad network domain.",
+          "result": "pass",
+          "evidence": []
+        },
+        {
+          "class_id": "Stealth",
+          "id": "no_binary_execution_and_deletion",
+          "description": "A program was executed, and then its file was deleted.",
+          "result": "pass",
+          "evidence": []
+        },
+        {
+          "class_id": "Privilege Escalation",
+          "id": "no_code_injection_via_proc_memory",
+          "description": "A process initiated code injection via /proc/{pid}/mem access.",
+          "result": "pass",
+          "evidence": []
+        }
+      ],
+      "counts": {
+        "associations": 3,
+        "processes": 2,
+        "destinations": 3,
+        "primary_names": 3,
+        "domains": 2,
+        "flows": 3
+      },
+      "edges": [
+        {
+          "remote_address": "140.82.114.24",
+          "remote_names": [
+            "140.82.114.24"
+          ],
+          "remote_ports": [
+            "443 (https)"
+          ],
+          "protocol": "TCP",
+          "result": "pass",
+          "detections": [
+            "flow"
+          ],
+          "lineage_recorded": true,
+          "pid": "1878",
+          "process": "hosted-compute-agent",
+          "ancestry": [
+            "systemd",
+            "hosted-compute-agent"
+          ],
+          "github_step": "99. Runner Processes",
+          "notes": []
+        },
+        {
+          "remote_address": "127.0.0.53",
+          "remote_names": [
+            "localhost"
+          ],
+          "remote_ports": [
+            "53 (dns)"
+          ],
+          "protocol": "UDP",
+          "result": "pass",
+          "detections": [
+            "flow"
+          ],
+          "lineage_recorded": true,
+          "pid": "1893",
+          "process": "provjobd3832655626",
+          "ancestry": [
+            "systemd",
+            "hosted-compute-agent",
+            "sudo",
+            "provjobd3832655626"
+          ],
+          "github_step": "99. Runner Processes",
+          "notes": [
+            "dns resolver"
+          ]
+        },
+        {
+          "remote_address": "140.82.113.24",
+          "remote_names": [
+            "hosted-compute-watchdog-prod-iad-02.githubapp",
+            "glb-2a3c35-public-internal.githubapp.com"
+          ],
+          "remote_ports": [
+            "443 (https)"
+          ],
+          "protocol": "TCP",
+          "result": "pass",
+          "detections": [
+            "flow"
+          ],
+          "lineage_recorded": true,
+          "pid": "1893",
+          "process": "provjobd3832655626",
+          "ancestry": [
+            "systemd",
+            "hosted-compute-agent",
+            "sudo",
+            "provjobd3832655626"
+          ],
+          "github_step": "99. Runner Processes",
+          "notes": []
+        }
+      ]
+    },
+    {
+      "name": "workload-egress",
+      "workflow": "ci",
+      "run_id": "29294366437",
+      "run_url": "https://github.com/garnet-org/runtime-review-testbed/actions/runs/29294366437",
+      "job_url": "",
+      "profile_id": "019f5de7-5992-7409-89cf-6d88e0fb46ea",
+      "uuid": "1494efb7-4fcf-5a8a-a44d-72b0f2c4d914",
+      "timestamp": "2026-07-13T23:54:30.631548072Z",
+      "repository": "garnet-org/runtime-review-testbed",
+      "sha": "6e5d0d4cf00a92a9e1fe697efe0e41b3ae61533e",
+      "ref": "refs/pull/76/merge",
+      "actor": "devin-ai-integration[bot]",
+      "job_index": "0",
+      "flow_count": 8,
+      "telemetry": {
+        "total_domains": 7,
+        "total_connections": 8
+      },
+      "telemetryDiscrepancies": [],
+      "assertions": [
+        {
+          "class_id": "Network Egress",
+          "id": "no_bad_egress_domain",
+          "description": "A process contacted a bad network domain.",
+          "result": "attention",
+          "evidence": []
+        },
+        {
+          "class_id": "Stealth",
+          "id": "no_binary_execution_and_deletion",
+          "description": "A program was executed, and then its file was deleted.",
+          "result": "pass",
+          "evidence": []
+        },
+        {
+          "class_id": "Privilege Escalation",
+          "id": "no_code_injection_via_proc_memory",
+          "description": "A process initiated code injection via /proc/{pid}/mem access.",
+          "result": "pass",
+          "evidence": []
+        }
+      ],
+      "counts": {
+        "associations": 11,
+        "processes": 5,
+        "destinations": 8,
+        "primary_names": 7,
+        "domains": 6,
+        "flows": 8
+      },
+      "edges": [
+        {
+          "remote_address": "140.82.113.23",
+          "remote_names": [
+            "140.82.113.23"
+          ],
+          "remote_ports": [
+            "443 (https)"
+          ],
+          "protocol": "TCP",
+          "result": "pass",
+          "detections": [
+            "flow"
+          ],
+          "lineage_recorded": true,
+          "pid": "1849",
+          "process": "hosted-compute-agent",
+          "ancestry": [
+            "systemd",
+            "hosted-compute-agent"
+          ],
+          "github_step": "99. Runner Processes",
+          "notes": []
+        },
+        {
+          "remote_address": "104.16.1.34",
+          "remote_names": [
+            "registry.npmjs.org"
+          ],
+          "remote_ports": [
+            "443 (https)"
+          ],
+          "protocol": "TCP",
+          "result": "attention",
+          "detections": [
+            "exec_from_unusual_dir",
+            "flow"
+          ],
+          "lineage_recorded": true,
+          "pid": "2361",
+          "process": "node",
+          "ancestry": [
+            "systemd",
+            "hosted-compute-agent",
+            "Runner.Listener",
+            "Runner.Worker",
+            "bash",
+            "node"
+          ],
+          "github_step": "4. Run workload (${{ matrix.job_name }})",
+          "notes": [
+            "detection: exec_from_unusual_dir"
+          ]
+        },
+        {
+          "remote_address": "127.0.0.53",
+          "remote_names": [
+            "localhost"
+          ],
+          "remote_ports": [
+            "53 (dns)"
+          ],
+          "protocol": "UDP",
+          "result": "attention",
+          "detections": [
+            "exec_from_unusual_dir",
+            "flow"
+          ],
+          "lineage_recorded": true,
+          "pid": "2361",
+          "process": "node",
+          "ancestry": [
+            "systemd",
+            "hosted-compute-agent",
+            "Runner.Listener",
+            "Runner.Worker",
+            "bash",
+            "node"
+          ],
+          "github_step": "4. Run workload (${{ matrix.job_name }})",
+          "notes": [
+            "dns resolver",
+            "detection: exec_from_unusual_dir"
+          ]
+        },
+        {
+          "remote_address": "104.16.8.34",
+          "remote_names": [
+            "registry.npmjs.org"
+          ],
+          "remote_ports": [
+            "443 (https)"
+          ],
+          "protocol": "TCP",
+          "result": "attention",
+          "detections": [
+            "exec_from_unusual_dir",
+            "flow"
+          ],
+          "lineage_recorded": true,
+          "pid": "2384",
+          "process": "node",
+          "ancestry": [
+            "systemd",
+            "hosted-compute-agent",
+            "Runner.Listener",
+            "Runner.Worker",
+            "bash",
+            "node",
+            "dash",
+            "node"
+          ],
+          "github_step": "4. Run workload (${{ matrix.job_name }})",
+          "notes": [
+            "detection: exec_from_unusual_dir"
+          ]
+        },
+        {
+          "remote_address": "104.26.10.16",
+          "remote_names": [
+            "api.garnet.ai"
+          ],
+          "remote_ports": [
+            "443 (https)"
+          ],
+          "protocol": "TCP",
+          "result": "attention",
+          "detections": [
+            "exec_from_unusual_dir",
+            "flow"
+          ],
+          "lineage_recorded": true,
+          "pid": "2384",
+          "process": "node",
+          "ancestry": [
+            "systemd",
+            "hosted-compute-agent",
+            "Runner.Listener",
+            "Runner.Worker",
+            "bash",
+            "node",
+            "dash",
+            "node"
+          ],
+          "github_step": "4. Run workload (${{ matrix.job_name }})",
+          "notes": [
+            "detection: exec_from_unusual_dir"
+          ]
+        },
+        {
+          "remote_address": "127.0.0.53",
+          "remote_names": [
+            "localhost"
+          ],
+          "remote_ports": [
+            "53 (dns)"
+          ],
+          "protocol": "UDP",
+          "result": "attention",
+          "detections": [
+            "exec_from_unusual_dir",
+            "flow"
+          ],
+          "lineage_recorded": true,
+          "pid": "2384",
+          "process": "node",
+          "ancestry": [
+            "systemd",
+            "hosted-compute-agent",
+            "Runner.Listener",
+            "Runner.Worker",
+            "bash",
+            "node",
+            "dash",
+            "node"
+          ],
+          "github_step": "4. Run workload (${{ matrix.job_name }})",
+          "notes": [
+            "dns resolver",
+            "detection: exec_from_unusual_dir"
+          ]
+        },
+        {
+          "remote_address": "140.82.113.3",
+          "remote_names": [
+            "github.com"
+          ],
+          "remote_ports": [
+            "443 (https)"
+          ],
+          "protocol": "TCP",
+          "result": "attention",
+          "detections": [
+            "exec_from_unusual_dir",
+            "flow"
+          ],
+          "lineage_recorded": true,
+          "pid": "2384",
+          "process": "node",
+          "ancestry": [
+            "systemd",
+            "hosted-compute-agent",
+            "Runner.Listener",
+            "Runner.Worker",
+            "bash",
+            "node",
+            "dash",
+            "node"
+          ],
+          "github_step": "4. Run workload (${{ matrix.job_name }})",
+          "notes": [
+            "detection: exec_from_unusual_dir"
+          ]
+        },
+        {
+          "remote_address": "100.52.37.185",
+          "remote_names": [
+            "httpbin.org"
+          ],
+          "remote_ports": [
+            "443 (https)"
+          ],
+          "protocol": "TCP",
+          "result": "pass",
+          "detections": [
+            "flow"
+          ],
+          "lineage_recorded": true,
+          "pid": "2396",
+          "process": "curl",
+          "ancestry": [
+            "systemd",
+            "hosted-compute-agent",
+            "Runner.Listener",
+            "Runner.Worker",
+            "bash",
+            "node",
+            "dash",
+            "node",
+            "dash",
+            "curl"
+          ],
+          "github_step": "4. Run workload (${{ matrix.job_name }})",
+          "notes": []
+        },
+        {
+          "remote_address": "127.0.0.53",
+          "remote_names": [
+            "localhost"
+          ],
+          "remote_ports": [
+            "53 (dns)"
+          ],
+          "protocol": "UDP",
+          "result": "attention",
+          "detections": [
+            "exec_from_unusual_dir",
+            "flow"
+          ],
+          "lineage_recorded": true,
+          "pid": "2396",
+          "process": "curl",
+          "ancestry": [
+            "systemd",
+            "hosted-compute-agent",
+            "Runner.Listener",
+            "Runner.Worker",
+            "bash",
+            "node",
+            "dash",
+            "node",
+            "dash",
+            "curl"
+          ],
+          "github_step": "4. Run workload (${{ matrix.job_name }})",
+          "notes": [
+            "dns resolver",
+            "detection: exec_from_unusual_dir"
+          ]
+        },
+        {
+          "remote_address": "127.0.0.53",
+          "remote_names": [
+            "localhost"
+          ],
+          "remote_ports": [
+            "53 (dns)"
+          ],
+          "protocol": "UDP",
+          "result": "attention",
+          "detections": [
+            "exec_from_unusual_dir",
+            "flow"
+          ],
+          "lineage_recorded": true,
+          "pid": "1864",
+          "process": "provjobd811584691",
+          "ancestry": [
+            "systemd",
+            "hosted-compute-agent",
+            "sudo",
+            "provjobd811584691"
+          ],
+          "github_step": "99. Runner Processes",
+          "notes": [
+            "dns resolver",
+            "detection: exec_from_unusual_dir"
+          ]
+        },
+        {
+          "remote_address": "140.82.114.23",
+          "remote_names": [
+            "hosted-compute-watchdog-prod-iad-02.githubapp",
+            "glb-2a3c35-public-internal.githubapp.com"
+          ],
+          "remote_ports": [
+            "443 (https)"
+          ],
+          "protocol": "TCP",
+          "result": "pass",
+          "detections": [
+            "flow"
+          ],
+          "lineage_recorded": true,
+          "pid": "1864",
+          "process": "provjobd811584691",
+          "ancestry": [
+            "systemd",
+            "hosted-compute-agent",
+            "sudo",
+            "provjobd811584691"
+          ],
+          "github_step": "99. Runner Processes",
+          "notes": []
+        }
+      ]
+    }
+  ]
+}

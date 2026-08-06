@@ -1,0 +1,170 @@
+{
+  "uuid": "65d9cef6-5dd0-5606-9453-b7113126034c",
+  "timestamp": "2026-07-01T01:53:29.303045005Z",
+  "metadata": {
+    "kind": "profile",
+    "name": "profile",
+    "format": "profile",
+    "version": "0.2.0",
+    "description": "Informational profile event",
+    "documentation": "https://jibril.garnet.ai/"
+  },
+  "scenarios": {
+    "github": {
+      "scenario_type": "github",
+      "action": "99. Runner Processes",
+      "id": "",
+      "actor": "devin-ai-integration[bot]",
+      "actor_id": "158243242",
+      "event_name": "pull_request",
+      "job": "runtime-review",
+      "ref": "refs/pull/22/merge",
+      "ref_name": "22/merge",
+      "ref_protected": "false",
+      "ref_type": "branch",
+      "repository": "garnet-labs/runtime-review-testbed",
+      "repository_id": "1272424980",
+      "repository_owner": "garnet-labs",
+      "repository_owner_id": "68412253",
+      "run_attempt": "1",
+      "run_id": "28488074733",
+      "run_number": "40",
+      "runner_arch": "X64",
+      "runner_os": "Linux",
+      "server_url": "https://github.com",
+      "sha": "f49a8476ccfe33c72428d0c471093a1c84f40124",
+      "triggering_actor": "devin-ai-integration[bot]",
+      "workflow": "Garnet Runtime Review",
+      "workflow_ref": "garnet-labs/runtime-review-testbed/.github/workflows/garnet-runtime-review.yml@refs/pull/22/merge",
+      "workflow_sha": "f49a8476ccfe33c72428d0c471093a1c84f40124",
+      "workspace": "/home/runner/work/runtime-review-testbed/runtime-review-testbed",
+      "created_at": "0001-01-01T00:00:00Z",
+      "updated_at": "0001-01-01T00:00:00Z"
+    }
+  },
+  "network": {
+    "egress": {
+      "peers": [
+        {
+          "result": "attention",
+          "detections": [
+            "exec_from_unusual_dir",
+            "flow"
+          ],
+          "protocol": "TCP",
+          "local_address": "10.1.1.112",
+          "remote_address": "104.16.5.34",
+          "local_names": [
+            "runnervmkkn4f",
+            "runnervmkkn4f.n2quayyzdxqexjlunlns3nw2md.bx.internal.cloudapp.net"
+          ],
+          "remote_names": [
+            "registry.npmjs.org"
+          ],
+          "remote_ports": [
+            "443 (https)"
+          ],
+          "proc_trees": [
+            {
+              "pid": 2377,
+              "process": "node",
+              "executable": "/opt/hostedtoolcache/node/20.20.2/x64/bin/node",
+              "arguments": "node /opt/hostedtoolcache/node/20.20.2/x64/bin/npm install",
+              "github_step": "3. Install dependencies",
+              "ancestry": [
+                "systemd",
+                "hosted-compute-agent",
+                "Runner.Listener",
+                "Runner.Worker",
+                "bash",
+                "node"
+              ]
+            }
+          ],
+          "remote_geo_info": {
+            "latitude": 43.6532,
+            "longitude": -79.3832,
+            "continent": "North America",
+            "continent_code": "NA",
+            "country": "Canada",
+            "country_code": "CA",
+            "region": "ON",
+            "region_name": "Ontario",
+            "city": "Toronto",
+            "isp": "Cloudflare, Inc.",
+            "org": "Cloudflare, Inc.",
+            "asname": "CLOUDFLARENET"
+          }
+        },
+        {
+          "result": "attention",
+          "detections": [
+            "exec_from_unusual_dir",
+            "flow"
+          ],
+          "protocol": "UDP",
+          "local_address": "127.0.0.1",
+          "remote_address": "127.0.0.53",
+          "local_names": [
+            "localhost"
+          ],
+          "remote_names": [
+            "localhost"
+          ],
+          "remote_ports": [
+            "53 (dns)"
+          ],
+          "proc_trees": [
+            {
+              "pid": 2377,
+              "process": "node",
+              "executable": "/opt/hostedtoolcache/node/20.20.2/x64/bin/node",
+              "arguments": "node /opt/hostedtoolcache/node/20.20.2/x64/bin/npm install",
+              "github_step": "3. Install dependencies",
+              "ancestry": [
+                "systemd",
+                "hosted-compute-agent",
+                "Runner.Listener",
+                "Runner.Worker",
+                "bash",
+                "node"
+              ]
+            }
+          ]
+        }
+      ],
+      "domains": [
+        "localhost",
+        "registry.npmjs.org"
+      ]
+    }
+  },
+  "telemetry": {
+    "network": {
+      "egress": {
+        "total_domains": 2,
+        "total_connections": 2
+      }
+    }
+  },
+  "assertions": [
+    {
+      "class_id": "Network Egress",
+      "assertion_id": "no_bad_egress_domain",
+      "result": "attention",
+      "id": "no_bad_egress_domain"
+    },
+    {
+      "class_id": "Stealth",
+      "assertion_id": "no_binary_execution_and_deletion",
+      "result": "pass",
+      "id": ""
+    },
+    {
+      "class_id": "Privilege Escalation",
+      "assertion_id": "no_code_injection_via_proc_memory",
+      "result": "pass",
+      "id": ""
+    }
+  ]
+}

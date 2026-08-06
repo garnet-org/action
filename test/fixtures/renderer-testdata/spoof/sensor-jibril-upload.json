@@ -1,0 +1,44 @@
+{
+  "_comment": "v6.3 positive control: jibril sensor agent uploading to api.garnet.ai — classifies as garnet upload.",
+  "uuid": "spoof-sensor-jibril-upload-0001",
+  "timestamp": "2026-07-09T00:00:00.000Z",
+  "scenarios": {
+    "github": {
+      "scenario_type": "github",
+      "job": "sensor-upload",
+      "workflow": "Garnet Runtime Review",
+      "repository": "garnet-org/runtime-review-testbed",
+      "run_id": "90000000003",
+      "run_number": "1",
+      "server_url": "https://github.com",
+      "sha": "cccccccccccccccccccccccccccccccccccccccc"
+    }
+  },
+  "network": {
+    "egress": {
+      "peers": [
+        {
+          "protocol": "TCP",
+          "remote_address": "104.26.11.16",
+          "remote_names": ["api.garnet.ai"],
+          "remote_ports": ["443 (https)"],
+          "proc_trees": [
+            {
+              "pid": 1,
+              "process": "jibril",
+              "ancestry": ["systemd", "jibril"]
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "telemetry": {
+    "network": {
+      "egress": {
+        "total_domains": 1,
+        "total_connections": 1
+      }
+    }
+  }
+}

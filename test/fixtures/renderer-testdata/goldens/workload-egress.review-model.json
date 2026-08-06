@@ -1,0 +1,195 @@
+{
+  "contractVersion": "6.6.1",
+  "repo": "garnet-org/runtime-review-testbed",
+  "sha": "ef01a52517e7532ab34aadea58b952c9f1e79ece",
+  "commitUrl": "https://github.com/garnet-org/runtime-review-testbed/commit/ef01a52517e7532ab34aadea58b952c9f1e79ece",
+  "appUrl": "https://app.garnet.ai",
+  "appMode": true,
+  "recordedThrough": "",
+  "counts": {
+    "jobs": 1,
+    "associations": 5,
+    "destinations": 4
+  },
+  "jobs": [
+    {
+      "name": "runtime-review",
+      "workflow": "Garnet Runtime Review",
+      "run_id": "28492112239",
+      "run_url": "https://github.com/garnet-labs/runtime-review-testbed/actions/runs/28492112239",
+      "job_url": "",
+      "profile_id": "019f1bca-e403-7ef6-ae2d-74c191dbff8e",
+      "uuid": "",
+      "timestamp": "",
+      "repository": "garnet-labs/runtime-review-testbed",
+      "sha": "ef01a52517e7532ab34aadea58b952c9f1e79ece",
+      "ref": "refs/pull/22/merge",
+      "actor": "devin-ai-integration[bot]",
+      "job_index": "",
+      "flow_count": 4,
+      "telemetry": {
+        "total_domains": 4,
+        "total_connections": 19
+      },
+      "telemetryDiscrepancies": [
+        {
+          "metric": "Connections",
+          "sensor": 19,
+          "derived": 4,
+          "derivedLabel": "recorded flows"
+        }
+      ],
+      "assertions": [],
+      "counts": {
+        "associations": 5,
+        "processes": 2,
+        "destinations": 4,
+        "primary_names": 4,
+        "domains": 4,
+        "flows": 4
+      },
+      "edges": [
+        {
+          "remote_address": "104.16.8.34",
+          "remote_names": [
+            "registry.npmjs.org",
+            "104.16.8.34"
+          ],
+          "remote_ports": [
+            "443"
+          ],
+          "protocol": "",
+          "result": "",
+          "detections": [],
+          "lineage_recorded": true,
+          "pid": "",
+          "process": "",
+          "ancestry": [
+            "systemd",
+            "hosted-compute-agent",
+            "Runner.Listener",
+            "Runner.Worker",
+            "bash",
+            "npm install"
+          ],
+          "github_step": "",
+          "notes": []
+        },
+        {
+          "remote_address": "104.16.8.34",
+          "remote_names": [
+            "registry.npmjs.org",
+            "104.16.8.34"
+          ],
+          "remote_ports": [
+            "443"
+          ],
+          "protocol": "",
+          "result": "",
+          "detections": [],
+          "lineage_recorded": true,
+          "pid": "",
+          "process": "",
+          "ancestry": [
+            "systemd",
+            "hosted-compute-agent",
+            "Runner.Listener",
+            "Runner.Worker",
+            "bash",
+            "npm test",
+            "sh",
+            "node"
+          ],
+          "github_step": "",
+          "notes": []
+        },
+        {
+          "remote_address": "104.26.11.16",
+          "remote_names": [
+            "api.garnet.ai",
+            "104.26.11.16"
+          ],
+          "remote_ports": [
+            "443"
+          ],
+          "protocol": "",
+          "result": "",
+          "detections": [],
+          "lineage_recorded": true,
+          "pid": "",
+          "process": "",
+          "ancestry": [
+            "systemd",
+            "hosted-compute-agent",
+            "Runner.Listener",
+            "Runner.Worker",
+            "bash",
+            "npm test",
+            "sh",
+            "node"
+          ],
+          "github_step": "",
+          "notes": []
+        },
+        {
+          "remote_address": "140.82.113.3",
+          "remote_names": [
+            "github.com",
+            "140.82.113.3"
+          ],
+          "remote_ports": [
+            "443"
+          ],
+          "protocol": "",
+          "result": "",
+          "detections": [],
+          "lineage_recorded": true,
+          "pid": "",
+          "process": "",
+          "ancestry": [
+            "systemd",
+            "hosted-compute-agent",
+            "Runner.Listener",
+            "Runner.Worker",
+            "bash",
+            "npm test",
+            "sh",
+            "node"
+          ],
+          "github_step": "",
+          "notes": []
+        },
+        {
+          "remote_address": "146.75.94.208",
+          "remote_names": [
+            "images.unsplash.com",
+            "146.75.94.208",
+            "dualstack.com.imgix.map.fastly.net",
+            "unsplash.imgix.net"
+          ],
+          "remote_ports": [
+            "443"
+          ],
+          "protocol": "",
+          "result": "",
+          "detections": [],
+          "lineage_recorded": true,
+          "pid": "",
+          "process": "",
+          "ancestry": [
+            "systemd",
+            "hosted-compute-agent",
+            "Runner.Listener",
+            "Runner.Worker",
+            "bash",
+            "npm test",
+            "sh",
+            "node"
+          ],
+          "github_step": "",
+          "notes": []
+        }
+      ]
+    }
+  ]
+}

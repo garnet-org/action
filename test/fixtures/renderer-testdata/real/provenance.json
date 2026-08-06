@@ -1,0 +1,72 @@
+{
+  "$schema": "runtime-review-fixture-provenance/v1",
+  "$note": "Hashes lock the exact fixture bytes. Historical capture versions marked unknown must not be inferred; the record-* and normal-v215 fixtures are explicit Jibril v2.15.0 producer evidence.",
+  "normal-run.json": {
+    "sha256": "6efce929c9448f7f1554f55fe05699b39ebf264a7c75ff36313134de410033b0",
+    "workflow_run": "28488074733",
+    "source_commit": "786a5bc8680486720bcf5dae13931de95d89b5ec",
+    "capture": "reconstructed historical flow-event stream",
+    "jibril_version": "unknown"
+  },
+  "npm-install-run.json": {
+    "sha256": "f6d97c42d836b020e4584090a9a41b6461d1b02b7fa5fbf0043269d634145982",
+    "workflow_run": "28488074733",
+    "source_commit": "f49a8476ccfe33c72428d0c471093a1c84f40124",
+    "capture": "historical Jibril profile",
+    "jibril_version": "unknown"
+  },
+  "record-docs-build.json": {
+    "sha256": "0f815c6fb12ff41de0be8b94ee40f56b4ba9a0595fc1a51a68ee9bb22dcd41d7",
+    "workflow_run": "29294366437",
+    "source_commit": "2d06364208370b94b4e3507439300ee506d8bd09",
+    "capture": "Jibril v2.15.0 matrix profile with post-export display-job label",
+    "jibril_version": "v2.15.0",
+    "job_index": 2
+  },
+  "record-install-only.json": {
+    "sha256": "dc2445ce0565bef8f361c8592966295048740854cd39f0f07c1c023250817e6c",
+    "workflow_run": "29294366437",
+    "source_commit": "2d06364208370b94b4e3507439300ee506d8bd09",
+    "capture": "Jibril v2.15.0 matrix profile with post-export display-job label",
+    "jibril_version": "v2.15.0",
+    "job_index": 1
+  },
+  "record-lint.json": {
+    "sha256": "73223de6523170218ce5662fc3e4d07a45b3699c01c31f5a5c65644fc9647089",
+    "workflow_run": "29294366437",
+    "source_commit": "2d06364208370b94b4e3507439300ee506d8bd09",
+    "capture": "Jibril v2.15.0 matrix profile with post-export display-job label",
+    "jibril_version": "v2.15.0",
+    "job_index": 3
+  },
+  "record-typecheck.json": {
+    "sha256": "d4d85a8e4de2e9a54ad86b186c51c147dd323a521683279669f6d41485d86f53",
+    "workflow_run": "29294366437",
+    "source_commit": "2d06364208370b94b4e3507439300ee506d8bd09",
+    "capture": "Jibril v2.15.0 matrix profile with post-export display-job label",
+    "jibril_version": "v2.15.0",
+    "job_index": 4
+  },
+  "record-workload-egress.json": {
+    "sha256": "25a235be667a6e70703e07f305a767001b36964c5258c07026ae8096323422d9",
+    "workflow_run": "29294366437",
+    "source_commit": "2d06364208370b94b4e3507439300ee506d8bd09",
+    "capture": "Jibril v2.15.0 matrix profile with post-export display-job label",
+    "jibril_version": "v2.15.0",
+    "job_index": 0
+  },
+  "normal-v215.json": {
+    "sha256": "96ee6df13b24f2e5d539543003aafe08c5fdea7fb3122bb369454754b7fba0cf",
+    "workflow_run": "29294366365",
+    "source_commit": "2d06364208370b94b4e3507439300ee506d8bd09",
+    "capture": "Jibril v2.15.0 non-matrix profile from the dev workflow",
+    "jibril_version": "v2.15.0"
+  },
+  "worth-a-look-run.json": {
+    "sha256": "b533ac3512ce52e2fb0398ebe3662114ef85213abcb1e2f955758feaab35916d",
+    "workflow_run": "28492112239",
+    "source_commit": "ef01a52517e7532ab34aadea58b952c9f1e79ece",
+    "capture": "reconstructed historical flow-event stream",
+    "jibril_version": "unknown"
+  }
+}

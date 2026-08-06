@@ -16447,26 +16447,21 @@ function gte(i, y) {
 function expand(str, max, isTop) {
   var expansions = [];
 
-  // The `{a},b}` rewrite below restarts expansion on a rewritten string with
-  // the same `max` and `isTop = true`. Loop instead of recursing so a long run
-  // of non-expanding `{}` groups can't exhaust the call stack.
-  for (;;) {
-    const m = balanced('{', '}', str)
-    if (!m) return [str]
+  var m = balanced('{', '}', str);
+  if (!m) return [str];
 
-    // no need to expand pre, since it is guaranteed to be free of brace-sets
-    const pre = m.pre
+  // no need to expand pre, since it is guaranteed to be free of brace-sets
+  var pre = m.pre;
+  var post = m.post.length
+    ? expand(m.post, max, false)
+    : [''];
 
-    if (/\$$/.test(m.pre)) {
-      const post =
-        m.post.length ? expand(m.post, max, false) : ['']
-      for (let k = 0; k < post.length && k < max; k++) {
-        const expansion = pre + '{' + m.body + '}' + post[k]
-        expansions.push(expansion)
-      }
-      return expansions
+  if (/\$$/.test(m.pre)) {    
+    for (var k = 0; k < post.length && k < max; k++) {
+      var expansion = pre+ '{' + m.body + '}' + post[k];
+      expansions.push(expansion);
     }
-
+  } else {
     var isNumericSequence = /^-?\d+\.\.-?\d+(?:\.\.-?\d+)?$/.test(m.body);
     var isAlphaSequence = /^[a-zA-Z]\.\.[a-zA-Z](?:\.\.-?\d+)?$/.test(m.body);
     var isSequence = isNumericSequence || isAlphaSequence;
@@ -16475,18 +16470,11 @@ function expand(str, max, isTop) {
       // {a},b}
       if (m.post.match(/,(?!,).*\}/)) {
         str = m.pre + '{' + m.body + escClose + m.post;
-        isTop = true;
-        continue;
+        return expand(str, max, true);
       }
       return [str];
     }
 
-    // Only expand post once we know this brace set actually expands. Computing
-    // it before the early returns above expanded post a second time on every
-    // non-expanding `{}`, which is what made inputs like `a{},{},{}...` blow up
-    // exponentially.
-    const post =
-      m.post.length ? expand(m.post, max, false) : ['']
     var n;
     if (isSequence) {
       n = m.body.split(/\.\./);
@@ -16560,9 +16548,9 @@ function expand(str, max, isTop) {
           expansions.push(expansion);
       }
     }
-
-    return expansions;
   }
+
+  return expansions;
 }
 
 
@@ -43286,13 +43274,7 @@ function processHeader (request, key, val) {
       } else if (typeof val[i] === 'object') {
         throw new InvalidArgumentError(`invalid ${key} header`)
       } else {
-        // Coerce primitives (and reject unsafe coercions such as functions
-        // with a crafted toString/Symbol.toPrimitive).
-        const str = `${val[i]}`
-        if (!isValidHeaderValue(str)) {
-          throw new InvalidArgumentError(`invalid ${key} header`)
-        }
-        arr.push(str)
+        arr.push(`${val[i]}`)
       }
     }
     val = arr
@@ -43303,12 +43285,7 @@ function processHeader (request, key, val) {
   } else if (val === null) {
     val = ''
   } else {
-    // Coerce primitives (and reject unsafe coercions such as functions
-    // with a crafted toString/Symbol.toPrimitive).
     val = `${val}`
-    if (!isValidHeaderValue(val)) {
-      throw new InvalidArgumentError(`invalid ${key} header`)
-    }
   }
 
   if (headerName === 'host') {
@@ -44680,7 +44657,6 @@ const {
   RequestContentLengthMismatchError,
   ResponseContentLengthMismatchError,
   RequestAbortedError,
-  InvalidArgumentError,
   HeadersTimeoutError,
   HeadersOverflowError,
   SocketError,
@@ -45664,16 +45640,8 @@ function writeH1 (client, request) {
     }
     body = bodyStream.stream
     contentLength = bodyStream.length
-  } else if (util.isBlobLike(body) && request.contentType == null) {
-    const contentType = body.type
-    if (contentType) {
-      const contentTypeValue = `${contentType}`
-      if (!util.isValidHeaderValue(contentTypeValue)) {
-        util.errorRequest(client, request, new InvalidArgumentError('invalid content-type header'))
-        return false
-      }
-      headers.push('content-type', contentTypeValue)
-    }
+  } else if (util.isBlobLike(body) && request.contentType == null && body.type) {
+    headers.push('content-type', body.type)
   }
 
   if (body && typeof body.read === 'function') {
@@ -49146,28 +49114,6 @@ function calculateRetryAfterHeader (retryAfter) {
   return new Date(retryAfter).getTime() - current
 }
 
-function validatePartialResponseContentLength (headers, range, statusCode, retryCount) {
-  const contentLength = headers['content-length']
-  if (contentLength == null) {
-    return null
-  }
-
-  if (!Number.isFinite(range.start) || !Number.isFinite(range.end)) {
-    return null
-  }
-
-  const length = Number(contentLength)
-  const expectedLength = range.end - range.start + 1
-  if (!Number.isFinite(length) || length !== expectedLength) {
-    return new RequestRetryError('Content-Length mismatch', statusCode, {
-      headers,
-      data: { count: retryCount }
-    })
-  }
-
-  return null
-}
-
 class RetryHandler {
   constructor (opts, handlers) {
     const { retryOptions, ...dispatchOpts } = opts
@@ -49382,12 +49328,6 @@ class RetryHandler {
         return false
       }
 
-      const contentLengthError = validatePartialResponseContentLength(headers, contentRange, statusCode, this.retryCount)
-      if (contentLengthError != null) {
-        this.abort(contentLengthError)
-        return false
-      }
-
       const { start, size, end = size - 1 } = contentRange
 
       assert(this.start === start, 'content-range mismatch')
@@ -49409,12 +49349,6 @@ class RetryHandler {
             resume,
             statusMessage
           )
-        }
-
-        const contentLengthError = validatePartialResponseContentLength(headers, range, statusCode, this.retryCount)
-        if (contentLengthError != null) {
-          this.abort(contentLengthError)
-          return false
         }
 
         const { start, size, end = size - 1 } = range
@@ -53661,7 +53595,7 @@ function validateCookiePath (path) {
 
     if (
       code < 0x20 || // exclude CTLs (0-31)
-      code > 0x7E || // exclude DEL and non-ascii
+      code === 0x7F || // DEL
       code === 0x3B // ;
     ) {
       throw new Error('Invalid cookie path')
@@ -53670,80 +53604,16 @@ function validateCookiePath (path) {
 }
 
 /**
- * <let-dig> ::= <letter> | <digit>
- *
- * <letter> ::= any one of the 52 alphabetic characters A through Z in
- * upper case and a through z in lower case
- *
- * <digit> ::= any one of the ten digits 0 through 9r
- *
- * @see https://www.rfc-editor.org/rfc/rfc1034#section-3.5
- * @param {number} code
- */
-function isLetterOrDigit (code) {
-  return (
-    (code >= 0x30 && code <= 0x39) || // 0-9
-    (code >= 0x41 && code <= 0x5A) || // A-Z
-    (code >= 0x61 && code <= 0x7A) // a-z
-  )
-}
-
-/**
- * Validates a cookie domain against the "preferred name syntax".
- *
- * <domain>      ::= <subdomain> | " "
- * <subdomain>   ::= <label> | <subdomain> "." <label>
- * <label>       ::= <let-dig> [ [ <ldh-str> ] <let-dig> ]
- * <ldh-str>     ::= <let-dig-hyp> | <let-dig-hyp> <ldh-str>
- * <let-dig-hyp> ::= <let-dig> | "-"
- *
- * @see https://www.rfc-editor.org/rfc/rfc1034#section-3.5
- * @see https://www.rfc-editor.org/rfc/rfc1123#section-2.1
- * @see https://www.rfc-editor.org/rfc/rfc1035#section-2.3.4
+ * I have no idea why these values aren't allowed to be honest,
+ * but Deno tests these. - Khafra
  * @param {string} domain
  */
 function validateCookieDomain (domain) {
-  // <domain> ::= <subdomain> | " "
-  if (domain === ' ') {
-    return
-  }
-
-  if (domain.length > 255) {
-    throw new Error('Invalid cookie domain')
-  }
-
-  let labelLength = 0
-
-  for (let i = 0; i < domain.length; ++i) {
-    const code = domain.charCodeAt(i)
-
-    if (code === 0x2E) {
-      if (labelLength === 0) {
-        throw new Error('Invalid cookie domain')
-      }
-
-      if (domain.charCodeAt(i - 1) === 0x2D) { // "-"
-        throw new Error('Invalid cookie domain')
-      }
-
-      labelLength = 0
-      continue
-    }
-
-    if (labelLength === 0 && !isLetterOrDigit(code)) {
-      throw new Error('Invalid cookie domain')
-    }
-
-    if (!isLetterOrDigit(code) && code !== 0x2D) { // "-"
-      throw new Error('Invalid cookie domain')
-    }
-
-    if (++labelLength > 63) {
-      throw new Error('Invalid cookie domain')
-    }
-  }
-
-  if (labelLength === 0 || domain.charCodeAt(domain.length - 1) === 0x2D) { // "-"
+  if (
+    domain.startsWith('-') ||
+    domain.endsWith('.') ||
+    domain.endsWith('-')
+  ) {
     throw new Error('Invalid cookie domain')
   }
 }
@@ -53886,13 +53756,7 @@ function stringify (cookie) {
 
     const [key, ...value] = part.split('=')
 
-    const trimmedKey = key.trim()
-    const joinedValue = value.join('=')
-
-    validateCookieName(trimmedKey)
-    validateCookieValue(joinedValue)
-
-    out.push(`${trimmedKey}=${joinedValue}`)
+    out.push(`${key.trim()}=${value.join('=')}`)
   }
 
   return out.join('; ')
@@ -69516,7 +69380,7 @@ exports.w = {
 
 /***/ }),
 
-/***/ 9437:
+/***/ 8914:
 /***/ ((__unused_webpack_module, exports) => {
 
 var __webpack_unused_export__;
@@ -69533,7 +69397,7 @@ exports.w = void 0;
 exports.w = {
     instrumenterImplementation: undefined,
 };
-//# sourceMappingURL=state-cjs.js.map
+//# sourceMappingURL=state-cjs.cjs.map
 
 /***/ }),
 
@@ -81398,7 +81262,7 @@ function getOptionalNumber(value) {
  * @param {...unknown} values
  * @returns {string}
  */
-function shared_firstNonEmptyString(...values) {
+function firstNonEmptyString(...values) {
   for (const value of values) {
     if (typeof value === "string" && value !== "") {
       return value
@@ -84263,7 +84127,7 @@ function httpHeaders_createHttpHeaders(rawHeaders) {
  * @returns RFC4122 v4 UUID.
  */
 function randomUUID() {
-    return globalThis.crypto.randomUUID();
+    return crypto.randomUUID();
 }
 //# sourceMappingURL=uuidUtils.js.map
 ;// CONCATENATED MODULE: ./node_modules/@typespec/ts-http-runtime/dist/esm/pipelineRequest.js
@@ -85272,7 +85136,7 @@ function logPolicy_logPolicy(options = {}) {
             logger(`Request: ${sanitizer.sanitize(request)}`);
             const response = await next(request);
             logger(`Response status code: ${response.status}`);
-            logger(`Headers: ${sanitizer.sanitize({ headers: response.headers })}`);
+            logger(`Headers: ${sanitizer.sanitize(response.headers)}`);
             return response;
         },
     };
@@ -85377,7 +85241,7 @@ function userAgentPolicy_userAgentPolicy(options = {}) {
  * @param min - The smallest integer value allowed.
  * @param max - The largest integer value allowed.
  */
-function getRandomIntegerInclusive(min, max) {
+function random_getRandomIntegerInclusive(min, max) {
     // Make sure inputs are integers.
     min = Math.ceil(min);
     max = Math.floor(max);
@@ -85405,7 +85269,7 @@ function calculateRetryDelay(retryAttempt, config) {
     const clampedDelay = Math.min(config.maxRetryDelayInMs, exponentialDelay);
     // Allow the final value to have some "jitter" (within 50% of the delay size) so
     // that retries across multiple clients don't occur simultaneously.
-    const retryAfterInMs = clampedDelay / 2 + getRandomIntegerInclusive(0, clampedDelay / 2);
+    const retryAfterInMs = clampedDelay / 2 + random_getRandomIntegerInclusive(0, clampedDelay / 2);
     return { retryAfterInMs };
 }
 //# sourceMappingURL=delay.js.map
@@ -85610,7 +85474,7 @@ function isSystemError(err) {
 ;// CONCATENATED MODULE: ./node_modules/@typespec/ts-http-runtime/dist/esm/constants.js
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
-const constants_SDK_VERSION = "0.3.7";
+const constants_SDK_VERSION = "0.3.6";
 const constants_DEFAULT_RETRY_POLICY_COUNT = 3;
 //# sourceMappingURL=constants.js.map
 ;// CONCATENATED MODULE: ./node_modules/@typespec/ts-http-runtime/dist/esm/policies/retryPolicy.js
@@ -87403,7 +87267,7 @@ async function util_userAgentPlatform_setPlatformSpecificData(map) {
 ;// CONCATENATED MODULE: ./node_modules/@azure/core-rest-pipeline/dist/esm/constants.js
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
-const esm_constants_SDK_VERSION = "1.25.0";
+const esm_constants_SDK_VERSION = "1.24.0";
 const esm_constants_DEFAULT_RETRY_POLICY_COUNT = 3;
 //# sourceMappingURL=constants.js.map
 ;// CONCATENATED MODULE: ./node_modules/@azure/core-rest-pipeline/dist/esm/util/userAgent.js
@@ -87728,30 +87592,20 @@ async function computeSha256Hash(content, encoding) {
 //# sourceMappingURL=internal.js.map
 ;// CONCATENATED MODULE: ./node_modules/@azure/abort-controller/dist/esm/AbortError.js
 // Copyright (c) Microsoft Corporation.
-// Licensed under the MIT License.
+// Licensed under the MIT license.
 /**
  * This error is thrown when an asynchronous operation has been aborted.
  * Check for this error by testing the `name` that the name property of the
  * error matches `"AbortError"`.
  *
  * @example
- * ```ts snippet:AbortErrorSample
- * import { AbortError } from "@azure/abort-controller";
- *
- * async function doAsyncWork(options: { abortSignal: AbortSignal }): Promise<void> {
- *   if (options.abortSignal.aborted) {
- *     throw new AbortError();
- *   }
- *
- *   // do async work
- * }
- *
+ * ```ts
  * const controller = new AbortController();
  * controller.abort();
  * try {
- *   doAsyncWork({ abortSignal: controller.signal });
+ *   doAsyncWork(controller.signal)
  * } catch (e) {
- *   if (e instanceof Error && e.name === "AbortError") {
+ *   if (e.name === 'AbortError') {
  *     // handle abort error here.
  *   }
  * }
@@ -87766,7 +87620,7 @@ class AbortError_AbortError extends Error {
 //# sourceMappingURL=AbortError.js.map
 ;// CONCATENATED MODULE: ./node_modules/@azure/abort-controller/dist/esm/index.js
 // Copyright (c) Microsoft Corporation.
-// Licensed under the MIT License.
+// Licensed under the MIT license.
 
 //# sourceMappingURL=index.js.map
 ;// CONCATENATED MODULE: ./node_modules/@azure/core-util/dist/esm/createAbortablePromise.js
@@ -87816,6 +87670,7 @@ function createAbortablePromise(buildPromise, options) {
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
+
 const delay_StandardAbortMessage = "The delay was aborted.";
 /**
  * A wrapper for setTimeout that resolves a promise after timeInMs milliseconds.
@@ -87833,6 +87688,22 @@ function delay_delay(timeInMs, options) {
         abortSignal,
         abortErrorMsg: abortErrorMsg ?? delay_StandardAbortMessage,
     });
+}
+/**
+ * Calculates the delay interval for retry attempts using exponential delay with jitter.
+ * @param retryAttempt - The current retry attempt number.
+ * @param config - The exponential retry configuration.
+ * @returns An object containing the calculated retry delay.
+ */
+function delay_calculateRetryDelay(retryAttempt, config) {
+    // Exponentially increase the delay each time
+    const exponentialDelay = config.retryDelayInMs * Math.pow(2, retryAttempt);
+    // Don't let the delay exceed the maximum
+    const clampedDelay = Math.min(config.maxRetryDelayInMs, exponentialDelay);
+    // Allow the final value to have some "jitter" (within 50% of the delay size) so
+    // that retries across multiple clients don't occur simultaneously.
+    const retryAfterInMs = clampedDelay / 2 + getRandomIntegerInclusive(0, clampedDelay / 2);
+    return { retryAfterInMs };
 }
 //# sourceMappingURL=delay.js.map
 ;// CONCATENATED MODULE: ./node_modules/@azure/core-util/dist/esm/error.js
@@ -88131,8 +88002,8 @@ class TracingContextImpl {
     }
 }
 //# sourceMappingURL=tracingContext.js.map
-// EXTERNAL MODULE: ./node_modules/@azure/core-tracing/dist/commonjs/state-cjs.js
-var state_cjs = __nccwpck_require__(9437);
+// EXTERNAL MODULE: ./node_modules/@azure/core-tracing/dist/commonjs/state.js
+var commonjs_state = __nccwpck_require__(8914);
 ;// CONCATENATED MODULE: ./node_modules/@azure/core-tracing/dist/esm/state.js
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
@@ -88142,7 +88013,7 @@ var state_cjs = __nccwpck_require__(9437);
 /**
  * Defines the shared state between CJS and ESM by re-exporting the CJS state.
  */
-const state_state = state_cjs/* state */.w;
+const state_state = commonjs_state/* state */.w;
 //# sourceMappingURL=state.js.map
 ;// CONCATENATED MODULE: ./node_modules/@azure/core-tracing/dist/esm/instrumenter.js
 // Copyright (c) Microsoft Corporation.
@@ -88224,8 +88095,8 @@ function createTracingClient(options) {
     function startSpan(name, operationOptions, spanOptions) {
         const startSpanResult = getInstrumenter().startSpan(name, {
             ...spanOptions,
-            packageName,
-            packageVersion,
+            packageName: packageName,
+            packageVersion: packageVersion,
             tracingContext: operationOptions?.tracingOptions?.tracingContext,
         });
         let tracingContext = startSpanResult.tracingContext;
@@ -88245,7 +88116,7 @@ function createTracingClient(options) {
     async function withSpan(name, operationOptions, callback, spanOptions) {
         const { span, updatedOptions } = startSpan(name, operationOptions, spanOptions);
         try {
-            const result = await withContext(updatedOptions.tracingOptions.tracingContext, () => callback(updatedOptions, span));
+            const result = await withContext(updatedOptions.tracingOptions.tracingContext, () => Promise.resolve(callback(updatedOptions, span)));
             span.setStatus({ status: "success" });
             return result;
         }
@@ -89323,6 +89194,22 @@ function isSASCredential(credential) {
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 /**
+ * @internal
+ * @param accessToken - Access token
+ * @returns Whether a token is bearer type or not
+ */
+function isBearerToken(accessToken) {
+    return !accessToken.tokenType || accessToken.tokenType === "Bearer";
+}
+/**
+ * @internal
+ * @param accessToken - Access token
+ * @returns Whether a token is Pop token or not
+ */
+function isPopToken(accessToken) {
+    return accessToken.tokenType === "pop";
+}
+/**
  * Tests an object to determine whether it implements TokenCredential.
  *
  * @param credential - The assumed TokenCredential to be tested.
@@ -89353,7 +89240,7 @@ const disableKeepAlivePolicyName = "DisableKeepAlivePolicy";
 function createDisableKeepAlivePolicy() {
     return {
         name: disableKeepAlivePolicyName,
-        sendRequest(request, next) {
+        async sendRequest(request, next) {
             request.disableKeepAlive = true;
             return next(request);
         },
@@ -90488,7 +90375,7 @@ const MapperTypeNames = {
 };
 //# sourceMappingURL=serializer.js.map
 // EXTERNAL MODULE: ./node_modules/@azure/core-client/dist/commonjs/state-cjs.js
-var commonjs_state_cjs = __nccwpck_require__(30);
+var state_cjs = __nccwpck_require__(30);
 ;// CONCATENATED MODULE: ./node_modules/@azure/core-client/dist/esm/state.js
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
@@ -90498,7 +90385,7 @@ var commonjs_state_cjs = __nccwpck_require__(30);
 /**
  * Defines the shared state between CJS and ESM by re-exporting the CJS state.
  */
-const esm_state_state = commonjs_state_cjs/* state */.w;
+const esm_state_state = state_cjs/* state */.w;
 //# sourceMappingURL=state.js.map
 ;// CONCATENATED MODULE: ./node_modules/@azure/core-client/dist/esm/operationHelpers.js
 // Copyright (c) Microsoft Corporation.
@@ -91687,22 +91574,6 @@ const util_originalRequestSymbol = Symbol("Original PipelineRequest");
 // cloned but we need to retrieve the OperationSpec and OperationArguments from the
 // original request.
 const originalClientRequestSymbol = Symbol.for("@azure/core-client original request");
-const passThroughProps = new Set([
-    "url",
-    "method",
-    "withCredentials",
-    "timeout",
-    "requestId",
-    "abortSignal",
-    "body",
-    "formData",
-    "onDownloadProgress",
-    "onUploadProgress",
-    "proxySettings",
-    "streamResponseStatusCodes",
-    "agent",
-    "requestOverrides",
-]);
 function toPipelineRequest(webResource, options = {}) {
     const compatWebResource = webResource;
     const request = compatWebResource[util_originalRequestSymbol];
@@ -91786,7 +91657,23 @@ function toWebResourceLike(request, options) {
                 if (prop === "keepAlive") {
                     request.disableKeepAlive = !value;
                 }
-                if (typeof prop === "string" && passThroughProps.has(prop)) {
+                const passThroughProps = [
+                    "url",
+                    "method",
+                    "withCredentials",
+                    "timeout",
+                    "requestId",
+                    "abortSignal",
+                    "body",
+                    "formData",
+                    "onDownloadProgress",
+                    "onUploadProgress",
+                    "proxySettings",
+                    "streamResponseStatusCodes",
+                    "agent",
+                    "requestOverrides",
+                ];
+                if (typeof prop === "string" && passThroughProps.includes(prop)) {
                     request[prop] = value;
                 }
                 return Reflect.set(target, prop, value, receiver);
@@ -92608,29 +92495,26 @@ class Matcher {
 
     // Get or create sibling tracking for current level
     const currentLevel = this.path.length;
-    let level = this.siblingStacks[currentLevel];
-    if (!level) {
-      // `counts` tells same-name siblings apart (the "counter" — nth <item>
-      // among other <item>s). `total` is every child seen at this level so
-      // far, kept as a running number instead of re-added from `counts` on
-      // every push — a parent with many differently-named children would
-      // otherwise cost more per child the more distinct names it has.
-      level = { counts: new Map(), total: 0 };
-      this.siblingStacks[currentLevel] = level;
+    if (!this.siblingStacks[currentLevel]) {
+      this.siblingStacks[currentLevel] = new Map();
     }
+
+    const siblings = this.siblingStacks[currentLevel];
 
     // Create a unique key for sibling tracking that includes namespace
     const siblingKey = namespace ? `${namespace}:${tagName}` : tagName;
 
     // Calculate counter (how many times this tag appeared at this level)
-    const counter = level.counts.get(siblingKey) || 0;
+    const counter = siblings.get(siblingKey) || 0;
 
-    // Position = total children at this level seen before this one.
-    const position = level.total;
+    // Calculate position (total children at this level so far)
+    let position = 0;
+    for (const count of siblings.values()) {
+      position += count;
+    }
 
-    // Update sibling count for this tag, and the level's running total.
-    level.counts.set(siblingKey, counter + 1);
-    level.total++;
+    // Update sibling count for this tag
+    siblings.set(siblingKey, counter + 1);
 
     // Create new node
     const node = {
@@ -93006,7 +92890,7 @@ class Matcher {
   snapshot() {
     return {
       path: this.path.map(node => ({ ...node })),
-      siblingStacks: this.siblingStacks.map(level => level ? { counts: new Map(level.counts), total: level.total } : level),
+      siblingStacks: this.siblingStacks.map(map => new Map(map)),
       keptAttrs: this._keptAttrs.map(entry => ({ ...entry }))
     };
   }
@@ -93018,7 +92902,7 @@ class Matcher {
   restore(snapshot) {
     this._pathStringCache = null;
     this.path = snapshot.path.map(node => ({ ...node }));
-    this.siblingStacks = snapshot.siblingStacks.map(level => level ? { counts: new Map(level.counts), total: level.total } : level);
+    this.siblingStacks = snapshot.siblingStacks.map(map => new Map(map));
     this._keptAttrs = (snapshot.keptAttrs || []).map(entry => ({ ...entry }));
   }
 
@@ -93173,36 +93057,8 @@ const buildRegexes = (startChar, char, flags = '') => {
 const regexes10 = buildRegexes(nameStartChar10, nameChar10);       // no /u — BMP only
 const regexes11 = buildRegexes(nameStartChar11, nameChar11, 'u');  // /u — enables \u{10000}-\u{EFFFF}
 
-// ---------------------------------------------------------------------------
-// ASCII-only fast path (opt-in, off by default)
-//
-// The XML 1.0 vs 1.1 NameStartChar/NameChar productions differ *only* in
-// their non-ASCII ranges (merged vs split Latin-1 ranges, \u0487, and
-// supplementary planes). Restricted to ASCII, both versions collapse to the
-// same character classes, so a single regex pair covers both xmlVersion
-// values — no /u flag needed.
-//
-// Rationale: unicode-aware regexes (the /u flag, required for XML 1.1's
-// supplementary-plane range) are measurably slower in V8 than plain
-// non-unicode regexes on the same input, even when the input is pure ASCII.
-// For the common case — HTML/SVG ids, XML tags — names are ASCII, so callers
-// who know this can opt in to skip the unicode-aware matching path entirely.
-// This is a real but *conditional* win: mainly for XML 1.1 input (avoids /u),
-// or at scale where the larger unicode character classes add engine
-// overhead. It also changes behaviour (rejects legitimate non-ASCII XML
-// 1.0/1.1 names), so it must never be silently enabled — hence off by
-// default.
-// ---------------------------------------------------------------------------
-
-const nameStartCharAscii = ':A-Za-z_';
-const nameCharAscii = nameStartCharAscii + '\\-\\.\\d';
-
-const regexesAscii = buildRegexes(nameStartCharAscii, nameCharAscii); // no /u — ASCII only
-
-const getRegexes = (xmlVersion = '1.0', asciiOnly = false) => {
-  if (asciiOnly) return regexesAscii;
-  return xmlVersion === '1.1' ? regexes11 : regexes10;
-};
+const getRegexes = (xmlVersion = '1.0') =>
+  xmlVersion === '1.1' ? regexes11 : regexes10;
 
 // ---------------------------------------------------------------------------
 // Boolean validators
@@ -93212,131 +93068,57 @@ const getRegexes = (xmlVersion = '1.0', asciiOnly = false) => {
  * Returns true if the string is a valid XML Name.
  * Colons are allowed anywhere (Name production).
  * Used for: DOCTYPE entity names, notation names, DTD element declarations.
- *
- * @param {{ xmlVersion?: '1.0'|'1.1', asciiOnly?: boolean }} [opts]
- *   asciiOnly: skip unicode-aware matching, ASCII names only (default false).
  */
-const src_name = (str, { xmlVersion = '1.0', asciiOnly = false } = {}) =>
-  getRegexes(xmlVersion, asciiOnly).name.test(str);
+const src_name = (str, { xmlVersion = '1.0' } = {}) =>
+  getRegexes(xmlVersion).name.test(str);
 
 /**
  * Returns true if the string is a valid NCName (Non-Colonized Name).
  * Colons are not permitted.
  * Used for: namespace prefixes, local names, SVG id attributes.
- *
- * @param {{ xmlVersion?: '1.0'|'1.1', asciiOnly?: boolean }} [opts]
- *   asciiOnly: skip unicode-aware matching, ASCII names only (default false).
  */
-const ncName = (str, { xmlVersion = '1.0', asciiOnly = false } = {}) =>
-  getRegexes(xmlVersion, asciiOnly).ncName.test(str);
+const ncName = (str, { xmlVersion = '1.0' } = {}) =>
+  getRegexes(xmlVersion).ncName.test(str);
 
 /**
  * Returns true if the string is a valid QName (Qualified Name).
  * Allows exactly one colon as a prefix separator: prefix:localName.
  * Used for: element and attribute names in namespace-aware XML/SVG.
- *
- * @param {{ xmlVersion?: '1.0'|'1.1', asciiOnly?: boolean }} [opts]
- *   asciiOnly: skip unicode-aware matching, ASCII names only (default false).
  */
-const qName = (str, { xmlVersion = '1.0', asciiOnly = false } = {}) =>
-  getRegexes(xmlVersion, asciiOnly).qName.test(str);
+const qName = (str, { xmlVersion = '1.0' } = {}) =>
+  getRegexes(xmlVersion).qName.test(str);
 
 /**
  * Returns true if the string is a valid NMToken.
  * Like Name but no restriction on the first character.
  * Used for: DTD NMTOKEN attribute values.
- *
- * @param {{ xmlVersion?: '1.0'|'1.1', asciiOnly?: boolean }} [opts]
- *   asciiOnly: skip unicode-aware matching, ASCII names only (default false).
  */
-const nmToken = (str, { xmlVersion = '1.0', asciiOnly = false } = {}) =>
-  getRegexes(xmlVersion, asciiOnly).nmToken.test(str);
+const nmToken = (str, { xmlVersion = '1.0' } = {}) =>
+  getRegexes(xmlVersion).nmToken.test(str);
 
 /**
  * Returns true if the string is a valid NMTokens value.
  * A whitespace-separated list of NMToken values.
  * Used for: DTD NMTOKENS attribute values.
- *
- * @param {{ xmlVersion?: '1.0'|'1.1', asciiOnly?: boolean }} [opts]
- *   asciiOnly: skip unicode-aware matching, ASCII names only (default false).
  */
-const nmTokens = (str, { xmlVersion = '1.0', asciiOnly = false } = {}) =>
-  getRegexes(xmlVersion, asciiOnly).nmTokens.test(str);
-
-// ---------------------------------------------------------------------------
-// Memoized validator factory
-//
-// Real documents reuse a small vocabulary of tag/attribute names across many
-// siblings (e.g. `id`, `class`, `href` repeated across hundreds of elements).
-// The plain boolean validators above re-run the regex on every call
-// regardless of repeats. `createValidator` returns a closure with a private
-// string -> boolean cache, so repeated names after the first become O(1)
-// lookups instead of regex tests.
-//
-// - opts (xmlVersion, asciiOnly) are fixed at creation time, so the regex is
-//   resolved once, not on every call.
-// - The cache is private to the returned closure — no shared/global state,
-//   no cross-caller pollution.
-// - `maxCacheSize` bounds memory: once the cache reaches this many entries,
-//   it stops accepting new ones (existing entries keep serving hits; new
-//   misses just fall through to the regex, uncached). This avoids unbounded
-//   growth against adversarial/high-cardinality input (e.g. validating
-//   attacker-supplied names with no repeats) without the cost/complexity of
-//   a full LRU, and without the perf cliff of reset-and-refill thrashing.
-// - Call `.reset()` on the returned function to clear the cache manually
-//   (e.g. between unrelated parse calls).
-// ---------------------------------------------------------------------------
-
-const PRODUCTIONS = ['name', 'ncName', 'qName', 'nmToken', 'nmTokens'];
-
-/**
- * Returns a memoized boolean validator function for a single production,
- * with opts fixed at creation time.
- *
- * @param {'name'|'ncName'|'qName'|'nmToken'|'nmTokens'} production
- * @param {{ xmlVersion?: '1.0'|'1.1', asciiOnly?: boolean, maxCacheSize?: number }} [opts]
- *   maxCacheSize: max number of distinct strings to cache (default 2048).
- *   Once reached, new strings are validated but not cached; existing cached
- *   entries keep being served.
- * @returns {((str: string) => boolean) & { reset: () => void }}
- */
-const createValidator = (production, { xmlVersion = '1.0', asciiOnly = false, maxCacheSize = 2048 } = {}) => {
-  if (!PRODUCTIONS.includes(production)) {
-    throw new TypeError(
-      `Unknown production "${production}". Must be one of: ${PRODUCTIONS.join(', ')}`
-    );
-  }
-
-  const regex = getRegexes(xmlVersion, asciiOnly)[production];
-  let cache = new Map();
-
-  const validator = (str) => {
-    const cached = cache.get(str);
-    if (cached !== undefined) return cached;
-
-    const result = regex.test(str);
-    if (cache.size < maxCacheSize) cache.set(str, result);
-    return result;
-  };
-
-  validator.reset = () => { cache = new Map(); };
-
-  return validator;
-};
+const nmTokens = (str, { xmlVersion = '1.0' } = {}) =>
+  getRegexes(xmlVersion).nmTokens.test(str);
 
 // ---------------------------------------------------------------------------
 // Diagnostic validator
 // ---------------------------------------------------------------------------
+
+const PRODUCTIONS = (/* unused pure expression or super */ null && (['name', 'ncName', 'qName', 'nmToken', 'nmTokens']));
 
 /**
  * Validates a string against a named production and returns a detailed result.
  *
  * @param {string} str
  * @param {'name'|'ncName'|'qName'|'nmToken'|'nmTokens'} production
- * @param {{ xmlVersion?: '1.0'|'1.1', asciiOnly?: boolean }} [opts]
+ * @param {{ xmlVersion?: '1.0'|'1.1' }} [opts]
  * @returns {{ valid: boolean, production: string, input: string, reason?: string, position?: number }}
  */
-const validate = (str, production, { xmlVersion = '1.0', asciiOnly = false } = {}) => {
+const validate = (str, production, { xmlVersion = '1.0' } = {}) => {
   if (!PRODUCTIONS.includes(production)) {
     throw new TypeError(
       `Unknown production "${production}". Must be one of: ${PRODUCTIONS.join(', ')}`
@@ -93344,19 +93126,12 @@ const validate = (str, production, { xmlVersion = '1.0', asciiOnly = false } = {
   }
 
   const validators = { name: src_name, ncName, qName, nmToken, nmTokens };
-  const isValid = validators[production](str, { xmlVersion, asciiOnly });
+  const isValid = validators[production](str, { xmlVersion });
 
   if (isValid) return { valid: true, production, input: str };
 
   let reason = 'Does not match the production rules';
   let position;
-
-  // Diagnostic fallback char checks must mirror the same character set the
-  // boolean validator above used, or the reported reason/position could
-  // contradict the `valid: false` result (e.g. flagging a char as illegal
-  // that the unicode-aware check would have accepted).
-  const startCharPattern = asciiOnly ? /^[:A-Za-z_]/ : /^[:A-Za-z_\u00C0-\uFFFD]/;
-  const namePattern = asciiOnly ? /[\w\-\\.:]/ : /[\w\-\\.:\u00B7\u00C0-\uFFFD]/;
 
   if (str.length === 0) {
     reason = 'Input is empty';
@@ -93374,13 +93149,13 @@ const validate = (str, production, { xmlVersion = '1.0', asciiOnly = false } = {
     position = str.lastIndexOf(':');
   } else if (
     ['name', 'ncName', 'qName'].includes(production) &&
-    !startCharPattern.test(str[0])
+    !/^[:A-Za-z_\u00C0-\uFFFD]/.test(str[0])
   ) {
     reason = `First character "${str[0]}" is not a valid NameStartChar`;
     position = 0;
   } else {
     for (let i = 0; i < str.length; i++) {
-      if (!namePattern.test(str[i])) {
+      if (!/[\w\-\\.:\u00B7\u00C0-\uFFFD]/.test(str[i])) {
         reason = `Character "${str[i]}" at position ${i} is not a valid NameChar`;
         position = i;
         break;
@@ -93400,7 +93175,7 @@ const validate = (str, production, { xmlVersion = '1.0', asciiOnly = false } = {
  *
  * @param {string[]} strings
  * @param {'name'|'ncName'|'qName'|'nmToken'|'nmTokens'} production
- * @param {{ xmlVersion?: '1.0'|'1.1', asciiOnly?: boolean }} [opts]
+ * @param {{ xmlVersion?: '1.0'|'1.1' }} [opts]
  * @returns {Array<{ valid: boolean, production: string, input: string, reason?: string, position?: number }>}
  */
 const validateAll = (strings, production, opts = {}) =>
@@ -93415,12 +93190,10 @@ const validateAll = (strings, production, opts = {}) =>
  *
  * @param {string} str
  * @param {'name'|'ncName'|'qName'|'nmToken'|'nmTokens'} production
- * @param {{ replacement?: string, asciiOnly?: boolean }} [opts]
- *   asciiOnly: also replace any non-ASCII character, not just XML-illegal
- *   ones (default false).
+ * @param {{ replacement?: string }} [opts]
  * @returns {string}
  */
-const sanitize = (str, production = 'name', { replacement = '_', asciiOnly = false } = {}) => {
+const sanitize = (str, production = 'name', { replacement = '_' } = {}) => {
   if (!str) return replacement;
 
   let result = str;
@@ -93431,8 +93204,7 @@ const sanitize = (str, production = 'name', { replacement = '_', asciiOnly = fal
   }
 
   // Replace illegal characters
-  const allowedCharPattern = asciiOnly ? /[^\w\-\.:]/g : /[^\w\-\.:\u00B7\u00C0-\uFFFD]/g;
-  result = result.replace(allowedCharPattern, replacement);
+  result = result.replace(/[^\w\-\.:\u00B7\u00C0-\uFFFD]/g, replacement);
 
   // Fix invalid start character for Name / NCName / QName
   if (production !== 'nmToken' && production !== 'nmTokens') {
@@ -93482,11 +93254,11 @@ function detectXmlVersionFromArray(jArray, options) {
  * @param {boolean} isAttribute - true when resolving an attribute name
  * @param {object}  options
  * @param {Matcher} matcher     - current matcher state (readonly from callback perspective)
- * @param {function} qNameValidator - function to validate tag names
+ * @param {string}  xmlVersion  - '1.0' or '1.1', forwarded to xml-naming
  */
-function resolveTagName(name, isAttribute, options, matcher, qNameValidator) {
+function resolveTagName(name, isAttribute, options, matcher, xmlVersion) {
     if (!options.sanitizeName) return name;
-    if (qNameValidator(name)) return name;
+    if (qName(name, { xmlVersion })) return name;
     return options.sanitizeName(name, { isAttribute, matcher: matcher.readOnly() });
 }
 
@@ -93516,14 +93288,14 @@ function toXml(jArray, options) {
 
     // Detect XML version for use in name validation
     const xmlVersion = detectXmlVersionFromArray(jArray, options);
-    const qNameValidator = createValidator('qName', { xmlVersion });
+
     // Initialize matcher for path tracking
     const matcher = new Matcher();
 
-    return arrToStr(jArray, options, indentation, matcher, stopNodeExpressions, qNameValidator);
+    return arrToStr(jArray, options, indentation, matcher, stopNodeExpressions, xmlVersion);
 }
 
-function arrToStr(arr, options, indentation, matcher, stopNodeExpressions, qNameValidator) {
+function arrToStr(arr, options, indentation, matcher, stopNodeExpressions, xmlVersion) {
     let xmlStr = "";
     let isPreviousElementTag = false;
 
@@ -93556,7 +93328,7 @@ function arrToStr(arr, options, indentation, matcher, stopNodeExpressions, qName
         // Resolve tag name (may transform it; may throw for invalid names)
         const tagName = isSpecialName
             ? rawTagName
-            : resolveTagName(rawTagName, false, options, matcher, qNameValidator);
+            : resolveTagName(rawTagName, false, options, matcher, xmlVersion);
 
         // Extract attributes from ":@" property
         const attrValues = extractAttributeValues(tagObj[":@"], options);
@@ -93598,7 +93370,7 @@ function arrToStr(arr, options, indentation, matcher, stopNodeExpressions, qName
             matcher.pop();
             continue;
         } else if (tagName[0] === "?") {
-            const attStr = attr_to_str(tagObj[":@"], options, isStopNode, matcher, qNameValidator);
+            const attStr = attr_to_str(tagObj[":@"], options, isStopNode, matcher, xmlVersion);
             const tempInd = tagName === "?xml" ? "" : indentation;
             // Text node content on PI/XML declaration tags is intentionally ignored.
             // Only attributes are valid on these tags per the XML spec.
@@ -93614,7 +93386,7 @@ function arrToStr(arr, options, indentation, matcher, stopNodeExpressions, qName
         }
 
         // Pass isStopNode to attr_to_str so attributes are also not processed for stopNodes
-        const attStr = attr_to_str(tagObj[":@"], options, isStopNode, matcher, qNameValidator);
+        const attStr = attr_to_str(tagObj[":@"], options, isStopNode, matcher, xmlVersion);
         const tagStart = indentation + `<${tagName}${attStr}`;
 
         // If this is a stopNode, get raw content without processing
@@ -93622,7 +93394,7 @@ function arrToStr(arr, options, indentation, matcher, stopNodeExpressions, qName
         if (isStopNode) {
             tagValue = orderedJs2Xml_getRawContent(tagObj[rawTagName], options);
         } else {
-            tagValue = arrToStr(tagObj[rawTagName], options, newIdentation, matcher, stopNodeExpressions, qNameValidator);
+            tagValue = arrToStr(tagObj[rawTagName], options, newIdentation, matcher, stopNodeExpressions, xmlVersion);
         }
 
         if (options.unpairedTags.indexOf(tagName) !== -1) {
@@ -93751,7 +93523,7 @@ function propName(obj) {
  * Build attribute string, resolving attribute names through sanitizeName when configured.
  * Accepts matcher so the callback has path context.
  */
-function attr_to_str(attrMap, options, isStopNode, matcher, qNameValidator) {
+function attr_to_str(attrMap, options, isStopNode, matcher, xmlVersion) {
     let attrStr = "";
     if (attrMap && !options.ignoreAttributes) {
         for (let attr in attrMap) {
@@ -93761,7 +93533,7 @@ function attr_to_str(attrMap, options, isStopNode, matcher, qNameValidator) {
             const cleanAttrName = attr.substr(options.attributeNamePrefix.length);
             const resolvedAttrName = isStopNode
                 ? cleanAttrName  // stopNodes are raw — skip sanitizeName for attr names too
-                : resolveTagName(cleanAttrName, true, options, matcher, qNameValidator);
+                : resolveTagName(cleanAttrName, true, options, matcher, xmlVersion);
 
             let attrVal;
             if (isStopNode) {
@@ -93955,11 +93727,11 @@ function detectXmlVersionFromObj(jObj, options) {
  * @param {boolean} isAttribute - true when resolving an attribute name
  * @param {object}  options
  * @param {Matcher} matcher     - current matcher state (readonly from callback perspective)
- * @param {function} qNameValidator - function to validate tag names
+ * @param {string}  xmlVersion  - '1.0' or '1.1', forwarded to xml-naming
  */
-function fxb_resolveTagName(name, isAttribute, options, matcher, qNameValidator) {
+function fxb_resolveTagName(name, isAttribute, options, matcher, xmlVersion) {
   if (!options.sanitizeName) return name;
-  if (qNameValidator(name)) return name;
+  if (qName(name, { xmlVersion })) return name;
   return options.sanitizeName(name, { isAttribute, matcher: matcher.readOnly() });
 }
 
@@ -93975,12 +93747,11 @@ Builder.prototype.build = function (jObj) {
     // Initialize matcher for path tracking
     const matcher = new Matcher();
     const xmlVersion = detectXmlVersionFromObj(jObj, this.options);
-    const qNameValidator = createValidator('qName', { xmlVersion });
-    return this.j2x(jObj, 0, matcher, qNameValidator).val;
+    return this.j2x(jObj, 0, matcher, xmlVersion).val;
   }
 };
 
-Builder.prototype.j2x = function (jObj, level, matcher, qNameValidator) {
+Builder.prototype.j2x = function (jObj, level, matcher, xmlVersion) {
   let attrStr = '';
   let val = '';
   if (this.options.maxNestedTags && matcher.getDepth() >= this.options.maxNestedTags) {
@@ -94008,7 +93779,7 @@ Builder.prototype.j2x = function (jObj, level, matcher, qNameValidator) {
 
     const resolvedKey = isSpecialKey
       ? key
-      : fxb_resolveTagName(key, false, this.options, matcher, qNameValidator);
+      : fxb_resolveTagName(key, false, this.options, matcher, xmlVersion);
 
     if (typeof jObj[key] === 'undefined') {
       // supress undefined node only if it is not an attribute
@@ -94033,7 +93804,7 @@ Builder.prototype.j2x = function (jObj, level, matcher, qNameValidator) {
       const attr = this.isAttribute(key);
       if (attr && !this.ignoreAttributesFn(attr, jPath)) {
         // Resolve the attribute name through sanitizeName
-        const resolvedAttr = fxb_resolveTagName(attr, true, this.options, matcher, qNameValidator);
+        const resolvedAttr = fxb_resolveTagName(attr, true, this.options, matcher, xmlVersion);
         attrStr += this.buildAttrPairStr(resolvedAttr, '' + jObj[key], isCurrentStopNode);
       } else if (!attr) {
         //tag value
@@ -94075,7 +93846,7 @@ Builder.prototype.j2x = function (jObj, level, matcher, qNameValidator) {
           if (this.options.oneListGroup) {
             // Push tag to matcher before recursive call
             matcher.push(resolvedKey);
-            const result = this.j2x(item, level + 1, matcher, qNameValidator);
+            const result = this.j2x(item, level + 1, matcher, xmlVersion);
             // Pop tag from matcher after recursive call
             matcher.pop();
 
@@ -94084,7 +93855,7 @@ Builder.prototype.j2x = function (jObj, level, matcher, qNameValidator) {
               listTagAttr += result.attrStr
             }
           } else {
-            listTagVal += this.processTextOrObjNode(item, resolvedKey, level, matcher, qNameValidator)
+            listTagVal += this.processTextOrObjNode(item, resolvedKey, level, matcher, xmlVersion)
           }
         } else {
           if (this.options.oneListGroup) {
@@ -94122,11 +93893,11 @@ Builder.prototype.j2x = function (jObj, level, matcher, qNameValidator) {
         const L = Ks.length;
         for (let j = 0; j < L; j++) {
           // Resolve attribute names inside attributesGroupName
-          const resolvedAttr = fxb_resolveTagName(Ks[j], true, this.options, matcher, qNameValidator);
+          const resolvedAttr = fxb_resolveTagName(Ks[j], true, this.options, matcher, xmlVersion);
           attrStr += this.buildAttrPairStr(resolvedAttr, '' + jObj[key][Ks[j]], isCurrentStopNode);
         }
       } else {
-        val += this.processTextOrObjNode(jObj[key], resolvedKey, level, matcher, qNameValidator)
+        val += this.processTextOrObjNode(jObj[key], resolvedKey, level, matcher, xmlVersion)
       }
     }
   }
@@ -94143,7 +93914,7 @@ Builder.prototype.buildAttrPairStr = function (attrName, val, isStopNode) {
   } else return ' ' + attrName + '="' + escapeAttribute(val) + '"';
 }
 
-function processTextOrObjNode(object, key, level, matcher, qNameValidator) {
+function processTextOrObjNode(object, key, level, matcher, xmlVersion) {
   // Extract attributes to pass to matcher
   const attrValues = this.extractAttributes(object);
 
@@ -94161,7 +93932,7 @@ function processTextOrObjNode(object, key, level, matcher, qNameValidator) {
     return this.buildObjectNode(rawContent, key, attrStr, level);
   }
 
-  const result = this.j2x(object, level + 1, matcher, qNameValidator);
+  const result = this.j2x(object, level + 1, matcher, xmlVersion);
   // Pop tag from matcher after recursion
   matcher.pop();
 
@@ -97332,6 +97103,26 @@ const MISC_SYMBOLS = {
   nVDash: '⊯',
 };
 
+/**
+ * All entities combined (if you need everything)
+ * @type {Record<string, string>}
+ */
+const ALL_ENTITIES = {
+  ...BASIC_LATIN,
+  ...LATIN_ACCENTS,
+  ...LATIN_EXTENDED,
+  ...GREEK,
+  ...CYRILLIC,
+  ...MATH,
+  ...MATH_ADVANCED,
+  ...ARROWS,
+  ...SHAPES,
+  ...PUNCTUATION,
+  ...CURRENCY,
+  ...FRACTIONS,
+  ...MISC_SYMBOLS,
+};
+
 const XML = {
   amp: "&",
   apos: "'",
@@ -98010,152 +97801,6 @@ class EntityDecoder {
     return this._applyNCRAction(effective, token, cp);
   }
 }
-;// CONCATENATED MODULE: ./node_modules/is-unsafe/src/contexts/sql.js
-/**
- * SQL context patterns — high-precision rules only.
- *
- * These rules have very low false-positive risk and are safe to apply to
- * general user text (names, descriptions, search queries, etc.).
- * All patterns are ReDoS-safe — unlike the `sql-injection` npm package
- * which has an active CVE on its own detection regexes.
- *
- * For exhaustive coverage including noisier heuristics (comment sequences,
- * hex literals, stacked queries with semicolons), use 'SQL-STRICT' instead.
- * Apply 'SQL-STRICT' only to strings that are specifically SQL fragments,
- * not to general free-text fields.
- */
-
-const SQL_PATTERNS = [
-  {
-    id: 'sql-block-comment-open',
-    description: 'SQL block comment open: /* ... */ — unusual in legitimate user text',
-    pattern: /\/\*/,
-  },
-  {
-    id: 'sql-union-select',
-    description: 'UNION SELECT — most common SQL injection aggregation attack',
-    pattern: /\bUNION\s{1,20}(?:ALL\s{1,20})?SELECT\b/i,
-  },
-  {
-    id: 'sql-drop-table',
-    description: 'DROP TABLE — destructive DDL injection',
-    pattern: /\bDROP\s{1,20}TABLE\b/i,
-  },
-  {
-    id: 'sql-drop-database',
-    description: 'DROP DATABASE — destructive DDL injection',
-    pattern: /\bDROP\s{1,20}DATABASE\b/i,
-  },
-  {
-    id: 'sql-insert-into',
-    description: 'INSERT INTO — data injection',
-    pattern: /\bINSERT\s{1,20}INTO\b/i,
-  },
-  {
-    id: 'sql-delete-from',
-    description: 'DELETE FROM — data deletion injection',
-    pattern: /\bDELETE\s{1,20}FROM\b/i,
-  },
-  {
-    id: 'sql-update-set',
-    description: 'UPDATE ... SET — data modification injection',
-    // Allows arbitrary content between UPDATE and SET (table name, alias, etc.)
-    pattern: /\bUPDATE\b[\s\S]{1,60}\bSET\b/i,
-  },
-  {
-    id: 'sql-exec-xp',
-    description: 'EXEC xp_ — MSSQL extended stored procedure execution',
-    pattern: /\bEXEC(?:UTE)?\s{1,20}xp_/i,
-  },
-  {
-    id: 'sql-tautology-string',
-    description: "Classic string tautology: ' OR '1'='1 or \" OR \"1\"=\"1\"",
-    // Last quote is optional — injection may truncate it: ' OR '1'='1--
-    pattern: /'\s{0,10}OR\s{0,10}'[^']{0,20}'\s*=\s*'[^']{0,20}/i,
-  },
-  {
-    id: 'sql-tautology-numeric',
-    description: 'Numeric tautology: OR 1=1',
-    pattern: /\bOR\s{1,10}1\s*=\s*1\b/i,
-  },
-  {
-    id: 'sql-always-true-zero',
-    description: 'Numeric tautology: OR 0=0',
-    pattern: /\bOR\s{1,10}0\s*=\s*0\b/i,
-  },
-  {
-    id: 'sql-sleep-benchmark',
-    description: 'Time-based blind injection: SLEEP() or BENCHMARK()',
-    pattern: /\b(?:SLEEP|BENCHMARK)\s*\(/i,
-  },
-  {
-    id: 'sql-waitfor-delay',
-    description: 'MSSQL time-based blind injection: WAITFOR DELAY',
-    pattern: /\bWAITFOR\s{1,20}DELAY\b/i,
-  },
-  {
-    id: 'sql-char-function',
-    description: 'CHAR() function — used to obfuscate injected strings',
-    pattern: /\bCHAR\s*\(\s*\d{1,3}/i,
-  },
-  {
-    id: 'sql-information-schema',
-    description: 'INFORMATION_SCHEMA — reconnaissance query for table/column enumeration',
-    pattern: /\bINFORMATION_SCHEMA\b/i,
-  },
-];
-
-/* harmony default export */ const sql = (SQL_PATTERNS);
-
-;// CONCATENATED MODULE: ./node_modules/is-unsafe/src/contexts/sql-strict.js
-/**
- * SQL-STRICT context patterns.
- *
- * Extends the base 'SQL' context with three additional rules that are
- * effective at detecting real injections but carry a higher false-positive
- * risk on general free-text input.
- *
- * Use 'SQL-STRICT' when:
- *   - The string is specifically a SQL fragment or database identifier
- *   - You control the input domain (e.g. a dedicated SQL search field)
- *   - You can tolerate occasional false positives in exchange for broader coverage
- *
- * Use 'SQL' (not STRICT) when:
- *   - The field is general user text (names, descriptions, comments)
- *   - False positives would block legitimate content (e.g. "see note -- above")
- *
- * Rules moved here from 'SQL' due to false-positive risk:
- *
- *   sql-line-comment   — "--" fires on "see note -- above", "value--", CSS var(--primary)
- *   sql-stacked-query  — "; SELECT" fires on legitimate prose with semicolons + SQL words
- *   sql-hex-encoding   — "0xDEAD" fires on hex values in technical docs and log output
- */
-
-
-
-const SQL_STRICT_EXTRA = [
-  {
-    id: 'sql-line-comment',
-    description: 'SQL line comment: -- followed by whitespace or end of string',
-    pattern: /--(?:\s|$)/,
-  },
-  {
-    id: 'sql-stacked-query',
-    description: 'Stacked queries: semicolon immediately followed by a SQL keyword',
-    pattern: /;\s{0,10}(?:SELECT|INSERT|UPDATE|DELETE|DROP|CREATE|ALTER|EXEC)\b/i,
-  },
-  {
-    id: 'sql-hex-encoding',
-    description: 'Hex-encoded string injection: 0x41414141 style (MySQL)',
-    pattern: /\b0x[0-9a-f]{4,}/i,
-  },
-];
-
-// SQL-STRICT = all base SQL rules + the three noisy extras
-const SQL_STRICT_PATTERNS = [...sql, ...SQL_STRICT_EXTRA];
-
-/* harmony default export */ const sql_strict = (SQL_STRICT_PATTERNS);
-
 ;// CONCATENATED MODULE: ./node_modules/is-unsafe/src/contexts/html.js
 /**
  * HTML context patterns.
@@ -98422,6 +98067,152 @@ const SVG_PATTERNS = [
 ];
 
 /* harmony default export */ const svg = (SVG_PATTERNS);
+
+;// CONCATENATED MODULE: ./node_modules/is-unsafe/src/contexts/sql.js
+/**
+ * SQL context patterns — high-precision rules only.
+ *
+ * These rules have very low false-positive risk and are safe to apply to
+ * general user text (names, descriptions, search queries, etc.).
+ * All patterns are ReDoS-safe — unlike the `sql-injection` npm package
+ * which has an active CVE on its own detection regexes.
+ *
+ * For exhaustive coverage including noisier heuristics (comment sequences,
+ * hex literals, stacked queries with semicolons), use 'SQL-STRICT' instead.
+ * Apply 'SQL-STRICT' only to strings that are specifically SQL fragments,
+ * not to general free-text fields.
+ */
+
+const SQL_PATTERNS = [
+  {
+    id: 'sql-block-comment-open',
+    description: 'SQL block comment open: /* ... */ — unusual in legitimate user text',
+    pattern: /\/\*/,
+  },
+  {
+    id: 'sql-union-select',
+    description: 'UNION SELECT — most common SQL injection aggregation attack',
+    pattern: /\bUNION\s{1,20}(?:ALL\s{1,20})?SELECT\b/i,
+  },
+  {
+    id: 'sql-drop-table',
+    description: 'DROP TABLE — destructive DDL injection',
+    pattern: /\bDROP\s{1,20}TABLE\b/i,
+  },
+  {
+    id: 'sql-drop-database',
+    description: 'DROP DATABASE — destructive DDL injection',
+    pattern: /\bDROP\s{1,20}DATABASE\b/i,
+  },
+  {
+    id: 'sql-insert-into',
+    description: 'INSERT INTO — data injection',
+    pattern: /\bINSERT\s{1,20}INTO\b/i,
+  },
+  {
+    id: 'sql-delete-from',
+    description: 'DELETE FROM — data deletion injection',
+    pattern: /\bDELETE\s{1,20}FROM\b/i,
+  },
+  {
+    id: 'sql-update-set',
+    description: 'UPDATE ... SET — data modification injection',
+    // Allows arbitrary content between UPDATE and SET (table name, alias, etc.)
+    pattern: /\bUPDATE\b[\s\S]{1,60}\bSET\b/i,
+  },
+  {
+    id: 'sql-exec-xp',
+    description: 'EXEC xp_ — MSSQL extended stored procedure execution',
+    pattern: /\bEXEC(?:UTE)?\s{1,20}xp_/i,
+  },
+  {
+    id: 'sql-tautology-string',
+    description: "Classic string tautology: ' OR '1'='1 or \" OR \"1\"=\"1\"",
+    // Last quote is optional — injection may truncate it: ' OR '1'='1--
+    pattern: /'\s{0,10}OR\s{0,10}'[^']{0,20}'\s*=\s*'[^']{0,20}/i,
+  },
+  {
+    id: 'sql-tautology-numeric',
+    description: 'Numeric tautology: OR 1=1',
+    pattern: /\bOR\s{1,10}1\s*=\s*1\b/i,
+  },
+  {
+    id: 'sql-always-true-zero',
+    description: 'Numeric tautology: OR 0=0',
+    pattern: /\bOR\s{1,10}0\s*=\s*0\b/i,
+  },
+  {
+    id: 'sql-sleep-benchmark',
+    description: 'Time-based blind injection: SLEEP() or BENCHMARK()',
+    pattern: /\b(?:SLEEP|BENCHMARK)\s*\(/i,
+  },
+  {
+    id: 'sql-waitfor-delay',
+    description: 'MSSQL time-based blind injection: WAITFOR DELAY',
+    pattern: /\bWAITFOR\s{1,20}DELAY\b/i,
+  },
+  {
+    id: 'sql-char-function',
+    description: 'CHAR() function — used to obfuscate injected strings',
+    pattern: /\bCHAR\s*\(\s*\d{1,3}/i,
+  },
+  {
+    id: 'sql-information-schema',
+    description: 'INFORMATION_SCHEMA — reconnaissance query for table/column enumeration',
+    pattern: /\bINFORMATION_SCHEMA\b/i,
+  },
+];
+
+/* harmony default export */ const sql = (SQL_PATTERNS);
+
+;// CONCATENATED MODULE: ./node_modules/is-unsafe/src/contexts/sql-strict.js
+/**
+ * SQL-STRICT context patterns.
+ *
+ * Extends the base 'SQL' context with three additional rules that are
+ * effective at detecting real injections but carry a higher false-positive
+ * risk on general free-text input.
+ *
+ * Use 'SQL-STRICT' when:
+ *   - The string is specifically a SQL fragment or database identifier
+ *   - You control the input domain (e.g. a dedicated SQL search field)
+ *   - You can tolerate occasional false positives in exchange for broader coverage
+ *
+ * Use 'SQL' (not STRICT) when:
+ *   - The field is general user text (names, descriptions, comments)
+ *   - False positives would block legitimate content (e.g. "see note -- above")
+ *
+ * Rules moved here from 'SQL' due to false-positive risk:
+ *
+ *   sql-line-comment   — "--" fires on "see note -- above", "value--", CSS var(--primary)
+ *   sql-stacked-query  — "; SELECT" fires on legitimate prose with semicolons + SQL words
+ *   sql-hex-encoding   — "0xDEAD" fires on hex values in technical docs and log output
+ */
+
+
+
+const SQL_STRICT_EXTRA = [
+  {
+    id: 'sql-line-comment',
+    description: 'SQL line comment: -- followed by whitespace or end of string',
+    pattern: /--(?:\s|$)/,
+  },
+  {
+    id: 'sql-stacked-query',
+    description: 'Stacked queries: semicolon immediately followed by a SQL keyword',
+    pattern: /;\s{0,10}(?:SELECT|INSERT|UPDATE|DELETE|DROP|CREATE|ALTER|EXEC)\b/i,
+  },
+  {
+    id: 'sql-hex-encoding',
+    description: 'Hex-encoded string injection: 0x41414141 style (MySQL)',
+    pattern: /\b0x[0-9a-f]{4,}/i,
+  },
+];
+
+// SQL-STRICT = all base SQL rules + the three noisy extras
+const SQL_STRICT_PATTERNS = [...sql, ...SQL_STRICT_EXTRA];
+
+/* harmony default export */ const sql_strict = (SQL_STRICT_PATTERNS);
 
 ;// CONCATENATED MODULE: ./node_modules/is-unsafe/src/contexts/shell.js
 /**
@@ -98808,22 +98599,20 @@ const LOG_PATTERNS = [
 
 /* harmony default export */ const contexts_log = (LOG_PATTERNS);
 
-;// CONCATENATED MODULE: ./node_modules/is-unsafe/src/index.js
+;// CONCATENATED MODULE: ./node_modules/is-unsafe/src/registry.js
 /**
- * is-unsafe v2
+ * Context registry — maps context name strings to their pattern arrays.
  *
- * Zero-dependency, DOM-free, pure predicate for detecting unsafe strings
- * across HTML, XML, SVG, SQL, SQL-STRICT, SHELL, REDOS, NOSQL, and LOG contexts.
+ * Adding a new context: create a file in ./contexts/, export a default array
+ * of pattern objects, and register it here.
  *
- * v2 change: contexts are imported as named pattern arrays rather than resolved
- * via a string-keyed registry. This makes each context independently
- * tree-shakeable — bundlers can drop any context you never import.
- *
- * @module is-unsafe
+ * Context name guide:
+ *   SQL        — high-precision rules; safe for general text fields
+ *   SQL-STRICT — SQL + three noisier rules (line comments, stacked queries, hex);
+ *                use only for SQL-specific inputs
+ *   REDOS      — detects ReDoS-prone patterns when string will be compiled as RegExp
  */
 
-// ─── Context pattern arrays (named exports) ────────────────────────────────
-// Import only the ones you need. Each is independently tree-shakeable.
 
 
 
@@ -98834,40 +98623,8 @@ const LOG_PATTERNS = [
 
 
 
-// SQL-STRICT needs a quoted identifier because of the hyphen
-
-
-
-// ─── VALID_CONTEXTS convenience re-export ─────────────────────────────────
-// Importing this pulls in ALL contexts. Use it only when you need all of them
-// (e.g. for validation UI, tooling, or exhaustive audits).
-// If you only need a subset, import the named contexts directly instead.
-
-
-
-
-
-
-
-
-
-
-// ─── Attach labels to named contexts ──────────────────────────────────────
-// Each built-in PatternList carries its canonical name so matchList can read
-// list.label directly — no registry lookup needed at match time.
-// Custom PatternLists default to 'CUSTOM' unless the caller sets list.label.
-
-html.label       = 'HTML';
-xml.label        = 'XML';
-svg.label        = 'SVG';
-sql.label        = 'SQL';
-sql_strict.label = 'SQL-STRICT';
-shell.label      = 'SHELL';
-redos.label      = 'REDOS';
-nosql.label      = 'NOSQL';
-contexts_log.label        = 'LOG';
-
-const VALID_CONTEXTS = Object.freeze({
+/** @type {Record<string, Array<{id: string, description: string, pattern: RegExp}>>} */
+const registry_CONTEXT_REGISTRY = {
   HTML: html,
   XML: xml,
   SVG: svg,
@@ -98877,29 +98634,45 @@ const VALID_CONTEXTS = Object.freeze({
   REDOS: redos,
   NOSQL: nosql,
   LOG: contexts_log,
-});
+};
 
-// ─── Types ────────────────────────────────────────────────────────────────
+/* harmony default export */ const registry = (registry_CONTEXT_REGISTRY);
 
 /**
- * @typedef {{ id: string, description: string, pattern: RegExp }} Rule
+ * Enum of valid context names — e.g. `VALID_CONTEXTS.HTML === 'HTML'`.
+ * @type {Record<string, string>}
+ */
+const VALID_CONTEXTS = Object.freeze(
+  Object.fromEntries(Object.keys(registry_CONTEXT_REGISTRY).map((k) => [k, k]))
+);
+;// CONCATENATED MODULE: ./node_modules/is-unsafe/src/index.js
+/**
+ * is-unsafe
+ *
+ * Zero-dependency, DOM-free, pure predicate for detecting unsafe strings
+ * across HTML, XML, SVG, SQL, SQL-STRICT, SHELL, REDOS, NOSQL, and LOG contexts.
+ *
+ * @module is-unsafe
  */
 
+
+
 /**
- * @typedef {Rule[]} PatternList
+ * @typedef {'HTML'|'XML'|'SVG'|'SQL'|'SQL-STRICT'|'SHELL'|'REDOS'|'NOSQL'|'LOG'} ContextName
  */
 
 /**
  * @typedef {Object} MatchResult
- * @property {string} context     - Label identifying which context matched ('HTML', 'CUSTOM', etc.)
- * @property {string} id          - Rule identifier
+ * @property {string} context   - The context in which the match was found
+ * @property {string} id        - Rule identifier
  * @property {string} description - Human-readable description of what was matched
- * @property {RegExp} pattern     - The pattern that matched
+ * @property {RegExp} pattern   - The pattern that matched
  */
 
-// ─── Internal helpers ──────────────────────────────────────────────────────
+// ─── Validation helpers ────────────────────────────────────────────────────
 
 /**
+ * Validate that `value` is a string. Throws TypeError if not.
  * @param {unknown} value
  */
 function assertString(value) {
@@ -98911,61 +98684,56 @@ function assertString(value) {
 }
 
 /**
- * @param {unknown} context
+ * Validate that `context` is a recognised context name, an array of them,
+ * or a RegExp instance. Throws TypeError if not.
+ * @param {ContextName|ContextName[]|RegExp} context
  */
 function assertContext(context) {
   if (context instanceof RegExp) return;
 
+  if (typeof context === 'string') {
+    if (!registry[context]) {
+      throw new TypeError(
+        `is-unsafe: unknown context "${context}". Valid contexts: ${Object.keys(VALID_CONTEXTS).join(', ')}`
+      );
+    }
+    return;
+  }
+
   if (Array.isArray(context)) {
     if (context.length === 0) {
-      throw new TypeError('is-unsafe: context must not be an empty array');
+      throw new TypeError('is-unsafe: context array must not be empty');
     }
-    // Detect array-of-arrays vs flat pattern list
-    if (Array.isArray(context[0])) {
-      // Array of PatternLists
-      for (const list of context) {
-        if (!Array.isArray(list) || list.length === 0) {
-          throw new TypeError(
-            'is-unsafe: each context in the array must be a non-empty pattern array (PatternList)'
-          );
-        }
+    for (const c of context) {
+      if (typeof c !== 'string' || !registry[c]) {
+        throw new TypeError(
+          `is-unsafe: unknown context "${c}" in array. Valid contexts: ${Object.keys(VALID_CONTEXTS).join(', ')}`
+        );
       }
     }
-    // else: flat PatternList — trust it, no deep validation needed
     return;
   }
 
   throw new TypeError(
-    `is-unsafe: second argument must be a PatternList (e.g. HTML), ` +
-    `an array of PatternLists (e.g. [HTML, XML]), or a RegExp. Got: ${typeof context}`
+    `is-unsafe: second argument must be a context string, array of context strings, or RegExp. Got: ${typeof context}`
   );
 }
 
-/**
- * Normalise any valid context arg into an array of PatternLists.
- *
- * @param {Rule[]|Rule[][]|RegExp} context
- * @returns {{ lists: Rule[][]|null, regex: RegExp|null }}
- */
-function normalise(context) {
-  if (context instanceof RegExp) return { lists: null, regex: context };
-  // Distinguish PatternList (array of rule objects) from array of PatternLists
-  if (Array.isArray(context[0])) return { lists: context, regex: null };
-  return { lists: [context], regex: null };
-}
+// ─── Core matching logic ───────────────────────────────────────────────────
 
 /**
- * Test value against a single PatternList. Returns the first MatchResult or null.
+ * Test a single value against one named context's patterns.
+ * Returns the first matching MatchResult, or null if nothing matched.
  *
  * @param {string} value
- * @param {Rule[]} list
+ * @param {string} contextName
  * @returns {MatchResult|null}
  */
-function matchList(value, list) {
-  const label = list.label ?? 'CUSTOM';
-  for (const rule of list) {
+function matchContext(value, contextName) {
+  const patterns = registry[contextName];
+  for (const rule of patterns) {
     if (rule.pattern.test(value)) {
-      return { context: label, id: rule.id, description: rule.description, pattern: rule.pattern };
+      return { context: contextName, id: rule.id, description: rule.description, pattern: rule.pattern };
     }
   }
   return null;
@@ -98976,95 +98744,103 @@ function matchList(value, list) {
 /**
  * Returns `true` if `value` is unsafe in the given context(s), `false` otherwise.
  *
- * @param {string} value - The string to test
- * @param {PatternList | PatternList[] | RegExp} context
- *   - A PatternList imported from is-unsafe (e.g. `HTML`, `XML`)
- *   - An array of PatternLists — returns true if unsafe in **any** of them
+ * @param {string} value           - The string to test
+ * @param {ContextName|ContextName[]|RegExp} context
+ *   - A named context ('HTML', 'XML', 'SVG', 'SQL', 'SQL-STRICT', 'SHELL', 'REDOS', 'NOSQL', 'LOG')
+ *   - An array of named contexts — returns true if unsafe in **any** of them
  *   - A custom RegExp — returns true if the pattern matches
  * @returns {boolean}
  *
  * @example
- * import { isUnsafe, HTML, SQL } from 'is-unsafe';
- *
- * isUnsafe('<script>alert(1)</script>', HTML)       // true
- * isUnsafe('hello world', HTML)                     // false
- * isUnsafe('value', [HTML, SQL])                    // false
- * isUnsafe('value', /my-pattern/i)                  // false
+ * isUnsafe('<script>alert(1)</script>', 'HTML')  // true
+ * isUnsafe('hello world', 'HTML')                // false
+ * isUnsafe('value', ['HTML', 'SQL'])             // false
+ * isUnsafe('value', /my-pattern/i)               // false
  */
 function isUnsafe(value, context) {
   assertString(value);
   assertContext(context);
 
-  const { lists, regex } = normalise(context);
+  // Custom RegExp — caller-supplied pattern
+  if (context instanceof RegExp) {
+    return context.test(value);
+  }
 
-  if (regex) return regex.test(value);
+  // Single named context
+  if (typeof context === 'string') {
+    return matchContext(value, context) !== null;
+  }
 
-  for (const list of lists) {
-    if (matchList(value, list) !== null) return true;
+  // Array of named contexts — unsafe if ANY context matches
+  for (const c of context) {
+    if (matchContext(value, c) !== null) return true;
   }
   return false;
 }
 
 /**
- * Like `isUnsafe`, but returns the first `MatchResult` describing **why**
- * the value was flagged, or `null` if it is safe.
+ * Like `isUnsafe`, but instead of a boolean returns the first `MatchResult`
+ * describing **why** the value was flagged, or `null` if it is safe.
+ *
+ * Useful for logging, error messages, or policy reporting.
  *
  * @param {string} value
- * @param {PatternList | PatternList[] | RegExp} context
+ * @param {ContextName|ContextName[]|RegExp} context
  * @returns {MatchResult|null}
  *
  * @example
- * import { whyUnsafe, HTML } from 'is-unsafe';
- *
- * whyUnsafe('<script>alert(1)</script>', HTML)
+ * whyUnsafe('<script>alert(1)</script>', 'HTML')
  * // { context: 'HTML', id: 'html-script-open', description: '...', pattern: /.../ }
  */
 function whyUnsafe(value, context) {
   assertString(value);
   assertContext(context);
 
-  const { lists, regex } = normalise(context);
-
-  if (regex) {
-    return regex.test(value)
-      ? { context: 'CUSTOM', id: 'custom-regex', description: 'Matched caller-supplied pattern', pattern: regex }
+  if (context instanceof RegExp) {
+    return context.test(value)
+      ? { context: 'CUSTOM', id: 'custom-regex', description: 'Matched caller-supplied pattern', pattern: context }
       : null;
   }
 
-  for (const list of lists) {
-    const result = matchList(value, list);
+  if (typeof context === 'string') {
+    return matchContext(value, context);
+  }
+
+  for (const c of context) {
+    const result = matchContext(value, c);
     if (result !== null) return result;
   }
   return null;
 }
 
 /**
- * Returns **all** matching rules across the given context(s), or an empty
- * array if the value is safe. Useful for comprehensive auditing.
+ * Returns all matching rules across the given context(s), or an empty array
+ * if the value is safe. Useful for comprehensive auditing.
  *
  * @param {string} value
- * @param {PatternList | PatternList[] | RegExp} context
+ * @param {ContextName|ContextName[]|RegExp} context
  * @returns {MatchResult[]}
  */
 function allUnsafe(value, context) {
   assertString(value);
   assertContext(context);
 
-  const { lists, regex } = normalise(context);
   const results = [];
 
-  if (regex) {
-    if (regex.test(value)) {
-      results.push({ context: 'CUSTOM', id: 'custom-regex', description: 'Matched caller-supplied pattern', pattern: regex });
+  if (context instanceof RegExp) {
+    if (context.test(value)) {
+      results.push({ context: 'CUSTOM', id: 'custom-regex', description: 'Matched caller-supplied pattern', pattern: context });
     }
     return results;
   }
 
-  for (const list of lists) {
-    const label = list.label ?? 'CUSTOM';
-    for (const rule of list) {
+  const contexts = typeof context === 'string' ? [context] : context;
+
+  for (const c of contexts) {
+    const patterns = CONTEXT_REGISTRY[c];
+    for (const rule of patterns) {
       if (rule.pattern.test(value)) {
-        results.push({ context: label, id: rule.id, description: rule.description, pattern: rule.pattern });
+        results.push({ context: c, id: rule.id, description: rule.description, pattern: rule.pattern });
       }
     }
   }
@@ -99074,7 +98850,6 @@ function allUnsafe(value, context) {
 
 
 /* harmony default export */ const src = ((/* unused pure expression or super */ null && (isUnsafe)));
-
 ;// CONCATENATED MODULE: ./node_modules/fast-xml-parser/src/xmlparser/OrderedObjParser.js
 
 ///@ts-check
@@ -99165,7 +98940,6 @@ class OrderedObjParser {
     this.ignoreAttributesFn = ignoreAttributes_getIgnoreAttributesFn(this.options.ignoreAttributes)
     this.entityExpansionCount = 0;
     this.currentExpandedLength = 0;
-    this.doctypefound = false;
     let namedEntities = { ...XML };
     if (this.options.entityDecoder) {
       this.entityDecoder = this.options.entityDecoder
@@ -99183,7 +98957,8 @@ class OrderedObjParser {
         // onExternalEntity: (name, value) => isUnsafe(value) ? 'block' : 'allow',
         onInputEntity: (name, value) =>
           //TODO: VALID_CONTEXTS.HTML should be set only if this.options.htmlEntities
-          isUnsafe(value, [html, xml]) ? ENTITY_ACTION.BLOCK : ENTITY_ACTION.ALLOW,
+          isUnsafe(value, [VALID_CONTEXTS.HTML, VALID_CONTEXTS.XML])
+            ? ENTITY_ACTION.BLOCK : ENTITY_ACTION.ALLOW,
 
         //postCheck: resolved => resolved
       });
@@ -99373,7 +99148,6 @@ const parseXml = function (xmlData) {
   // Reset entity expansion counters for this document
   this.entityExpansionCount = 0;
   this.currentExpandedLength = 0;
-  this.doctypefound = false;
   const options = this.options;
   const docTypeReader = new DocTypeReader(options.processEntities);
   const xmlLen = xmlData.length;
@@ -99458,8 +99232,6 @@ const parseXml = function (xmlData) {
         i = endIndex;
       } else if (c1 === 33
         && xmlData.charCodeAt(i + 2) === 68) { //'!D'
-        if (this.doctypefound) throw new Error("Multiple DOCTYPE declarations found.");
-        this.doctypefound = true;
         const result = docTypeReader.readDocType(xmlData, i);
         this.entityDecoder.addInputEntities(result.entities);
         i = result.i;
@@ -100257,8 +100029,7 @@ async function parseXML(str, opts = {}) {
         delete parsedXml["?xml"];
     }
     if (!opts.includeRoot) {
-        const key = Object.keys(parsedXml)[0];
-        if (key !== undefined) {
+        for (const key of Object.keys(parsedXml)) {
             const value = parsedXml[key];
             return typeof value === "object" ? { ...value } : value;
         }
@@ -133782,269 +133553,14 @@ const originalStringify = JSON.stringify;
 const originalParse = JSON.parse;
 const customFormat = /^-?\d+n$/;
 
-const bigIntsStringify = /([\[:])?"(-?\d+)n"($|\s*[,\}\]])/g;
-const noiseStringify = /([\[:])?("-?\d+n+)n("$|"\s*[,\}\]])/g;
+const bigIntsStringify = /([\[:])?"(-?\d+)n"($|([\\n]|\s)*(\s|[\\n])*[,\}\]])/g;
+const noiseStringify =
+  /([\[:])?("-?\d+n+)n("$|"([\\n]|\s)*(\s|[\\n])*[,\}\]])/g;
 
 /**
  * @typedef {(this: any, key: string | number | undefined, value: any) => any} Replacer
  * @typedef {(key: string | number | undefined, value: any, context?: { source: string }) => any} Reviver
  */
-
-/**
- * Checks if a value is unstringifiable according to native JSON.stringify rules.
- *
- * @param {any} val The value to check.
- * @returns {boolean} True if the value is undefined, a function, or a symbol.
- */
-const isUnstringifiable = (val) =>
-  val === undefined || typeof val === "function" || typeof val === "symbol";
-
-/**
- * Checks if a value is a native JSON.rawJSON object (Node.js 22+).
- *
- * @param {any} val The value to check.
- * @returns {boolean} True if the value is a RawJSON instance.
- */
-const isRawJSON = (val) =>
-  val !== null &&
-  typeof val === "object" &&
-  val.constructor &&
-  val.constructor.name === "RawJSON";
-
-/**
- * Iteratively converts a JS value to a JSON string.
- * Used as a fallback when the native JSON.stringify hits the Maximum Call Stack size.
- * Fully compliant with JSON formatting (space), replacers, and toJSON behaviors.
- *
- * @param {any} rootValue The value to stringify.
- * @param {Replacer | Array<string | number> | null} [replacer] User's custom replacer function.
- * @param {string | number} [spaceParam] Indentation for pretty-printing.
- * @returns {string | undefined} The generated JSON string.
- */
-const stringifyIteratively = (rootValue, replacer, spaceParam) => {
-  let space = "";
-
-  if (typeof spaceParam === "number") {
-    space = " ".repeat(Math.min(10, Math.max(0, Math.floor(spaceParam))));
-  } else if (typeof spaceParam === "string") {
-    space = spaceParam.slice(0, 10);
-  }
-
-  const isFunctionReplacer = typeof replacer === "function";
-  const propertyList = Array.isArray(replacer)
-    ? new Set(replacer.map(String))
-    : null;
-
-  /**
-   * Prepares a value for stringification by resolving toJSON, handling BigInts,
-   * applying custom replacers, and unwrapping primitive objects.
-   *
-   * @param {object|Array} parent The parent object or array holding the value.
-   * @param {string} key The key associated with the value.
-   * @param {any} val The raw value to process.
-   * @returns {any} The processed value ready for stringification.
-   */
-  const prepareVal = (parent, key, val) => {
-    const isObject = val !== null && typeof val === "object";
-    const hasToJSON = isObject && typeof val.toJSON === "function";
-
-    if (hasToJSON) {
-      val = val.toJSON(key);
-    }
-
-    const isNoise = typeof val === "string" && noiseValue.test(val);
-
-    if (isNoise) return val + "n";
-
-    const isBigInt = typeof val === "bigint";
-
-    if (isBigInt) {
-      const supportsRawJSON = "rawJSON" in JSON;
-
-      if (supportsRawJSON) return JSON.rawJSON(val.toString());
-
-      return val.toString() + "n";
-    }
-
-    if (isFunctionReplacer) {
-      val = replacer.call(parent, key, val);
-    }
-
-    const isPostReplacerObject = val !== null && typeof val === "object";
-
-    if (isPostReplacerObject) {
-      const isPrimitiveWrapper =
-        val instanceof Number ||
-        val instanceof String ||
-        val instanceof Boolean;
-
-      if (isPrimitiveWrapper) {
-        val = val.valueOf();
-      }
-    }
-
-    return val;
-  };
-
-  const rootProcessed = prepareVal({ "": rootValue }, "", rootValue);
-
-  if (isUnstringifiable(rootProcessed)) {
-    return undefined;
-  }
-
-  const isRootPrimitive =
-    rootProcessed === null || typeof rootProcessed !== "object";
-  const isRootNativeRawJSON = isRawJSON(rootProcessed);
-
-  if (isRootPrimitive || isRootNativeRawJSON) {
-    return originalStringify(rootProcessed);
-  }
-
-  const chunks = [];
-  let level = 0;
-
-  const stack = [
-    {
-      parent: { "": rootProcessed },
-      key: "",
-      val: rootProcessed,
-      isArray: Array.isArray(rootProcessed),
-      keys: Array.isArray(rootProcessed) ? null : Object.keys(rootProcessed),
-      index: 0,
-      first: true,
-    },
-  ];
-
-  const visited = new WeakSet([rootProcessed]);
-
-  while (stack.length > 0) {
-    const node = stack[stack.length - 1];
-
-    if (node.index === 0) {
-      chunks.push(node.isArray ? "[" : "{");
-      level++;
-    }
-
-    let isDone = false;
-
-    if (node.isArray) {
-      if (node.index < node.val.length) {
-        if (!node.first) chunks.push(",");
-
-        if (space) chunks.push("\n" + space.repeat(level));
-
-        const childRaw = node.val[node.index];
-        const childVal = prepareVal(node.val, String(node.index), childRaw);
-
-        if (isUnstringifiable(childVal)) {
-          chunks.push("null");
-          node.first = false;
-          node.index++;
-        } else {
-          const isComplexObject =
-            childVal !== null && typeof childVal === "object";
-          const isNativeRaw = isRawJSON(childVal);
-
-          if (isComplexObject && !isNativeRaw) {
-            if (visited.has(childVal)) {
-              throw new TypeError("Converting circular structure to JSON");
-            }
-
-            visited.add(childVal);
-
-            stack.push({
-              parent: node.val,
-              key: String(node.index),
-              val: childVal,
-              isArray: Array.isArray(childVal),
-              keys: Array.isArray(childVal) ? null : Object.keys(childVal),
-              index: 0,
-              first: true,
-            });
-
-            node.first = false;
-            node.index++;
-          } else {
-            chunks.push(originalStringify(childVal));
-            node.first = false;
-            node.index++;
-          }
-        }
-      } else {
-        isDone = true;
-      }
-    } else {
-      while (node.index < node.keys.length) {
-        const k = node.keys[node.index++];
-
-        const isFilteredOutByArray = propertyList && !propertyList.has(k);
-
-        if (isFilteredOutByArray) continue;
-
-        const childRaw = node.val[k];
-        const childVal = prepareVal(node.val, k, childRaw);
-
-        if (isUnstringifiable(childVal)) continue;
-
-        if (!node.first) chunks.push(",");
-
-        if (space) {
-          chunks.push("\n" + space.repeat(level) + originalStringify(k) + ": ");
-        } else {
-          chunks.push(originalStringify(k) + ":");
-        }
-
-        const isComplexObject =
-          childVal !== null && typeof childVal === "object";
-        const isNativeRaw = isRawJSON(childVal);
-
-        if (isComplexObject && !isNativeRaw) {
-          if (visited.has(childVal)) {
-            throw new TypeError("Converting circular structure to JSON");
-          }
-
-          visited.add(childVal);
-
-          stack.push({
-            parent: node.val,
-            key: k,
-            val: childVal,
-            isArray: Array.isArray(childVal),
-            keys: Array.isArray(childVal) ? null : Object.keys(childVal),
-            index: 0,
-            first: true,
-          });
-
-          node.first = false;
-
-          break; // Stop current loop level to process the newly pushed stack node
-        } else {
-          chunks.push(originalStringify(childVal));
-          node.first = false;
-        }
-      }
-
-      const isNodeFullyProcessed =
-        node.index >= node.keys.length && stack[stack.length - 1] === node;
-
-      if (isNodeFullyProcessed) {
-        isDone = true;
-      }
-    }
-
-    if (isDone) {
-      level--;
-
-      if (!node.first && space) chunks.push("\n" + space.repeat(level));
-
-      chunks.push(node.isArray ? "]" : "}");
-      visited.delete(node.val);
-      stack.pop();
-    }
-  }
-
-  return chunks.join("");
-};
 
 /**
  * Converts a JavaScript value to a JSON string.
@@ -134057,87 +133573,55 @@ const stringifyIteratively = (rootValue, replacer, spaceParam) => {
  *
  * @param {*} value The value to convert to a JSON string.
  * @param {Replacer | Array<string | number> | null} [replacer]
- * A function that alters the behavior of the stringification process,
- * or an array of strings/numbers to indicate properties to exclude.
+ *   A function that alters the behavior of the stringification process,
+ *   or an array of strings/numbers to indicate properties to exclude.
  * @param {string | number} [space]
- * A string or number to specify indentation or pretty-printing.
+ *   A string or number to specify indentation or pretty-printing.
  * @returns {string} The JSON string representation.
  */
 const JSONStringify = (value, replacer, space) => {
-  try {
-    const supportsRawJSON = "rawJSON" in JSON;
-
-    if (supportsRawJSON) {
-      return originalStringify(
-        value,
-        (key, val) => {
-          if (typeof val === "bigint") return JSON.rawJSON(val.toString());
-
-          const hasFunctionReplacer = typeof replacer === "function";
-
-          if (hasFunctionReplacer) return replacer(key, val);
-
-          const isKeyInArrayReplacer =
-            Array.isArray(replacer) && replacer.includes(key);
-
-          if (isKeyInArrayReplacer) return val;
-
-          return val;
-        },
-        space,
-      );
-    }
-
-    if (!value) return originalStringify(value, replacer, space);
-
-    const convertedToCustomJSON = originalStringify(
+  if ("rawJSON" in JSON) {
+    return originalStringify(
       value,
-      (key, val) => {
-        const isNoise = typeof val === "string" && noiseValue.test(val);
+      (key, value) => {
+        if (typeof value === "bigint") return JSON.rawJSON(value.toString());
 
-        if (isNoise) return val.toString() + "n"; // Mark noise values with additional "n" to offset the deletion of one "n" during the processing
+        if (typeof replacer === "function") return replacer(key, value);
 
-        if (typeof val === "bigint") return val.toString() + "n";
+        if (Array.isArray(replacer) && replacer.includes(key)) return value;
 
-        const hasFunctionReplacer = typeof replacer === "function";
-
-        if (hasFunctionReplacer) return replacer(key, val);
-
-        const isKeyInArrayReplacer =
-          Array.isArray(replacer) && replacer.includes(key);
-
-        if (isKeyInArrayReplacer) return val;
-
-        return val;
+        return value;
       },
       space,
     );
-
-    const processedJSON = convertedToCustomJSON.replace(
-      bigIntsStringify,
-      "$1$2$3",
-    ); // Delete one "n" off the end of every BigInt value
-
-    const denoisedJSON = processedJSON.replace(noiseStringify, "$1$2$3"); // Remove one "n" off the end of every noisy string
-
-    return denoisedJSON;
-  } catch (error) {
-    if (error instanceof RangeError) {
-      const convertedJSON = stringifyIteratively(value, replacer, space);
-
-      if (convertedJSON === undefined) return undefined;
-
-      const supportsRawJSON = "rawJSON" in JSON;
-
-      if (supportsRawJSON) return convertedJSON;
-
-      const processedJSON = convertedJSON.replace(bigIntsStringify, "$1$2$3");
-
-      return processedJSON.replace(noiseStringify, "$1$2$3");
-    }
-
-    throw error;
   }
+
+  if (!value) return originalStringify(value, replacer, space);
+
+  const convertedToCustomJSON = originalStringify(
+    value,
+    (key, value) => {
+      const isNoise = typeof value === "string" && noiseValue.test(value);
+
+      if (isNoise) return value.toString() + "n"; // Mark noise values with additional "n" to offset the deletion of one "n" during the processing
+
+      if (typeof value === "bigint") return value.toString() + "n";
+
+      if (typeof replacer === "function") return replacer(key, value);
+
+      if (Array.isArray(replacer) && replacer.includes(key)) return value;
+
+      return value;
+    },
+    space,
+  );
+  const processedJSON = convertedToCustomJSON.replace(
+    bigIntsStringify,
+    "$1$2$3",
+  ); // Delete one "n" off the end of every BigInt value
+  const denoisedJSON = processedJSON.replace(noiseStringify, "$1$2$3"); // Remove one "n" off the end of every noisy string
+
+  return denoisedJSON;
 };
 
 const featureCache = new Map();
@@ -134185,15 +133669,12 @@ const isContextSourceSupported = () => {
 const convertMarkedBigIntsReviver = (key, value, context, userReviver) => {
   const isCustomFormatBigInt =
     typeof value === "string" && customFormat.test(value);
-
   if (isCustomFormatBigInt) return BigInt(value.slice(0, -1));
 
   const isNoiseValue = typeof value === "string" && noiseValue.test(value);
   if (isNoiseValue) return value.slice(0, -1);
 
-  const hasUserReviver = typeof userReviver === "function";
-
-  if (!hasUserReviver) return value;
+  if (typeof userReviver !== "function") return value;
 
   return userReviver(key, value, context);
 };
@@ -134211,18 +133692,15 @@ const convertMarkedBigIntsReviver = (key, value, context, userReviver) => {
  */
 const JSONParseV2 = (text, reviver) => {
   return JSON.parse(text, (key, value, context) => {
-    const isNumber = typeof value === "number";
-    const isOutOfBounds =
-      value > Number.MAX_SAFE_INTEGER || value < Number.MIN_SAFE_INTEGER;
-    const isBigNumber = isNumber && isOutOfBounds;
+    const isBigNumber =
+      typeof value === "number" &&
+      (value > Number.MAX_SAFE_INTEGER || value < Number.MIN_SAFE_INTEGER);
     const isInt = context && intRegex.test(context.source);
     const isBigInt = isBigNumber && isInt;
 
     if (isBigInt) return BigInt(context.source);
 
-    const hasCustomReviver = typeof reviver === "function";
-
-    if (!hasCustomReviver) return value;
+    if (typeof reviver !== "function") return value;
 
     return reviver(key, value, context);
   });
@@ -134235,105 +133713,6 @@ const stringsOrLargeNumbers =
 const noiseValueWithQuotes = /^"-?\d+n+"$/; // Noise - strings that match the custom format before being converted to it
 
 /**
- * Iteratively traverses the parsed object bottom-up (post-order),
- * emulating the native JSON.parse reviver behavior.
- * This avoids Call Stack overflows (RangeError) on deeply nested structures.
- *
- * @param {any} parsed The natively parsed JSON object.
- * @param {Reviver} [userReviver] User's custom reviver function.
- * @returns {any} The fully processed object.
- */
-const applyReviverIteratively = (parsed, userReviver) => {
-  const rootHolder = { "": parsed };
-  const stack = [{ parent: rootHolder, key: "", visited: false }];
-
-  while (stack.length > 0) {
-    const node = stack[stack.length - 1];
-
-    if (!node.visited) {
-      node.visited = true;
-
-      const value = node.parent[node.key];
-      const isComplexObject = value !== null && typeof value === "object";
-
-      if (isComplexObject) {
-        const keys = Object.keys(value);
-
-        for (let i = keys.length - 1; i >= 0; i--) {
-          stack.push({ parent: value, key: keys[i], visited: false });
-        }
-      }
-    } else {
-      const { parent, key } = node;
-      let value = parent[key];
-
-      if (typeof value === "string") {
-        const isCustomFormatBigInt = customFormat.test(value);
-
-        if (isCustomFormatBigInt) {
-          value = BigInt(value.slice(0, -1));
-        } else {
-          const isNoise = noiseValue.test(value);
-
-          if (isNoise) value = value.slice(0, -1);
-        }
-      }
-
-      const hasUserReviver = typeof userReviver === "function";
-
-      if (hasUserReviver) {
-        value = userReviver.call(parent, key, value);
-      }
-
-      const isDeleted = value === undefined;
-
-      if (isDeleted) {
-        delete parent[key];
-      } else {
-        parent[key] = value;
-      }
-
-      stack.pop();
-    }
-  }
-
-  return rootHolder[""];
-};
-
-/**
- * Pre-processes the JSON string to mark large numbers with an 'n' suffix.
- *
- * @param {string} text The raw JSON string.
- * @returns {string} The serialized string with marked BigInts.
- */
-const serializeBigInts = (text) => {
-  return text.replace(
-    stringsOrLargeNumbers,
-    (match, digits, fractional, exponential) => {
-      const isString = match[0] === '"';
-      const isNoise = isString && noiseValueWithQuotes.test(match);
-
-      if (isNoise) return match.substring(0, match.length - 1) + 'n"'; // Mark noise values with additional "n" to offset the deletion of one "n" during the processing
-
-      const hasFractionalOrExponential = fractional || exponential;
-
-      // With a fixed number of digits, we can correctly use lexicographical comparison to do a numeric comparison
-      const isLessThanMaxSafeInt =
-        digits &&
-        (digits.length < MAX_DIGITS ||
-          (digits.length === MAX_DIGITS && digits <= MAX_INT));
-
-      const isStandardValue =
-        isString || hasFractionalOrExponential || isLessThanMaxSafeInt;
-
-      if (isStandardValue) return match;
-
-      return '"' + match + 'n"';
-    },
-  );
-};
-
-/**
  * Converts a JSON string into a JavaScript value.
  *
  * Supports parsing of large integers using two strategies:
@@ -134344,34 +133723,42 @@ const serializeBigInts = (text) => {
  *
  * @param {string} text A valid JSON string.
  * @param {Reviver} [reviver]
- * A function that transforms the results. This function is called for each member
- * of the object. If a member contains nested objects, the nested objects are
- * transformed before the parent object is.
+ *   A function that transforms the results. This function is called for each member
+ *   of the object. If a member contains nested objects, the nested objects are
+ *   transformed before the parent object is.
  * @returns {any} The parsed JavaScript value.
  * @throws {SyntaxError} If text is not valid JSON.
  */
 const JSONParse = (text, reviver) => {
   if (!text) return originalParse(text, reviver);
 
-  try {
-    if (isContextSourceSupported()) return JSONParseV2(text, reviver); // Shortcut to a faster (2x) and simpler version
+  if (isContextSourceSupported()) return JSONParseV2(text, reviver); // Shortcut to a faster (2x) and simpler version
 
-    // Find and mark big numbers with "n"
-    const serializedData = serializeBigInts(text);
+  // Find and mark big numbers with "n"
+  const serializedData = text.replace(
+    stringsOrLargeNumbers,
+    (text, digits, fractional, exponential) => {
+      const isString = text[0] === '"';
+      const isNoise = isString && noiseValueWithQuotes.test(text);
 
-    return originalParse(serializedData, (key, value, context) =>
-      convertMarkedBigIntsReviver(key, value, context, reviver),
-    );
-  } catch (error) {
-    if (error instanceof RangeError) {
-      const serializedData = serializeBigInts(text);
-      const parsed = originalParse(serializedData);
+      if (isNoise) return text.substring(0, text.length - 1) + 'n"'; // Mark noise values with additional "n" to offset the deletion of one "n" during the processing
 
-      return applyReviverIteratively(parsed, reviver);
-    }
+      const isFractionalOrExponential = fractional || exponential;
+      const isLessThanMaxSafeInt =
+        digits &&
+        (digits.length < MAX_DIGITS ||
+          (digits.length === MAX_DIGITS && digits <= MAX_INT)); // With a fixed number of digits, we can correctly use lexicographical comparison to do a numeric comparison
 
-    throw error;
-  }
+      if (isString || isFractionalOrExponential || isLessThanMaxSafeInt)
+        return text;
+
+      return '"' + text + 'n"';
+    },
+  );
+
+  return originalParse(serializedData, (key, value, context) =>
+    convertMarkedBigIntsReviver(key, value, context, reviver),
+  );
 };
 
 
@@ -141204,9 +140591,9 @@ const $ZodNumberFormat = /*@__PURE__*/ $constructor("$ZodNumberFormat", (inst, d
     $ZodCheckNumberFormat.init(inst, def);
     $ZodNumber.init(inst, def); // no format checks
 });
-const $ZodBoolean = /*@__PURE__*/ (/* unused pure expression or super */ null && (core.$constructor("$ZodBoolean", (inst, def) => {
+const $ZodBoolean = /*@__PURE__*/ $constructor("$ZodBoolean", (inst, def) => {
     $ZodType.init(inst, def);
-    inst._zod.pattern = regexes.boolean;
+    inst._zod.pattern = regexes_boolean;
     inst._zod.parse = (payload, _ctx) => {
         if (def.coerce)
             try {
@@ -141224,7 +140611,7 @@ const $ZodBoolean = /*@__PURE__*/ (/* unused pure expression or super */ null &&
         });
         return payload;
     };
-})));
+});
 const $ZodBigInt = /*@__PURE__*/ (/* unused pure expression or super */ null && (core.$constructor("$ZodBigInt", (inst, def) => {
     $ZodType.init(inst, def);
     inst._zod.pattern = regexes.bigint;
@@ -142971,10 +142358,10 @@ class $ZodRegistry {
     }
 }
 // registries
-function registry() {
+function registries_registry() {
     return new $ZodRegistry();
 }
-(registries_a = globalThis).__zod_globalRegistry ?? (registries_a.__zod_globalRegistry = registry());
+(registries_a = globalThis).__zod_globalRegistry ?? (registries_a.__zod_globalRegistry = registries_registry());
 const globalRegistry = globalThis.__zod_globalRegistry;
 
 ;// CONCATENATED MODULE: ./node_modules/zod/v4/core/api.js
@@ -143353,7 +142740,7 @@ function _uint32(Class, params) {
 function _boolean(Class, params) {
     return new Class({
         type: "boolean",
-        ...util.normalizeParams(params),
+        ...normalizeParams(params),
     });
 }
 // @__NO_SIDE_EFFECTS__
@@ -145802,13 +145189,13 @@ function int32(params) {
 function uint32(params) {
     return core._uint32(ZodNumberFormat, params);
 }
-const ZodBoolean = /*@__PURE__*/ (/* unused pure expression or super */ null && (core.$constructor("ZodBoolean", (inst, def) => {
-    core.$ZodBoolean.init(inst, def);
+const ZodBoolean = /*@__PURE__*/ $constructor("ZodBoolean", (inst, def) => {
+    $ZodBoolean.init(inst, def);
     ZodType.init(inst, def);
-    inst._zod.processJSONSchema = (ctx, json, params) => processors.booleanProcessor(inst, ctx, json, params);
-})));
+    inst._zod.processJSONSchema = (ctx, json, params) => booleanProcessor(inst, ctx, json, params);
+});
 function schemas_boolean(params) {
-    return core._boolean(ZodBoolean, params);
+    return _boolean(ZodBoolean, params);
 }
 const ZodBigInt = /*@__PURE__*/ (/* unused pure expression or super */ null && (core.$constructor("ZodBigInt", (inst, def) => {
     core.$ZodBigInt.init(inst, def);
@@ -146611,1111 +145998,3222 @@ function preprocess(fn, schema) {
     });
 }
 
-;// CONCATENATED MODULE: ./src/runtime-review.js
-
-
+// EXTERNAL MODULE: external "node:net"
+var external_node_net_ = __nccwpck_require__(7030);
+;// CONCATENATED MODULE: ./src/runtime-review-vocab.js
 /**
- * Garnet Runtime Review — observation-only PR comment renderer (Comment v5.2).
+ * Machine-readable contract lock — exact copy of
+ * garnet-org/runtime-review-testbed contract/vocab.json at commit
+ * 814d4d328f679f40b4546918a1c3bf347101413f (contract v6.6.1). Vendored so the
+ * renderer needs no filesystem read at runtime. Regenerate by copying the
+ * upstream file; never hand-edit values.
+ */
+
+const runtime_review_vocab_CONTRACT_VOCAB = {
+    "$schema_comment": "Machine-readable execution-comment contract lock (v6.6.1) — single source for exact emitted copy, comparison identity, lossless projection, deterministic factual notes, medium limits, selector/privacy requirements, and deferrals. Consumed by cmd/garnet-runtime-review/review.mjs. Locked by docs/ux-contract.md.",
+    "version": "6.6.1",
+    "profileFormatVersion": "0.2.0",
+    "copy": {
+        "headlineLead": "Execution Profiles recorded for",
+        "headlineTemplate": "**Execution Profiles recorded for <N> job(s), triggered by [`<sha7>`](<commit-url>)** — the one headline, bold body register, never a `#` heading; all counts and change facts live in the metadata line and job folds",
+        "headlinePendingLead": "Execution Profiles recording for jobs triggered by",
+        "headlinePendingTemplate": "**Execution Profiles recording for jobs triggered by [`<sha7>`](<commit-url>)**",
+        "metadataTemplate": "> *<N>&nbsp;execution chain(s) · <N>&nbsp;destination(s) [· changed|no change since [`<prev7>`](<prev-commit-url>)] · recorded at the kernel by Garnet · <UTC timestamp>* — noun facts only, each · segment one fact; the change clause renders only on comparison comments ; italic blockquote only, never <sub> (GitHub mobile collapses <sub> line-height and a wrapped line overprints itself)",
+        "stepSummaryHeading": "Garnet Execution Summary",
+        "artifact": "Execution Profile",
+        "data": "the record",
+        "kernelProvenance": "recorded at the kernel by Garnet",
+        "sensor": "Jibril",
+        "destinationNoun": "destination",
+        "chainNoun": "execution chain",
+        "chainNounRule": "first count mention spells 'execution chains'; subsequent counts use bare 'chains'; never 'process chains'; never 'trees' as a count noun — a job has one tree and N chains",
+        "permalinkLabel": "View this job's Execution Profile in Garnet →",
+        "emptyPeers": "no outbound destinations recorded.",
+        "noRunProfile": "no Execution Profile recorded.",
+        "unknownLineage": "unknown (not recorded)",
+        "explainerLabel": "💡 How to read this",
+        "pendingStatus": "⏳ Execution Profiles for this commit are still being recorded — this comment updates in place as jobs finish.",
+        "truncationTemplate": "rendered X of Y destination associations",
+        "noChange": "no change",
+        "noWorkloadChange": "no workload change",
+        "sinceWord": "since",
+        "vanishedJobsLabel": "jobs no longer recorded",
+        "jobsLineTemplate": "> *<X> job(s) changed +A&nbsp;−R&nbsp;destination(s) · <Y> job(s) unchanged [· <Z> job(s) with no outbound destinations] [· <W> job(s) no longer recorded]* — second blockquote paragraph directly under the metadata line, comparison comments only, rendered only when a workload change or a vanished job exists; every segment is a job count over the folds/entries rendered below and the segments sum to the comment's rendered jobs plus the vanished fold's entries (adjacency gate); +A −R are the workload delta totals over the rendered job folds with the unit named and zero sides dropped (vanished chains stay in their own segment); noun facts only",
+        "jobsLineNoOutbound": "with no outbound destinations",
+        "jobsLineVanished": "no longer recorded",
+        "jobsLineChanged": "changed",
+        "jobsLineUnchanged": "unchanged",
+        "machineSummaryMarker": "garnet:summary",
+        "substrateFoldLabel": "dns + runner substrate",
+        "whatIsGarnetLabel": "What is Garnet →",
+        "whatIsGarnetUrl": "https://docs.garnet.ai?utm_source=github&utm_medium=pr_comment",
+        "egressCentricScope": "The record is egress-centric; processes without recorded egress do not appear.",
+        "substrateVisibility": "nothing subtracts: attributed workload chains render in the job's main tree; dns-resolver chatter and unattributed runner-infrastructure chains render inside a nested collapsed 'dns + runner substrate' fold in the same job fold; attribution alone (recorded step + Runner.Worker descent) decides the partition — a recorded detection emphasizes a chain wherever it renders but never re-classes an unattributed chain as workload; substrate has its own quiet comparison diff and never changes workload delta counts or changed status; every recorded chain remains visible",
+        "foldSentence": "deterministic bounded factual projection of the fold's main tree, spoken only from recorded step attribution — chains without a recorded workflow step (including the sensor's 'NN. Runner Processes' sentinel, which is not attribution) never produce a sentence: process-name fallbacks are runner machinery, not a job's headline summary, and the row falls back to plain counts; each attributed group counts its distinct destinations with the tree's own identity; groups sort changed-first on comparison comments, then destination count descending, then name; at most two groups are named as '<name> reached N destination(s)' and the remainder collapses to 'and K more'; the sentence's numbers must equal the rendered tree's counts (adjacency gate); never an interpretation — no salience, safety, or intent vocabulary",
+        "countDedup": "single-job comment: chain/destination counts render in the metadata line ONLY and the fold row carries the fold sentence plus the delta (or 'no change'); multi-job: fold-row <sub> counts render only when the sentence is capped ('and K more'), absent, or partial and count exactly the rendered main tree; a substrate-only job carries no fold-row counts (never '0 chains · 0 destinations') and its body opens with the self-counting substrate fold; the substrate fold carries its own rendered count; metadata counts speak the comment register — chains totals the rendered chain rows for this record across all job folds (workload and substrate; '−' rows never count), destinations the union of their identity keys — while capture multiplicity stays in the evidence register; aggregate counts equal the visible projection and every rendered number counts what sits directly beneath it"
+    },
+    "comment": {
+        "heading": "one ### category heading stating the primitive — Execution Profiles belong to jobs, the commit is the trigger; the product name never appears in the heading",
+        "headlineTypography": "### heading, plain text with one linked short sha — no bold, no counts, no delta clause; counts live in the metadata line, deltas in job folds",
+        "countDedup": "single-job comment: chain/destination counts render in the metadata line ONLY and the fold row carries the fold sentence plus the delta (or 'no change'); multi-job: fold-row counts as <sub> count exactly the fold's main tree (the substrate fold carries its own count), aggregate counts in the metadata line equal the sum of every rendered chain; a rendered number always counts what sits directly beneath it and never renders twice for the same scope",
+        "foldRow": "<code>Workflow</code> / <a href=\"<actions job URL>\"><code>job-id</code>&nbsp;↗</a> · <fold sentence> — the job-id text plus ↗ is the hyperlink (GitHub-context link class); target is the specific Actions job URL when known, else the run URL; each matrix cell is its own job/fold and the cell identity lives in the job-id slot",
+        "foldSentence": "deterministic bounded factual projection of the fold's main tree — chains group by recorded step attribution (else deepest recorded process display name, else the unknown-lineage label); each group counts its distinct destinations with the tree's own identity; groups sort changed-first on comparison comments, then destination count descending, then name; at most two groups are named as '<name> reached N destination(s)' and the remainder collapses to 'and K more'; the sentence's numbers must equal the rendered tree's counts (adjacency gate); never an interpretation — no salience, safety, or intent vocabulary",
+        "foldRowChanged": "· <b>+A&nbsp;−R</b> since <code><prev7></code> (plus <sub>· N chain(s) · N destination(s)</sub> multi-job only — counts inflect, number and unit glued with &nbsp; so they never wrap apart); the fold renders open",
+        "foldRowUnchanged": "· no change — the comparison base sha renders in the metadata line and on changed fold rows only; the fold renders collapsed; `no change` is only true when nothing beneath the fold moved — a job whose nested substrate fold renders a diff says `no workload change` and the substrate fold label carries its own `+N −M destinations`, so no fold ever claims less movement than its body renders",
+        "snapshotTree": "no comparison / first profile: plain <pre> tree with 6.4 bold/italic attribution typography; no +/−, no @@ anywhere",
+        "changedTree": "changed job: the fold's tree renders as a ```diff fence — same tree walk; new leaf lines carry +, no-longer-recorded leaf lines carry −, unchanged ancestry/leaves are context; one @@ header at the top: '@@ <head-sha> vs <previous-sha> · +A −R @@'; typography is sacrificed inside the fence",
+        "defang": "hostnames are defanged on the PR-comment surface only (example[.]com — final dot bracketed) so untrusted destinations never autolink; address literals are left verbatim; Step Summary, model JSON, and the public report stay canonical",
+        "explainerPlacement": "bottom of the comment, under a --- divider, <details><summary><sub>💡 How to read this</sub></summary>; closed by default, open only on a first-profile comment; body is the annotated mini tree (the tree teaches — no prose lead) plus, on comparison comments only, one terse <sub><i>…</i></sub> line defining + / − and the moved-destination rule; no defensive or philosophy prose",
+        "substrateVisibility": "nothing subtracts: attributed workload chains render in the job's main tree; dns-resolver chatter and unattributed runner-infrastructure chains render in a nested collapsed substrate fold regardless of recorded detections (a detection emphasizes, never re-classes); substrate comparison is quiet and separate from workload deltas; every captured association remains visible",
+        "foldOpenRuling": "job folds render open on the first recorded result and on changed comparison jobs while the comment carries at most foldOpenBudget changed jobs; when more jobs changed than the budget, every job fold renders collapsed and the jobs line plus fold-row deltas carry the change facts — nothing subtracts, folds just stop shouting",
+        "foldOpenBudget": 3,
+        "jobOrdering": "comparison comments order job folds by decision relevance, deterministically: workload-changed jobs first, then substrate-only movement, then no-change jobs, then jobs with no outbound destinations; within a tier the canonical alphabetic 'workflow / job' order holds; a job with a workload delta is a changed job even when its head record is empty (a fully emptied job renders its removals, never the no-outbound line); snapshot comments keep the canonical alphabetic order (no change facts exist to rank by); ordering is a projection of the same complete evidence — no tier is dropped or truncated by rank",
+        "jobsLine": "one italic blockquote paragraph under the metadata line, comparison comments only, present only when a workload change or vanished job exists: '<X> job(s) changed +A −R · <Y> job(s) unchanged [· <Z> job(s) with no outbound destinations] [· <W> job(s) no longer recorded]' — each segment counts the job folds (or vanished entries) rendered beneath it and the segments sum to the rendered jobs plus vanished entries; never salience or safety vocabulary",
+        "machineSummary": "one HTML comment marker '<!-- garnet:summary {json} -->' after the commit marker with fixed key order (contract, commit, previous, jobs, changed, unchanged, noOutbound, vanished, added, removed, vanishedChains, chains, destinations); every number equals the corresponding rendered count (adjacency gate); comparison-only fields are null on snapshot comments; '--' inside JSON string values is escaped as '--' so no record-sourced value can terminate the comment and JSON.parse restores the recorded bytes; agents read the marker, humans read the surface — same truth, two registers",
+        "resolutionLayering": "the evidence register is lossless and keeps PID-distinct associations; the human comment register deduplicates rendered destination identities; ancestry is recorded name-only, so name-level prefix merging loses nothing and splitting name-identical ancestors would invent distinctions the sensor did not record; tree order is deterministic by identity key and never claims chronology",
+        "previousProfiledCommit": "the unit of change is strictly the previous profiled commit (this PR, else named base-branch commit); visible copy says 'since <sha>' exactly once, in the headline — the word 'baseline' never renders",
+        "comparisonIdentity": "a job is matched to its previous-commit counterpart by workflow + job name + matrix cell index; matrix cells never diff against each other, and a cell with no counterpart diffs against nothing (all chains new)",
+        "destinationIdentity": "comparison identity is the canonical recorded name — the first non-empty non-address-like remote_names value, else the first non-empty value — else remote_address, normalized per job; an address-like alias never outranks a recorded hostname; an address-only edge joins a named edge for that address when either side records the name; process paths, PIDs, ports, and capture order never create comparison identities",
+        "substrateComparison": "dns-resolver and unattributed runner substrate are excluded from workload added/removed sets and changed status; a non-empty substrate delta renders quietly inside the collapsed substrate fold ; the substrate fold's own label carries its movement ('dns + runner substrate · N chain(s) · +A −R destination(s)') so the quiet diff is never unlabelled",
+        "ordering": "comment and diff destinations and process groups sort deterministically by normalized destination identity; capture order and process-path reshaping never change bytes",
+        "dualRegister": "human register: readable, deduplicated, defanged PR comment; evidence register: canonical profile JSON/API via permalink, preserving raw IPs, ports, PIDs, hostnames, and multiplicity",
+        "losslessProjection": "every captured destination identity appears in the workload tree or substrate fold, and every rendered identity derives from captured evidence; nothing is subtracted",
+        "vanishedJobs": "jobs recorded on the previous profiled commit with no counterpart on this one keep their removal count: their comment-visible chains are added to the headline's 'R no longer recorded' total and listed once in a collapsed fold below the job folds (above the explainer divider) as '<details><summary><sub>jobs no longer recorded · N job(s) · M chain(s)</sub></summary>' with one '<workflow> / <job> · N chain(s)' entry per line — history sits below this commit's behavior, never as an alarm strip at the top; a vanished job never renders as 'no change' and its chains never silently leave the comparison"
+    },
+    "bannedVocabulary": [
+        "every process",
+        "flagged",
+        "detected",
+        "baseline",
+        "safe",
+        "verdict",
+        "score",
+        "Assertions · beta",
+        "monitoring",
+        "clean",
+        "secure",
+        "threat",
+        "malicious",
+        "as of",
+        "github infra",
+        "garnet sensor upload",
+        "expected plumbing",
+        "garnet.ai/what-garnet-records",
+        "Run Profile",
+        "process lineage",
+        "process chains",
+        "lineage tree",
+        "Runtime Summary",
+        "Runtime Review",
+        "Reading this review",
+        "gone"
+    ],
+    "edgeModel": {
+        "definition": "one destination association = one network.egress.peers[] item × one proc_trees[] item; a peer with no proc_trees emits one association with lineage 'unknown (not recorded)'",
+        "preservedFields": [
+            "remote_address",
+            "remote_names (every value, verbatim — never repaired; the canonical recorded name — first non-empty non-address-like value, else first non-empty — is the production display identity; secondary values are preview-only)",
+            "remote_ports (every value, verbatim — explicit Step Summary preview only; the PR comment and production summary show no ports/protocol/address annotations)",
+            "protocol (explicit Step Summary preview only)",
+            "peer result (recorded ATTENTION is explicit Step Summary preview only)",
+            "leaf pid ((pid N) renders on the Step Summary process leaf only, never the PR comment)",
+            "leaf process comm name (Step Summary only)",
+            "ancestry names in record order",
+            "github_step (escaped, labeled 'step:', attribution metadata only)",
+            "detections (every non-empty value other than 'flow' is preserved in the model; 'detection: <kind>' notes render only under assertions preview)"
+        ],
+        "embargoedFields": [
+            "arguments",
+            "executable"
+        ],
+        "noDedupe": false,
+        "registerModel": "evidence surfaces remain lossless; only human comment and diff surfaces deduplicate destination identities",
+        "noMultiplicity": "peers in profile format 0.2 are already deduplicated and carry no per-edge count; ×N is banned; telemetry.total_connections is never row multiplicity",
+        "addressLikeNames": "the first remote_names value is the counting identity; secondary values are preserved in the model and preview only, and never create extra rows",
+        "pidDistinct": "same ancestry with a different PID remains distinct in the evidence register and Step Summary; comment destination rows are identity-deduplicated"
+    },
+    "counts": {
+        "destinationAssociations": "sum over peers of max(1, len(proc_trees))",
+        "recordedProcesses": "distinct recorded lineage + PID + process identities; unrecorded lineage is not called a recorded process",
+        "destinations": "distinct non-empty remote_address values represented by rendered associations",
+        "primaryRemoteNames": "distinct non-empty first remote_names values; secondary values are not counting identities",
+        "observedDomainNames": "distinct non-empty first remote_names values that are not IP/address literals",
+        "flows": "len(network.egress.peers)",
+        "portsAndProtocols": "render but never create extra destination-count identities",
+        "loopbackAndResolver": "displayed and counted; notes never subtract",
+        "telemetryFamilies": "sensor Unique domains and Connections pass through verbatim; derived Destinations and Flows are labeled separately and never aliased",
+        "expectedJobCoverage": "deferred; the headline renders only '<N> job(s) recorded', never k-of-n",
+        "destinationOwnerTags": "deferred to control-plane enrichment: owner/category tags on destinations (imds, garnet telemetry, github infra, package registry) require a versioned destination→owner map carried in the profile or served by the control plane — the renderer never hardcodes owner lists; when the map ships, tags render as leaf notes with the same deterministic note rules and the tag vocabulary is locked here first",
+        "chains": "execution chains = destination associations (one root-to-action path per association); the metadata line spells 'execution chains' on first mention, later counts say bare 'chains'"
+    },
+    "notes": {
+        "dnsResolver": {
+            "text": "dns resolver",
+            "rule": "only when remote_address is loopback AND a remote_ports value has numeric port 53 (including strings such as '53 (dns)')",
+            "loopbackPattern": "^(127\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}|::1|localhost)$"
+        },
+        "instanceMetadata": {
+            "text": "instance metadata",
+            "addresses": [
+                "169.254.169.254",
+                "169.254.170.2",
+                "fd00:ec2::254"
+            ],
+            "truncationPriority": "IMDS edges present in the record are retained first and never evicted under medium truncation",
+            "notACaptureGuarantee": true
+        },
+        "detection": {
+            "rule": "detection notes are assertion-layer vocabulary: 'detection: <kind>' (every non-empty detections[] value other than 'flow') renders only under assertions preview; a recorded non-flow detection still overrides italic scaffolding presentation in prod"
+        },
+        "forbiddenNotes": [
+            "github infra",
+            "garnet sensor upload",
+            "expected plumbing",
+            "inferred DNS causality"
+        ]
+    },
+    "lineage": {
+        "attributedTypography": "bold when github_step is non-empty and ancestry contains exact Runner.Worker; otherwise italic runner scaffolding; a non-flow detection always renders bold; typography is attribution context, never trust",
+        "githubStep": "escaped recorded metadata labeled 'step:'; used with Runner.Worker descent for attribution, never an allowlist or ownership claim",
+        "forbiddenClaim": "complete process inventory/tree"
+    },
+    "timestamp": {
+        "source": "profile.timestamp only (profile.recorded_at does not exist)",
+        "format": "YYYY-MM-DD HH:MM:SS UTC",
+        "multiProfile": "recorded at the kernel through <max valid profile.timestamp>",
+        "missing": "omit — never substitute the renderer clock",
+        "pending": "no timestamp and no 'as of'"
+    },
+    "prComment": {
+        "stickyComment": "exactly one stable App-owned sticky Runtime Review comment per PR",
+        "workflowTrigger": "runtime-review workflows run on every pull_request base, including stacked PRs with layered non-main/non-trunk bases; no pull_request branches filter is allowed",
+        "commitMarker": "<!-- garnet:commit <full sha> -->",
+        "writeTimeGuard": "update only if the profile SHA equals the PR's current head at write time; stale old-head events never overwrite a newer head — the guard protects the PR comment only, the job-local Step Summary is published before it",
+        "commitIdentity": "every rendered commit SHA — the headline trigger and its permalink, the metadata line's 'since <prev7>', and the '@@ <head7> vs <prev7> @@' pair — must be PR-visible; a recorded synthetic merge SHA (two-parent GITHUB_SHA from refs/pull/N/merge) resolves producer-side to the PR head (the merge commit's second parent) before rendering, on both sides of the comparison; the renderer performs no lookups, and on resolution failure the raw recorded SHA renders unchanged — nothing fabricated or substituted",
+        "actionSuppression": "when the App is installed/publishing, the standalone Action comment is suppressed",
+        "pending": "headline lead + commit marker + hourglass status + open explainer at the bottom; no timestamp, count, denominator, or permalink",
+        "completed": "headline with commit link and state clause; metadata blockquote with kernel provenance from profile.timestamp ('recorded at the kernel' renders exactly once per comment — on the metadata line, never in the explainer); explainer at the bottom, open on the first recorded result and collapsed on later updates; job folds open on the first recorded result and on changed jobs, collapsed otherwise",
+        "destinations": "domain-first: the canonical recorded name is the identity, bare IP only when no name is recorded; no ports, protocol, or address annotations on the comment; no [pid · command] suffixes",
+        "processDisplayNames": "comment tree node names strip a trailing run of 4+ digits (provjobd1326539233 → provjobd) — display only; the record, Step Summary, model JSON, and chain identity keep the raw name",
+        "foldsCollapsedByDefault": true,
+        "jobOrder": "alphabetic by 'workflow / job'",
+        "edgeOrder": "deterministic by lineage, remote address, ports/protocol, PID",
+        "foldHeading": "workflow / job — the job-id text is the hyperlink",
+        "profileSelector": "?profile=<Garnet profile ID> — the control-plane profile-envelope ID; a raw profile never fabricates a selector from data.uuid",
+        "runLinks": "one exact per-fold Run Profile link when an envelope Profile.ID exists; no top run-index CTA"
+    },
+    "stepSummary": {
+        "headings": [
+            "Garnet Execution Summary",
+            "Workload Summary",
+            "Network Egress Summary"
+        ],
+        "egressSections": [
+            "Process Tree",
+            "Destinations"
+        ],
+        "treePivot": "lineage-first: one '| Process Tree | Destinations |' table row per distinct process lineage keyed on (lineage_recorded, pid, process, ancestry); different PIDs never merge; each row nests that lineage's destinations with identical destination names collapsed (telemetry counts derive from the profile, not rows); compact trees retain the first node and final three nodes with an explicit ellipsis between them; the leaf carries '(pid N)'; each destination is bullet-anchored; captured names are length-bounded with a middle ellipsis",
+        "telemetry": "one sentence: Network telemetry observed N unique domains, M destinations, C connections, and F flows. Unique domains and connections pass through from sensor telemetry; destinations and flows remain independently derived from the record",
+        "assertions": "omitted by default; assertions: preview renders a collapsed source-context table plus a collapsed Check | Result | Context fold and an evidence table only for record-backed assertions[].evidence",
+        "footer": "right-aligned workflow · run · job · profile.timestamp (provenance only, no telemetry counts), then Powered by Garnet · exact Run Profile link; followed by Job summary generated at run-time"
+    },
+    "gateT": {
+        "connections": "telemetry.total_connections must equal len(network.egress.peers)",
+        "domains": "telemetry.total_domains must equal distinct non-empty first remote_names",
+        "ci": "hard-fail only for pinned fixtures expected to satisfy the invariant",
+        "runtime": "never throw; render sensor and derived values in the telemetry one-liner with no discrepancy prose — the divergence stays a model-level fact (telemetryDiscrepancies) checked in CI"
+    },
+    "mediumLimits": {
+        "prCommentHardLimit": 65536,
+        "prCommentBudget": 60000,
+        "stepSummaryHardLimit": 1048576,
+        "runProfileUntruncated": true,
+        "truncationStrategy": "deterministic fair round-robin across jobs in canonical order, byte/character budget checked on the final serialized output; PR comments retain IMDS associations first; Step Summaries retain whole destination rows and never split a destination from its process trees; per-job/no-record coverage preserved where possible; truncation is never silent",
+        "minimalFallback": "when even fixed overhead exceeds the medium budget, emit deterministic markers, heading, coverage, and an exact rendered-0 omission line within the serialized cap"
+    },
+    "publicRunProfile": {
+        "runIndexRoute": "/public/runs/{run_id} — no logged-out projection without an exact ?profile selector",
+        "profileSelectorRoute": "/public/runs/{run_id}?profile=<profile_id>",
+        "jobParam": "?job= is not a public profile selector and never authorizes a logged-out projection",
+        "selectorMiss": "an absent, empty, or wrong profile ID returns 404 — never a silent fallback to run index/job/first profile",
+        "embargoedFields": [
+            "argv",
+            "arguments",
+            "executable paths",
+            "environment values",
+            "assertions",
+            "detection evidence",
+            "sensor telemetry",
+            "sensitive actor/ref metadata"
+        ],
+        "policy": {
+            "default": "deny (404)",
+            "render": "only when backend-truth repository visibility is exactly 'public' AND explicit publication consent exists AND consent is not revoked AND an exact envelope Profile.ID selector resolves, rechecked at request time",
+            "deniedStates": [
+                "private",
+                "internal",
+                "unknown",
+                "revoked",
+                "unconsented",
+                "visibility-flipped-to-private",
+                "missing-profile-selector",
+                "empty-profile-selector",
+                "wrong-profile-selector",
+                "job-only-selector"
+            ],
+            "nonOracular404": "all denied cases return the same 404 for HTML and JSON",
+            "noCdnCaching": "JSON/HTML responses are not long-lived CDN cached"
+        },
+        "lossless": "the canonical public Run Profile is untruncated; UI folding/virtualization must be lossless",
+        "privateTestbed": "this repository is private — its logged-out permalink correctly 404s; positive public-link acceptance requires a separate public, explicitly consented fixture repository"
+    },
+    "future": [
+        "Phase 1–2: chain canonicalization + previous-profiled-commit resolution wiring in producers (this contract already locks the comparison render shape)",
+        "Phase 2+: top atomic-chain diff fence above the folds (additive; in-fold marked trees remain)",
+        "Phase 3: garnet:execution:v1 hidden JSON machine block (agents parse the schema block, never ownership markers)",
+        "Phase 4: /public/compare/<id> route + 'View execution comparison →' CTA; neutral Check run",
+        "commit-history fold"
+    ],
+    "v7Deferrals": [
+        "structural fork/exec ownership and double-fork/reparent correctness",
+        "strong DNS causality",
+        "guarantee that Jibril captures IMDS/link-local traffic",
+        "producer-side argv/executable capture suppression",
+        "bytes",
+        "full process/file inventory",
+        "per-edge connection multiplicity / ×N",
+        "expectedJobs / k-of-n coverage",
+        "cryptographic sensor-upload provenance",
+        "endpoint ownership labels backed by rules-as-data evidence",
+        "record-side process/name truncation repair",
+        "commit-level cross-run public review permalink beyond the one-run first-release journey"
+    ]
+}
+
+;// CONCATENATED MODULE: ./src/runtime-review.js
+/**
+ * Garnet execution comment — reference renderer for contract v6.6.1.
  *
  * Vendored from the locked reference renderer in
- * garnet-labs/runtime-review-testbed (`cmd/garnet-runtime-review/review.mjs`,
- * merged in PR #30). This copy follows the repo's AGENTS.md explicit-check
- * rule throughout; every such rewrite is byte-neutral and verified by the
- * fixture byte-compare tests, so the rendered markdown stays faithful to the
- * reference.
+ * garnet-org/runtime-review-testbed (cmd/garnet-runtime-review/review.mjs at
+ * commit 814d4d328f679f40b4546918a1c3bf347101413f) with two mechanical
+ * changes: the CLI plumbing section is dropped (the action drives the
+ * renderer from src/post.js and src/profile-comment.js) and CONTRACT_VOCAB
+ * is imported from the vendored ./runtime-review-vocab.js instead of a
+ * filesystem read.
  *
- * Frame: the comment answers exactly one question — "what happened in this
- * PR?". It is runtime evidence for code review, never an evaluation. No
- * statuses, no icons, no badges. Deterministic by construction: same profile
- * payload (and render clock) in → byte-identical markdown out.
+ * Three projections of the same selected record set: the GitHub PR comment,
+ * the GitHub job Step Summary, and the public Run Profile (HTML/JSON —
+ * contract carried here as machine-readable policy data; the page itself is
+ * served by the Garnet app).
  *
- * v5.1 amendments implemented here:
- *   A1 — structural classification: every connection gets exactly one class
- *        (`dns`, `garnet upload`, `github infra`, or unclassified), derived
- *        from what the connection IS, never whether it is fine. Classes render
- *        as inline annotations in the tree, never as icons.
- *   A2 — classification filters salience, never counts: classified
- *        connections are excluded from headline candidacy and the three named
- *        enumeration slots; they remain in every count and every tree.
- *   A3 — selection order is salience order everywhere: within-run uniqueness,
- *        then spawn-chain depth, then connection count, then lexical.
- *        First-seen/temporal order is dead as a selection key.
- *   A4 — runner-chain elision: the exact GitHub-hosted ancestry set compresses
- *        to one line with aggregate counts; any non-member in the subtree or
- *        member reaching a non-GitHub-owned destination cancels elision for
- *        that branch. Elide processes, never counts.
- *   A5 — identifier normalization: behavior signatures normalize
- *        trailing-digit suffixes; display always shows the raw name.
- *   A6 — link policy: one label ↔ one destination class. `job log ↗` per job
- *        line; `Run Profile ↗` (footer) is ONLY the capability link — when no
- *        capability link exists the footer omits it rather than mislabel;
- *        `add the step ↗` only when coverage k < n.
- *   A7 — meta line: [`{sha}`](commit) · {k} of {n} jobs recorded (only when a
- *        total n > k is known; otherwise `{k} job(s) recorded`) · updated
- *        {HH:MM} UTC · {Mon D}. Absolute UTC, never relative.
- *   A8 — hardening: evidence strings are escaped, control characters
- *        stripped, tree fences use four backticks. Canonical sticky marker is
- *        `<!-- garnet-runtime-review -->`.
- *   A9 — size budget: 60,000-char ceiling; overflow collapses trees
- *        lowest-salience-first with explicit markers; nothing disappears
- *        silently.
+ * v6.5.0 record model:
+ *   - One destination association = one `network.egress.peers[]` item × one
+ *     `proc_trees[]` item. A peer with no proc_trees emits one association
+ *     with lineage `unknown (not recorded)`.
+ *   - The record is egress-centric — it is NOT a process inventory; a
+ *     process that made no recorded egress may not appear.
+ *   - The evidence model is lossless; the comment projection deduplicates
+ *     destination identities so capture multiplicity never becomes comparison
+ *     churn.
+ *   - `arguments`/argv and `executable` paths are embargoed: never captured
+ *     into the render model, never emitted on any surface.
+ *   - Typography is attribution, not trust: a lineage recorded under a
+ *     GitHub step below `Runner.Worker` is bold; runner scaffolding is italic.
+ *     A recorded detection always overrides de-emphasis.
+ *   - Deterministic factual notes only: `(dns resolver)`, `(instance
+ *     metadata)`, and record-backed `detection: <kind>` values other than
+ *     `flow`.
+ *   - Counts are mechanical and qualified. Sensor telemetry is preserved
+ *     verbatim and never aliased to renderer-derived destinations or flows.
+ *   - Timestamps come from `profile.timestamp` only, rendered
+ *     `YYYY-MM-DD HH:MM:SS UTC`; the renderer clock never substitutes.
+ *   - Medium truncation is a deterministic fair round-robin across jobs in
+ *     canonical order, IMDS-touching lineages retained first, with an explicit
+ *     `rendered X of Y process lineages` line — never silent.
  *
- * Progressive disclosure across surfaces:
- *   - PR comment  — headline, one job line per job, per-job <details> fold
- *     (open iff the winning rung beats plain counts).
- *   - Step summary — the FULL-detail snapshot: every tree inline, no elision,
- *     nothing folded.
+ * Deterministic by construction: same profile payload in → byte-identical
+ * output out.
  */
 
-/**
- * Canonical sticky marker (A8). `<!-- garnet-run-profile -->` is retained only
- * through the Action→App takeover window for self-identification and sunsets
- * at M1.
- */
-const RUNTIME_REVIEW_MARKER = "<!-- garnet-runtime-review -->"
 
-/** Self-marker: identifies this renderer's own comments for update/delete. */
-const COMMENT_MARKER = "<!-- garnet-run-profile -->"
 
-/**
- * Markers emitted by the control-plane GitHub App comment (the AUTHORITATIVE
- * "Garnet Runtime Review"). When the App has commented, this fallback defers.
- */
-const CONTROL_PLANE_MARKERS = [
-  "garnet-control-plane-pr-comment:v1",
-  "garnet-control-plane-pending-pr-comment:v1",
-]
 
-/** Hard size ceiling for the PR comment body (A9). GitHub caps at 65,536. */
-const SIZE_BUDGET = 60_000
 
-/** Network tools whose presence in a lineage tail is structurally salient. */
-const NETWORK_TOOLS = [/^curl\b/, /^wget\b/, /^sh -c\b/]
 
-/** How many trailing ancestry entries count as the "lineage tail". */
-const TAIL_DEPTH = 3
+
+// ---------------------------------------------------------------------------
+// Model typedefs (checkJs) — the v6.6.1 record/review model.
+// ---------------------------------------------------------------------------
 
 /**
- * The exact known GitHub-hosted runner ancestry set (A4). Membership is
- * exact-match after A5 normalization (`provjobd128…` ≡ `provjobd*`).
- */
-const RUNNER_CHAIN = new Set([
-  "systemd",
-  "hosted-compute-agent",
-  "Runner.Listener",
-  "Runner.Worker",
-  "sudo",
-  "provjobd*",
-])
-
-/** GitHub-published destination names (github infra classification, A1). */
-const GITHUB_OWNED_RE =
-  /(^|\.)github\.com$|(^|\.)githubusercontent\.com$|(^|\.)githubapp\.com$|(^|\.)actions\.githubusercontent\.com$/
-
-/**
- * @typedef {{ ancestry: string[], domain: string, ip: string }} RawConnection
- */
-
-/**
- * @typedef {RawConnection & { count: number, class: string }} ReviewConnection
+ * One destination association: one recorded egress peer × one proc_tree.
+ * @typedef {{
+ *   flow_id: number
+ *   tree_index: number
+ *   remote_address: string
+ *   remote_names: string[]
+ *   remote_ports: string[]
+ *   protocol: string
+ *   result: string
+ *   detections: string[]
+ *   lineage_recorded: boolean
+ *   pid: string
+ *   process: string
+ *   ancestry: string[]
+ *   github_step: string
+ * }} ReviewEdge
  */
 
 /**
  * @typedef {{
+ *   timestamp: string
+ *   event: string
+ *   remote_peer: string
+ *   protocol: string
+ *   ports: string
+ *   result: string
+ * }} AssertionEvidence
+ */
+
+/**
+ * @typedef {{
+ *   class_id: string
+ *   id: string
+ *   description: string
+ *   result: string
+ *   evidence: AssertionEvidence[]
+ * }} JobAssertion
+ */
+
+/**
+ * @typedef {{
+ *   total_domains: number | null
+ *   total_connections: number | null
+ * }} JobTelemetry
+ */
+
+/**
+ * @typedef {{
+ *   associations: number
+ *   processes: number
+ *   destinations: number
+ *   primary_names: number
+ *   domains: number
+ *   flows: number
+ * }} EdgeCounts
+ */
+
+/**
+ * One job's summarized record (the output of `summarizeProfile`).
+ * @typedef {{
  *   name: string
  *   workflow: string
+ *   repository: string
  *   sha: string
  *   run_id: string
  *   run_url: string
- *   connections: RawConnection[]
- * }} JobRecord
+ *   job_url?: string
+ *   profile_id: string
+ *   uuid: string
+ *   timestamp: string
+ *   ref: string
+ *   actor: string
+ *   job_index: string
+ *   flow_count: number
+ *   telemetry: JobTelemetry
+ *   assertions: JobAssertion[]
+ *   edges: ReviewEdge[]
+ *   counts: EdgeCounts
+ * }} JobSummary
+ */
+
+/**
+ * @typedef {JobSummary & { id: number, job_url: string }} ReviewJob
  */
 
 /**
  * @typedef {{
- *   id: number
  *   name: string
  *   workflow: string
- *   run_url: string
- *   connections: ReviewConnection[]
- * }} ReviewJob
+ *   job_index: string
+ *   edges: ReviewEdge[]
+ * }} PreviousJob
  */
 
 /**
- * @typedef {{
- *   rule: string
- *   jobRungs: Map<number, number>
- *   salientJobs: number[]
- *   salientKey: string
- *   headline: string
- * }} Salience
+ * @typedef {{ previousSha: string, previousJobs: PreviousJob[] }} ReviewComparison
  */
 
 /**
  * @typedef {{
  *   repo: string
  *   sha: string
- *   permalink: string
- *   docsURL: string
- *   renderedAt: Date | null
- *   commitURL: string
+ *   commitUrl: string
+ *   appUrl: string
+ *   appMode: boolean
+ *   recordedThrough: string
  *   jobs: ReviewJob[]
- *   uniqueDests: Set<string>
- *   lineageAbsent: boolean
- *   salience: Salience
- *   counts: {
- *     jobs: number
- *     expectedJobs: number
- *     workflows: number
- *     domains: number
- *     connections: number
- *   }
+ *   comparison: ReviewComparison | null
+ *   counts: { jobs: number, associations: number, destinations: number }
  * }} RunReview
  */
 
 /**
+ * Per-job comparison delta over comment-visible chains.
  * @typedef {{
- *   children: Map<string, TreeNode>
- *   leaves: ReviewConnection[]
- *   onPath?: boolean
+ *   addedIds: Set<string>
+ *   removedIds: Set<string>
+ *   added: Set<string>
+ *   removed: ReviewEdge[]
+ *   addedCount: number
+ *   removedCount: number
+ * }} EdgeDelta
+ */
+
+/**
+ * @typedef {EdgeDelta & { substrate: EdgeDelta }} JobDelta
+ */
+
+/**
+ * Shared-prefix lineage tree node for the comment tree.
+ * @typedef {{
+ *   name: string
+ *   children: TreeNode[]
+ *   childByKey: Map<string, TreeNode>
+ *   associations: ReviewEdge[]
+ *   pids: Set<string>
+ *   processes: Set<string>
+ *   steps: Set<string>
+ *   emphasized: boolean
  * }} TreeNode
  */
 
 /**
+ * Comparison identity scope shared across a job's partitions.
  * @typedef {{
- *   sha: string
- *   commitURL: string
- *   expectedJobs: number
- *   docsURL: string
- *   renderedAt: string | Date
- * }} NoRecordInput
+ *   names: Map<string, string>
+ *   headUniverse: Set<string>
+ *   previousUniverse: Set<string>
+ * }} DeltaScope
  */
 
 /**
- * Strip control characters from any evidence string (A8).
- * @param {unknown} value
- * @returns {string}
+ * One lineage-first Step Summary row.
+ * @typedef {{ edge: ReviewEdge, associations: ReviewEdge[] }} LineageRow
  */
-function stripControl(value) {
-  return String(value ?? "").replace(/[\u0000-\u0008\u000B-\u001F\u007F]/g, "")
+
+/** Canonical sticky marker. */
+const RUNTIME_REVIEW_MARKER = "<!-- garnet-runtime-review -->"
+
+/** Self-marker: identifies THIS renderer's own comments for update/delete. */
+const COMMENT_MARKER = "<!-- garnet-run-profile -->"
+
+/**
+ * Stable marker for the testbed-only "after" projection. It deliberately
+ * shares no exact marker with the App or Action fallback, so each owner can
+ * update only its own PR comment.
+ */
+const REFERENCE_MOCKUP_MARKER = "<!-- garnet-reference-renderer-mockup -->"
+
+/**
+ * Markers emitted by the control-plane GitHub App comment (the AUTHORITATIVE
+ * "Garnet Runtime Review"). When the App has commented, this standalone
+ * Action fallback is suppressed.
+ */
+const CONTROL_PLANE_MARKERS = [
+  "garnet-control-plane-pr-comment:v1",
+  "garnet-control-plane-pending-pr-comment:v1",
+]
+
+/** Exact emitted vocabulary — byte-locked by contract/vocab.json. */
+const VOCAB = {
+  headlineLead: runtime_review_vocab_CONTRACT_VOCAB.copy.headlineLead,
+  stepSummaryHeading: runtime_review_vocab_CONTRACT_VOCAB.copy.stepSummaryHeading,
+  artifact: runtime_review_vocab_CONTRACT_VOCAB.copy.artifact,
+  permalinkLabel: runtime_review_vocab_CONTRACT_VOCAB.copy.permalinkLabel,
+  emptyPeers: runtime_review_vocab_CONTRACT_VOCAB.copy.emptyPeers,
+  noRunProfile: runtime_review_vocab_CONTRACT_VOCAB.copy.noRunProfile,
+  unknownLineage: runtime_review_vocab_CONTRACT_VOCAB.copy.unknownLineage,
+  noChange: runtime_review_vocab_CONTRACT_VOCAB.copy.noChange,
+  noWorkloadChange: runtime_review_vocab_CONTRACT_VOCAB.copy.noWorkloadChange,
+  sinceWord: runtime_review_vocab_CONTRACT_VOCAB.copy.sinceWord,
+  vanishedJobsLabel: runtime_review_vocab_CONTRACT_VOCAB.copy.vanishedJobsLabel,
+  jobsLineChanged: runtime_review_vocab_CONTRACT_VOCAB.copy.jobsLineChanged,
+  jobsLineUnchanged: runtime_review_vocab_CONTRACT_VOCAB.copy.jobsLineUnchanged,
+  jobsLineNoOutbound: runtime_review_vocab_CONTRACT_VOCAB.copy.jobsLineNoOutbound,
+  jobsLineVanished: runtime_review_vocab_CONTRACT_VOCAB.copy.jobsLineVanished,
+  machineSummaryMarker: runtime_review_vocab_CONTRACT_VOCAB.copy.machineSummaryMarker,
+  substrateFoldLabel: runtime_review_vocab_CONTRACT_VOCAB.copy.substrateFoldLabel,
+  whatIsGarnetLabel: runtime_review_vocab_CONTRACT_VOCAB.copy.whatIsGarnetLabel,
+  whatIsGarnetUrl: runtime_review_vocab_CONTRACT_VOCAB.copy.whatIsGarnetUrl,
 }
 
-/**
- * @param {unknown} value
- * @returns {value is string}
- */
-function isNonEmptyString(value) {
-  return typeof value === "string" && value !== ""
-}
+/** PR comment serialized UTF-8 byte budget (GitHub hard cap is 65,536). */
+const SIZE_BUDGET = runtime_review_vocab_CONTRACT_VOCAB.mediumLimits.prCommentBudget
+
+/** Changed folds render open only while at most this many jobs changed. */
+const FOLD_OPEN_BUDGET = runtime_review_vocab_CONTRACT_VOCAB.comment.foldOpenBudget
+
+/** Step Summary hard limit (1 MiB). */
+const STEP_SUMMARY_BUDGET = runtime_review_vocab_CONTRACT_VOCAB.mediumLimits.stepSummaryHardLimit
+
+/** Loopback matcher for the dns-resolver note (anchored — never a suffix). */
+const LOOPBACK_RE = new RegExp(runtime_review_vocab_CONTRACT_VOCAB.notes.dnsResolver.loopbackPattern)
+
+/** The three exact instance-metadata addresses. */
+const IMDS_ADDRESSES = new Set(runtime_review_vocab_CONTRACT_VOCAB.notes.instanceMetadata.addresses)
+
+// ---------------------------------------------------------------------------
+// Escaping — every record-sourced string is attacker-controlled.
+// ---------------------------------------------------------------------------
 
 /**
- * Escape a value destined for INSIDE a `code span`: a stray backtick would
- * break out of the span, so neutralize it (and collapse newlines).
+ * Strip control characters from any record-sourced string.
  * @param {unknown} value
- * @returns {string}
  */
-function escapeCode(value) {
-  return stripControl(value)
-    .replace(/`/g, "ʼ")
-    .replace(/[\r\n]+/g, " ")
-    .trim()
-}
+const stripControl = (value) =>
+  String(value ?? "").replace(/[\u0000-\u0008\u000B-\u001F\u007F]/g, "")
 
 /**
- * Escape a value destined for INSIDE an HTML element (A8).
+ * Escape a value destined for INSIDE an HTML element. Three-plus backtick
+ * runs are neutralized so hostile names can never open a fence even if the
+ * surrounding HTML block is interrupted.
  * @param {unknown} value
- * @returns {string}
  */
-function escapeHtml(value) {
-  return stripControl(value)
+const escapeHtml = (value) =>
+  stripControl(value)
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
+    .replace(/`{3,}/g, (m) => "ʼ".repeat(m.length))
     .replace(/[\r\n]+/g, " ")
     .trim()
-}
 
 /**
- * Sanitize a value rendered inside a four-backtick text fence (A8): no
- * three-plus backtick runs, one line, control characters stripped.
+ * Neutralize markdown link vectors in record-sourced text that renders as
+ * plain (non-<code>) content: `](` can close a link label and `://` can
+ * autolink. HTML entities render identically but never parse as markdown.
+ * @param {string} value
+ */
+const neutralizeMarkdown = (value) =>
+  value.replaceAll("](", "]&#40;").replaceAll("://", "&#58;//")
+
+/**
+ * Escape a value destined for INSIDE an HTML attribute.
  * @param {unknown} value
- * @returns {string}
  */
-function fenceSafe(value) {
-  return stripControl(value)
-    .replace(/`{3,}/g, m => "ʼ".repeat(m.length))
+const escapeHtmlAttr = (value) =>
+  stripControl(value)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;")
     .replace(/[\r\n]+/g, " ")
     .trim()
-}
 
 /**
- * A5 — identifier normalization: trailing-digit suffixes are ephemeral
- * (e.g. `provjobd128037216` ≡ `provjobd*`). Signatures compare normalized
- * names; display always shows the raw recorded name.
- * @param {string} name
- * @returns {string}
+ * Escape a value destined for INSIDE a `code span`.
+ * @param {unknown} value
  */
-function normalizeIdentifier(name) {
-  return String(name ?? "").replace(/\d+$/, "*")
-}
+const escapeCode = (value) =>
+  stripControl(value)
+    .replace(/`/g, "ʼ")
+    .replace(/[\r\n]+/g, " ")
+    .trim()
 
 /**
- * Is this process name a member of the GitHub runner chain (A4)?
- * @param {string} name
- * @returns {boolean}
+ * Escape a value destined for INSIDE a `code span` that sits in a table
+ * cell: code spans neutralize HTML/Markdown, but `|` still splits cells and
+ * must be backslash-escaped at the GFM table layer.
+ * @param {unknown} value
  */
-function isRunnerChainProcess(name) {
-  return RUNNER_CHAIN.has(normalizeIdentifier(String(name)))
-}
+const escapeCodeCell = (value) => escapeCode(value).replaceAll("|", "\\|")
 
 /**
- * A1 — structural classification. Exactly one class per connection, typed on
- * identity and provenance, never acceptability:
- *   `dns`           — resolver stub (systemd-resolved loopback).
- *   `garnet upload` — the sensor's own upload path.
- *   `github infra`  — destination inside GitHub's published ranges AND origin
- *                     inside the runner chain (both: ownership + provenance).
- *   ""              — unclassified (everything else — including GitHub-owned
- *                     destinations reached from user code, which stay
- *                     enumerable evidence).
- * @param {{ ancestry: string[], domain: string, ip: string }} c
- * @returns {string}
+ * Escape a value destined for HTML inside a GFM table cell.
+ * @param {unknown} value
  */
-function classifyConnection(c) {
-  const domain = String(shared_firstNonEmptyString(c.domain))
-  const ip = String(shared_firstNonEmptyString(c.ip))
-  if (/^(localhost|127\.|::1)/.test(domain) || /^(127\.|::1)/.test(ip)) return "dns"
-  if (/^(?:[a-z0-9-]+-)?api\.garnet\.ai$/.test(domain)) return "garnet upload"
-  const ancestry = (c.ancestry ?? []).filter(isNonEmptyString)
-  const fromRunnerChain = ancestry.length > 0 && ancestry.every(isRunnerChainProcess)
-  if (fromRunnerChain && (GITHUB_OWNED_RE.test(domain) || domain === "")) return "github infra"
-  return ""
+const escapeHtmlCell = (value) => escapeHtml(value).replaceAll("|", "\\|")
+
+/**
+ * Bound a captured (attacker-controllable) label to `max` chars with a
+ * middle ellipsis, preserving head+tail so it stays identifiable while a
+ * crafted payload buried mid-string cannot survive or inflate token cost.
+ * Full untruncated values remain in the Run Profile / API.
+ * @param {unknown} value
+ * @param {number} [max]
+ */
+const truncateMiddle = (value, max = 64) => {
+  const v = String(value ?? "")
+  if (v.length <= max) return v
+  const head = Math.ceil((max - 1) / 2)
+  const tail = Math.floor((max - 1) / 2)
+  return `${v.slice(0, head)}…${v.slice(v.length - tail)}`
 }
 
 /**
- * Collapse one raw Jibril profile into a job record.
+ * Escape a value destined for a markdown table cell.
+ * @param {unknown} value
+ */
+function escapeMarkdownCell(value) {
+  return stripControl(value)
+    .replaceAll("\\", "\\\\")
+    .replaceAll("|", "\\|")
+    .replaceAll("`", "\\`")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replace(/[\r\n]+/g, " ")
+}
+
+// ---------------------------------------------------------------------------
+// Record model.
+// ---------------------------------------------------------------------------
+
+/**
+ * True for IPv4/IPv6/address literals — an address-like name is not a domain.
+ * @param {unknown} value
+ */
+function isAddressLike(value) {
+  const v = String(value).trim().replace(/^\[|\]$/g, "")
+  return (0,external_node_net_.isIP)(v.split("%", 1)[0] ?? "") !== 0
+}
+
+/**
+ * Deterministic timestamp formatting: `YYYY-MM-DD HH:MM:SS UTC` from
+ * `profile.timestamp` only. Invalid/missing input → "" (never the renderer
+ * clock).
+ * @param {unknown} value
+ */
+function formatTimestamp(value) {
+  const raw = String(value ?? "").trim()
+  if (raw === "") return ""
+  const date = new Date(raw)
+  if (Number.isNaN(date.getTime())) return ""
+  const pad = (/** @type {number} */ n) => String(n).padStart(2, "0")
+  return `${date.getUTCFullYear()}-${pad(date.getUTCMonth() + 1)}-${pad(date.getUTCDate())} ${pad(date.getUTCHours())}:${pad(date.getUTCMinutes())}:${pad(date.getUTCSeconds())} UTC`
+}
+
+/**
+ * Numeric port from a recorded remote_ports value (handles `53 (dns)`).
+ * @param {unknown} value
+ */
+const numericPort = (value) => {
+  const m = /^\s*(\d+)/.exec(String(value))
+  return m ? Number(m[1]) : null
+}
+
+/**
+ * Deterministic factual notes for one association:
+ *   - `dns resolver` — loopback remote_address AND a remote_ports value with
+ *     numeric port 53.
+ *   - `instance metadata` — remote_address is one of the three exact IMDS
+ *     addresses.
+ *   - `detection: <kind>` — every non-empty recorded detection except `flow`.
+ * @param {ReviewEdge} edge
+ * @param {{ detections?: boolean }} [options]
+ */
+function edgeNotes(edge, { detections = true } = {}) {
+  /** @type {string[]} */
+  const notes = []
+  if (
+    LOOPBACK_RE.test(edge.remote_address) &&
+    edge.remote_ports.some((p) => numericPort(p) === 53)
+  ) {
+    notes.push(runtime_review_vocab_CONTRACT_VOCAB.notes.dnsResolver.text)
+  }
+  if (IMDS_ADDRESSES.has(edge.remote_address)) {
+    notes.push(runtime_review_vocab_CONTRACT_VOCAB.notes.instanceMetadata.text)
+  }
+  if (!detections) return notes
+  for (const detection of (edge.detections || [])
+    .filter((value) => value !== "" && value.toLowerCase() !== "flow")
+    .sort()) {
+    notes.push(`detection: ${detection}`)
+  }
+  return notes
+}
+
+/**
+ * Expand one recorded peer into its edges (one per proc_tree; a peer with no
+ * proc_trees emits one edge with unrecorded lineage). Preserves every
+ * contract field verbatim; never captures `arguments` or `executable`.
+ * @param {Record<string, any>} peer
+ * @param {number} flowID
+ * @returns {ReviewEdge[]}
+ */
+function peerEdges(peer, flowID) {
+  // Record-faithful: recorded empty strings are preserved, never silently
+  // filtered (projections skip empties at render time; counts exclude them).
+  const remote_names = (Array.isArray(peer?.remote_names) ? peer.remote_names : []).map((n) =>
+    String(n ?? ""),
+  )
+  const remote_address = String(peer?.remote_address ?? "")
+  const remote_ports = (
+    Array.isArray(peer?.remote_ports) ? peer.remote_ports : []
+  ).map(String)
+  const protocol = String(peer?.protocol ?? "")
+  const result = String(peer?.result ?? "")
+  const rawDetections = Array.isArray(peer?.detections)
+    ? peer.detections
+    : Array.isArray(peer?.Detections)
+      ? peer.Detections
+      : []
+  const detections = rawDetections.map((value) => String(value ?? ""))
+  const trees = Array.isArray(peer?.proc_trees) && peer.proc_trees.length > 0
+    ? peer.proc_trees
+    : [null]
+  return trees.map((/** @type {Record<string, any> | null} */ tree, treeIndex) => ({
+    flow_id: flowID,
+    tree_index: treeIndex,
+    remote_address,
+    remote_names,
+    remote_ports,
+    protocol,
+    result,
+    detections,
+    lineage_recorded: tree !== null,
+    pid: tree && tree.pid !== undefined && tree.pid !== null ? String(tree.pid) : "",
+    process: tree ? String(tree.process ?? "") : "",
+    ancestry: tree ? (Array.isArray(tree.ancestry) ? tree.ancestry : []).map((/** @type {unknown} */ a) => String(a ?? "")) : [],
+    github_step: tree ? String(tree.github_step ?? "") : "",
+  }))
+}
+
+/**
+ * Display lineage for one edge (raw, unescaped).
+ * @param {ReviewEdge} edge
+ */
+function edgeLineage(edge) {
+  if (!edge.lineage_recorded) return VOCAB.unknownLineage
+  if (edge.ancestry.length > 0) return edge.ancestry.join(" › ")
+  return edge.process || VOCAB.unknownLineage
+}
+
+/**
+ * Canonical deterministic edge order: lineage, remote address,
+ * ports/protocol, PID.
+ * @param {ReviewEdge} a
+ * @param {ReviewEdge} b
+ */
+function edgeComparator(a, b) {
+  const keyA = [
+    edgeLineage(a),
+    a.remote_address,
+    a.remote_ports.join(","),
+    a.protocol,
+    a.pid,
+    a.flow_id,
+    a.tree_index,
+  ]
+  const keyB = [
+    edgeLineage(b),
+    b.remote_address,
+    b.remote_ports.join(","),
+    b.protocol,
+    b.pid,
+    b.flow_id,
+    b.tree_index,
+  ]
+  for (let i = 0; i < keyA.length; i += 1) {
+    const va = keyA[i] ?? ""
+    const vb = keyB[i] ?? ""
+    if (va < vb) return -1
+    if (va > vb) return 1
+  }
+  return 0
+}
+
+/**
+ * Collapse one raw Jibril profile (format 0.2.0) into a job record with its
+ * destination associations and mechanical counts.
  * @param {unknown} profile
- * @returns {JobRecord | null}
+ * @returns {JobSummary | null}
  */
 function summarizeProfile(profile) {
-  if (profile === null || profile === undefined || typeof profile !== "object") return null
-  const p = /** @type {Record<string, any>} */ (profile)
-  const github = p?.scenarios?.github ?? p?.github ?? {}
+  if (!profile || typeof profile !== "object") return null
+  const envelope = /** @type {Record<string, any>} */ (profile)
+  const p =
+    envelope.data && typeof envelope.data === "object"
+      ? /** @type {Record<string, any>} */ (envelope.data)
+      : envelope
+  const github = p?.scenarios?.github || p?.github || {}
 
-  const egressPeers = Array.isArray(p?.network?.egress?.peers) ? p.network.egress.peers : []
-  /** @type {RawConnection[]} */
-  const connections = []
-  for (const peer of egressPeers) {
-    const domain = String(firstNonEmptyString(...(peer?.remote_names ?? peer?.RemoteNames ?? [])))
-    const ip = String(firstNonEmptyString(peer?.remote_address, peer?.RemoteAddress))
-    const trees = peer?.proc_trees ?? peer?.ProcTrees ?? []
-    const ancestries = trees.length > 0
-      ? trees.map((/** @type {any} */ t) => {
-          const ancestry = t?.ancestry ?? t?.Ancestry ?? []
-          return ancestry.filter(isNonEmptyString)
-        })
-      : [[]]
-    for (const ancestry of ancestries) {
-      connections.push({ ancestry, domain, ip })
-    }
-  }
+  /** @type {Record<string, any>[]} */
+  const peers = Array.isArray(p?.network?.egress?.peers) ? p.network.egress.peers : []
+  const edges = peers.flatMap((peer, index) => peerEdges(peer, index)).sort(edgeComparator)
+  const egressTelemetry = p?.telemetry?.network?.egress || {}
+  /** @type {JobAssertion[]} */
+  const assertions = (Array.isArray(p?.assertions) ? p.assertions : []).map((/** @type {Record<string, any>} */ assertion) => ({
+    class_id: String(assertion?.class_id || assertion?.ClassId || ""),
+    id: String(assertion?.assertion_id || assertion?.id || ""),
+    description: String(assertion?.description || ""),
+    result: String(assertion?.result || ""),
+    evidence: (Array.isArray(assertion?.evidence) ? assertion.evidence : []).map(
+      (/** @type {Record<string, unknown>} */ evidence) => ({
+        timestamp: evidenceValue(evidence, ["timestamp", "time", "created_at"]),
+        event: evidenceValue(evidence, ["event", "event_type", "kind", "detection"]),
+        remote_peer: evidenceValue(evidence, [
+          "remote_peer",
+          "remote_name",
+          "remote_address",
+          "peer",
+        ]),
+        protocol: evidenceValue(evidence, ["protocol"]),
+        ports: evidenceValue(evidence, ["ports", "remote_ports", "port"]),
+        result: evidenceValue(evidence, ["result"]),
+      }),
+    ),
+  }))
 
   return {
-    name: firstNonEmptyString(github.job),
-    workflow: firstNonEmptyString(github.workflow),
-    sha: firstNonEmptyString(github.sha),
-    run_id: firstNonEmptyString(github.run_id),
+    name: String(github.job || ""),
+    workflow: String(github.workflow || ""),
+    repository: String(github.repository || ""),
+    sha: String(github.sha || ""),
+    run_id: String(github.run_id || ""),
     run_url:
-      isNonEmptyString(github.run_id) && isNonEmptyString(github.repository)
-        ? `${isNonEmptyString(github.server_url) ? github.server_url : "https://github.com"}/${github.repository}/actions/runs/${github.run_id}`
+      github.run_id && github.repository
+        ? `${github.server_url || "https://github.com"}/${github.repository}/actions/runs/${github.run_id}`
         : "",
-    connections,
+    profile_id: String(envelope.id || envelope.profile_id || ""),
+    uuid: String(p?.uuid || ""),
+    timestamp: String(p?.timestamp || ""),
+    ref: String(github.ref || ""),
+    actor: String(github.triggering_actor || github.actor || ""),
+    job_index:
+      github.job_index !== undefined && github.job_index !== null
+        ? String(github.job_index)
+        : "",
+    flow_count: peers.length,
+    telemetry: {
+      total_domains:
+        typeof egressTelemetry.total_domains === "number"
+          ? egressTelemetry.total_domains
+          : null,
+      total_connections:
+        typeof egressTelemetry.total_connections === "number"
+          ? egressTelemetry.total_connections
+          : null,
+    },
+    assertions,
+    edges,
+    counts: edgeCounts(edges, peers.length),
   }
 }
 
 /**
- * A6 — the Run Profile permalink: an explicit permalink wins; otherwise
- * derive the Garnet app run URL from the profile's own run_id.
- * Never a github.com/actions URL.
- * @param {string} explicit
- * @param {{ run_id?: string }[]} jobRecords
- * @param {string} appURL
- * @returns {string}
+ * Mechanical v6.4 structural counts over destination associations:
+ *   - associations = Σ peers max(1, len(proc_trees));
+ *   - recorded processes = distinct recorded lineage + PID identities;
+ *   - destinations = distinct non-empty remote_address values;
+ *   - observed domain names = distinct non-address-like first remote_names;
+ *   - flows = raw peers length.
+ * Secondary names are annotations, never extra identities.
+ * @param {ReviewEdge[]} edges
+ * @param {number} [flowCount]
+ * @returns {EdgeCounts}
  */
-function derivePermalink(explicit, jobRecords, appURL) {
-  if (explicit !== "") return explicit
-  const runID = (jobRecords ?? []).map(j => j?.run_id).find(isNonEmptyString)
-  if (runID === undefined || runID === "" || appURL === "") return ""
-  return `${appURL}/dashboard/runs/${encodeURIComponent(String(runID))}?utm_source=github&utm_medium=pr_comment`
-}
-
-/**
- * Stable key for deduplicating one (lineage, destination) behavior.
- * @param {{ ancestry: string[], domain: string, ip: string }} c
- * @returns {string}
- */
-function connectionKey(c) {
-  return `${(c.ancestry ?? []).join("\u0000")}\u0001${c.domain}\u0001${c.ip}`
-}
-
-/**
- * A5 — behavior signature for R0 comparison across pushes: normalized
- * ancestry + destination. Computed on the raw profile; elision (A4) has no
- * effect on signatures.
- * @param {{ ancestry?: string[], domain?: string, ip?: string }} c
- * @returns {string}
- */
-function behaviorSignature(c) {
-  return `${(c.ancestry ?? []).map(normalizeIdentifier).join("\u0000")}\u0001${firstNonEmptyString(c.domain, c.ip)}`
-}
-
-/**
- * A destination's display identity (domain when named, else address).
- * @param {{ domain: string, ip: string }} c
- * @returns {string}
- */
-function destName(c) {
-  return shared_firstNonEmptyString(c.domain, c.ip)
-}
-
-/**
- * Display label for a destination under A1 (`dns` replaces the stub name).
- * @param {ReviewConnection} c
- * @returns {string}
- */
-function destLabel(c) {
-  return c.class === "dns" ? "dns" : destName(c)
-}
-
-/**
- * @param {string[]} ancestry
- * @returns {boolean}
- */
-function tailHasNetworkTool(ancestry) {
-  return ancestry.slice(-TAIL_DEPTH).some(step => NETWORK_TOOLS.some(re => re.test(String(step))))
-}
-
-/**
- * A3 — the total selection order (salience order), applied to headline
- * destination, enumeration slots, job ordering, and pruning order:
- * within-run uniqueness → spawn-chain depth → connection count → lexical.
- * Returns a comparator; smaller sorts first (more salient).
- * @param {Set<string>} uniqueDests
- * @returns {(a: ReviewConnection, b: ReviewConnection) => number}
- */
-function salienceComparator(uniqueDests) {
-  return (a, b) => {
-    const uniqA = uniqueDests.has(destName(a)) ? 0 : 1
-    const uniqB = uniqueDests.has(destName(b)) ? 0 : 1
-    if (uniqA !== uniqB) return uniqA - uniqB
-    const depthA = (a.ancestry || []).length
-    const depthB = (b.ancestry || []).length
-    if (depthA !== depthB) return depthB - depthA
-    if (a.count !== b.count) return b.count - a.count
-    return destName(a) < destName(b) ? -1 : destName(a) > destName(b) ? 1 : 0
+function edgeCounts(edges, flowCount) {
+  const processes = new Set()
+  const destinations = new Set()
+  const primaryNames = new Set()
+  const domains = new Set()
+  const flowIds = new Set()
+  for (const e of edges) {
+    if (e.lineage_recorded) {
+      processes.add(
+        JSON.stringify([e.pid, e.process, e.ancestry]),
+      )
+    }
+    if (e.remote_address !== "") destinations.add(e.remote_address)
+    const primaryName = canonicalRecordedName(e.remote_names)
+    if (primaryName !== "") primaryNames.add(primaryName)
+    if (primaryName !== "" && !isAddressLike(primaryName)) domains.add(primaryName)
+    if (e.flow_id !== undefined && e.flow_id !== null) flowIds.add(e.flow_id)
+  }
+  return {
+    associations: edges.length,
+    processes: processes.size,
+    destinations: destinations.size,
+    primary_names: primaryNames.size,
+    domains: domains.size,
+    flows: flowCount !== undefined && Number.isInteger(flowCount) ? flowCount : flowIds.size || edges.length,
   }
 }
 
 /**
- * Build the review object from job records.
- * @param {{
- *   repo?: string
- *   sha?: string
- *   commitURL?: string
- *   permalink?: string
- *   docsURL?: string
- *   expectedJobs?: number
- *   renderedAt?: string | Date
- *   jobs: Partial<JobRecord>[]
- * }} input
+ * Runtime telemetry comparison. This never throws: historical records may
+ * legitimately disagree with the projection. CI separately hard-fails Gate T
+ * for the pinned fixtures expected to satisfy the invariant.
+ * @param {ReviewJob | JobSummary} job
+ * @returns {{ metric: string, sensor: number, derived: number, derivedLabel: string }[]}
+ */
+function telemetryDiscrepancies(job) {
+  /** @type {{ metric: string, sensor: number, derived: number, derivedLabel: string }[]} */
+  const discrepancies = []
+  if (
+    job.telemetry.total_connections !== null &&
+    job.telemetry.total_connections !== job.counts.flows
+  ) {
+    discrepancies.push({
+      metric: "Connections",
+      sensor: job.telemetry.total_connections,
+      derived: job.counts.flows,
+      derivedLabel: "recorded flows",
+    })
+  }
+  if (
+    job.telemetry.total_domains !== null &&
+    job.telemetry.total_domains !== job.counts.primary_names
+  ) {
+    discrepancies.push({
+      metric: "Unique domains",
+      sensor: job.telemetry.total_domains,
+      derived: job.counts.primary_names,
+      derivedLabel: "distinct primary remote names",
+    })
+  }
+  return discrepancies
+}
+
+/**
+ * A loosely-typed incoming job record accepted by `buildRunReview`.
+ * @typedef {Record<string, any>} JobRecordInput
+ */
+
+/**
+ * Build the review model from job records.
+ * @param {{repo?: string, sha?: string, commitUrl?: string, appUrl?: string,
+ *          appMode?: boolean, jobs: (JobRecordInput | null | undefined)[],
+ *          previousSha?: string, previousJobs?: (JobRecordInput | null | undefined)[] | null}} input
  * @returns {RunReview}
  */
 function buildRunReview(input) {
-  const inputRecord = /** @type {Record<string, unknown>} */ (input)
   /** @type {ReviewJob[]} */
-  let jobs = (input.jobs ?? []).filter(job => job !== undefined && job !== null).map((j, i) => ({
-    id: i,
-    name: shared_firstNonEmptyString(j.name, `job-${i + 1}`),
-    workflow: shared_firstNonEmptyString(j.workflow),
-    run_url: shared_firstNonEmptyString(j.run_url),
-    connections: dedupeConnections(j.connections ?? []),
-  }))
+  const jobs = (input.jobs || [])
+    .filter((j) => j !== null && j !== undefined)
+    .map((j, i) => ({
+      id: i,
+      name: String(j.name || ""),
+      workflow: String(j.workflow || ""),
+      run_id: String(j.run_id || ""),
+      run_url: String(j.run_url || ""),
+      job_url: String(j.job_url || ""),
+      profile_id: String(j.profile_id || ""),
+      uuid: String(j.uuid || ""),
+      timestamp: String(j.timestamp || ""),
+      repository: String(j.repository || ""),
+      sha: String(j.sha || ""),
+      ref: String(j.ref || ""),
+      actor: String(j.actor || ""),
+      job_index: String(j.job_index || ""),
+      flow_count: Number(j.flow_count || 0),
+      telemetry: {
+        total_domains:
+          typeof j.telemetry?.total_domains === "number"
+            ? j.telemetry.total_domains
+            : null,
+        total_connections:
+          typeof j.telemetry?.total_connections === "number"
+            ? j.telemetry.total_connections
+            : null,
+      },
+      assertions: Array.isArray(j.assertions) ? j.assertions : [],
+      edges: (j.edges || []).slice().sort(edgeComparator),
+    }))
+    .map((j) => ({ ...j, counts: edgeCounts(j.edges, j.flow_count) }))
+    // Canonical job order: alphabetic by `workflow / job`.
+    .sort((a, b) => {
+      const ka = [
+        a.workflow,
+        a.name,
+        a.run_id,
+        a.job_index,
+        a.profile_id,
+        a.uuid,
+        a.timestamp,
+      ].join("\u0000")
+      const kb = [
+        b.workflow,
+        b.name,
+        b.run_id,
+        b.job_index,
+        b.profile_id,
+        b.uuid,
+        b.timestamp,
+      ].join("\u0000")
+      return ka < kb ? -1 : ka > kb ? 1 : 0
+    })
 
-  const workflows = [...new Set(jobs.map(j => j.workflow).filter(isNonEmptyString))]
-  const domains = [...new Set(jobs.flatMap(j => j.connections.map(destName)).filter(isNonEmptyString))]
-  const totalConnections = jobs.reduce(
-    (n, j) => n + j.connections.reduce((m, c) => m + c.count, 0),
-    0,
-  )
+  // `recorded through <max valid profile.timestamp>` — sensor time only.
+  const stamps = jobs.map((j) => formatTimestamp(j.timestamp)).filter((s) => s !== "")
+  const recordedThrough = stamps.length > 0 ? (stamps.sort()[stamps.length - 1] ?? "") : ""
 
-  // Within-run uniqueness (A3's first key): destinations reached by exactly
-  // one job. Only meaningful when more than one job is recorded.
-  /** @type {Set<string>} */
-  const uniqueDests = new Set()
-  if (jobs.length > 1) {
-    /** @type {Map<string, Set<number>>} */
-    const destJobs = new Map()
-    for (const job of jobs) {
-      for (const c of job.connections) {
-        const d = destName(c)
-        if (d === "") continue
-        const owners = destJobs.get(d) ?? new Set()
-        owners.add(job.id)
-        destJobs.set(d, owners)
-      }
+  // Optional execution comparison: the previous profiled commit's job
+  // records (Phase-1 wiring supplies them; without them every fold renders
+  // the snapshot tree). Comparison is computed over comment-visible chains.
+  const previousSha = String(input.previousSha || "")
+  /** @type {PreviousJob[] | null} */
+  const previousJobs = Array.isArray(input.previousJobs)
+    ? input.previousJobs
+        .filter((j) => j !== null && j !== undefined)
+        .map((j) => ({
+          name: String(j.name || ""),
+          workflow: String(j.workflow || ""),
+          job_index: j.job_index === undefined || j.job_index === null ? "" : String(j.job_index),
+          edges: (j.edges || []).slice().sort(edgeComparator),
+        }))
+    : null
+  const comparison =
+    previousSha !== "" && previousJobs !== null
+      ? { previousSha, previousJobs }
+      : null
+
+  const destinationUnion = new Set()
+  for (const j of jobs) {
+    for (const e of j.edges) {
+      if (e.remote_address !== "") destinationUnion.add(e.remote_address)
     }
-    for (const [d, owners] of destJobs) if (owners.size === 1) uniqueDests.add(d)
   }
 
-  // S7 — lineage-absent degradation: trees and spawn rungs disabled.
-  const lineageAbsent = jobs.every(j => j.connections.every(c => c.ancestry.length === 0))
-
-  const salience = computeSalience(jobs, {
-    domains,
-    totalConnections,
-    uniqueDests,
-    lineageAbsent,
-  })
-
-  // A3 — job ordering: headline-picked jobs first, then rung ascending;
-  // ties by name (total order). Keeps the salient job out of the group fold.
-  /** @param {ReviewJob} job */
-  const salientRank = job => (salience.salientJobs.includes(job.id) ? 0 : 1)
-  /** @param {ReviewJob} job */
-  const rungRank = job => salience.jobRungs.get(job.id) ?? 3
-  jobs = [...jobs].sort(
-    (a, b) =>
-      salientRank(a) - salientRank(b) || rungRank(a) - rungRank(b) || (a.name < b.name ? -1 : 1),
-  )
-
-  const recorded = jobs.length
-  const expected = Math.max(input.expectedJobs ?? 0, recorded)
-
-  return {
-    repo: shared_firstNonEmptyString(input.repo),
-    sha: shared_firstNonEmptyString(input.sha),
-    permalink: shared_firstNonEmptyString(input.permalink),
-    docsURL: shared_firstNonEmptyString(input.docsURL, inputRecord["docsUrl"]),
-    renderedAt: input.renderedAt !== undefined && input.renderedAt !== null ? new Date(input.renderedAt) : null,
-    commitURL: shared_firstNonEmptyString(input.commitURL, inputRecord["commitUrl"]),
+  const review = {
+    repo: String(input.repo || ""),
+    sha: String(input.sha || ""),
+    commitUrl: String(input.commitUrl || ""),
+    appUrl: String(input.appUrl || "https://app.garnet.ai").replace(/\/+$/, ""),
+    appMode: input.appMode !== false,
+    recordedThrough,
     jobs,
-    uniqueDests,
-    lineageAbsent,
-    salience,
+    comparison,
     counts: {
-      jobs: recorded,
-      expectedJobs: expected,
-      workflows: workflows.length,
-      domains: domains.length,
-      connections: totalConnections,
+      jobs: jobs.length,
+      associations: jobs.reduce((n, j) => n + j.counts.associations, 0),
+      destinations: destinationUnion.size,
     },
   }
+
+  // Comparison reviews order jobs by decision relevance: workload change,
+  // substrate-only movement, no change, then jobs with no outbound
+  // destinations. Canonical alphabetic order holds within each tier;
+  // snapshot reviews keep it outright.
+  if (review.comparison !== null) {
+    const { tiers } = changeAccounting(review)
+    const canonicalIndex = new Map(review.jobs.map((j, i) => [j.id, i]))
+    review.jobs = [...review.jobs].sort(
+      (a, b) =>
+        (tiers.get(a.id) ?? 0) - (tiers.get(b.id) ?? 0) ||
+        (canonicalIndex.get(a.id) ?? 0) - (canonicalIndex.get(b.id) ?? 0),
+    )
+  }
+  return review
 }
 
 /**
- * Merge duplicate (lineage, destination) pairs into one classified entry.
- * @param {RawConnection[]} connections
- * @returns {ReviewConnection[]}
+ * Stable JSON-serializable review model (the review-model golden surface).
+ * @param {RunReview} review
  */
-function dedupeConnections(connections) {
-  /** @type {Map<string, ReviewConnection>} */
-  const byKey = new Map()
-  for (const raw of connections) {
-    const c = {
-      ancestry: (raw.ancestry ?? []).map(s => String(s)),
-      domain: String(shared_firstNonEmptyString(raw.domain)),
-      ip: String(shared_firstNonEmptyString(raw.ip)),
-    }
-    const key = connectionKey(c)
-    const seen = byKey.get(key)
-    if (seen !== undefined) seen.count += 1
-    else byKey.set(key, { ...c, count: 1, class: classifyConnection(c) })
+function exportReviewModel(review) {
+  return {
+    contractVersion: CONTRACT_VOCAB.version,
+    repo: review.repo,
+    sha: review.sha,
+    commitUrl: review.commitUrl,
+    appUrl: review.appUrl,
+    appMode: review.appMode,
+    recordedThrough: review.recordedThrough,
+    counts: review.counts,
+    jobs: review.jobs.map((j) => ({
+      name: j.name,
+      workflow: j.workflow,
+      run_id: j.run_id,
+      run_url: j.run_url,
+      job_url: j.job_url,
+      profile_id: j.profile_id,
+      uuid: j.uuid,
+      timestamp: j.timestamp,
+      repository: j.repository,
+      sha: j.sha,
+      ref: j.ref,
+      actor: j.actor,
+      job_index: j.job_index,
+      flow_count: j.flow_count,
+      telemetry: j.telemetry,
+      telemetryDiscrepancies: telemetryDiscrepancies(j),
+      assertions: j.assertions,
+      counts: j.counts,
+      edges: j.edges.map((e) => ({
+        remote_address: e.remote_address,
+        remote_names: e.remote_names,
+        remote_ports: e.remote_ports,
+        protocol: e.protocol,
+        result: e.result,
+        detections: e.detections,
+        lineage_recorded: e.lineage_recorded,
+        pid: e.pid,
+        process: e.process,
+        ancestry: e.ancestry,
+        github_step: e.github_step,
+        notes: edgeNotes(e),
+      })),
+    })),
   }
-  return [...byKey.values()]
+}
+
+// ---------------------------------------------------------------------------
+// Public Run Profile — selector and publication policy (contract data; the
+// page is served by the Garnet app, this repo locks the policy + URLs).
+// ---------------------------------------------------------------------------
+
+/**
+ * Exact profile selector URL: `/public/runs/{run_id}?profile=<profile_id>`.
+ * `profile_id` is the control-plane envelope ID, not the raw record UUID.
+ * @param {{run_id?: string, profile_id?: string}} job
+ * @param {string} appUrl
+ * @param {string} utmMedium
+ */
+function profilePermalink(job, appUrl, utmMedium) {
+  if (!job.run_id || !job.profile_id || !appUrl) return ""
+  return `${appUrl}/public/runs/${encodeURIComponent(String(job.run_id))}?profile=${encodeURIComponent(String(job.profile_id))}&utm_source=github&utm_medium=${utmMedium}`
 }
 
 /**
- * The structural-salience headline. Rungs (top wins):
- *   uniqueness — a destination reached by exactly one job (multi-job only)
- *   spawn      — a network tool in a lineage tail
- *   counts     — the pure inventory sentence (S4)
- * A2: classified connections never headline. A3: within a rung, candidates
- * are ordered by the salience comparator, never first-seen.
- * @param {ReviewJob[]} jobs
- * @param {{
- *   domains: string[]
- *   totalConnections: number
- *   uniqueDests: Set<string>
- *   lineageAbsent: boolean
- * }} totals
- * @returns {Salience}
+ * Fail-closed publication decision, rechecked at request time. Default deny.
+ * Renders only when backend-truth visibility is exactly "public" AND explicit
+ * consent exists AND consent is not revoked AND an exact envelope Profile.ID
+ * selector resolves. Missing, empty, wrong, or job-only selectors return 404
+ * and never fall back to a run index/job/first profile. Every denied case
+ * returns the same non-oracular 404 for HTML and JSON.
+ * @param {{visibility?: string, consent?: boolean, revoked?: boolean,
+ *          profileRequested?: boolean, selectorResolves?: boolean}} state
+ * @returns {{status: 200|404, body: "render"|"not found"}}
  */
-function computeSalience(jobs, totals) {
-  const cmp = salienceComparator(totals.uniqueDests)
-  /** @type {Map<number, number>} */
-  const jobRungs = new Map()
-  /** @type {{ job: ReviewJob, c: ReviewConnection }[]} */
-  const candidates = []
-  for (const job of jobs) {
-    for (const c of job.connections) {
-      if (c.class !== "") continue // A2 — classified connections are excluded from candidacy
-      candidates.push({ job, c })
-    }
-  }
-  candidates.sort((a, b) => cmp(a.c, b.c))
+function publicationDecision(state = {}) {
+  const base =
+    state.visibility === "public" && state.consent === true && state.revoked !== true
+  const allowed =
+    base && state.profileRequested === true && state.selectorResolves === true
+  return allowed ? { status: 200, body: "render" } : { status: 404, body: "not found" }
+}
 
-  for (const job of jobs) {
-    const unclassified = job.connections.filter(c => c.class === "")
-    const hasUnique = unclassified.some(c => totals.uniqueDests.has(destName(c)))
-    const hasSpawn = !totals.lineageAbsent && unclassified.some(c => tailHasNetworkTool(c.ancestry))
-    jobRungs.set(job.id, hasUnique ? 1 : hasSpawn ? 2 : 3)
-  }
+// ---------------------------------------------------------------------------
+// PR comment.
+// ---------------------------------------------------------------------------
 
-  if (totals.uniqueDests.size > 0) {
-    const pick = candidates.find(({ c }) => totals.uniqueDests.has(destName(c)))
-    if (pick !== undefined) {
-      return {
-        rule: "R1",
-        jobRungs,
-        salientJobs: [pick.job.id],
-        salientKey: connectionKey(pick.c),
-        headline: totals.lineageAbsent
-          ? `In \`${escapeCode(pick.job.name)}\`, \`${escapeCode(destName(pick.c))}\` was reached — a destination no other job in this run reached.`
-          : describeConnection(pick.job, pick.c, "a destination no other job in this run reached"),
+/**
+ * A recorded workload lineage is attributed by step metadata + descent.
+ * @param {ReviewEdge} edge
+ */
+function isAttributedWorkload(edge) {
+  return edge.github_step !== "" && edge.ancestry.includes("Runner.Worker")
+}
+
+/**
+ * A non-flow detection overrides runner-scaffolding de-emphasis.
+ * @param {ReviewEdge} edge
+ */
+function hasRecordedDetection(edge) {
+  return (edge.detections || []).some(
+    (value) => value !== "" && value.toLowerCase() !== "flow",
+  )
+}
+
+/**
+ * Format one note: structural notes are parenthetical; detections are not.
+ * @param {string} note
+ */
+const renderNote = (note) =>
+  note.startsWith("detection: ") ? escapeHtml(note) : `(${escapeHtml(note)})`
+
+/**
+ * Defang a hostname for the PR-comment surface: bracket the final dot
+ * (`example[.]com`) so an untrusted recorded destination can never autolink
+ * in GitHub comments or the emails/Slack mirrors that relay them. Address
+ * literals are left verbatim (they do not autolink); the Step Summary,
+ * review model, and public report keep the canonical value.
+ * @param {unknown} value
+ */
+function defangHostname(value) {
+  const v = String(value ?? "")
+  if (v === "" || isAddressLike(v) || !v.includes(".")) return v
+  return v.replace(/\.(?=[^.]*$)/, "[.]")
+}
+
+/**
+ * PR-comment destination display: domain-first — the canonical recorded
+ * name is the identity, a bare IP only when no name is recorded. Hostnames
+ * are defanged on this surface. No ports, no protocol, address annotation,
+ * or secondary-name annotation on the comment.
+ * @param {ReviewEdge} edge
+ * @param {(value: unknown) => string} escape
+ */
+function commentDestinationDisplay(edge, escape) {
+  return escape(defangHostname(truncateMiddle(edgePrimaryDestination(edge))))
+}
+
+/**
+ * Preview-only destination display: canonical name, address, ports/protocol,
+ * and secondary-name annotations from the record (sorted — capture order of
+ * `remote_names` never changes bytes).
+ * @param {ReviewEdge} edge
+ * @param {(value: unknown) => string} escape
+ */
+function destinationDisplay(edge, escape) {
+  const primary = edgePrimaryDestination(edge)
+  const parts = [escape(primary)]
+  if (
+    edge.remote_address !== "" &&
+    edge.remote_address !== primary
+  ) {
+    parts.push(`[${escape(edge.remote_address)}]`)
+  }
+  if (edge.remote_ports.length > 0) {
+    parts.push(`:${edge.remote_ports.map(escape).join(", ")}`)
+  }
+  if (edge.protocol !== "") parts.push(escape(edge.protocol))
+  const secondaryNames = [
+    ...new Set(
+      edge.remote_names.filter(
+        (name) => name !== "" && name !== primary && name !== edge.remote_address,
+      ),
+    ),
+  ].sort()
+  if (secondaryNames.length > 0) {
+    parts.push(`· also recorded: ${secondaryNames.map(escape).join(", ")}`)
+  }
+  return parts.join(" ")
+}
+
+/**
+ * Render one association as one line inside a job fold's `<pre>` block.
+ * @param {ReviewEdge} edge
+ * @param {{ detections?: boolean }} [options]
+ */
+function renderEdgeLine(edge, { detections = false } = {}) {
+  const parts = []
+  const lineage = escapeHtml(edgeLineage(edge))
+  const emphasized = edgeIsEmphasized(edge)
+  parts.push(emphasized ? `<strong>${lineage}</strong>` : `<em>${lineage}</em>`)
+  parts.push("→")
+  parts.push(commentDestinationDisplay(edge, escapeHtml))
+  for (const note of edgeNotes(edge, { detections })) parts.push(renderNote(note))
+  if (edge.github_step !== "") parts.push(`· step: ${escapeHtml(edge.github_step)}`)
+  return parts.join(" ")
+}
+
+/**
+ * One association's typography state: attribution or detection emphasizes it.
+ * @param {ReviewEdge} edge
+ */
+function edgeIsEmphasized(edge) {
+  return hasRecordedDetection(edge) || isAttributedWorkload(edge)
+}
+
+/**
+ * Recorded ancestry path as process nodes; empty rungs do not render.
+ * @param {ReviewEdge} edge
+ * @returns {string[]}
+ */
+function edgeProcessPath(edge) {
+  if (!edge.lineage_recorded) return [VOCAB.unknownLineage]
+  const ancestry = (edge.ancestry || []).filter((part) => part !== "")
+  if (ancestry.length > 0) return ancestry
+  return [edge.process || VOCAB.unknownLineage]
+}
+
+/**
+ * Comment-tree path: recorded ancestry rooted at `Runner.Worker` when the
+ * lineage descends from it (the scaffolding prefix above the worker is
+ * attribution-noise on the comment; the full path stays in the Step Summary
+ * and the Execution Profile).
+ * @param {ReviewEdge} edge
+ */
+function commentTreePath(edge) {
+  const path = edgeProcessPath(edge)
+  const workerIndex = path.indexOf("Runner.Worker")
+  return workerIndex > 0 ? path.slice(workerIndex) : path
+}
+
+/**
+ * The canonical recorded name for a set of `remote_names`: the first
+ * non-empty non-address-like value in record order (the record lists the
+ * queried hostname first; an address-like name never outranks a real
+ * hostname), else the first non-empty value.
+ * @param {string[]} names
+ */
+function canonicalRecordedName(names) {
+  let fallback = ""
+  for (const value of names) {
+    if (value === "") continue
+    if (!isAddressLike(value)) return value
+    if (fallback === "") fallback = value
+  }
+  return fallback
+}
+
+/**
+ * The canonical destination identity for one edge (undefanged).
+ * @param {ReviewEdge} edge
+ */
+function edgePrimaryDestination(edge) {
+  return (
+    canonicalRecordedName(edge.remote_names) ||
+    edge.remote_address ||
+    "(no destination recorded)"
+  )
+}
+
+/**
+ * Normalize a destination identity with names learned from both sides of a
+ * comparison. A bare address therefore joins the named identity recorded by
+ * its counterpart.
+ * @param {ReviewEdge} edge
+ * @param {Map<string, string>} [addressNames]
+ */
+function destinationIdentity(edge, addressNames = new Map()) {
+  const primary = edgePrimaryDestination(edge)
+  if (edge.remote_names.some((name) => name !== "")) return primary
+  return addressNames.get(edge.remote_address) || primary
+}
+
+/**
+ * Address→name map learned across one or more edge sets.
+ * @param {...ReviewEdge[]} edgeSets
+ * @returns {Map<string, string>}
+ */
+function addressNameMap(...edgeSets) {
+  /** @type {Map<string, string>} */
+  const names = new Map()
+  for (const edges of edgeSets) {
+    for (const edge of edges) {
+      if (edge.remote_address === "") continue
+      const name = canonicalRecordedName(edge.remote_names)
+      if (name === "") continue
+      const current = names.get(edge.remote_address)
+      if (current === undefined || (isAddressLike(current) && !isAddressLike(name))) {
+        names.set(edge.remote_address, name)
       }
     }
   }
-
-  if (!totals.lineageAbsent) {
-    const pick = candidates.find(({ c }) => tailHasNetworkTool(c.ancestry))
-    if (pick !== undefined) {
-      return {
-        rule: "R2",
-        jobRungs,
-        salientJobs: [pick.job.id],
-        salientKey: connectionKey(pick.c),
-        headline: describeConnection(pick.job, pick.c, ""),
-      }
-    }
-  }
-
-  // S4 / S7 — the pure inventory sentence: when no structure stands out, the
-  // totals are the fact.
-  let headline
-  const firstJob = jobs[0]
-  if (totals.domains.length === 0) {
-    const jobWord = jobs.length === 1 ? "job" : "jobs"
-    headline = `${jobs.length} ${jobWord} ran; none made outbound connections.`
-  } else if (jobs.length === 1 && firstJob !== undefined) {
-    const processes = new Set(firstJob.connections.flatMap(c => c.ancestry)).size
-    const procPart = processes > 0 ? `${processes} process${processes === 1 ? "" : "es"}` : "processes"
-    headline = `In \`${escapeCode(firstJob.name)}\`, ${procPart} reached ${totals.domains.length} domain${totals.domains.length === 1 ? "" : "s"} over ${totals.totalConnections} connection${totals.totalConnections === 1 ? "" : "s"}.`
-  } else {
-    headline = `${jobs.length} jobs reached ${totals.domains.length} domain${totals.domains.length === 1 ? "" : "s"} over ${totals.totalConnections} connection${totals.totalConnections === 1 ? "" : "s"}.`
-  }
-  return { rule: "R3", jobRungs, salientJobs: [], salientKey: "", headline }
+  return names
 }
 
 /**
- * One natural-language sentence describing a single connection's lineage:
- * "In `e2e`, `npm install` spawned `sh -c → curl`, which reached `dest`."
+ * One representative edge per destination identity, named edges preferred.
+ * @param {ReviewEdge[]} edges
+ * @param {Map<string, string>} [names]
+ * @returns {ReviewEdge[]}
+ */
+function dedupeDestinationEdges(edges, names = addressNameMap(edges)) {
+  /** @type {Map<string, ReviewEdge>} */
+  const representatives = new Map()
+  for (const edge of [...edges].sort(edgeComparator)) {
+    const key = destinationIdentity(edge, names)
+    const current = representatives.get(key)
+    const named = edge.remote_names.some((name) => name !== "")
+    const currentNamed = current?.remote_names.some((name) => name !== "")
+    if (!current || (named && !currentNamed)) representatives.set(key, edge)
+  }
+  return [...representatives.values()].sort((a, b) => {
+    const ka = destinationIdentity(a, names)
+    const kb = destinationIdentity(b, names)
+    return ka < kb ? -1 : ka > kb ? 1 : edgeComparator(a, b)
+  })
+}
+
+/**
+ * Partition a job's edges for the comment fold — nothing subtracts:
+ * attributed workload chains render in the main tree; dns-resolver chatter
+ * and unattributed runner infrastructure render inside a nested collapsed
+ * `runner substrate` fold in the same job fold. When a job has no attributed
+ * chains, the substrate fold carries the full record. Identity keys come
+ * from one job-wide address→name map, so a name recorded on either side of
+ * the partition unifies the same address everywhere and a captured identity
+ * never disappears between the two partitions. Each partition renders one
+ * row per destination identity — capture multiplicity (distinct chains to
+ * the same identity) stays in the evidence register.
+ * @param {ReviewEdge[]} edges
+ * @returns {{ shown: ReviewEdge[], substrate: ReviewEdge[] }}
+ */
+function partitionCommentEdges(edges) {
+  /** @type {ReviewEdge[]} */
+  const workload = []
+  for (const edge of edges) {
+    const notes = edgeNotes(edge, { detections: false })
+    // Attribution alone decides the partition: a recorded detection
+    // emphasizes a chain wherever it renders but never re-classes
+    // unattributed runner infrastructure as workload.
+    if (!notes.includes(runtime_review_vocab_CONTRACT_VOCAB.notes.dnsResolver.text) && isAttributedWorkload(edge)) {
+      workload.push(edge)
+    }
+  }
+  const names = addressNameMap(edges)
+  // A bare-address representative whose address is named elsewhere in the
+  // same record renders under that name — the identity's name is captured
+  // evidence, not an invention.
+  const unify = (/** @type {ReviewEdge} */ edge) => {
+    if (edge.remote_names.some((name) => name !== "")) return edge
+    const name = names.get(edge.remote_address)
+    return name ? { ...edge, remote_names: [name] } : edge
+  }
+  const shown = dedupeDestinationEdges(workload, names).map(unify)
+  const shownIds = new Set(shown.map((edge) => destinationIdentity(edge, names)))
+  const substrate = dedupeDestinationEdges(
+    edges.filter((edge) => !workload.includes(edge)),
+    names,
+  )
+    .filter((edge) => !shownIds.has(destinationIdentity(edge, names)))
+    .map(unify)
+  return { shown, substrate }
+}
+
+/**
+ * The nested collapsed substrate fold inside a job fold: this record's
+ * dns/runner-infrastructure identities rendered one row each — visible on
+ * one click, never counted-but-hidden. The label counts the rendered head
+ * rows only; `−` rows inside the quiet diff belong to the previous record
+ * and never count, matching the run-scope register. When the quiet diff moves,
+ * the label carries that movement too — an unlabelled fold whose body renders
+ * `+`/`−` rows would claim less than it shows. The fold also renders when the
+ * head record has no substrate rows but the previous one did, so substrate
+ * chains never silently leave the comparison.
  * @param {ReviewJob} job
- * @param {ReviewConnection} c
- * @param {string} suffix
- * @returns {string}
+ * @param {ReviewEdge[]} substrate
+ * @param {EdgeDelta | null} [delta]
+ * @param {string} [headSha]
+ * @param {string} [previousSha]
+ * @returns {string[]}
  */
-function describeConnection(job, c, suffix) {
-  const ancestry = c.ancestry.filter(isNonEmptyString)
-  const dest = destLabel(c)
-  const tail = ancestry.slice(-TAIL_DEPTH)
-  const toolIndex = tail.findIndex(step => NETWORK_TOOLS.some(re => re.test(String(step))))
-  let action
-  const chainStart = ancestry.length - tail.length + toolIndex
-  if (toolIndex !== -1 && chainStart > 0) {
-    const parent = ancestry[chainStart - 1]
-    const chain = ancestry.slice(chainStart).map(escapeCode).join(" → ")
-    action = `\`${escapeCode(parent)}\` spawned \`${chain}\`, which reached \`${escapeCode(dest)}\``
-  } else {
-    const proc = isNonEmptyString(ancestry[ancestry.length - 1]) ? ancestry[ancestry.length - 1] : "a process"
-    action = `\`${escapeCode(proc)}\` reached \`${escapeCode(dest)}\``
+function renderSubstrateFold(job, substrate, delta = null, headSha = "", previousSha = "") {
+  const changed = delta && (delta.addedCount > 0 || delta.removedCount > 0)
+  if (substrate.length === 0 && !changed) return []
+  const displayEdges = dedupeDestinationEdges(substrate)
+  const k = displayEdges.length
+  const movement = changed
+    ? ` · ${deltaPhrase(delta.addedCount, delta.removedCount, { bold: false })}`
+    : ""
+  return [
+    `<details><summary><sub>${VOCAB.substrateFoldLabel} · ${countPhrase(k, "chain")}${movement}</sub></summary>`,
+    "",
+    ...(changed
+      ? [
+          "```diff",
+          renderJobDiffTree({ ...job, edges: displayEdges }, delta, headSha, previousSha),
+          "```",
+        ]
+      : ["<pre>", renderJobTree(job, displayEdges), "</pre>"]),
+    "",
+    "</details>",
+  ]
+}
+
+/**
+ * @param {string} [name]
+ * @returns {TreeNode}
+ */
+function makeTreeNode(name = "") {
+  return {
+    name,
+    children: [],
+    childByKey: new Map(),
+    associations: [],
+    pids: new Set(),
+    processes: new Set(),
+    steps: new Set(),
+    emphasized: false,
   }
-  const tailPart = suffix !== "" ? ` — ${suffix}` : ""
-  return `In \`${escapeCode(job.name)}\`, ${action}${tailPart}.`
 }
 
 /**
- * A4 — split a job's connections into the elidable runner-chain set and the
- * visible set. A connection is elidable iff its entire ancestry is inside the
- * runner chain AND its destination is GitHub-owned infrastructure (`github
- * infra`) or the resolver stub (`dns`). Any member-only lineage reaching an
- * unclassified or non-GitHub destination cancels elision for that branch and
- * renders in full.
- * @param {{ connections: ReviewConnection[] }} job
- * @returns {{
- *   elided: ReviewConnection[]
- *   visible: ReviewConnection[]
- *   elidedProcs: Set<string>
- *   elidedConnections: number
- * }}
+ * Add one destination association to a shared-prefix lineage tree. Nodes
+ * are keyed by recorded process name along the lineage path; PID-distinct
+ * capture stays in the evidence register (the comment tree renders one row
+ * per destination identity).
+ * @param {TreeNode} root
+ * @param {ReviewEdge} edge
  */
-function splitRunnerChain(job) {
-  /** @type {ReviewConnection[]} */
-  const elided = []
-  /** @type {ReviewConnection[]} */
-  const visible = []
-  for (const c of job.connections) {
-    const ancestry = c.ancestry.filter(isNonEmptyString)
-    const allMembers = ancestry.length > 0 && ancestry.every(isRunnerChainProcess)
-    if (allMembers && (c.class === "github infra" || c.class === "dns")) elided.push(c)
-    else visible.push(c)
-  }
-  const elidedProcs = new Set(elided.flatMap(c => c.ancestry))
-  const elidedConnections = elided.reduce((n, c) => n + c.count, 0)
-  return { elided, visible, elidedProcs, elidedConnections }
-}
-
-/**
- * Strip the leading run of runner-chain members from a visible connection's
- * ancestry (they are represented by the elision line); membership stops at
- * the first non-member (A4: elision cancels from there down).
- * @param {string[]} ancestry
- * @returns {{ prefix: string[], rest: string[] }}
- */
-function stripRunnerPrefix(ancestry) {
-  let i = 0
-  while (i < ancestry.length && isRunnerChainProcess(ancestry[i] ?? "")) i += 1
-  // Cancellation (A4): a member-only lineage that survived splitRunnerChain
-  // reached a non-GitHub-owned destination — render that branch in full.
-  if (i === ancestry.length && ancestry.length > 0) return { prefix: [], rest: ancestry }
-  return { prefix: ancestry.slice(0, i), rest: ancestry.slice(i) }
-}
-
-/**
- * Shared-prefix-merge a job's connections into one lineage tree rooted at the
- * job name (A4 elision applied when `elide` is set), leaves annotated
- * `→ domain · ip` with A1 class annotations. Four-backtick fences are the
- * caller's responsibility. When `focus` names a connection, only branches on
- * the path to that leaf expand; sibling subtrees compress to one `┄` line
- * per level (the Step Summary always renders the full tree).
- * @param {{ name: string, connections: ReviewConnection[] }} job
- * @param {{ elide?: boolean, focus?: string }} [opts]
- * @returns {string}
- */
-function renderJobTree(job, opts = {}) {
-  const elide = opts.elide !== false
-  const focus = shared_firstNonEmptyString(opts.focus)
-  const lines = [fenceSafe(job.name)]
-
-  const { visible, elidedProcs, elidedConnections } = elide
-    ? splitRunnerChain(job)
-    : { visible: job.connections, elidedProcs: new Set(), elidedConnections: 0 }
-
-  /** @type {TreeNode} */
-  const root = { children: new Map(), leaves: [] }
-  /** @type {Set<string>} */
-  const prefixProcs = new Set()
-  for (const c of visible) {
-    const ancestry = c.ancestry.filter(isNonEmptyString)
-    const { prefix, rest } = elide ? stripRunnerPrefix(ancestry) : { prefix: [], rest: ancestry }
-    for (const p of prefix) prefixProcs.add(p)
-    const focused = focus !== "" && connectionKey(c) === focus
-    let node = root
-    if (focused) root.onPath = true
-    for (const step of rest) {
-      const key = String(step)
-      const child = node.children.get(key) ?? { children: new Map(), leaves: [] }
-      node.children.set(key, child)
-      node = child
-      if (focused) node.onPath = true
+function addAssociationToTree(root, edge) {
+  const path = commentTreePath(edge)
+  const attributed = isAttributedWorkload(edge)
+  const detected = hasRecordedDetection(edge)
+  const workerIndex = path.indexOf("Runner.Worker")
+  let node = root
+  path.forEach((name, index) => {
+    const terminal = index === path.length - 1
+    // Emphasis is per-node, never inherited from descendants: a process is bold
+    // only when it is itself attributed workload (below `Runner.Worker` in a
+    // step-attributed lineage) or the terminal process carries a recorded
+    // detection that overrides scaffolding de-emphasis. Runner scaffolding at or
+    // above `Runner.Worker` stays italic.
+    const belowWorker = workerIndex !== -1 && index > workerIndex
+    const nodeEmphasized = (attributed && belowWorker) || (terminal && detected)
+    const key = JSON.stringify([name])
+    let child = node.childByKey.get(key)
+    if (!child) {
+      child = makeTreeNode(name)
+      node.childByKey.set(key, child)
+      node.children.push(child)
     }
-    node.leaves.push(c)
-  }
-
-  const runnerProcs = new Set([...elidedProcs, ...prefixProcs])
-  if (elide && runnerProcs.size > 0) {
-    const connPart = elidedConnections > 0
-      ? ` · ${elidedConnections} connection${elidedConnections === 1 ? "" : "s"} → GitHub-owned addresses`
-      : ""
-    lines.push(`└─ GitHub runner ┄ ${runnerProcs.size} process${runnerProcs.size === 1 ? "" : "es"}${connPart}`)
-    renderNodeChildren(root, "   ", lines, focus !== "" && root.onPath === true)
-  } else {
-    renderNodeChildren(root, "", lines, focus !== "" && root.onPath === true)
-  }
-  return lines.join("\n")
+    child.emphasized ||= nodeEmphasized
+    node = child
+    if (terminal) {
+      node.associations.push(edge)
+      if (edge.pid !== "") node.pids.add(edge.pid)
+      if (edge.process !== "") node.processes.add(edge.process)
+      if (edge.github_step !== "") node.steps.add(edge.github_step)
+    }
+  })
 }
 
 /**
- * Distinct destinations and total connections in a subtree.
- * @param {TreeNode} node
- * @param {Set<string>} [dests]
- * @param {{ connections: number }} [totals]
- * @returns {{ dests: number, connections: number }}
+ * @param {ReviewEdge[]} edges
+ * @returns {TreeNode}
  */
-function subtreeCounts(node, dests = new Set(), totals = { connections: 0 }) {
-  for (const leaf of node.leaves) {
-    dests.add(destLabel(leaf))
-    totals.connections += leaf.count
+function treeForAssociations(edges) {
+  const root = makeTreeNode()
+  for (const edge of dedupeDestinationEdges(edges)) addAssociationToTree(root, edge)
+  coalescePrefixTerminalNodes(root)
+  return root
+}
+
+/**
+ * @param {TreeNode} target
+ * @param {TreeNode} source
+ */
+function mergeTreeNode(target, source) {
+  target.associations.push(...source.associations)
+  for (const pid of source.pids) target.pids.add(pid)
+  for (const process of source.processes) target.processes.add(process)
+  for (const step of source.steps) target.steps.add(step)
+  target.emphasized ||= source.emphasized
+}
+
+/**
+ * If a process both has its own egress and appears as the prefix of deeper
+ * lineage, render it once with destination leaves and child processes.
+ * @param {TreeNode} node
+ */
+function coalescePrefixTerminalNodes(node) {
+  for (const child of node.children) coalescePrefixTerminalNodes(child)
+  /** @type {Map<string, TreeNode[]>} */
+  const grouped = new Map()
+  for (const child of node.children) {
+    const group = grouped.get(child.name) || []
+    group.push(child)
+    grouped.set(child.name, group)
   }
-  for (const child of node.children.values()) subtreeCounts(child, dests, totals)
-  return { dests: dests.size, connections: totals.connections }
+  for (const group of grouped.values()) {
+    const branch = group.find((child) => child.children.length > 0)
+    if (!branch) continue
+    for (const child of group) {
+      if (child !== branch && child.children.length === 0) mergeTreeNode(branch, child)
+    }
+  }
+  node.children = node.children.filter((child) => {
+    const group = grouped.get(child.name) || []
+    const branch = group.find((candidate) => candidate.children.length > 0)
+    return !branch || child === branch || child.children.length > 0
+  })
+}
+
+/**
+ * Display-only process name: a trailing run of 4+ digits is provisioning
+ * noise (provjobd1326539233 → provjobd) and strips from the comment tree;
+ * the record, Step Summary, model JSON, and chain identity keep the raw name.
+ * @param {unknown} name
+ */
+function displayProcessName(name) {
+  const stripped = String(name ?? "").replace(/\d{4,}$/, "")
+  return stripped === "" ? String(name ?? "") : stripped
+}
+
+/**
+ * @param {TreeNode} node
+ * @param {{ steps?: boolean }} [options]
+ */
+function processNodeLine(node, { steps = true } = {}) {
+  const escaped = escapeHtml(truncateMiddle(displayProcessName(node.name)))
+  const body = node.emphasized ? `<strong>${escaped}</strong>` : `<em>${escaped}</em>`
+  // PID + command identity is Step Summary-only; the comment tree shows
+  // process names alone.
+  const recordedSteps = [...node.steps].filter((name) => !isSentinelStep(name)).sort()
+  const step =
+    steps && recordedSteps.length > 0
+      ? ` · step: ${recordedSteps.map(escapeHtml).join(" · ")}`
+      : ""
+  return `${body}${step}`
+}
+
+/**
+ * @param {ReviewEdge} edge
+ * @param {boolean} detections
+ */
+function destinationLeafLine(edge, detections) {
+  const parts = ["→", commentDestinationDisplay(edge, escapeHtml)]
+  for (const note of edgeNotes(edge, { detections })) parts.push(renderNote(note))
+  return parts.join(" ")
 }
 
 /**
  * @param {TreeNode} node
  * @param {string} prefix
  * @param {string[]} lines
- * @param {boolean} [focusMode]
- * @returns {void}
+ * @param {{ destinations: boolean, steps?: boolean, detections?: boolean }} options
  */
-function renderNodeChildren(node, prefix, lines, focusMode = false) {
-  let procs = [...node.children.entries()].map(([name, child]) => ({ name, child }))
-  let collapsedNote = ""
-  if (focusMode) {
-    const offPath = procs.filter(p => p.child.onPath !== true)
-    if (offPath.length > 0) {
-      /** @type {Set<string>} */
-      const dests = new Set()
-      const totals = { connections: 0 }
-      for (const p of offPath) subtreeCounts(p.child, dests, totals)
-      collapsedNote = `┄ ${dests.size} more destination${dests.size === 1 ? "" : "s"} · ${totals.connections} connection${totals.connections === 1 ? "" : "s"} — full tree in the Step Summary ↗`
-      procs = procs.filter(p => p.child.onPath === true)
-    }
-  }
-  /** @type {(
-   *   { kind: "proc", name: string, child: TreeNode } |
-   *   { kind: "leaf", leaf: ReviewConnection } |
-   *   { kind: "note", note: string }
-   * )[]} */
+function renderTreeChildren(node, prefix, lines, { destinations, steps = true, detections = false }) {
+  /** @type {({ kind: "process", child: TreeNode } | { kind: "destination", edge: ReviewEdge })[]} */
   const entries = [
-    ...procs.map(p => /** @type {{ kind: "proc", name: string, child: TreeNode }} */ ({ kind: "proc", ...p })),
-    ...node.leaves.map(leaf => /** @type {{ kind: "leaf", leaf: ReviewConnection }} */ ({ kind: "leaf", leaf })),
-    ...(collapsedNote !== "" ? [/** @type {{ kind: "note", note: string }} */ ({ kind: "note", note: collapsedNote })] : []),
+    ...node.children.map((child) => ({ kind: /** @type {"process"} */ ("process"), child })),
+    ...(destinations
+      ? node.associations.map((edge) => ({ kind: /** @type {"destination"} */ ("destination"), edge }))
+      : []),
   ]
-  entries.forEach((entry, i) => {
-    const last = i === entries.length - 1
+  entries.forEach((entry, index) => {
+    const last = index === entries.length - 1
     const branch = last ? "└─ " : "├─ "
-    const childPrefix = prefix + (last ? "   " : "│  ")
-    if (entry.kind === "proc") {
-      lines.push(`${prefix}${branch}${fenceSafe(entry.name)}`)
-      renderNodeChildren(entry.child, childPrefix, lines, focusMode && entry.child.onPath === true)
-    } else if (entry.kind === "note") {
-      lines.push(`${prefix}${branch}${entry.note}`)
+    const childPrefix = `${prefix}${last ? "   " : "│  "}`
+    if (entry.kind === "process") {
+      lines.push(`${prefix}${branch}${processNodeLine(entry.child, { steps })}`)
+      renderTreeChildren(entry.child, childPrefix, lines, { destinations, steps, detections })
     } else {
-      const { leaf } = entry
-      const name = leaf.class === "dns" ? "dns" : ""
-      const label =
-        [...new Set([shared_firstNonEmptyString(name, leaf.domain), leaf.ip].filter(isNonEmptyString))].map(fenceSafe).join(" · ") ||
-        "(unnamed peer)"
-      const annotation = isNonEmptyString(leaf.class) && leaf.class !== "dns" ? ` — ${leaf.class}` : ""
-      const times = leaf.count > 1 ? ` ×${leaf.count}` : ""
-      lines.push(`${prefix}${branch}→ ${label}${annotation}${times}`)
+      lines.push(`${prefix}${branch}${destinationLeafLine(entry.edge, detections)}`)
     }
   })
 }
 
 /**
- * One job line (S1/S8): named enumeration slots hold the ≤3 most salient
- * UNCLASSIFIED destinations (A2/A3); classified and overflow entries fold
- * into "and {n} more". Slots prefer named domains — a bare address takes a
- * slot only when no named domain is left. Raw totals stay true.
- * @param {{ name: string, run_url?: string, connections: ReviewConnection[] }} job
- * @param {Set<string>} [uniqueDests]
- * @param {{ link?: boolean, html?: boolean }} [opts] link=false omits the
- *   job-log link (the line becomes a fold `<summary>`; the link moves into
- *   the fold). html=true emits HTML inline markup — GitHub does not render
- *   markdown inside `<summary>`, so fold rows need `<b><code>` instead.
- * @returns {string}
+ * Render a job's lossless shared-prefix lineage tree. Destination leaves stay
+ * attached to the terminal recorded process; no ×N grouping or trust labels.
+ * @param {ReviewJob} job
+ * @param {ReviewEdge[]} [edges]
  */
-function jobSummaryLine(job, uniqueDests = new Set(), opts = {}) {
-  /** @type {(v: string) => string} */
-  const code = opts.html ? v => `<code>${escapeHtml(v)}</code>` : v => `\`${escapeCode(v)}\``
-  const ident = opts.html ? `<b>${code(job.name)}</b>` : `**${code(job.name)}**`
-  const logLink =
-    isNonEmptyString(job.run_url) && opts.link !== false ? ` · [job log ↗](${job.run_url})` : ""
-  if (job.connections.length === 0) {
-    return `${ident} — made no outbound connections.${logLink}`
-  }
-  const cmp = salienceComparator(uniqueDests)
+function renderJobTree(job, edges = job.edges) {
   /** @type {string[]} */
-  const named = []
-  /** @type {Set<string>} */
-  const seen = new Set()
-  const ordered = [...job.connections].sort(
-    (a, b) => (isNonEmptyString(a.domain) ? 0 : 1) - (isNonEmptyString(b.domain) ? 0 : 1) || cmp(a, b),
-  )
-  for (const c of ordered) {
-    if (c.class !== "") continue
-    const d = destName(c)
-    if (d === "" || seen.has(d)) continue
-    seen.add(d)
-    named.push(d)
-    if (named.length === 3) break
+  const lines = []
+  const root = treeForAssociations(edges)
+  for (const child of root.children) {
+    lines.push(processNodeLine(child, { steps: false }))
+    renderTreeChildren(child, "", lines, { destinations: true, steps: false })
   }
-  const allDests = new Set(job.connections.map(destName).filter(isNonEmptyString))
-  const remainder = allDests.size - named.length
-  const total = job.connections.reduce((n, c) => n + c.count, 0)
-  const shown = named.map(code).join(", ")
-  const more = remainder > 0 ? ` and ${remainder} more` : ""
-  const reach = named.length > 0
-    ? `reached ${shown}${more}`
-    : `reached ${allDests.size} destination${allDests.size === 1 ? "" : "s"}`
-  return `${ident} — ${reach} · ${total} connection${total === 1 ? "" : "s"}${logLink}`
+  for (const edge of root.associations) {
+    lines.push(destinationLeafLine(edge, false))
+  }
+  return lines.join("\n")
 }
 
+// ---------------------------------------------------------------------------
+// Execution comparison — in-fold marked tree (§21). The tree walk is the same
+// as the snapshot tree; new leaves carry `+`, no-longer-recorded leaves carry
+// `−`, unchanged ancestry/leaves are context lines. Rendered inside a
+// ```diff fence with one `@@ <head> vs <previous> · +A −R @@` header.
+// ---------------------------------------------------------------------------
+
 /**
- * Per-job counts used in fold summaries (raw-true, A2).
- * @param {ReviewJob} job
- * @returns {{ domains: number, connections: number }}
+ * Plain-text (fence-safe) node/leaf text — no HTML, backticks neutralized.
+ * @param {unknown} value
  */
-function jobCounts(job) {
-  const domains = new Set(job.connections.map(destName).filter(isNonEmptyString)).size
-  const connections = job.connections.reduce((n, c) => n + c.count, 0)
-  return { domains, connections }
-}
+const fenceText = (value) =>
+  stripControl(value).replace(/`/g, "ʼ").replace(/[\r\n]+/g, " ").trim()
 
 /**
- * A7 — absolute-UTC freshness stamp: `updated 14:02 UTC · Jul 3`.
- * @param {Date} date
- * @returns {string}
+ * Per-job comparison against the same job in the previous profiled commit.
+ * Comparison identity is one normalized destination per job.
+ * @param {ReviewEdge[]} headEdges
+ * @param {ReviewEdge[]} previousEdges
+ * @param {DeltaScope | null} [scope]
+ * @returns {EdgeDelta}
  */
-function freshnessStamp(date) {
-  const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
-  const hh = String(date.getUTCHours()).padStart(2, "0")
-  const mm = String(date.getUTCMinutes()).padStart(2, "0")
-  return `updated ${hh}:${mm} UTC · ${MONTHS[date.getUTCMonth()]} ${date.getUTCDate()}`
+function compareJobEdges(headEdges, previousEdges, scope = null) {
+  const names = scope?.names ?? addressNameMap(headEdges, previousEdges)
+  const headIds = new Set(headEdges.map((edge) => destinationIdentity(edge, names)))
+  const prevIds = new Set(previousEdges.map((edge) => destinationIdentity(edge, names)))
+  const headUniverse = scope?.headUniverse ?? headIds
+  const prevUniverse = scope?.previousUniverse ?? prevIds
+  const addedIds = new Set([...headIds].filter((id) => !prevIds.has(id) && !prevUniverse.has(id)))
+  const removedIds = new Set([...prevIds].filter((id) => !headIds.has(id) && !headUniverse.has(id)))
+  /** @type {Map<string, ReviewEdge>} */
+  const removedByID = new Map()
+  for (const edge of [...previousEdges].sort(edgeComparator)) {
+    const id = destinationIdentity(edge, names)
+    if (removedIds.has(id) && !removedByID.has(id)) removedByID.set(id, edge)
+  }
+  return {
+    addedIds,
+    removedIds,
+    added: addedIds,
+    removed: [...removedByID.values()],
+    addedCount: addedIds.size,
+    removedCount: removedIds.size,
+  }
 }
 
 /**
- * A7 — canonical meta line:
- * [`{sha}`](commit-url) · {k} of {n} jobs recorded · updated {HH:MM} UTC · {Mon D}
- * The coverage clause is conditional: `{k} of {n} jobs recorded` only when a
- * total n greater than the recorded k is known; otherwise `{k} job(s) recorded`.
- * Repo name dropped (the comment lives in the repo); `{w} workflows` only
- * when w > 1; timestamps absolute UTC, never relative.
- * @param {RunReview} review
- * @returns {string}
+ * @param {TreeNode} node
  */
-function metaLine(review) {
-  const shaPrefix = review.sha.slice(0, 7)
-  const sha7 = escapeCode(isNonEmptyString(shaPrefix) ? shaPrefix : "unknown")
-  const shaPart = isNonEmptyString(review.commitURL) ? `[\`${sha7}\`](${review.commitURL})` : `\`${sha7}\``
-  const coverage =
-    review.counts.expectedJobs > review.counts.jobs
-      ? `${review.counts.jobs} of ${review.counts.expectedJobs} job${review.counts.expectedJobs === 1 ? "" : "s"} recorded`
-      : `${review.counts.jobs} job${review.counts.jobs === 1 ? "" : "s"} recorded`
-  const parts = [shaPart, coverage]
-  if (review.counts.workflows > 1) parts.push(`${review.counts.workflows} workflows`)
-  if (review.renderedAt !== null) parts.push(freshnessStamp(review.renderedAt))
-  return parts.join(" · ")
+function diffNodeLine(node) {
+  return fenceText(truncateMiddle(displayProcessName(node.name)))
 }
 
 /**
- * Shared header lines: markers (optional), title, meta line, headline.
- * @param {RunReview} review
- * @param {{ markers: boolean }} opts
- * @returns {string[]}
+ * @param {ReviewEdge} edge
  */
-function renderHeader(review, { markers }) {
-  const lines = markers ? [RUNTIME_REVIEW_MARKER, COMMENT_MARKER] : []
-  lines.push("## Garnet Runtime Review")
-  lines.push(metaLine(review))
-  lines.push("")
-  lines.push(review.salience.headline)
-  lines.push("")
-  return lines
+function diffLeafLine(edge) {
+  const parts = ["→", fenceText(defangHostname(truncateMiddle(edgePrimaryDestination(edge))))]
+  for (const note of edgeNotes(edge, { detections: false })) parts.push(`(${fenceText(note)})`)
+  return parts.join(" ")
 }
 
 /**
- * A6 — footer: the one-question frame; `Run Profile ↗` ONLY when a capability
- * link exists (never a github.com/actions URL — omitted rather than
- * mislabeled); `add the step ↗` only when coverage k < n.
- * @param {RunReview} review
+ * @param {TreeNode} node
+ * @param {string} prefix
  * @param {string[]} lines
- * @returns {void}
+ * @param {Map<ReviewEdge, string>} marks
  */
-function renderFooter(review, lines) {
-  lines.push("---")
-  const capability =
-    isNonEmptyString(review.permalink) && !/github\.com\/[^ ]*\/actions\//.test(review.permalink)
-      ? ` · [Run Profile ↗](${review.permalink})`
-      : ""
-  const missing = review.counts.expectedJobs - review.counts.jobs
-  const growth =
-    missing > 0 && isNonEmptyString(review.docsURL)
-      ? ` · ${missing} job${missing === 1 ? "" : "s"} not yet recorded — [add the step ↗](${review.docsURL})`
-      : ""
-  lines.push(
-    `<sub>What happened in this PR — each job's processes and where they reached.${capability}${growth}</sub>`,
-  )
-}
-
-/**
- * Render one job as ONE row (S1/S8): quiet jobs are a single plain line;
- * jobs with egress fold their lineage under the summary line itself — the
- * job line IS the `<summary>`, so the list scans as one row per job and the
- * tree always sits indented inside its job. Open iff the job's rung beats
- * plain counts.
- * @param {RunReview} review
- * @param {ReviewJob} job
- * @param {string[]} lines
- * @param {{ collapsed: boolean }} opts
- * @returns {void}
- */
-function renderJobSection(review, job, lines, { collapsed }) {
-  if (job.connections.length === 0 || review.lineageAbsent) {
-    lines.push(jobSummaryLine(job, review.uniqueDests))
-    lines.push("")
-    return
-  }
-  const { connections } = jobCounts(job)
-  const rung = review.salience.jobRungs.get(job.id) ?? 3
-  const salient = review.salience.salientJobs.includes(job.id)
-  const open = rung < 3 ? " open" : ""
-  lines.push(
-    `<details${open}><summary>${jobSummaryLine(job, review.uniqueDests, { link: false, html: true })}</summary>`,
-  )
-  lines.push("")
-  const logLink = isNonEmptyString(job.run_url) ? ` · [job log ↗](${job.run_url})` : ""
-  if (collapsed) {
-    const procs = new Set(job.connections.flatMap(c => c.ancestry)).size
-    lines.push(`┄ ${procs} process${procs === 1 ? "" : "es"} · ${connections} connection${connections === 1 ? "" : "s"} — full tree in the Step Summary ↗`)
-    lines.push("")
-    if (logLink !== "") {
-      lines.push(`<sub>Full detail in the Step Summary${logLink}</sub>`)
-      lines.push("")
+function renderDiffChildren(node, prefix, lines, marks) {
+  /** @type {({ kind: "process", child: TreeNode } | { kind: "destination", edge: ReviewEdge })[]} */
+  const entries = [
+    ...node.children.map((child) => ({ kind: /** @type {"process"} */ ("process"), child })),
+    ...node.associations.map((edge) => ({ kind: /** @type {"destination"} */ ("destination"), edge })),
+  ]
+  entries.forEach((entry, index) => {
+    const last = index === entries.length - 1
+    const branch = last ? "└─ " : "├─ "
+    const childPrefix = `${prefix}${last ? "   " : "│  "}`
+    if (entry.kind === "process") {
+      lines.push(`  ${prefix}${branch}${diffNodeLine(entry.child)}`)
+      renderDiffChildren(entry.child, childPrefix, lines, marks)
+    } else {
+      const mark = marks.get(entry.edge) ?? " "
+      lines.push(`${mark} ${prefix}${branch}${diffLeafLine(entry.edge)}`)
     }
-  } else {
-    lines.push("````text")
-    lines.push(renderJobTree(job, { focus: salient ? review.salience.salientKey : "" }))
-    lines.push("````")
-    lines.push("")
-    lines.push(
-      `<sub>Paste the tree into your review agent · full detail in the Step Summary${logLink}</sub>`,
-    )
-    lines.push("")
-  }
-  lines.push("</details>")
-  lines.push("")
-}
-
-/**
- * Render the Garnet Runtime Review PR comment. A9: if the body exceeds the
- * size budget, trees collapse lowest-salience-first into explicit markers;
- * headline and job lines are never dropped.
- * @param {RunReview} review
- * @returns {string}
- */
-function renderRunReview(review) {
-  // A3 (ascending salience = pruning order): collapse R3-rung jobs first.
-  const pruneOrder = [...review.jobs]
-    .sort(
-      (a, b) =>
-        (review.salience.jobRungs.get(b.id) ?? 3) - (review.salience.jobRungs.get(a.id) ?? 3) ||
-        (a.name < b.name ? 1 : -1),
-    )
-    .map(j => j.id)
-
-  // Readability tier: after the top salient jobs, remaining jobs group into
-  // one fold so the comment's height is O(1) in the size of the job matrix.
-  const GROUP_AFTER = 3
-  const grouped = review.jobs.length > GROUP_AFTER + 1 ? review.jobs.slice(GROUP_AFTER) : []
-  const ungrouped = grouped.length > 0 ? review.jobs.slice(0, GROUP_AFTER) : review.jobs
-
-  /** @type {Set<number>} */
-  const collapsedIDs = new Set()
-  for (let attempts = 0; attempts <= review.jobs.length; attempts += 1) {
-    const lines = renderHeader(review, { markers: true })
-    for (const job of ungrouped) {
-      renderJobSection(review, job, lines, { collapsed: collapsedIDs.has(job.id) })
-    }
-    if (grouped.length > 0) {
-      const domains = new Set(grouped.flatMap(j => j.connections.map(destName)).filter(isNonEmptyString)).size
-      const connections = grouped.reduce((n, j) => n + j.connections.reduce((m, c) => m + c.count, 0), 0)
-      lines.push(
-        `<details><summary>${grouped.length} more jobs · ${domains} domain${domains === 1 ? "" : "s"} · ${connections} connection${connections === 1 ? "" : "s"}</summary>`,
-      )
-      lines.push("")
-      for (const job of grouped) {
-        renderJobSection(review, job, lines, { collapsed: collapsedIDs.has(job.id) })
-      }
-      lines.push("</details>")
-      lines.push("")
-    }
-    renderFooter(review, lines)
-    const body = lines.join("\n")
-    if (body.length <= SIZE_BUDGET || collapsedIDs.size === review.jobs.length) return body
-    const pruneID = pruneOrder[collapsedIDs.size]
-    if (pruneID === undefined) return body
-    collapsedIDs.add(pruneID)
-  }
-  throw new Error("unreachable")
-}
-
-/**
- * Render the FULL-detail snapshot for the GitHub Step Summary: every job's
- * complete lineage tree inline — no elision, no folds, no markers, no budget.
- * @param {RunReview} review
- * @returns {string}
- */
-function renderStepSummary(review) {
-  const lines = renderHeader(review, { markers: false })
-
-  review.jobs.forEach(job => {
-    lines.push(jobSummaryLine(job, review.uniqueDests))
-    lines.push("")
-    if (job.connections.length === 0 || review.lineageAbsent) return
-    lines.push("````text")
-    lines.push(renderJobTree(job, { elide: false }))
-    lines.push("````")
-    lines.push("")
   })
+}
 
-  renderFooter(review, lines)
+/**
+ * Render one changed job's marked tree as the body of a `diff` fence: the
+ * union of the head tree and the no-longer-recorded chains, one `@@` header
+ * carrying the head-vs-previous attribution and the exact delta.
+ * @param {ReviewJob} job
+ * @param {EdgeDelta} delta
+ * @param {string} headSha
+ * @param {string} previousSha
+ */
+function renderJobDiffTree(job, delta, headSha, previousSha) {
+  /** @type {Map<ReviewEdge, string>} */
+  const marks = new Map()
+  const names = addressNameMap(job.edges, delta.removed)
+  /** @type {Map<string, ReviewEdge>} */
+  const representatives = new Map()
+  for (const edge of [...job.edges, ...delta.removed].sort(edgeComparator)) {
+    const id = destinationIdentity(edge, names)
+    const current = representatives.get(id)
+    const named = edge.remote_names.some((name) => name !== "")
+    const currentNamed = current?.remote_names.some((name) => name !== "")
+    if (!current || (named && !currentNamed)) representatives.set(id, edge)
+  }
+  const unionEdges = [...representatives.entries()].map(([id, edge]) => {
+    marks.set(edge, delta.addedIds.has(id) ? "+" : delta.removedIds.has(id) ? "-" : " ")
+    return edge
+  })
+  unionEdges.sort((a, b) => {
+    const ka = destinationIdentity(a, names)
+    const kb = destinationIdentity(b, names)
+    return ka < kb ? -1 : ka > kb ? 1 : edgeComparator(a, b)
+  })
+  const lines = [
+    `@@ ${fenceText(headSha.slice(0, 7) || "unknown")} vs ${fenceText(previousSha.slice(0, 7) || "unknown")} @@`,
+  ]
+  const root = treeForAssociations(unionEdges)
+  for (const child of root.children) {
+    lines.push(`  ${diffNodeLine(child)}`)
+    renderDiffChildren(child, "", lines, marks)
+  }
+  for (const edge of root.associations) {
+    const mark = marks.get(edge) ?? " "
+    lines.push(`${mark} ${diffLeafLine(edge)}`)
+  }
   return lines.join("\n")
 }
 
 /**
- * The no-record body: Jibril produced no profile (sensor failed to start or
- * the workload never ran). Says so plainly — no verdict, no glyph; the footer
- * carries the one growth CTA (A6). Markerless; callers prepend markers for
- * the PR-comment surface.
- * @param {NoRecordInput} input
+ * A count with its inflected unit, glued with `&nbsp;` so `11 chains` never
+ * wraps between the number and the word on narrow screens.
+ * @param {number} n
+ * @param {string} unit
+ */
+function countPhrase(n, unit) {
+  return `${n}&nbsp;${unit}${n === 1 ? "" : "s"}`
+}
+
+/**
+ * Named workload delta — `+A −R destination(s)` — numbers bold, unit
+ * named, zero sides dropped (`−1 destination`, never `+0 −1`). The unit
+ * inflects on the total moved identities.
+ * @param {number} added
+ * @param {number} removed
+ * @param {{ bold?: boolean }} [options]
+ */
+function deltaPhrase(added, removed, { bold = true } = {}) {
+  const sides = []
+  if (added > 0) sides.push(`+${added}`)
+  if (removed > 0) sides.push(`−${removed}`)
+  const unit = added + removed === 1 ? "destination" : "destinations"
+  const numbers = sides.join("&nbsp;")
+  return `${bold ? `<b>${numbers}</b>` : numbers}&nbsp;${unit}`
+}
+
+/**
+ * The fold identity line: `workflow / job ↗` — the job-id text is the
+ * hyperlink. Target: the specific Actions job URL when recorded, else the
+ * run URL. Matrix cells are distinct jobs; the cell identity lives in the
+ * job-id slot.
+ * @param {{ name: string, workflow: string, job_url?: string, run_url?: string }} job
+ */
+function jobIdentity(job) {
+  const wf = `<code>${escapeHtml(job.workflow)}</code>`
+  const url = job.job_url || job.run_url
+  const name = url
+    ? `<a href="${escapeHtmlAttr(url)}"><code>${escapeHtml(job.name)}</code>&nbsp;↗</a>`
+    : `<code>${escapeHtml(job.name)}</code>`
+  return job.workflow !== "" ? `${wf} / ${name}` : name
+}
+
+/**
+ * Explicit medium-forced omission line.
+ * @param {number} x
+ * @param {number} y
+ */
+const truncationLine = (x, y) =>
+  runtime_review_vocab_CONTRACT_VOCAB.copy.truncationTemplate
+    .replace("X", String(x))
+    .replace("Y", String(y))
+
+/**
+ * Concise orientation fold with a lineage-exact mini tree. Open while
+ * pending and on the first recorded result; collapsed on later updates.
+ * @param {{ open?: boolean, comparison?: boolean }} [options]
+ */
+function renderExplainer({ open = false, comparison = false } = {}) {
+  const tree = [
+    "<pre>",
+    "<em>Runner.Worker</em>                ← the runner: root of the job's execution tree (italic)",
+    "└─ <strong>npm install</strong>               ← a process your job ran (bold)",
+    "   └─ → registry.npmjs[.]org  ← an action: what the process did — an outbound connection, defanged",
+    "      ╰ one chain of processes, root to action: an execution chain",
+    "</pre>",
+  ]
+  const lines = [
+    `<details${open ? " open" : ""}><summary><sub>${runtime_review_vocab_CONTRACT_VOCAB.copy.explainerLabel}</sub></summary>`,
+    "",
+    ...tree,
+    "",
+    "<sub><i>The tree is every chain the job ran; a process appears only when it acted.</i></sub>",
+  ]
+  if (comparison) {
+    lines.push("")
+    lines.push(
+      "<sub><i><code>+</code> new destination · <code>−</code> destination no longer reached, vs the previous profiled commit.</i></sub>",
+    )
+  }
+  lines.push("")
+  lines.push("</details>")
+  return lines.join("\n")
+}
+
+/**
+ * Deterministic fold sentence — a bounded factual projection of the fold's
+ * own tree, never an interpretation. Chains group by recorded step
+ * attribution (else deepest recorded process name, else the unknown-lineage
+ * label); each group counts its distinct destinations with the tree's own
+ * identity; groups sort changed-first (comparison comments), then
+ * destination count descending, then name; at most two groups are named and
+ * the remainder collapses to `and K more`.
+ * @param {ReviewEdge[]} edges
+ * @param {EdgeDelta | null} [delta]
+ */
+function jobSummarySentence(edges, delta = null) {
+  if (edges.length === 0) return ""
+  const names = addressNameMap(edges, delta ? delta.removed : [])
+  const removedGroups = delta
+    ? new Set(delta.removed.map((edge) => groupKeyForEdge(edge)))
+    : new Set()
+  /** @type {Map<string, { key: string, destinations: Set<string>, changed: boolean }>} */
+  const groups = new Map()
+  // The sentence speaks only from recorded step attribution — workload facts.
+  // Process-name fallbacks (runner machinery like provjobd) are evidence for
+  // the tree, not a headline: promoting them reads as the job's summary and
+  // repeats infrastructure noise across rows. No attributed steps → no
+  // sentence; the row falls back to plain counts.
+  const attributed = edges.filter(
+    (e) => e.github_step !== "" && !isSentinelStep(e.github_step),
+  )
+  if (attributed.length === 0) return ""
+  for (const edge of attributed) {
+    const key = groupKeyForEdge(edge)
+    let g = groups.get(key)
+    if (g === undefined) {
+      g = { key, destinations: new Set(), changed: false }
+      groups.set(key, g)
+    }
+    g.destinations.add(destinationIdentity(edge, names))
+    if (
+      delta &&
+      (delta.addedIds.has(destinationIdentity(edge, names)) || removedGroups.has(key))
+    ) {
+      g.changed = true
+    }
+  }
+  const ordered = [...groups.values()].sort((a, b) => {
+    if (a.changed !== b.changed) return a.changed ? -1 : 1
+    if (a.destinations.size !== b.destinations.size) return b.destinations.size - a.destinations.size
+    return a.key < b.key ? -1 : a.key > b.key ? 1 : 0
+  })
+  const named = ordered.slice(0, 2).map((g) => {
+    const n = g.destinations.size
+    return `${neutralizeMarkdown(escapeHtml(truncateMiddle(g.key)))} reached ${n}\u00a0destination${n === 1 ? "" : "s"}`
+  })
+  const rest = ordered.length - named.length
+  return rest > 0 ? `${named.join(", ")}, and ${rest} more` : named.join(", ")
+}
+
+/** Recorded step names carry the runner's ordinal prefix (`4. Run workload`);
+ * the ordinal is presentation noise — stripped for display only, like
+ * displayProcessName. The record, model, and Step Summary keep the raw name.
+ * @param {unknown} name */
+function displayStepName(name) {
+  // Unexpanded workflow expressions (`${{ matrix.job_name }}`) are recorded
+  // verbatim in unnamed steps — template syntax, not a name; display drops
+  // them (with an empty enclosing `()`), the record and model keep the raw.
+  const stripped = String(name ?? "")
+    .replace(/^\d+\.\s+/, "")
+    .replace(/\s*\(\s*\$\{\{[^}]*\}\}\s*\)/g, "")
+    .replace(/\$\{\{[^}]*\}\}/g, "")
+    .trim()
+  return stripped === "" ? String(name ?? "") : stripped
+}
+
+/**
+ * Jibril attributes runner-infrastructure chains to a sentinel step named
+ * `NN. Runner Processes`. It is not a workflow step, so no surface may
+ * present it as step attribution.
+ * @param {unknown} name
+ */
+function isSentinelStep(name) {
+  return displayStepName(name) === "Runner Processes"
+}
+
+/**
+ * Grouping identity for the fold sentence: step attribution, else deepest recorded process.
+ * @param {ReviewEdge} edge
+ */
+function groupKeyForEdge(edge) {
+  // Keyed on the display name, not the raw record: the runner ordinal-prefixes
+  // repeated steps (`4. Run build`, `9. Run build`), which display identically
+  // — raw keys would render duplicate names with split counts.
+  if (edge.github_step !== "" && !isSentinelStep(edge.github_step)) return displayStepName(edge.github_step)
+  const path = edgeProcessPath(edge).filter((part) => part !== "")
+  return displayProcessName(path[path.length - 1] ?? VOCAB.unknownLineage)
+}
+
+/**
+ * Fold summary row — count-dedup rules (§21.6): single-job comments carry
+ * counts in the metadata line only; multi-job comments demote per-job counts
+ * into `<sub>` on the fold row. Changed jobs bold the delta; unchanged jobs
+ * say `no change`; the comparison base renders only in the headline.
+ * @param {ReviewJob} job
+ * @param {{ multiJob?: boolean, delta?: JobDelta | null, treeEdges?: ReviewEdge[] | null }} [options]
+ */
+function jobSummaryLine(job, { multiJob = false, delta = null, treeEdges = null } = {}) {
+  const tree = treeEdges ?? job.edges
+  const displayEdges = dedupeDestinationEdges(tree)
+  const names = addressNameMap(tree)
+  const treeCounts = new Set(displayEdges.map((edge) => destinationIdentity(edge, names))).size
+  const sentence = jobSummarySentence(tree, delta)
+  const parts = []
+  // Changed rows lead with the bold delta: the left edge is the scan column,
+  // so what moved reads top-to-bottom without reading a single job name.
+  // The comparison base commit renders once at run scope (metadata line) and
+  // inside the diff's @@ header — the fold row carries only its own delta.
+  const changed = delta !== null && delta.addedCount + delta.removedCount > 0
+  if (changed) parts.push(`${deltaPhrase(delta.addedCount, delta.removedCount)} ·`)
+  parts.push(jobIdentity(job))
+  if (sentence !== "") parts.push(`· ${sentence}`)
+  // `no change` is only true when nothing beneath the fold moved. A job whose
+  // substrate fold renders a diff says so — the workload tree is what did not
+  // move, and the substrate fold carries its own delta.
+  if (delta !== null && !changed) {
+    const substrateMoved =
+      delta.substrate !== undefined &&
+      delta.substrate.addedCount + delta.substrate.removedCount > 0
+    parts.push(`· ${substrateMoved ? VOCAB.noWorkloadChange : VOCAB.noChange}`)
+  }
+  // Fold-row counts render whenever the sentence does not fully cover the
+  // tree: capped (`and K more`), absent, or partial (chains without step
+  // attribution exist beneath it). A complete sentence already covers every
+  // group, and the chain count is countable in the tree itself. Changed rows
+  // carry no totals: one destination fact per row — the delta — with the
+  // totals countable inside the fold.
+  const sentenceCapped = /, and \d+ more$/.test(sentence)
+  const sentencePartial =
+    sentence !== "" &&
+    displayEdges.some((e) => e.github_step === "" || isSentinelStep(e.github_step))
+  if (
+    multiJob &&
+    !changed &&
+    displayEdges.length > 0 &&
+    (sentenceCapped || sentencePartial || sentence === "")
+  ) {
+    parts.push(
+      `<sub>· ${countPhrase(displayEdges.length, "chain")} · ${countPhrase(treeCounts, "destination")}</sub>`,
+    )
+  }
+  return parts.join(" ")
+}
+
+/**
+ * Per-job edge retention order under medium truncation: IMDS edges first
+ * (never evicted while any non-IMDS edge renders), then canonical order.
+ * @param {ReviewEdge[]} edges
+ */
+function retentionOrder(edges) {
+  /** @type {ReviewEdge[]} */
+  const imds = []
+  /** @type {ReviewEdge[]} */
+  const rest = []
+  for (const e of edges) (IMDS_ADDRESSES.has(e.remote_address) ? imds : rest).push(e)
+  return [...imds, ...rest]
+}
+
+/**
+ * Render the PR comment body with `kept` edges per job (kept = Map job.id →
+ * count from the job's retention order; display stays canonical order).
+ */
+/**
+ * Markdown commit reference: linked short sha when the commit URL is known.
+ * @param {string} sha
+ * @param {string} commitUrl
+ */
+function commitRef(sha, commitUrl) {
+  const sha7 = escapeCode(sha.slice(0, 7) || "unknown")
+  return commitUrl ? `[\`${sha7}\`](${commitUrl})` : `\`${sha7}\``
+}
+
+/**
+ * The previous profiled commit's reference, linked when derivable.
+ * @param {RunReview & { comparison: ReviewComparison }} review
+ */
+function previousCommitRef(review) {
+  const prev = review.comparison.previousSha
+  const url =
+    review.commitUrl !== "" && review.sha !== "" && review.commitUrl.endsWith(review.sha)
+      ? review.commitUrl.slice(0, review.commitUrl.length - review.sha.length) + prev
+      : ""
+  return commitRef(prev, url)
+}
+
+/**
+ * The category heading — the core primitive stated as the high-level
+ * summary: Execution Profiles belong to jobs; the commit is the trigger.
+ * All counts and change facts live in the metadata line and job folds.
+ * @param {RunReview} review
+ */
+function headlineSentence(review) {
+  const k = review.counts.jobs
+  const jobsNoun = `${k} job${k === 1 ? "" : "s"}`
+  // Bold body line, not a `#` heading — a recurring bot comment speaks at
+  // body register; the primitive is the emphasis, not the type size.
+  return `**${VOCAB.headlineLead} ${jobsNoun}, triggered by ${commitRef(review.sha, review.commitUrl)}**`
+}
+
+/**
+ * Comment-register counts: the run-scope numbers count what the comment
+ * renders for this record — chains is the total of rendered chain rows
+ * across job folds (workload and substrate alike), destinations the union
+ * of their destination identities. Substrate is excluded from change
+ * accounting, never from presence counts. Capture multiplicity stays in the
+ * Step Summary and the review model (the evidence register).
+ * @param {ReviewJob[]} jobs
+ */
+function commentRegisterCounts(jobs) {
+  let chains = 0
+  const identities = new Set()
+  for (const job of jobs) {
+    const names = addressNameMap(job.edges)
+    const { shown, substrate } = partitionCommentEdges(job.edges)
+    chains += shown.length + substrate.length
+    for (const edge of [...shown, ...substrate]) {
+      identities.add(destinationIdentity(edge, names))
+    }
+  }
+  return { chains, destinations: identities.size }
+}
+
+/**
+ * Metadata blockquote — noun facts only, each `·` segment one fact: counts
+ * (first mention spells `execution chains`), the change pointer vs the
+ * previous profiled commit, kernel/eBPF provenance, and the record's
+ * timestamp. Single-job comments carry counts here ONLY.
+ * @param {RunReview} review
+ * @param {Map<number, JobDelta> | null} deltas
+ */
+function metadataLine(review, deltas) {
+  const { chains, destinations } = commentRegisterCounts(review.jobs)
+  const parts = [
+    `${chains}&nbsp;execution chain${chains === 1 ? "" : "s"}`,
+    `${destinations}&nbsp;destination${destinations === 1 ? "" : "s"}`,
+  ]
+  if (review.comparison !== null) {
+    const added = deltas ? [...deltas.values()].reduce((n, d) => n + d.addedCount, 0) : 0
+    const removed =
+      (deltas ? [...deltas.values()].reduce((n, d) => n + d.removedCount, 0) : 0) +
+      vanishedJobs(review).reduce((n, entry) => n + entry.chains, 0)
+    const clause = added + removed > 0 ? "changed" : VOCAB.noChange
+    parts.push(
+      `${clause} ${VOCAB.sinceWord} ${previousCommitRef(/** @type {RunReview & { comparison: ReviewComparison }} */ (review))}`,
+    )
+  }
+  parts.push(runtime_review_vocab_CONTRACT_VOCAB.copy.kernelProvenance)
+  if (review.recordedThrough !== "") parts.push(review.recordedThrough)
+  // Italic blockquote only — never <sub>: GitHub mobile collapses <sub>
+  // line-height, so a wrapped metadata line overprints itself on phones.
+  return `> *${parts.join(" · ")}*`
+}
+
+/**
+ * Comparison identity of a job: matrix cells are distinct jobs, so the cell
+ * discriminator belongs in the key — otherwise every cell of a matrix would
+ * diff against one arbitrary earlier cell.
+ * @param {{ workflow: string, name: string, job_index?: string }} job
+ */
+const comparisonIdentity = (job) =>
+  `${job.workflow}\u0000${job.name}\u0000${job.job_index ?? ""}`
+
+/**
+ * @param {{ workflow: string, name: string }} job
+ */
+const jobNameKey = (job) => `${job.workflow}\u0000${job.name}`
+
+/**
+ * @template T
+ * @param {T[]} jobs
+ * @param {(job: T) => string} key
+ */
+const countByKey = (jobs, key) => {
+  /** @type {Map<string, number>} */
+  const counts = new Map()
+  for (const job of jobs) counts.set(key(job), (counts.get(key(job)) ?? 0) + 1)
+  return counts
+}
+
+/**
+ * Pair each recorded job with its counterpart on the previous profiled commit.
+ * Matching is exact on workflow + job + matrix cell, so matrix cells never
+ * diff against each other. When a record carries no cell index at all, the
+ * name alone identifies the job — but only while it is unique on both sides.
+ * @param {ReviewJob[]} headJobs
+ * @param {PreviousJob[]} previousJobs
+ * @returns {{ pairs: Map<number, PreviousJob | null>, matched: Set<PreviousJob> }}
+ */
+function pairWithPreviousJobs(headJobs, previousJobs) {
+  const prevByIdentity = new Map(previousJobs.map((j) => [comparisonIdentity(j), j]))
+  const prevByName = new Map(previousJobs.map((j) => [jobNameKey(j), j]))
+  const headNameCounts = countByKey(headJobs, jobNameKey)
+  const prevNameCounts = countByKey(previousJobs, jobNameKey)
+
+  /** @type {Map<number, PreviousJob | null>} */
+  const pairs = new Map()
+  /** @type {Set<PreviousJob>} */
+  const matched = new Set()
+  for (const job of headJobs) {
+    let prev = prevByIdentity.get(comparisonIdentity(job))
+    if (
+      prev === undefined &&
+      headNameCounts.get(jobNameKey(job)) === 1 &&
+      prevNameCounts.get(jobNameKey(job)) === 1
+    ) {
+      prev = prevByName.get(jobNameKey(job))
+    }
+    pairs.set(job.id, prev ?? null)
+    if (prev !== undefined && prev !== null) matched.add(prev)
+  }
+  return { pairs, matched }
+}
+
+/**
+ * Per-job comparison deltas over comment-visible chains, keyed by job id.
+ * Returns null when the review carries no comparison.
+ * @param {RunReview} review
+ * @returns {Map<number, JobDelta> | null}
+ */
+function reviewDeltas(review) {
+  if (review.comparison === null) return null
+  const { pairs } = pairWithPreviousJobs(review.jobs, review.comparison.previousJobs)
+  /** @type {Map<number, JobDelta>} */
+  const deltas = new Map()
+  for (const job of review.jobs) {
+    const prev = pairs.get(job.id)
+    const prevEdges = prev ? prev.edges : []
+    const headPartition = partitionCommentEdges(job.edges)
+    const prevPartition = prev ? partitionCommentEdges(prevEdges) : { shown: [], substrate: [] }
+    // One job-wide identity scope: a destination recorded on both commits is
+    // never added or removed, even when its attribution moves between the
+    // workload tree and the substrate fold.
+    const names = addressNameMap(job.edges, prevEdges)
+    const scope = {
+      names,
+      headUniverse: new Set(job.edges.map((edge) => destinationIdentity(edge, names))),
+      previousUniverse: new Set(prevEdges.map((edge) => destinationIdentity(edge, names))),
+    }
+    deltas.set(job.id, {
+      ...compareJobEdges(headPartition.shown, prevPartition.shown, scope),
+      substrate: compareJobEdges(headPartition.substrate, prevPartition.substrate, scope),
+    })
+  }
+  return deltas
+}
+
+/**
+ * Jobs recorded on the previous profiled commit with no counterpart on this
+ * one. Their chains left the record, so they carry their own removal count
+ * instead of disappearing from the comparison.
+ * @param {RunReview} review
+ * @returns {{ job: PreviousJob, chains: number }[]}
+ */
+function vanishedJobs(review) {
+  if (review.comparison === null) return []
+  const { matched } = pairWithPreviousJobs(review.jobs, review.comparison.previousJobs)
+  return review.comparison.previousJobs
+    .filter((job) => !matched.has(job))
+    .map((job) => {
+      const { shown, substrate } = partitionCommentEdges(job.edges)
+      return { job, chains: shown.length + substrate.length }
+    })
+    .filter((entry) => entry.chains > 0)
+}
+
+/**
+ * Change accounting for a review: per-job ordering tier plus the run-scope
+ * job totals the jobs line and machine summary speak. Tier 0 is workload
+ * change, 1 substrate-only movement, 2 no change, 3 no outbound
+ * destinations; substrate movement never makes a job "changed".
+ * @param {RunReview} review
+ */
+function changeAccounting(review) {
+  const deltas = reviewDeltas(review)
+  /** @type {Map<number, number>} */
+  const tiers = new Map()
+  const totals = { changedJobs: 0, unchangedJobs: 0, noOutboundJobs: 0, added: 0, removed: 0 }
+  for (const job of review.jobs) {
+    let tier
+    const delta = deltas ? deltas.get(job.id) : null
+    // A workload delta outranks an empty head record: a job whose whole
+    // record left is a changed job, never "no outbound destinations".
+    if (delta !== null && delta !== undefined && delta.addedCount + delta.removedCount > 0) {
+      tier = 0
+      totals.changedJobs += 1
+      totals.added += delta.addedCount
+      totals.removed += delta.removedCount
+    } else if (job.edges.length === 0) {
+      tier = 3
+      totals.noOutboundJobs += 1
+    } else if (
+      delta !== null &&
+      delta !== undefined &&
+      delta.substrate.addedCount + delta.substrate.removedCount > 0
+    ) {
+      tier = 1
+      totals.unchangedJobs += 1
+    } else {
+      tier = 2
+      totals.unchangedJobs += 1
+    }
+    tiers.set(job.id, tier)
+  }
+  const vanished = vanishedJobs(review)
+  return {
+    deltas,
+    tiers,
+    ...totals,
+    vanishedJobCount: vanished.length,
+    vanishedChains: vanished.reduce((n, entry) => n + entry.chains, 0),
+  }
+}
+
+/**
+ * The machine summary marker: one HTML comment carrying the run-scope
+ * counts as JSON so agents read structure instead of parsing the human
+ * surface. Every number equals the corresponding rendered count;
+ * comparison-only fields are null on snapshot comments.
+ * @param {RunReview} review
+ * @param {ReturnType<typeof changeAccounting>} accounting
+ */
+function machineSummaryMarker(review, accounting) {
+  const { chains, destinations } = commentRegisterCounts(review.jobs)
+  const comparing = review.comparison !== null
+  const summary = {
+    contract: runtime_review_vocab_CONTRACT_VOCAB.version,
+    commit: review.sha,
+    previous: review.comparison !== null ? review.comparison.previousSha : null,
+    jobs: review.jobs.length,
+    changed: comparing ? accounting.changedJobs : null,
+    unchanged: comparing ? accounting.unchangedJobs : null,
+    noOutbound: comparing ? accounting.noOutboundJobs : null,
+    vanished: comparing ? accounting.vanishedJobCount : null,
+    added: comparing ? accounting.added : null,
+    removed: comparing ? accounting.removed : null,
+    vanishedChains: comparing ? accounting.vanishedChains : null,
+    chains,
+    destinations,
+  }
+  // `--` is escaped inside JSON strings so a hostile record-sourced value
+  // can never terminate the HTML comment; JSON.parse restores the bytes.
+  const json = JSON.stringify(summary).replace(/--/g, "-\\u002d")
+  return `<!-- ${VOCAB.machineSummaryMarker} ${json} -->`
+}
+
+/**
+ * The jobs line: one italic blockquote paragraph under the metadata line
+ * stating how many job folds changed, held, recorded no outbound
+ * destinations, or left the record — comparison comments only, and only
+ * when a workload change or vanished job exists. Segments count the folds
+ * and entries rendered beneath them.
+ * @param {ReturnType<typeof changeAccounting>} accounting
+ */
+function jobsLine(accounting) {
+  /** @type {string[]} */
+  const segments = []
+  if (accounting.changedJobs > 0) {
+    segments.push(
+      `${countPhrase(accounting.changedJobs, "job")} ${VOCAB.jobsLineChanged} ${deltaPhrase(accounting.added, accounting.removed, { bold: false })}`,
+    )
+  }
+  if (accounting.unchangedJobs > 0) {
+    segments.push(`${countPhrase(accounting.unchangedJobs, "job")} ${VOCAB.jobsLineUnchanged}`)
+  }
+  if (accounting.noOutboundJobs > 0) {
+    segments.push(`${countPhrase(accounting.noOutboundJobs, "job")} ${VOCAB.jobsLineNoOutbound}`)
+  }
+  if (accounting.vanishedJobCount > 0) {
+    segments.push(`${countPhrase(accounting.vanishedJobCount, "job")} ${VOCAB.jobsLineVanished}`)
+  }
+  return `> *${segments.join(" · ")}*`
+}
+
+/**
+ * @param {RunReview} review
+ * @param {Map<number, number>} kept
+ * @param {{ explainerOpen?: boolean }} [options]
+ */
+function renderCommentBody(review, kept, { explainerOpen = false } = {}) {
+  const lines = [RUNTIME_REVIEW_MARKER, COMMENT_MARKER]
+  if (review.sha !== "") lines.push(`<!-- garnet:commit ${review.sha} -->`)
+  const accounting = changeAccounting(review)
+  const deltas = accounting.deltas
+  lines.push(machineSummaryMarker(review, accounting))
+  lines.push(headlineSentence(review))
+  lines.push("")
+  lines.push(metadataLine(review, deltas))
+  if (
+    review.comparison !== null &&
+    (accounting.changedJobs > 0 || accounting.vanishedJobCount > 0)
+  ) {
+    lines.push(">")
+    lines.push(jobsLine(accounting))
+  }
+  lines.push("")
+
+  const multiJob = review.jobs.length > 1
+  const previousSha = review.comparison ? review.comparison.previousSha : ""
+
+  for (const job of review.jobs) {
+    const delta = deltas ? deltas.get(job.id) : null
+    const changed =
+      delta !== null && delta !== undefined && delta.addedCount + delta.removedCount > 0
+    // A job whose whole record left since the previous profiled commit is a
+    // changed job — its removals render in the fold's diff, never silently.
+    if (job.edges.length === 0 && !changed) {
+      lines.push(`<sub>${jobIdentity(job)} — ${VOCAB.emptyPeers}</sub>`)
+      lines.push("")
+      continue
+    }
+    const keptCount = kept.get(job.id) ?? job.edges.length
+    const retained = new Set(retentionOrder(job.edges).slice(0, keptCount))
+    const shown = job.edges.filter((e) => retained.has(e))
+    const { shown: workload, substrate } = partitionCommentEdges(shown)
+    // Folds render open on the first recorded result, and on changed jobs
+    // while the comment carries at most FOLD_OPEN_BUDGET of them.
+    const open = (changed && accounting.changedJobs <= FOLD_OPEN_BUDGET) || explainerOpen
+    lines.push(
+      `<details${open ? " open" : ""}><summary>${jobSummaryLine(job, { multiJob, delta: delta ?? null, treeEdges: workload })}</summary>`,
+    )
+    lines.push("")
+    if (changed) {
+      lines.push("```diff")
+      lines.push(renderJobDiffTree({ ...job, edges: workload }, delta, review.sha, previousSha))
+      lines.push("```")
+      lines.push("")
+    } else if (workload.length > 0) {
+      lines.push("<pre>")
+      lines.push(renderJobTree(job, workload))
+      lines.push("</pre>")
+      lines.push("")
+    }
+    const substrateFold = renderSubstrateFold(
+      job,
+      substrate,
+      delta ? delta.substrate : null,
+      review.sha,
+      previousSha,
+    )
+    if (substrateFold.length > 0) {
+      lines.push(...substrateFold)
+      lines.push("")
+    }
+    if (shown.length < job.edges.length) {
+      lines.push(`<sub>${truncationLine(shown.length, job.edges.length)}</sub>`)
+      lines.push("")
+    }
+    const link = profilePermalink(job, review.appUrl, "pr_comment")
+    if (link !== "") {
+      lines.push(
+        `<p align="right"><sub><a href="${escapeHtmlAttr(link)}">${VOCAB.permalinkLabel}</a></sub></p>`,
+      )
+      lines.push("")
+    }
+    lines.push("</details>")
+    lines.push("")
+  }
+
+  // Jobs that left the record sit below this commit's behavior, in one
+  // collapsed self-counting fold.
+  const vanished = vanishedJobs(review)
+  if (vanished.length > 0) {
+    lines.push(
+      `<details><summary><sub>${VOCAB.vanishedJobsLabel} · ${countPhrase(vanished.length, "job")} · ${countPhrase(accounting.vanishedChains, "chain")}</sub></summary>`,
+    )
+    lines.push("")
+    lines.push(
+      vanished
+        .map(({ job, chains }) => `<sub>${jobIdentity(job)} · ${countPhrase(chains, "chain")}</sub>`)
+        .join("<br>\n"),
+    )
+    lines.push("")
+    lines.push("</details>")
+    lines.push("")
+  }
+
+  // The explainer sits at the bottom under a divider; open only on a
+  // first-profile comment.
+  lines.push("---")
+  lines.push("")
+  lines.push(renderExplainer({ open: explainerOpen, comparison: review.comparison !== null }))
+
+  while (lines.length > 0 && lines[lines.length - 1] === "") lines.pop()
+  return lines.join("\n")
+}
+
+/**
+ * Deterministic explicit minimal fallback for the pathological case where
+ * even zero kept edges (the fixed per-job fold overhead) exceeds the medium
+ * budget: markers, heading, headline, coverage count, the exact truncation
+ * line, and — when they still fit — the run-index link(s).
+ * @param {RunReview} review
+ */
+function renderMinimalComment(review) {
+  const head = [RUNTIME_REVIEW_MARKER, COMMENT_MARKER]
+  if (review.sha !== "") head.push(`<!-- garnet:commit ${review.sha} -->`)
+  head.push(headlineSentence(review))
+  head.push("")
+  head.push(`<sub>${truncationLine(0, review.counts.associations)}</sub>`)
+  return head.join("\n")
+}
+
+/**
+ * Render the Garnet Runtime Review PR comment. Jobs in review order
+ * (change tiers on comparison comments, else alphabetic by
+ * `workflow / job`); edges in canonical deterministic order.
+ * Truncation (only because of the medium budget, never silently) drops edges
+ * via a deterministic fair round-robin across jobs in canonical order — IMDS
+ * associations retained first — and emits an explicit destination-association
+ * line per truncated fold.
+ * @param {RunReview} review
+ * @param {RenderRunReviewOptions} [opts] explainer opens on the first
+ * recorded result and collapses on later updates; `budget` lowers the
+ * serialized byte budget below the contract default when the caller wraps
+ * the review with additional payload (never raises it)
+ */
+function renderRunReview(review, opts = {}) {
+  const explainerOpen = opts.explainerOpen === true
+  const budget =
+    typeof opts.budget === "number" && Number.isSafeInteger(opts.budget) && opts.budget < SIZE_BUDGET
+      ? opts.budget
+      : SIZE_BUDGET
+  const full = renderCommentBody(review, new Map(), { explainerOpen })
+  if (Buffer.byteLength(full, "utf8") <= budget) return full
+
+  // Global round-robin retention order: round r keeps the r-th edge of each
+  // job's retention queue, jobs visited in canonical order.
+  const queues = review.jobs.map((j) => ({ id: j.id, total: j.edges.length }))
+  /** @type {{id: number}[]} */
+  const order = []
+  for (let round = 0; order.length < review.counts.associations; round += 1) {
+    for (const q of queues) {
+      if (round < q.total) order.push({ id: q.id })
+    }
+  }
+
+  const bodyFor = (/** @type {number} */ keepTotal) => {
+    /** @type {Map<number, number>} */
+    const kept = new Map(review.jobs.map((j) => [j.id, 0]))
+    for (let i = 0; i < keepTotal; i += 1) {
+      const entry = order[i]
+      if (entry === undefined) break
+      kept.set(entry.id, (kept.get(entry.id) ?? 0) + 1)
+    }
+    return renderCommentBody(review, kept, { explainerOpen })
+  }
+
+  // Largest edge total whose serialized body fits the budget (binary search
+  // — rendering is deterministic, so this is reproducible).
+  let lo = 0
+  let hi = review.counts.associations - 1
+  let best = bodyFor(0)
+  while (lo <= hi) {
+    const mid = (lo + hi) >> 1
+    const body = bodyFor(mid)
+    if (Buffer.byteLength(body, "utf8") <= budget) {
+      best = body
+      lo = mid + 1
+    } else {
+      hi = mid - 1
+    }
+  }
+  // True final cap: when even the zero-edge body's fixed overhead exceeds
+  // the budget, fall back to the deterministic minimal comment.
+  if (Buffer.byteLength(best, "utf8") > budget) return renderMinimalComment(review)
+  return best
+}
+
+/**
+ * @typedef {{
+ *   explainerOpen?: boolean
+ *   budget?: number
+ * }} RenderRunReviewOptions
+ */
+
+/**
+ * The waiting/pending comment: open explainer + hourglass, but no timestamp,
+ * renderer clock, count, expected denominator, or permalink.
+ * @param {{sha?: string, commitUrl?: string, appMode?: boolean}} input
+ */
+function renderPendingReview(input = {}) {
+  const sha = String(input.sha || "")
+  const lines = [RUNTIME_REVIEW_MARKER, COMMENT_MARKER]
+  if (sha !== "") lines.push(`<!-- garnet:commit ${sha} -->`)
+  lines.push(
+    `**${runtime_review_vocab_CONTRACT_VOCAB.copy.headlinePendingLead} ${commitRef(sha, String(input.commitUrl || ""))}**`,
+  )
+  lines.push("")
+  lines.push(runtime_review_vocab_CONTRACT_VOCAB.copy.pendingStatus)
+  lines.push("")
+  lines.push("---")
+  lines.push("")
+  lines.push(renderExplainer({ open: true }))
+  return lines.join("\n")
+}
+
+/**
+ * Wrap an exact renderer body as the testbed-only "after" comment while
+ * replacing ownership markers that the App and Action fallback use.
+ * Visible renderer copy and layout remain unchanged.
+ * @param {string} body
+ */
+function renderReferenceMockup(body, stepSummary = "") {
+  const projectedBody = String(body)
+    .replaceAll(RUNTIME_REVIEW_MARKER, "<!-- garnet-reference-renderer-body -->")
+    .replaceAll(COMMENT_MARKER, "<!-- garnet-reference-renderer-owner:none -->")
+    .replace(
+      /<!-- garnet:commit ([0-9a-f]+) -->/gi,
+      "<!-- garnet-reference-renderer-commit $1 -->",
+    )
+
+  const lines = [
+    REFERENCE_MOCKUP_MARKER,
+    `<!-- garnet-reference-renderer-contract:v${CONTRACT_VOCAB.version} -->`,
+    `> **After — v${CONTRACT_VOCAB.version} reference renderer.** Generated from this PR's captured profiles by the contract active in this branch. Compare it with the installed GitHub App's live **Before** comment on this PR. This preview updates in place; neither the App nor the Action fallback owns it.`,
+    "",
+    projectedBody,
+  ]
+
+  // Second surface: the exact job Step Summary (lineage-keyed egress table)
+  // as it renders in the Actions run Summary tab — embedded here so this one
+  // isolated comment shows BOTH shipped surfaces for review in one place.
+  if (String(stepSummary).trim()) {
+    lines.push(
+      "",
+      "<!-- garnet-reference-renderer-step-summary -->",
+      "<details><summary><strong>Step Summary</strong> — as rendered in the Actions run Summary tab</summary>",
+      "",
+      String(stepSummary).trim(),
+      "",
+      "</details>",
+    )
+  }
+
+  return lines.join("\n")
+}
+
+// ---------------------------------------------------------------------------
+// Step Summary.
+// ---------------------------------------------------------------------------
+
+/**
+ * One destination-first Step Summary row (one source peer).
+ * @typedef {{
+ *   flow_id: number
+ *   remote_address: string
+ *   remote_names: string[]
+ *   associations: ReviewEdge[]
+ * }} DestinationRow
+ */
+
+/**
+ * Destination-first Step Summary projection: one row per source peer in the
+ * profile's recorded order, with every process tree retained in source order.
+ * @param {ReviewEdge[]} edges
+ * @returns {DestinationRow[]}
+ */
+function buildDestinationRows(edges) {
+  /** @type {DestinationRow[]} */
+  const rows = []
+  /** @type {Map<number, DestinationRow>} */
+  const byKey = new Map()
+  for (const edge of edges) {
+    const key = edge.flow_id
+    let row = byKey.get(key)
+    if (!row) {
+      row = {
+        flow_id: edge.flow_id,
+        remote_address: edge.remote_address,
+        remote_names: edge.remote_names,
+        associations: [],
+      }
+      byKey.set(key, row)
+      rows.push(row)
+    }
+    row.associations.push(edge)
+  }
+  return rows
+    .sort((a, b) => a.flow_id - b.flow_id)
+    .map((row) => ({
+      ...row,
+      associations: row.associations
+        .slice()
+        .sort((a, b) => a.tree_index - b.tree_index),
+    }))
+}
+
+/**
+ * Screenshot-style compact ancestry: first node, ellipsis, final three nodes.
+ * @param {ReviewEdge} edge
+ * @returns {string[]}
+ */
+function compactStepSummaryAncestry(edge) {
+  if (!edge.lineage_recorded) return [VOCAB.unknownLineage]
+  const names = (edge.ancestry || []).filter((name) => name !== "")
+  const chain = names.length > 0 ? names.slice() : []
+  if (edge.process !== "" && chain[chain.length - 1] !== edge.process) {
+    chain.push(edge.process)
+  }
+  if (chain.length === 0) chain.push(VOCAB.unknownLineage)
+  if (chain.length <= 4) return chain
+  return [chain[0] ?? "", "…", ...chain.slice(-3)]
+}
+
+/**
+ * @param {ReviewEdge} edge
+ */
+function processTreeCell(edge) {
+  const names = compactStepSummaryAncestry(edge)
+  return names
+    .map((name, index) => {
+      const leaf = index === names.length - 1
+      const value =
+        leaf && edge.pid !== ""
+          ? `${truncateMiddle(name)} (pid ${edge.pid})`
+          : truncateMiddle(name)
+      return `<code>${escapeHtmlCell(value)}</code>`
+    })
+    .join(" → ")
+}
+
+/**
+ * Lineage-first Step Summary projection: one row per recorded process lineage,
+ * deduped by lineage + PID + process + ancestry, with every recorded
+ * destination for that lineage nested and identical destinations collapsed.
+ * Telemetry counts are unaffected — they pass through from the sensor/profile,
+ * not from these rows (see `buildDestinationRows` for the lossless peer view).
+ * @param {ReviewEdge[]} edges
+ * @returns {LineageRow[]}
+ */
+function buildLineageRows(edges) {
+  /** @type {LineageRow[]} */
+  const rows = []
+  /** @type {Map<string, LineageRow>} */
+  const byKey = new Map()
+  for (const edge of edges) {
+    const key = JSON.stringify([
+      edge.lineage_recorded,
+      edge.pid,
+      edge.process,
+      edge.ancestry,
+    ])
+    let row = byKey.get(key)
+    if (!row) {
+      row = { edge, associations: [] }
+      byKey.set(key, row)
+      rows.push(row)
+    }
+    row.associations.push(edge)
+  }
+  return rows
+}
+
+/**
+ * @param {ReviewEdge} edge
+ */
+function edgeDestinationLabel(edge) {
+  const primary = edge.remote_names.find((name) => name !== "")
+  return primary || edge.remote_address || "(no destination recorded)"
+}
+
+/**
+ * Destinations cell: one deduped domain-first line per recorded destination.
+ * @param {LineageRow} row
+ */
+function lineageDestinationsCell(row) {
+  const seen = new Set()
+  /** @type {string[]} */
+  const labels = []
+  for (const edge of row.associations) {
+    const label = edgeDestinationLabel(edge)
+    if (seen.has(label)) continue
+    seen.add(label)
+    labels.push(label)
+  }
+  // Stacked destinations each start with a marker glued to the label by a
+  // non-breaking space: it anchors every item without implying an order the
+  // record never captured (ordinals would), and the glue keeps the glyph
+  // from orphaning onto its own line at phone width. A single destination
+  // renders bare — a marker of one is noise.
+  if (labels.length === 1) return `<code>${escapeHtmlCell(truncateMiddle(labels[0]))}</code>`
+  return labels
+    .map((label) => `· <code>${escapeHtmlCell(truncateMiddle(label))}</code>`)
+    .join("<br>")
+}
+
+/**
+ * GitHub-native lineage-first table: one recorded process lineage per row with
+ * its deduped destinations nested.
+ * @param {LineageRow[]} rows
+ */
+function renderLineageTable(rows) {
+  const lines = ["| Process Tree | Destinations |", "| --- | --- |"]
+  for (const row of rows) {
+    lines.push(`| ${processTreeCell(row.edge)} | ${lineageDestinationsCell(row)} |`)
+  }
+  return lines.join("\n")
+}
+
+/**
+ * Lineage-row retention: rows touching IMDS are kept first, then the rest.
+ * @param {LineageRow[]} rows
+ */
+function lineageRetentionOrder(rows) {
+  /** @type {LineageRow[]} */
+  const imds = []
+  /** @type {LineageRow[]} */
+  const rest = []
+  for (const row of rows) {
+    const isImds = row.associations.some((edge) =>
+      IMDS_ADDRESSES.has(edge.remote_address),
+    )
+    ;(isImds ? imds : rest).push(row)
+  }
+  return [...imds, ...rest]
+}
+
+/**
+ * @param {ReviewJob} job
+ */
+function hasExplainableTelemetry(job) {
+  if (
+    job.telemetry.total_domains === null ||
+    job.telemetry.total_connections === null ||
+    telemetryDiscrepancies(job).length > 0
+  ) {
+    return false
+  }
+  return true
+}
+
+/**
+ * Djalal's sensor + derived telemetry semantics in the approved prose shape.
+ * @param {ReviewJob} job
+ */
+function renderTelemetry(job) {
+  if (!hasExplainableTelemetry(job)) return ""
+  const domains = `${job.telemetry.total_domains} unique domain${job.telemetry.total_domains === 1 ? "" : "s"}`
+  const connections = `${job.telemetry.total_connections} connection${job.telemetry.total_connections === 1 ? "" : "s"}`
+  return `Network telemetry observed ${domains}, ${job.counts.destinations} destination${job.counts.destinations === 1 ? "" : "s"}, ${connections}, and ${job.counts.flows} flow${job.counts.flows === 1 ? "" : "s"}.`
+}
+
+/**
+ * @param {ReviewEdge[]} edges
+ */
+function renderRecordedContextPreview(edges) {
+  if (edges.length === 0) return ""
+  const lines = [
+    "<details><summary><strong>Recorded context preview</strong></summary>",
+    "",
+    "| Destination | Process Tree | Context |",
+    "| --- | --- | --- |",
+  ]
+  for (const edge of edges) {
+    /** @type {string[]} */
+    const context = []
+    if (edge.github_step !== "") context.push(`step: ${escapeMarkdownCell(edge.github_step)}`)
+    context.push(
+      ...edgeNotes(edge, { detections: true }).map((note) =>
+        note.startsWith("detection: ")
+          ? `\`${escapeCodeCell(note)}\``
+          : `(${escapeMarkdownCell(note)})`,
+      ),
+    )
+    if (edge.result.toLowerCase() === "attention") context.push("⚠ attention")
+    lines.push(
+      `| <code>${destinationDisplay(edge, escapeHtmlCell)}</code> | ${processTreeCell(edge)} | ${context.join(" · ") || "—"} |`,
+    )
+  }
+  lines.push("", "</details>")
+  return lines.join("\n")
+}
+
+/**
+ * Flexible record-backed evidence projection; never synthesizes evidence.
+ * @param {Record<string, unknown> | null | undefined} evidence
+ * @param {string[]} keys
  * @returns {string}
  */
-function renderNoRecord(input) {
-  const inputRecord = /** @type {Record<string, unknown>} */ (input)
-  const expected = Math.max(input.expectedJobs ?? 0, 1)
-  const shaSource = isNonEmptyString(input.sha) ? input.sha : "unknown"
-  const sha7 = escapeCode(String(shaSource).slice(0, 7))
-  const stamp = freshnessStamp(new Date(input.renderedAt))
-  const commitURL = shared_firstNonEmptyString(input.commitURL, inputRecord["commitUrl"])
-  const docsURL = shared_firstNonEmptyString(input.docsURL, inputRecord["docsUrl"])
+function evidenceValue(evidence, keys) {
+  for (const key of keys) {
+    if (evidence?.[key] !== undefined && evidence?.[key] !== null) {
+      const value = evidence[key]
+      return Array.isArray(value) ? value.map(String).join(", ") : String(value)
+    }
+  }
+  return ""
+}
+
+/**
+ * @param {JobAssertion[]} assertions
+ */
+function renderAssertionPreview(assertions) {
+  if (assertions.length === 0) {
+    return [
+      "<details><summary><strong>Assertions</strong></summary>",
+      "",
+      "No assertions recorded.",
+      "",
+      "</details>",
+    ].join("\n")
+  }
+
+  const lines = [
+    "<details><summary><strong>Assertions</strong></summary>",
+    "",
+    "| Check | Result | Context |",
+    "| --- | --- | --- |",
+  ]
+  for (const assertion of assertions) {
+    const check = assertion.description || assertion.id || "—"
+    const context = [assertion.class_id, assertion.id].filter(Boolean).join(" · ") || "—"
+    lines.push(
+      `| ${escapeMarkdownCell(check)} | \`${escapeCodeCell(assertion.result || "unknown")}\` | ${escapeMarkdownCell(context)} |`,
+    )
+  }
+
+  const evidenceRows = assertions.flatMap((assertion) =>
+    assertion.evidence.map((evidence) => [
+      assertion.id || assertion.description || "—",
+      evidenceValue(evidence, ["timestamp", "time", "created_at"]) || "—",
+      evidenceValue(evidence, ["event", "event_type", "kind", "detection"]) || "—",
+      evidenceValue(evidence, ["remote_peer", "remote_name", "remote_address", "peer"]) || "—",
+      evidenceValue(evidence, ["protocol"]) || "—",
+      evidenceValue(evidence, ["ports", "remote_ports", "port"]) || "—",
+      evidenceValue(evidence, ["result"]) || assertion.result || "—",
+    ]),
+  )
+  if (evidenceRows.length > 0) {
+    lines.push("")
+    lines.push("| Assertion | Timestamp | Event | Remote Peer | Protocol | Ports | Result |")
+    lines.push("| --- | --- | --- | --- | --- | --- | --- |")
+    for (const row of evidenceRows) {
+      lines.push(`| ${row.map(escapeMarkdownCell).join(" | ")} |`)
+    }
+  }
+  lines.push("", "</details>")
+  return lines.join("\n")
+}
+
+/**
+ * Render one profile's Runtime Summary section with `keptEdges` retained
+ * (Infinity = all).
+ * @param {ReviewJob} job
+ * @param {string} appUrl
+ */
+function renderStepSummaryFooter(job, appUrl) {
+  // Workflow, run, and job identity live in the Workload table; the footer
+  // adds only the recording timestamp and the product path.
+  const stamp = formatTimestamp(job.timestamp)
+  const lines = ['<div align="right">']
+  if (stamp !== "") lines.push(`<sub>${stamp}</sub><br>`)
+  const link = profilePermalink(job, appUrl, "step_summary")
+  const cta =
+    link === ""
+      ? "<strong>Powered by Garnet</strong>"
+      : `<a href="${escapeHtmlAttr(link)}">${VOCAB.permalinkLabel}</a>`
+  lines.push(cta, "</div>")
+  if (job.run_url !== "") {
+    lines.push(
+      "",
+      `<sub><a href="${escapeHtmlAttr(job.run_url)}">Job summary generated at run-time</a></sub>`,
+    )
+  } else {
+    lines.push("", "<sub>Job summary generated at run-time</sub>")
+  }
+  return lines.join("\n")
+}
+
+/**
+ * @param {ReviewJob} job
+ * @param {string} appUrl
+ * @param {number} keptDestinations
+ * @param {boolean} previewAssertions
+ */
+function renderProfileSummary(job, appUrl, keptDestinations, previewAssertions) {
+  const lines = [`## ${VOCAB.stepSummaryHeading}`, ""]
+
+  lines.push("### Workload Summary", "")
+  /** @type {[string, string][]} */
+  const rows = []
+  if (job.profile_id !== "") rows.push(["Profile UUID", job.profile_id])
+  if (job.workflow !== "") rows.push(["Workflow", job.workflow])
+  if (job.repository !== "") rows.push(["Repository", job.repository])
+  if (job.ref !== "") rows.push(["Branch", job.ref])
+  if (job.sha !== "") rows.push(["Commit", job.sha])
+  if (job.actor !== "") rows.push(["Triggered by", job.actor])
+  if (job.run_id !== "" || job.name !== "") {
+    rows.push(["Run ID / Job", [job.run_id, job.name].filter(Boolean).join(" / ")])
+  }
+  if (job.job_index !== "") rows.push(["Matrix job index", job.job_index])
+  lines.push("| Field | Value |")
+  lines.push("| --- | --- |")
+  for (const [key, value] of rows) {
+    lines.push(`| ${escapeMarkdownCell(key)} | ${escapeMarkdownCell(value)} |`)
+  }
+  lines.push("")
+
+  lines.push("### Network Egress Summary", "")
+  const lineageRows = buildLineageRows(job.edges)
+  if (lineageRows.length === 0) {
+    lines.push(VOCAB.emptyPeers)
+    lines.push("")
+  } else {
+    const keep = keptDestinations === Infinity ? lineageRows.length : keptDestinations
+    const retained = new Set(lineageRetentionOrder(lineageRows).slice(0, keep))
+    const shown = lineageRows.filter((row) => retained.has(row))
+    lines.push("Keyed by execution chain; repeated destination names within a chain are collapsed.", "")
+    lines.push(renderLineageTable(shown))
+    lines.push("")
+    if (shown.length < lineageRows.length) {
+      lines.push(
+        `<sub>rendered ${shown.length} of ${lineageRows.length} execution chains</sub>`,
+      )
+      lines.push("")
+    }
+  }
+
+  const telemetry = renderTelemetry(job)
+  if (telemetry !== "") {
+    lines.push(telemetry)
+    lines.push("")
+  }
+
+  if (previewAssertions) {
+    lines.push(renderRecordedContextPreview(job.edges))
+    lines.push("")
+    lines.push(renderAssertionPreview(job.assertions))
+    lines.push("")
+  }
+
+  lines.push(renderStepSummaryFooter(job, appUrl))
+  return lines.join("\n")
+}
+
+/**
+ * Render the GitHub Step Summary: heading `## Garnet Runtime Summary`,
+ * Workload first, then the lineage-first network-egress table, source-
+ * backed telemetry, optional preview-only assertions, and the aligned footer.
+ * The 1 MiB budget uses deterministic fair-round-robin retention.
+ * @param {unknown[]} profiles raw parsed Jibril profiles
+ * @param {{appUrl?: string, preview?: boolean}} [opts]
+ */
+function renderStepSummary(profiles, opts = {}) {
+  const appUrl = String(opts.appUrl || "https://app.garnet.ai").replace(/\/+$/, "")
+  const jobs = buildRunReview({
+    appUrl,
+    jobs: profiles.map(summarizeProfile).filter(Boolean),
+  }).jobs
+  const render = (/** @type {Map<number, number>} */ kept) =>
+    jobs
+      .map((j, i) =>
+        renderProfileSummary(j, appUrl, kept.get(i) ?? Infinity, opts.preview === true),
+      )
+      .join("\n\n---\n\n")
+
+  const full = render(new Map())
+  if (Buffer.byteLength(full, "utf8") <= STEP_SUMMARY_BUDGET) return full
+
+  const rowCounts = jobs.map((job) => buildLineageRows(job.edges).length)
+  const totalLineages = rowCounts.reduce((sum, count) => sum + count, 0)
+  /** @type {number[]} */
+  const order = []
+  for (let round = 0; order.length < totalLineages; round += 1) {
+    jobs.forEach((_, i) => {
+      if (round < (rowCounts[i] ?? 0)) order.push(i)
+    })
+  }
+  const bodyFor = (/** @type {number} */ keepTotal) => {
+    /** @type {Map<number, number>} */
+    const kept = new Map(jobs.map((_, i) => [i, 0]))
+    for (let i = 0; i < keepTotal; i += 1) {
+      const jobIndex = order[i]
+      if (jobIndex === undefined) break
+      kept.set(jobIndex, (kept.get(jobIndex) ?? 0) + 1)
+    }
+    return render(kept)
+  }
+  let lo = 0
+  let hi = totalLineages - 1
+  let best = bodyFor(0)
+  while (lo <= hi) {
+    const mid = (lo + hi) >> 1
+    const body = bodyFor(mid)
+    if (Buffer.byteLength(body, "utf8") <= STEP_SUMMARY_BUDGET) {
+      best = body
+      lo = mid + 1
+    } else {
+      hi = mid - 1
+    }
+  }
+  // True final cap: when even the zero-edge summary's fixed overhead exceeds
+  // the budget, fall back to the deterministic minimal summary.
+  if (Buffer.byteLength(best, "utf8") > STEP_SUMMARY_BUDGET) {
+    return renderMinimalStepSummary(jobs)
+  }
+  return best
+}
+
+/**
+ * Deterministic explicit minimal fallback for the Step Summary.
+ * @param {ReviewJob[]} jobs
+ */
+function renderMinimalStepSummary(jobs) {
+  const lineages = jobs.reduce(
+    (sum, job) => sum + buildLineageRows(job.edges).length,
+    0,
+  )
   return [
-    "## Garnet Runtime Review",
-    `${isNonEmptyString(commitURL) ? `[\`${sha7}\`](${commitURL})` : `\`${sha7}\``} · 0 of ${expected} job${expected === 1 ? "" : "s"} recorded · ${stamp}`,
+    `## ${VOCAB.stepSummaryHeading}`,
     "",
-    "No Run Profile was produced for this run.",
+    `${jobs.length} job${jobs.length === 1 ? "" : "s"} recorded`,
     "",
-    "Confirm the Garnet action started Jibril successfully and that the workload ran before this step.",
-    "",
-    "---",
-    `<sub>What happened in this PR — each job's processes and where they reached. · ${expected} job${expected === 1 ? "" : "s"} not yet recorded — [add the step ↗](${docsURL})</sub>`,
+    `<sub>rendered 0 of ${lineages} execution chains</sub>`,
   ].join("\n")
+}
+
+/**
+ * Semantic surface linter — guards the whole class of "same fact rendered
+ * twice in one visual block" regressions (e.g. telemetry counts printed in
+ * both the prose line and the footer). Byte-goldens cannot catch this because
+ * they lock whatever the renderer emits, duplication included. The Step
+ * Summary is split into per-job sections; the PR comment is checked whole.
+ * Returns a list of human-readable violations; an empty array means clean.
+ * @param {string} surface rendered markdown/HTML for one run
+ * @param {"pr"|"step-summary"} kind
+ * @returns {string[]}
+ */
+function lintRenderedSurface(surface, kind) {
+  /** @type {string[]} */
+  const violations = []
+  const count = (/** @type {string} */ text, /** @type {RegExp} */ re) => (text.match(re) || []).length
+  if (kind === "step-summary") {
+    const sections = surface.split(/\n\n---\n\n/)
+    sections.forEach((section, i) => {
+      /** @type {[string, RegExp][]} */
+      const families = [
+        ["telemetry unique-domain count", /\bunique domain/gi],
+        ["telemetry connection count", /\d+ connections?\b/gi],
+        ["Powered by Garnet footer", /Powered by Garnet/gi],
+        ["profile permalink", /\?profile=/gi],
+      ]
+      for (const [name, re] of families) {
+        const n = count(section, re)
+        if (n > 1) {
+          violations.push(
+            `step-summary job section ${i}: "${name}" appears ${n}× (expected \u2264 1)`,
+          )
+        }
+      }
+    })
+  } else {
+    // The PR comment carries no telemetry counts at all; any occurrence means
+    // a fact family leaked into the wrong surface.
+    /** @type {[string, RegExp][]} */
+    const forbidden = [
+      ["telemetry prose", /Network telemetry observed/gi],
+      ["telemetry unique-domain count", /\bunique domain/gi],
+    ]
+    for (const [name, re] of forbidden) {
+      const n = count(surface, re)
+      if (n > 0) {
+        violations.push(`pr comment: "${name}" must not appear (found ${n}\u00d7)`)
+      }
+    }
+  }
+  return violations
 }
 
 ;// CONCATENATED MODULE: ./src/profile-comment.js
 
 
 
-
 /** @typedef {import("./runtime-review.js").RunReview} RunReview */
-/** @typedef {import("./runtime-review.js").JobRecord} JobRecord */
+/** @typedef {import("./runtime-review.js").JobSummary} JobSummary */
+/** @typedef {import("./runtime-review.js").ReviewEdge} ReviewEdge */
 
 const ACTION_COMMENT_MARKER = "garnet-action-pr-comment:v1"
 const COMMIT_MARKER_PREFIX = "garnet-pr-commit:"
 const LEGACY_COMMENT_STATE_MARKER = "garnet-runtime-visibility"
 
 const COMMENT_STATE_MARKER_PREFIX = "garnet-action-comment-state:"
+
+// GitHub rejects issue comments above this many characters; the final body
+// (rendered review plus the hidden state marker) must stay under it.
+const COMMENT_HARD_LIMIT = 65536
 
 /**
  * @typedef {"pass" | "attention" | "fail" | "unknown"} ProfileResult
@@ -147734,63 +149232,13 @@ const COMMENT_STATE_MARKER_PREFIX = "garnet-action-comment-state:"
  */
 
 /**
- * @typedef {{ ancestry: string[] }} ProcTree
- */
-
-/**
- * @typedef {{ ancestry?: unknown }} ProcTreeTransformInput
- */
-
-/**
- * @typedef {{
- *   result: ProfileResult
- *   remote_names?: unknown
- *   remote_address?: string | undefined
- *   proc_trees?: unknown
- * }} PeerTransformInput
- */
-
-/**
- * @typedef {{
- *   timestamp: string
- *   scenarios: { github: GitHubScenario }
- *   assertions: AssertionSummary[]
- *   network?: unknown
- *   telemetry?: unknown
- * }} ProfileJsonTransformInput
- */
-
-/**
- * @typedef {{
- *   remote_names: string[]
- *   remote_address: string
- *   proc_trees: ProcTree[]
- *   result: ProfileResult
- * }} EgressPeer
- */
-
-/**
- * @typedef {{
- *   total_domains: number
- *   total_connections: number
- * }} NetworkTelemetry
- */
-
-/**
- * @typedef {{
- *   id: string
- *   result: ProfileResult
- * }} AssertionSummary
- */
-
-/**
+ * One profile as carried inside the sticky-comment state: the GitHub
+ * scenario key fields used by the merge machinery plus the renderer's full
+ * job summary (v6.6.1 shape — edges, assertions, telemetry, metadata).
  * @typedef {{
  *   timestamp: string
  *   github: GitHubScenario
- *   assertions: AssertionSummary[]
- *   egress_peers: EgressPeer[]
- *   telemetry: NetworkTelemetry
- *   report_link: string
+ *   job: JobSummary
  * }} NormalizedProfile
  */
 
@@ -147802,36 +149250,8 @@ const COMMENT_STATE_MARKER_PREFIX = "garnet-action-comment-state:"
  */
 
 /**
- * @typedef {{ kind: "stale" } | { kind: "updated", state: CommentState }} MergeCommentStateResult
- */
-
-/**
  * @typedef {{
- *   repository: string
- *   run_id: string
- *   job: string
- * }} ReportLinkInput
- */
-
-/**
- * @typedef {{
- *   ancestry: string[]
- *   domain: string
- *   ip: string
- * }} ProfileConnection
- */
-
-/**
- * @typedef {{
- *   version: 1
- *   latest_run: WorkflowRun
- *   profiles: NormalizedProfile[]
- * }} LegacyCommentState
- */
-
-/**
- * @typedef {{
- *   version: 2
+ *   version: 3
  *   workflow_runs: Record<string, WorkflowRun>
  *   profiles: NormalizedProfile[]
  * }} CommentState
@@ -147839,39 +149259,18 @@ const COMMENT_STATE_MARKER_PREFIX = "garnet-action-comment-state:"
 
 /**
  * Rendering knobs threaded from the action's inputs (all optional, additive).
+ * `firstRun` drives the explainer's open state: true through the PR's
+ * first-commit lifecycle, false on every update after.
  * @typedef {{
- *   expectedJobs?: number
- *   permalinkURL?: string
- *   docsURL?: string
  *   renderedAt?: string | Date
+ *   firstRun?: boolean
  * }} RenderOptions
  */
 
 const DEFAULT_JSON_PROFILE_FILE = "/var/log/jibril.profile.json"
 const DEFAULT_APP_BASE_URL = "https://app.garnet.ai"
-const DEFAULT_DOCS_URL = "https://github.com/garnet-org/action#readme"
 const UTM_SOURCE = "github"
 const UTM_MEDIUM = "pr_comment"
-
-const PROFILE_RESULT_SCHEMA = unknown().transform(transformProfileResult)
-
-const PROC_TREE_SCHEMA = looseObject({
-        ancestry: array(schemas_string()),
-    })
-    .transform(transformProcTree)
-
-const ASSERTION_SCHEMA = looseObject({
-    id: schemas_string(),
-    result: PROFILE_RESULT_SCHEMA,
-})
-
-const PEER_SCHEMA = looseObject({
-        result: PROFILE_RESULT_SCHEMA,
-        remote_names: array(schemas_string()),
-        remote_address: schemas_string().optional(),
-        proc_trees: array(PROC_TREE_SCHEMA),
-    })
-    .transform(transformPeer)
 
 const GITHUB_SCENARIO_SCHEMA = object({
     workflow: schemas_string(),
@@ -147883,49 +149282,77 @@ const GITHUB_SCENARIO_SCHEMA = object({
     job: schemas_string(),
 })
 
-const PROFILE_NETWORK_SCHEMA = object({
-        egress: object({
-                peers: array(PEER_SCHEMA).optional(),
-            })
-            .optional(),
-    })
-    .optional()
+const REVIEW_EDGE_SCHEMA = object({
+    flow_id: schemas_number(),
+    tree_index: schemas_number(),
+    remote_address: schemas_string(),
+    remote_names: array(schemas_string()),
+    remote_ports: array(schemas_string()),
+    protocol: schemas_string(),
+    result: schemas_string(),
+    detections: array(schemas_string()),
+    lineage_recorded: schemas_boolean(),
+    pid: schemas_string(),
+    process: schemas_string(),
+    ancestry: array(schemas_string()),
+    github_step: schemas_string(),
+})
 
-const PROFILE_NETWORK_TELEMETRY_SCHEMA = object({
-        network: object({
-                egress: object({
-                        total_domains: schemas_number().optional(),
-                        total_connections: schemas_number().optional(),
-                    })
-                    .optional(),
-            })
-            .optional(),
-    })
-    .optional()
+const ASSERTION_EVIDENCE_SCHEMA = object({
+    timestamp: schemas_string(),
+    event: schemas_string(),
+    remote_peer: schemas_string(),
+    protocol: schemas_string(),
+    ports: schemas_string(),
+    result: schemas_string(),
+})
+
+const JOB_ASSERTION_SCHEMA = object({
+    class_id: schemas_string(),
+    id: schemas_string(),
+    description: schemas_string(),
+    result: schemas_string(),
+    evidence: array(ASSERTION_EVIDENCE_SCHEMA),
+})
+
+const JOB_SUMMARY_SCHEMA = object({
+    name: schemas_string(),
+    workflow: schemas_string(),
+    repository: schemas_string(),
+    sha: schemas_string(),
+    run_id: schemas_string(),
+    run_url: schemas_string(),
+    profile_id: schemas_string(),
+    uuid: schemas_string(),
+    timestamp: schemas_string(),
+    ref: schemas_string(),
+    actor: schemas_string(),
+    job_index: schemas_string(),
+    flow_count: schemas_number(),
+    telemetry: object({
+        total_domains: schemas_number().nullable(),
+        total_connections: schemas_number().nullable(),
+    }),
+    assertions: array(JOB_ASSERTION_SCHEMA),
+    edges: array(REVIEW_EDGE_SCHEMA),
+    counts: object({
+        associations: schemas_number(),
+        processes: schemas_number(),
+        destinations: schemas_number(),
+        primary_names: schemas_number(),
+        domains: schemas_number(),
+        flows: schemas_number(),
+    }),
+})
 
 const NORMALIZED_PROFILE_SCHEMA = object({
     timestamp: schemas_string(),
     github: GITHUB_SCENARIO_SCHEMA,
-    assertions: array(ASSERTION_SCHEMA),
-    egress_peers: array(PEER_SCHEMA),
-    telemetry: object({
-        total_domains: schemas_number(),
-        total_connections: schemas_number(),
-    }),
-    report_link: schemas_string(),
-})
-
-const LEGACY_COMMENT_STATE_SCHEMA = object({
-    version: literal(1),
-    latest_run: object({
-        run_id: schemas_string(),
-        run_attempt: schemas_number(),
-    }),
-    profiles: array(NORMALIZED_PROFILE_SCHEMA),
+    job: JOB_SUMMARY_SCHEMA,
 })
 
 const COMMENT_STATE_SCHEMA = object({
-    version: literal(2),
+    version: literal(3),
     workflow_runs: record(
         schemas_string(),
         object({
@@ -147936,70 +149363,51 @@ const COMMENT_STATE_SCHEMA = object({
     profiles: array(NORMALIZED_PROFILE_SCHEMA),
 })
 
-const PROFILE_JSON_SCHEMA = looseObject({
-        timestamp: schemas_string(),
-        scenarios: object({
-            github: GITHUB_SCENARIO_SCHEMA,
+// Pre-v3 comment states (versions 1 and 2) carried a reduced profile shape
+// (egress peers without ports/protocol/detections/steps). They are upgraded
+// on read so an in-flight PR keeps its sticky comment across the renderer
+// upgrade; missing fields default to empty.
+const LEGACY_PROC_TREE_SCHEMA = looseObject({
+    ancestry: array(schemas_string()),
+})
+
+const LEGACY_PEER_SCHEMA = looseObject({
+    remote_names: array(schemas_string()),
+    remote_address: schemas_string().optional(),
+    proc_trees: array(LEGACY_PROC_TREE_SCHEMA),
+    result: unknown(),
+})
+
+const LEGACY_PROFILE_SCHEMA = looseObject({
+    timestamp: schemas_string(),
+    github: GITHUB_SCENARIO_SCHEMA,
+    egress_peers: array(LEGACY_PEER_SCHEMA),
+    telemetry: object({
+        total_domains: schemas_number(),
+        total_connections: schemas_number(),
+    }),
+})
+
+const LEGACY_V1_STATE_SCHEMA = object({
+    version: literal(1),
+    latest_run: object({
+        run_id: schemas_string(),
+        run_attempt: schemas_number(),
+    }),
+    profiles: array(LEGACY_PROFILE_SCHEMA),
+})
+
+const LEGACY_V2_STATE_SCHEMA = object({
+    version: literal(2),
+    workflow_runs: record(
+        schemas_string(),
+        object({
+            run_id: schemas_string(),
+            run_attempt: schemas_number(),
         }),
-        assertions: array(ASSERTION_SCHEMA),
-        network: PROFILE_NETWORK_SCHEMA,
-        telemetry: PROFILE_NETWORK_TELEMETRY_SCHEMA,
-    })
-    .transform(transformProfileJson)
-
-/**
- * @param {unknown} value
- * @returns {ProfileResult}
- */
-function transformProfileResult(value) {
-    return normalizeResult(value)
-}
-
-/**
- * @param {ProcTreeTransformInput} procTree
- * @returns {ProcTree}
- */
-function transformProcTree(procTree) {
-    const ancestry = Array.isArray(procTree.ancestry) ? procTree.ancestry : []
-    return {
-        ancestry: ancestry.filter(entry => typeof entry === "string" && entry.length > 0),
-    }
-}
-
-/**
- * @param {PeerTransformInput} peer
- * @returns {EgressPeer}
- */
-function transformPeer(peer) {
-    const remoteNames = Array.isArray(peer.remote_names) ? peer.remote_names : []
-    const procTrees = Array.isArray(peer.proc_trees) ? peer.proc_trees : []
-
-    return {
-        remote_names: remoteNames.filter(name => typeof name === "string" && name.length > 0),
-        remote_address: peer.remote_address ?? "",
-        proc_trees: /** @type {ProcTree[]} */ (procTrees),
-        result: peer.result,
-    }
-}
-
-/**
- * @param {ProfileJsonTransformInput} profile
- * @returns {NormalizedProfile}
- */
-function transformProfileJson(profile) {
-    return {
-        timestamp: profile.timestamp,
-        github: profile.scenarios.github,
-        assertions: profile.assertions,
-        egress_peers: getProfileNetworkPeers(profile),
-        telemetry: getProfileNetworkTelemetry(profile),
-        report_link: buildReportLink({
-            repository: profile.scenarios.github.repository,
-            run_id: profile.scenarios.github.run_id,
-            job: profile.scenarios.github.job,
-        }),
-    }
-}
+    ),
+    profiles: array(LEGACY_PROFILE_SCHEMA),
+})
 
 /**
  * @returns {string}
@@ -148019,23 +149427,31 @@ function getDefaultJsonProfileFile() {
  */
 function parseProfileJson(content) {
     const parsedContent = JSON.parse(content)
-    const result = PROFILE_JSON_SCHEMA.safeParse(parsedContent)
-    if (result.success) {
-        return result.data
+    const job = summarizeProfile(parsedContent)
+    if (job === null) {
+        throw new Error("Invalid profile JSON: not a profile object")
     }
 
-    const issues = result.error.issues.map(issue => {
-        const path = issue.path.length > 0 ? issue.path.join(".") : "<root>"
-        return `${path}: ${issue.message}`
-    })
-    throw new Error(`Invalid profile JSON: ${issues.join("; ")}`)
+    return {
+        timestamp: job.timestamp,
+        github: {
+            workflow: job.workflow,
+            repository: job.repository,
+            ref: job.ref,
+            sha: job.sha,
+            actor: job.actor,
+            run_id: job.run_id,
+            job: job.name,
+        },
+        job,
+    }
 }
 
 /**
  * @param {CommentState | null} existingState
  * @param {NormalizedProfile} incomingProfile
  * @param {number} runAttempt
- * @returns {MergeCommentStateResult}
+ * @returns {{ kind: "stale" } | { kind: "updated", state: CommentState }}
  */
 function mergeCommentState(existingState, incomingProfile, runAttempt) {
     const incomingRunID = incomingProfile.github.run_id
@@ -148050,7 +149466,7 @@ function mergeCommentState(existingState, incomingProfile, runAttempt) {
         return {
             kind: "updated",
             state: {
-                version: 2,
+                version: 3,
                 workflow_runs: {
                     [workflowKey]: {
                         run_id: incomingRunID,
@@ -148079,7 +149495,7 @@ function mergeCommentState(existingState, incomingProfile, runAttempt) {
         return {
             kind: "updated",
             state: {
-                version: 2,
+                version: 3,
                 workflow_runs: {
                     ...existingState.workflow_runs,
                     [workflowKey]: {
@@ -148102,7 +149518,7 @@ function mergeCommentState(existingState, incomingProfile, runAttempt) {
     return {
         kind: "updated",
         state: {
-            version: 2,
+            version: 3,
             workflow_runs: existingState.workflow_runs,
             profiles,
         },
@@ -148147,7 +149563,7 @@ function mergeCommentStates(states) {
     }
 
     return {
-        version: 2,
+        version: 3,
         workflow_runs: workflowRuns,
         profiles: [...profiles.values()].sort(compareProfiles),
     }
@@ -148161,14 +149577,25 @@ function mergeCommentStates(states) {
  * @param {RenderOptions} [options]
  * @returns {string}
  */
-function renderCommentBody(state, options = {}) {
-    const metadata = encodeCommentState(state)
+function profile_comment_renderCommentBody(state, options = {}) {
+    const metadata = encodeCommentStateWithinBudget(state)
     const profiles = [...state.profiles].sort(compareProfiles)
     const commitSha = getCommentCommitSha(profiles)
-    const review = buildProfileRunReview(profiles, options)
-    const reviewBody = renderRunReview(review)
+    const review = buildProfileRunReview(profiles)
+    const markerOverhead = Buffer.byteLength(
+        [`<!-- ${ACTION_COMMENT_MARKER} -->`, `<!-- ${COMMIT_MARKER_PREFIX}${commitSha} -->`, `<!-- ${COMMENT_STATE_MARKER_PREFIX}${metadata} -->`, ""].join("\n"),
+        "utf8",
+    )
+    const reviewBody = renderRunReview(review, {
+        explainerOpen: options.firstRun === true,
+        budget: Math.min(SIZE_BUDGET, COMMENT_HARD_LIMIT - markerOverhead),
+    })
 
-    const markerPrefix = `${RUNTIME_REVIEW_MARKER}\n${COMMENT_MARKER}\n`
+    // v6.2 marker block: canonical marker, self marker, then the commit
+    // marker `<!-- garnet:commit {full sha} -->` (all emitted by the
+    // renderer), followed by the action's own state markers.
+    const commitMarker = commitSha !== "" ? `<!-- garnet:commit ${commitSha} -->\n` : ""
+    const markerPrefix = `${RUNTIME_REVIEW_MARKER}\n${COMMENT_MARKER}\n${commitMarker}`
     if (!reviewBody.startsWith(markerPrefix)) {
         throw new Error("rendered review body is missing the runtime-review markers")
     }
@@ -148176,6 +149603,7 @@ function renderCommentBody(state, options = {}) {
     return [
         RUNTIME_REVIEW_MARKER,
         COMMENT_MARKER,
+        ...(commitSha !== "" ? [`<!-- garnet:commit ${commitSha} -->`] : []),
         `<!-- ${ACTION_COMMENT_MARKER} -->`,
         `<!-- ${COMMIT_MARKER_PREFIX}${commitSha} -->`,
         `<!-- ${COMMENT_STATE_MARKER_PREFIX}${metadata} -->`,
@@ -148188,59 +149616,21 @@ function renderCommentBody(state, options = {}) {
  * Shared by the PR comment and the Step Summary so both surfaces render
  * from the same review.
  * @param {NormalizedProfile[]} profiles
- * @param {RenderOptions} [options]
  * @returns {RunReview}
  */
-function buildProfileRunReview(profiles, options = {}) {
-    const optionsRecord = /** @type {Record<string, unknown>} */ (options)
-    const jobs = profiles.map(profile => profileToJobRecord(profile))
+function buildProfileRunReview(profiles) {
     const sha = getCommentCommitSha(profiles)
     const repository = getCommentRepository(profiles)
-    const commitURL = repository !== "" && sha !== "" ? `https://github.com/${repository}/commit/${sha}` : ""
-    const permalink = derivePermalink(
-        shared_firstNonEmptyString(options.permalinkURL, optionsRecord["permalinkUrl"]),
-        jobs,
-        resolveAppBaseURL(),
-    )
+    const commitUrl = repository !== "" && sha !== "" ? `https://github.com/${repository}/commit/${sha}` : ""
+    const appUrl = resolveAppBaseURL()
 
     return buildRunReview({
         repo: repository,
         sha,
-        commitURL,
-        permalink,
-        docsURL: shared_firstNonEmptyString(options.docsURL, optionsRecord["docsUrl"], DEFAULT_DOCS_URL),
-        expectedJobs: options.expectedJobs ?? 0,
-        renderedAt: options.renderedAt ?? new Date(),
-        jobs,
+        commitUrl,
+        appUrl,
+        jobs: profiles.map(profile => profile.job),
     })
-}
-
-/**
- * Collapse one normalized profile into the renderer's job-record shape.
- * @param {NormalizedProfile} profile
- * @returns {JobRecord}
- */
-function profileToJobRecord(profile) {
-    /** @type {ProfileConnection[]} */
-    const connections = []
-    for (const peer of profile.egress_peers) {
-        const domain = peer.remote_names[0] ?? ""
-        const ip = peer.remote_address
-        const ancestries =
-            peer.proc_trees.length > 0 ? peer.proc_trees.map(tree => tree.ancestry.filter(entry => entry !== "")) : [[]]
-        for (const ancestry of ancestries) {
-            connections.push({ ancestry, domain, ip })
-        }
-    }
-
-    return {
-        name: profile.github.job,
-        workflow: profile.github.workflow,
-        sha: profile.github.sha,
-        run_id: profile.github.run_id,
-        run_url: buildGitHubRunLink(profile.github.repository, profile.github.run_id),
-        connections,
-    }
 }
 
 /**
@@ -148277,11 +149667,89 @@ function parseCommentState(body) {
             return result.data
         }
 
-        const legacyResult = LEGACY_COMMENT_STATE_SCHEMA.safeParse(parsed)
-        return legacyResult.success ? upgradeLegacyCommentState(legacyResult.data) : null
+        const legacyV2 = LEGACY_V2_STATE_SCHEMA.safeParse(parsed)
+        if (legacyV2.success) {
+            return {
+                version: 3,
+                workflow_runs: legacyV2.data.workflow_runs,
+                profiles: legacyV2.data.profiles.map(upgradeLegacyProfile).sort(compareProfiles),
+            }
+        }
+
+        const legacyV1 = LEGACY_V1_STATE_SCHEMA.safeParse(parsed)
+        if (legacyV1.success) {
+            const profiles = legacyV1.data.profiles.map(upgradeLegacyProfile).sort(compareProfiles)
+            /** @type {Record<string, WorkflowRun>} */
+            const workflowRuns = {}
+            for (const profile of profiles) {
+                workflowRuns[getWorkflowKey(profile)] = legacyV1.data.latest_run
+            }
+            return { version: 3, workflow_runs: workflowRuns, profiles }
+        }
+
+        return null
     } catch {
         return null
     }
+}
+
+/**
+ * A pre-v3 state profile carried egress peers without ports, protocol,
+ * detections, PIDs, or step attribution; the upgrade fills those with
+ * empty defaults so the review still renders every recorded chain.
+ * @param {z.infer<typeof LEGACY_PROFILE_SCHEMA>} profile
+ * @returns {NormalizedProfile}
+ */
+function upgradeLegacyProfile(profile) {
+    /** @type {ReviewEdge[]} */
+    const edges = []
+    profile.egress_peers.forEach((peer, peerIndex) => {
+        const trees = peer.proc_trees.length > 0 ? peer.proc_trees : [{ ancestry: [] }]
+        trees.forEach((tree, treeIndex) => {
+            const ancestry = tree.ancestry.filter(entry => entry !== "")
+            edges.push({
+                flow_id: peerIndex,
+                tree_index: treeIndex,
+                remote_address: peer.remote_address ?? "",
+                remote_names: peer.remote_names.filter(name => name !== ""),
+                remote_ports: [],
+                protocol: "",
+                result: typeof peer.result === "string" ? peer.result : "",
+                detections: [],
+                lineage_recorded: ancestry.length > 0,
+                pid: "",
+                process: ancestry[ancestry.length - 1] ?? "",
+                ancestry,
+                github_step: "",
+            })
+        })
+    })
+
+    /** @type {JobSummary} */
+    const job = {
+        name: profile.github.job,
+        workflow: profile.github.workflow,
+        repository: profile.github.repository,
+        sha: profile.github.sha,
+        run_id: profile.github.run_id,
+        run_url: buildGitHubRunLink(profile.github.repository, profile.github.run_id),
+        profile_id: "",
+        uuid: "",
+        timestamp: profile.timestamp,
+        ref: profile.github.ref,
+        actor: profile.github.actor,
+        job_index: "",
+        flow_count: profile.egress_peers.length,
+        telemetry: {
+            total_domains: profile.telemetry.total_domains,
+            total_connections: profile.telemetry.total_connections,
+        },
+        assertions: [],
+        edges,
+        counts: edgeCounts(edges, profile.egress_peers.length),
+    }
+
+    return { timestamp: profile.timestamp, github: profile.github, job }
 }
 
 /**
@@ -148290,6 +149758,39 @@ function parseCommentState(body) {
  */
 function encodeCommentState(state) {
     return Buffer.from(JSON.stringify(state), "utf8").toString("base64url")
+}
+
+// The encoded state rides inside the comment, so it shares the comment's
+// hard limit with the rendered review. When the full state cannot leave the
+// review at least the contract's minimal fallback, assertion evidence rows
+// are dropped from the carried state (assertion results are kept; the
+// Execution Profile remains the untruncated record).
+const STATE_BYTE_BUDGET = COMMENT_HARD_LIMIT - 8192
+
+/**
+ * @param {CommentState} state
+ * @returns {string}
+ */
+function encodeCommentStateWithinBudget(state) {
+    const encoded = encodeCommentState(state)
+    if (encoded.length <= STATE_BYTE_BUDGET) {
+        return encoded
+    }
+
+    /** @type {CommentState} */
+    const slimmed = {
+        version: 3,
+        workflow_runs: state.workflow_runs,
+        profiles: state.profiles.map(profile => ({
+            ...profile,
+            job: {
+                ...profile.job,
+                assertions: profile.job.assertions.map(assertion => ({ ...assertion, evidence: [] })),
+            },
+        })),
+    }
+
+    return encodeCommentState(slimmed)
 }
 
 /**
@@ -148327,6 +149828,13 @@ function getCommentCommitSha(profiles) {
 }
 
 /**
+ * @typedef {Object} ReportLinkInput
+ * @property {string} repository
+ * @property {string} run_id
+ * @property {string} job
+ */
+
+/**
  * @param {ReportLinkInput} values
  * @returns {string}
  */
@@ -148336,9 +149844,11 @@ function buildReportLink(values) {
         return utmTrackedURL(baseURL)
     }
 
-    // TODO: Switch back to the full repository/job route once the dashboard
-    // supports /dashboard/runs/{org}/{repo}/{runID}/{job}.
-    return utmTrackedURL(`${baseURL}/dashboard/runs/${encodeURIComponent(values.run_id)}`)
+    // The tokenless PUBLIC report route (v6.1 §1.1) — never the authed
+    // dashboard, which would wall cold PR traffic behind a login. Run-level:
+    // no `?job=` selector (per-job `?job=` permalinks are the control-plane
+    // GitHub App comment's job — ENG-1355).
+    return utmTrackedURL(`${baseURL}/public/runs/${encodeURIComponent(values.run_id)}`)
 }
 
 /**
@@ -148376,6 +149886,8 @@ function buildGitHubRunLink(repository, runID) {
 }
 
 /**
+ * The Garnet app base URL for permalinks, mapped from the configured API
+ * host (dev-api → dev-app, …).
  * @returns {string}
  */
 function resolveAppBaseURL() {
@@ -148427,8 +149939,14 @@ function mapApiHostToAppHost(host) {
 }
 
 /**
- * @param {WorkflowRun} left
- * @param {WorkflowRun} right
+ * @typedef {Object} RunOrderKey
+ * @property {string} run_id
+ * @property {number} run_attempt
+ */
+
+/**
+ * @param {RunOrderKey} left
+ * @param {RunOrderKey} right
  * @returns {number}
  */
 function compareRuns(left, right) {
@@ -148449,21 +149967,6 @@ function compareRuns(left, right) {
     }
 
     return 0
-}
-
-/**
- * @param {LegacyCommentState} state
- * @returns {CommentState}
- */
-function upgradeLegacyCommentState(state) {
-    return {
-        version: 2,
-        workflow_runs: state.profiles.reduce((accumulator, profile) => {
-            accumulator[getWorkflowKey(profile)] = state.latest_run
-            return accumulator
-        }, /** @type {Record<string, WorkflowRun>} */ ({})),
-        profiles: [...state.profiles].sort(compareProfiles),
-    }
 }
 
 /**
@@ -148505,53 +150008,6 @@ function toBigInt(value) {
         return BigInt(value)
     } catch {
         return 0n
-    }
-}
-
-/**
- * @param {unknown} value
- * @returns {ProfileResult}
- */
-function normalizeResult(value) {
-    const normalized = getString(value).toLowerCase()
-    if (normalized === "pass" || normalized === "attention" || normalized === "fail") {
-        return normalized
-    }
-    return "unknown"
-}
-
-/**
- * @param {unknown} value
- * @returns {number}
- */
-function getNumber(value) {
-    return typeof value === "number" ? value : 0
-}
-
-/**
- * @param {unknown} profile
- * @returns {EgressPeer[]}
- */
-function getProfileNetworkPeers(profile) {
-    const root = shared_getOptionalRecord(profile)
-    const network = shared_getOptionalRecord(root?.network)
-    const egress = shared_getOptionalRecord(network?.egress)
-    return Array.isArray(egress?.peers) ? egress.peers : []
-}
-
-/**
- * @param {unknown} profile
- * @returns {NetworkTelemetry}
- */
-function getProfileNetworkTelemetry(profile) {
-    const root = shared_getOptionalRecord(profile)
-    const telemetry = shared_getOptionalRecord(root?.telemetry)
-    const network = shared_getOptionalRecord(telemetry?.network)
-    const egress = shared_getOptionalRecord(network?.egress)
-
-    return {
-        total_domains: getNumber(egress?.total_domains),
-        total_connections: getNumber(egress?.total_connections),
     }
 }
 
@@ -148758,7 +150214,10 @@ function planPullRequestComment(comments, profile, runAttempt, renderOptions = {
     }
 
     const duplicateCommentIDs = matchingComments.slice(0, -1).map(entry => entry.comment.id)
-    const body = renderCommentBody(mergeResult.state, renderOptions)
+    const body = profile_comment_renderCommentBody(mergeResult.state, {
+        ...renderOptions,
+        firstRun: isFirstCommitLifecycle(comments, threadKey),
+    })
 
     if (primary === null) {
         return {
@@ -148774,6 +150233,29 @@ function planPullRequestComment(comments, profile, runAttempt, renderOptions = {
         body,
         duplicateCommentIDs,
     }
+}
+
+/**
+ * The explainer's open state (v6.1 §1.4): open through the PR's ENTIRE
+ * first-commit lifecycle, collapsed from the second commit onward. The
+ * comment state marker retains the commit sha, so "still on the PR's first
+ * commit" means every prior Garnet comment on the PR belongs to the SAME
+ * commit as the incoming profile (vacuously true when none exist). A Garnet
+ * comment we cannot attribute to a commit (canonical marker but no parseable
+ * state) counts as prior history, so the explainer collapses.
+ * @param {PullRequestComment[]} comments
+ * @param {string} threadKey
+ * @returns {boolean}
+ */
+function isFirstCommitLifecycle(comments, threadKey) {
+    return comments.every(comment => {
+        const state = parseCommentState(comment.body)
+        if (state !== null) {
+            return isMatchingThread(state, threadKey)
+        }
+
+        return !comment.body.includes(RUNTIME_REVIEW_MARKER)
+    })
 }
 
 /**
@@ -149030,6 +150512,10 @@ function getCreateRecheckDelayMs(profile) {
 /** @typedef {import("./profile-comment.js").RenderOptions} RenderOptions */
 
 /**
+ * @typedef {{ normalized: NormalizedProfile, raw: unknown }} LoadedProfile
+ */
+
+/**
  * @typedef {{
  *   statusCode?: number
  *   apiCode?: string
@@ -149041,8 +150527,9 @@ const DOCS_URL = "https://github.com/garnet-org/action#readme"
 
 // This is the post step for the action. It is called by the GitHub Actions
 // runtime. It stops the Jibril service so the daemon flushes all pending events
-// and writes the JSON profile before we read it. It then renders the Runtime
-// Review Step Summary and publishes the PR comment from the same Run Profile.
+// and writes the JSON profile before we read it. It then renders the Garnet
+// Runtime Summary (Step Summary) and publishes the Garnet Runtime Review PR
+// comment from the same Run Profile.
 
 async function run() {
     const platform = external_node_os_namespaceObject.platform()
@@ -149085,12 +150572,12 @@ async function run() {
             await uploadJibrilArtifacts()
         }
 
-        const profile = await readNormalizedProfile(debug === "true")
+        const profile = await readProfile(debug === "true")
         const renderOptions = getRenderOptions()
 
         await appendRuntimeReviewSummary(profile, renderOptions)
         if (profile !== null) {
-            await publishProfilerComment(profile, renderOptions)
+            await publishProfilerComment(profile.normalized, renderOptions)
         }
     } catch (err) {
         // Never fail the job because of the Runtime Review step.
@@ -149100,12 +150587,14 @@ async function run() {
 
 /**
  * Reads and parses the JSON profile produced by Jibril, or null when the
- * profile is missing or unreadable.
+ * profile is missing or unreadable. Returns both the raw parsed JSON (the
+ * Step Summary renders the full-detail report from it, v6.1 §8) and the
+ * normalized shape used by the PR-comment state machinery.
  * @param {boolean} debug
- * @returns {Promise<NormalizedProfile | null>}
+ * @returns {Promise<LoadedProfile | null>}
  */
-async function readNormalizedProfile(debug) {
-    const jsonProfilerFile = shared_firstNonEmptyString(getState("jsonProfilerFile"), getDefaultJsonProfileFile())
+async function readProfile(debug) {
+    const jsonProfilerFile = firstNonEmptyString(getState("jsonProfilerFile"), getDefaultJsonProfileFile())
 
     try {
         const jsonProfile = await readOptionalRootFile(jsonProfilerFile)
@@ -149119,7 +150608,10 @@ async function readNormalizedProfile(debug) {
             info(jsonProfile)
         }
 
-        return parseProfileJson(jsonProfile)
+        return {
+            normalized: parseProfileJson(jsonProfile),
+            raw: JSON.parse(jsonProfile),
+        }
     } catch (error) {
         warning(`failed to read ${JSON_PROFILE_LABEL}: ${getErrorMessage(error)}`)
         return null
@@ -149136,9 +150628,12 @@ function getRenderOptions() {
 }
 
 /**
- * Writes the full-detail Runtime Review snapshot to the GitHub Step Summary
- * (no elision, no folds, no markers).
- * @param {NormalizedProfile | null} profile
+ * Writes the Garnet Runtime Summary — the per-run full-detail tabular
+ * record (v6.1 §8) — to the GitHub Step Summary, rendered from the RAW
+ * parsed profile. When no profile was produced, the waiting-state body
+ * (v6.1 §2) is written instead, markerless and with the explainer
+ * collapsed.
+ * @param {LoadedProfile | null} profile
  * @param {RenderOptions} renderOptions
  * @returns {Promise<void>}
  */
@@ -149153,20 +150648,17 @@ async function appendRuntimeReviewSummary(profile, renderOptions) {
     if (profile === null) {
         const sha = getEnv("GITHUB_SHA")
         const repository = getEnv("GITHUB_REPOSITORY")
-        content = renderNoRecord({
+        content = renderPendingReview({
             sha,
-            commitURL: repository !== "" && sha !== "" ? `https://github.com/${repository}/commit/${sha}` : "",
-            expectedJobs: renderOptions.expectedJobs ?? 1,
-            docsURL: DOCS_URL,
-            renderedAt: renderOptions.renderedAt ?? new Date(),
+            commitUrl: repository !== "" && sha !== "" ? `https://github.com/${repository}/commit/${sha}` : "",
         })
     } else {
-        const review = buildProfileRunReview([profile], renderOptions)
-        content = renderStepSummary(review)
+        const preview = getState("preview") === "true"
+        content = renderStepSummary([profile.raw], { appUrl: resolveAppBaseURL(), preview })
     }
 
     await promises_.appendFile(summaryFile, `\n${content}\n`)
-    info("Runtime Review written to job summary")
+    info("Garnet Runtime Summary written to job summary")
 }
 
 /**
@@ -149187,7 +150679,7 @@ async function publishProfilerComment(profile, renderOptions) {
         return
     }
 
-    const token = shared_firstNonEmptyString(getState("githubToken"), getEnv("GITHUB_TOKEN"))
+    const token = firstNonEmptyString(getState("githubToken"), getEnv("GITHUB_TOKEN"))
     if (token === "") {
         warning("github_token is not set, skipping PR comment")
         return

@@ -1,0 +1,81 @@
+{
+  "contractVersion": "6.6.1",
+  "repo": "garnet-org/runtime-review-testbed",
+  "sha": "786a5bc8680486720bcf5dae13931de95d89b5ec",
+  "commitUrl": "https://github.com/garnet-org/runtime-review-testbed/commit/786a5bc8680486720bcf5dae13931de95d89b5ec",
+  "appUrl": "https://app.garnet.ai",
+  "appMode": true,
+  "recordedThrough": "",
+  "counts": {
+    "jobs": 1,
+    "associations": 1,
+    "destinations": 1
+  },
+  "jobs": [
+    {
+      "name": "runtime-review",
+      "workflow": "Garnet Runtime Review",
+      "run_id": "28488074733",
+      "run_url": "https://github.com/garnet-labs/runtime-review-testbed/actions/runs/28488074733",
+      "job_url": "",
+      "profile_id": "019f1b61-9f3c-7ac8-a8ed-0c07bf1546af",
+      "uuid": "",
+      "timestamp": "",
+      "repository": "garnet-labs/runtime-review-testbed",
+      "sha": "786a5bc8680486720bcf5dae13931de95d89b5ec",
+      "ref": "refs/pull/22/merge",
+      "actor": "devin-ai-integration[bot]",
+      "job_index": "",
+      "flow_count": 1,
+      "telemetry": {
+        "total_domains": 1,
+        "total_connections": 15
+      },
+      "telemetryDiscrepancies": [
+        {
+          "metric": "Connections",
+          "sensor": 15,
+          "derived": 1,
+          "derivedLabel": "recorded flows"
+        }
+      ],
+      "assertions": [],
+      "counts": {
+        "associations": 1,
+        "processes": 1,
+        "destinations": 1,
+        "primary_names": 1,
+        "domains": 1,
+        "flows": 1
+      },
+      "edges": [
+        {
+          "remote_address": "104.16.5.34",
+          "remote_names": [
+            "registry.npmjs.org",
+            "104.16.5.34"
+          ],
+          "remote_ports": [
+            "443"
+          ],
+          "protocol": "",
+          "result": "",
+          "detections": [],
+          "lineage_recorded": true,
+          "pid": "",
+          "process": "",
+          "ancestry": [
+            "systemd",
+            "hosted-compute-agent",
+            "Runner.Listener",
+            "Runner.Worker",
+            "bash",
+            "npm install"
+          ],
+          "github_step": "",
+          "notes": []
+        }
+      ]
+    }
+  ]
+}

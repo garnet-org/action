@@ -1,518 +1,1971 @@
+#!/usr/bin/env node
 /**
- * Spec gate for the observation-only Garnet Runtime Review renderer
- * (Comment v5.2), ported from the locked reference test suite in
- * garnet-labs/runtime-review-testbed (review.test.mjs): v5.1 acceptance
- * tests 18–27, the v5.2 readability invariants, the banned-vocabulary/glyph
- * hard gate, and byte-comparison against the checked-in real-data mockups.
+ * Contract tests for the Garnet execution-comment renderer — v6.5.0.
  *
- *   node --test test/
+ * Locks destination-association preservation, destination-first projection, qualified
+ * structural/sensor counts, attributed typography, factual detections,
+ * lifecycle copy, escaping, medium truncation, selector/publication policy,
+ * Gate T, byte-determinism, and copy lint over every emitted surface/golden.
  */
-import test from "node:test"
 import assert from "node:assert/strict"
-import { readFile } from "node:fs/promises"
+import { createHash } from "node:crypto"
+import { readFileSync, readdirSync } from "node:fs"
 import { fileURLToPath } from "node:url"
 import { dirname, join } from "node:path"
 import {
-    buildRunReview,
-    renderRunReview,
-    renderStepSummary,
-    renderJobTree,
-    jobSummaryLine,
-    summarizeProfile,
-    classifyConnection,
-    derivePermalink,
-    behaviorSignature,
-    normalizeIdentifier,
-    freshnessStamp,
-    renderNoRecord as renderNoRecordBody,
-    SIZE_BUDGET,
-    COMMENT_MARKER,
-    RUNTIME_REVIEW_MARKER,
+  CONTRACT_VOCAB,
+  RUNTIME_REVIEW_MARKER,
+  COMMENT_MARKER,
+  REFERENCE_MOCKUP_MARKER,
+  VOCAB,
+  SIZE_BUDGET,
+  STEP_SUMMARY_BUDGET,
+  summarizeProfile,
+  jobSummarySentence,
+  isSentinelStep,
+  compareJobEdges,
+  buildRunReview,
+  renderRunReview,
+  renderPendingReview,
+  renderReferenceMockup,
+  renderStepSummary,
+  truncateMiddle,
+  lintRenderedSurface,
+  exportReviewModel,
+  formatTimestamp,
+  isAddressLike,
+  edgeNotes,
+  edgeCounts,
+  telemetryDiscrepancies,
+  buildDestinationRows,
+  buildLineageRows,
+  isAttributedWorkload,
+  hasRecordedDetection,
+  profilePermalink,
+  publicationDecision,
+  defangHostname,
+  partitionCommentEdges,
+  displayProcessName,
 } from "../src/runtime-review.js"
+import {
+  loadProfile,
+  renderFromProfiles,
+  renderNoRecord,
+  renderPublicRunProfileMockup,
+} from "./render-states-real.mjs"
+import { renderCombined } from "./render-combined-real.mjs"
 
 const here = dirname(fileURLToPath(import.meta.url))
-const fixturesDir = join(here, "fixtures")
+const realEnvelopes = JSON.parse(
+  readFileSync(join(here, "fixtures", "renderer-testdata", "real", "profile-envelopes.json"), "utf8"),
+)
 
-const REPO = "garnet-labs/runtime-review-testbed"
-
-/** Pinned render clock so renders stay byte-identical (A7 freshness stamp). */
-const RENDERED_AT = "2026-07-03T14:02:00Z"
-
-/** Example capability link (A6): the tokenless public Run Profile page. */
-const CAPABILITY_LINK = "https://app.garnet.ai/p/runtime-review-testbed"
-
-const DOCS_URL = "https://github.com/garnet-org/action#readme"
-
-async function loadProfile(name) {
-    return JSON.parse(await readFile(join(fixturesDir, "profiles", name), "utf8"))
+let passed = 0
+let failed = 0
+async function test(name, fn) {
+  try {
+    await fn()
+    passed += 1
+    console.log(`  ok  ${name}`)
+  } catch (err) {
+    failed += 1
+    console.error(`FAIL  ${name}\n      ${err.message}`)
+  }
 }
 
-/** Render one or more real profiles through the exact CI code path. */
-function renderFromProfiles(profiles, { permalink = "", expectedJobs = profiles.length } = {}) {
-    const jobs = profiles.map(summarizeProfile).filter(Boolean)
-    const sha = jobs[0]?.sha || ""
-    const review = buildRunReview({
-        repo: REPO,
-        sha,
-        commitUrl: sha ? `https://github.com/${REPO}/commit/${sha}` : "",
-        permalink,
-        docsUrl: DOCS_URL,
-        expectedJobs,
-        renderedAt: RENDERED_AT,
-        jobs,
-    })
-    return { review, body: renderRunReview(review) }
+const load = (dir, name) => {
+  const data = JSON.parse(readFileSync(join(here, "fixtures", "renderer-testdata", dir, name), "utf8"))
+  const envelope = dir === "real" ? realEnvelopes[name] : null
+  return envelope?.id ? { id: envelope.id, data } : data
+}
+const rawProfile = (profile) => profile?.data || profile
+
+const REPO = "garnet-org/runtime-review-testbed"
+const APP_URL = "https://app.garnet.ai"
+
+function reviewFor(profiles, opts = {}) {
+  const jobs = profiles.map(summarizeProfile).filter(Boolean)
+  const sha = jobs[0]?.sha || ""
+  return buildRunReview({
+    repo: REPO,
+    sha,
+    commitUrl: sha ? `https://github.com/${REPO}/commit/${sha}` : "",
+    appUrl: APP_URL,
+    appMode: opts.appMode !== false,
+    jobs,
+  })
 }
 
-/** The no-record placeholder body with the PR-comment markers prepended. */
-function renderNoRecord(sha) {
-    return [
-        RUNTIME_REVIEW_MARKER,
-        COMMENT_MARKER,
-        renderNoRecordBody({
-            sha,
-            commitUrl: `https://github.com/${REPO}/commit/${sha}`,
-            expectedJobs: 1,
-            docsUrl: DOCS_URL,
-            renderedAt: RENDERED_AT,
+const workload = load("real", "record-workload-egress.json")
+const worth = load("real", "worth-a-look-run.json")
+const recordSet = [
+  "record-workload-egress.json",
+  "record-docs-build.json",
+  "record-install-only.json",
+  "record-lint.json",
+  "record-typecheck.json",
+].map((f) => load("real", f))
+const edgeCases = load("synthetic", "edge-cases.json")
+const injection = load("synthetic", "injection.json")
+const credential = load("synthetic", "credential-argv.json")
+const duplicateEdges = load("synthetic", "duplicate-edges.json")
+const edgeCaseEnvelope = {
+  id: "019f5e00-0000-7000-8000-000000000001",
+  data: edgeCases,
+}
+
+const EDGE_REVIEW = reviewFor([edgeCaseEnvelope])
+const EDGE_MD = renderRunReview(EDGE_REVIEW)
+const EDGE_SUMMARY = renderStepSummary([edgeCaseEnvelope], { appUrl: APP_URL })
+const EDGE_SUMMARY_PREVIEW = renderStepSummary([edgeCaseEnvelope], {
+  appUrl: APP_URL,
+  preview: true,
+})
+const REAL_SUMMARY = renderStepSummary(recordSet, { appUrl: APP_URL, preview: true })
+const EDGE_MODEL = exportReviewModel(EDGE_REVIEW)
+
+// ---------------------------------------------------------------------------
+// Contract lock
+// ---------------------------------------------------------------------------
+
+await test("contract: vocab.json is the v6.6.1 machine-readable lock", () => {
+  assert.equal(CONTRACT_VOCAB.version, "6.6.1")
+  assert.equal(CONTRACT_VOCAB.profileFormatVersion, "0.2.0")
+  assert.equal(VOCAB.headlineLead, "Execution Profiles recorded for")
+  assert.equal(VOCAB.stepSummaryHeading, "Garnet Execution Summary")
+  assert.equal(VOCAB.artifact, "Execution Profile")
+  assert.equal(VOCAB.permalinkLabel, "View this job's Execution Profile in Garnet →")
+  assert.equal(VOCAB.noChange, "no change")
+  assert.equal(CONTRACT_VOCAB.copy.explainerLabel, "💡 How to read this")
+  assert.equal(CONTRACT_VOCAB.copy.chainNoun, "execution chain")
+  for (const retired of [
+    "Run Profile",
+    "process lineage",
+    "process chains",
+    "lineage tree",
+    "Runtime Summary",
+    "Runtime Review",
+    "baseline",
+    "gone",
+  ]) {
+    assert.ok(
+      CONTRACT_VOCAB.bannedVocabulary.includes(retired),
+      `retired term not banned: ${retired}`,
+    )
+  }
+  assert.equal(
+    CONTRACT_VOCAB.publicRunProfile.profileSelectorRoute,
+    "/public/runs/{run_id}?profile=<profile_id>",
+  )
+  assert.ok(
+    CONTRACT_VOCAB.publicRunProfile.selectorMiss.includes("absent, empty, or wrong"),
+  )
+  for (const field of [
+    "argv",
+    "arguments",
+    "executable paths",
+    "environment values",
+    "assertions",
+    "detection evidence",
+    "sensor telemetry",
+    "sensitive actor/ref metadata",
+  ]) {
+    assert.ok(CONTRACT_VOCAB.publicRunProfile.embargoedFields.includes(field))
+  }
+  assert.equal(SIZE_BUDGET, 60_000)
+  assert.equal(STEP_SUMMARY_BUDGET, 1_048_576)
+  assert.ok(CONTRACT_VOCAB.v7Deferrals.length >= 10)
+})
+
+await test("contract: reference mockup preserves App-mode output without App/Action ownership markers", () => {
+  const rendered = renderRunReview(reviewFor(recordSet))
+  const mockup = renderReferenceMockup(rendered)
+  const isolatedBody = rendered
+    .replaceAll(RUNTIME_REVIEW_MARKER, "<!-- garnet-reference-renderer-body -->")
+    .replaceAll(COMMENT_MARKER, "<!-- garnet-reference-renderer-owner:none -->")
+    .replace(
+      /<!-- garnet:commit ([0-9a-f]+) -->/gi,
+      "<!-- garnet-reference-renderer-commit $1 -->",
+    )
+
+  assert.ok(mockup.startsWith(REFERENCE_MOCKUP_MARKER))
+  assert.ok(mockup.includes("**After — v6.6.1 reference renderer.**"))
+  assert.ok(mockup.endsWith(isolatedBody))
+  assert.ok(!mockup.includes(RUNTIME_REVIEW_MARKER))
+  assert.ok(!mockup.includes(COMMENT_MARKER))
+  assert.ok(!mockup.includes("<!-- garnet:commit "))
+  // One category heading — the primitive stated first, commit as the trigger.
+  assert.ok(rendered.includes("**Execution Profiles recorded for "))
+})
+
+await test("contract: real fixture bytes match their provenance manifest", () => {
+  const realDir = join(here, "fixtures", "renderer-testdata", "real")
+  const provenance = JSON.parse(readFileSync(join(realDir, "provenance.json"), "utf8"))
+  for (const [name, entry] of Object.entries(provenance)) {
+    if (name.startsWith("$")) continue
+    const digest = createHash("sha256").update(readFileSync(join(realDir, name))).digest("hex")
+    assert.equal(digest, entry.sha256, `${name} provenance hash drifted`)
+  }
+})
+
+await test("contract: v2.15.0 producer evidence preserves matrix identity and blank argv", () => {
+  const normal = load("real", "normal-v215.json")
+  const captures = [normal, ...recordSet].map(rawProfile)
+  for (const profile of captures) {
+    assert.equal(profile.metadata.version, "0.2.0")
+    assert.ok(formatTimestamp(profile.timestamp))
+    const argumentsSeen = (profile.network?.egress?.peers || []).flatMap((peer) =>
+      (peer.proc_trees || []).map((tree) => String(tree.arguments || "")).filter(Boolean),
+    )
+    assert.deepEqual(argumentsSeen, [])
+  }
+  const indexes = recordSet
+    .map((profile) => Number(rawProfile(profile).scenarios.github.job_index))
+    .sort((a, b) => a - b)
+  assert.deepEqual(indexes, [0, 1, 2, 3, 4])
+  const executablesSeen = captures.flatMap((profile) =>
+    (profile.network?.egress?.peers || []).flatMap((peer) =>
+      (peer.proc_trees || []).map((tree) => String(tree.executable || "")).filter(Boolean),
+    ),
+  )
+  assert.ok(executablesSeen.length > 0, "fixture must exercise executable-path embargo")
+})
+
+// ---------------------------------------------------------------------------
+// Gate 1 — real workload egress: edge-field bijection
+// ---------------------------------------------------------------------------
+
+await test("gate 1: one association per peer × proc_tree, every contract field preserved", () => {
+  const model = exportReviewModel(reviewFor([workload]))
+  const peers = rawProfile(workload).network.egress.peers
+  const expectedEdges = peers.reduce((n, p) => n + Math.max(1, (p.proc_trees || []).length), 0)
+  assert.equal(model.jobs[0].counts.associations, expectedEdges)
+  const key = (addr, names, ports, pid, ancestry) =>
+    JSON.stringify([addr, names, ports, pid, ancestry])
+  // Multiset comparison (sorted arrays, not Sets): identical duplicate
+  // edges must keep their multiplicity.
+  const want = []
+  for (const p of peers) {
+    const trees = (p.proc_trees || []).length ? p.proc_trees : [null]
+    for (const t of trees) {
+      want.push(
+        key(
+          p.remote_address || "",
+          (p.remote_names || []).map((n) => String(n ?? "")),
+          (p.remote_ports || []).map(String),
+          t?.pid !== undefined && t?.pid !== null ? String(t.pid) : "",
+          t ? (t.ancestry || []).map((a) => String(a ?? "")) : [],
+        ),
+      )
+    }
+  }
+  const got = model.jobs[0].edges.map((e) =>
+    key(e.remote_address, e.remote_names, e.remote_ports, e.pid, e.ancestry),
+  )
+  assert.deepEqual([...got].sort(), [...want].sort())
+})
+
+await test("gate 1b: identical duplicate peer × proc_tree edges keep their multiplicity (multiset, never Set-collapsed)", () => {
+  const model = exportReviewModel(reviewFor([duplicateEdges]))
+  const peers = rawProfile(duplicateEdges).network.egress.peers
+  const key = (e) =>
+    JSON.stringify([e.remote_address, e.remote_names, e.remote_ports, e.protocol, e.pid, e.ancestry])
+  const expected = peers
+    .flatMap((p) =>
+      ((p.proc_trees || []).length ? p.proc_trees : [null]).map((t) =>
+        key({
+          remote_address: p.remote_address || "",
+          remote_names: (p.remote_names || []).map((n) => String(n ?? "")),
+          remote_ports: (p.remote_ports || []).map(String),
+          protocol: p.protocol || "",
+          pid: t?.pid !== undefined && t?.pid !== null ? String(t.pid) : "",
+          ancestry: t ? (t.ancestry || []).map((a) => String(a ?? "")) : [],
         }),
-    ].join("\n")
-}
+      ),
+    )
+    .sort()
+  const actual = model.jobs[0].edges.map(key).sort()
+  assert.deepEqual(actual, expected)
+  // The fixture carries two byte-identical recorded edges; both must survive.
+  const dupes = actual.filter((k) => k === actual[0])
+  assert.ok(dupes.length >= 2, "identical duplicate edges were collapsed")
+  assert.equal(model.jobs[0].counts.associations, expected.length)
+})
 
 // ---------------------------------------------------------------------------
-// Real inputs — captured from live CI runs of the testbed repo.
+// Gates 2–5 — bare IP, ordinary destinations, neutral systemd, PID-distinct
 // ---------------------------------------------------------------------------
-const normal = await loadProfile("normal-run.json") // run 28488074733 — plain npm install
-const install = await loadProfile("npm-install-run.json") // run 28488074733 — install + resolver
-const worth = await loadProfile("worth-a-look-run.json") // run 28492112239 — unsplash fetch in npm test
-const sample = await loadProfile("sample-profile.json")
 
-const STATES = {
-    "no-record": renderNoRecord("ef01a52517e7532ab34aadea58b952c9f1e79ece"),
-    "registry-only": renderFromProfiles([normal]).body,
-    "workload-egress": renderFromProfiles([worth]).body,
-    "multi-job": renderFromProfiles([install, worth]).body,
-    "partial-coverage": renderFromProfiles([worth], { expectedJobs: 6 }).body,
-}
+await test("gate 2: bare-IP egress renders with no note and counts as a destination", () => {
+  assert.ok(EDGE_MD.includes("203.0.113.7"))
+  const line = EDGE_MD.split("\n").find((l) => l.includes("203.0.113.7"))
+  assert.ok(!line.includes("(dns resolver)") && !line.includes("(instance metadata)"))
+})
 
-// Synthetic jobs used only where no real profile can produce the edge case.
-const CANARY_JOB = {
-    name: "runtime-review",
-    workflow: "Garnet Runtime Review",
-    run_url: "https://github.com/garnet-labs/runtime-review-testbed/actions/runs/1",
-    connections: [
-        { ancestry: ["systemd", "hosted-compute-agent", "Runner.Listener", "Runner.Worker", "bash", "node", "dash", "node", "dash", "curl"], domain: "httpbin.org", ip: "98.95.76.254" },
-        { ancestry: ["systemd", "hosted-compute-agent", "Runner.Listener", "Runner.Worker", "bash", "node", "dash", "node", "dash", "curl"], domain: "localhost", ip: "127.0.0.53" },
-        { ancestry: ["systemd", "hosted-compute-agent", "Runner.Listener", "Runner.Worker", "bash", "node", "dash", "node"], domain: "registry.npmjs.org", ip: "104.16.6.34" },
-        { ancestry: ["systemd", "hosted-compute-agent", "Runner.Listener", "Runner.Worker", "bash", "node", "dash", "node"], domain: "api.garnet.ai", ip: "104.26.11.16" },
-        { ancestry: ["systemd", "hosted-compute-agent", "Runner.Listener", "Runner.Worker", "bash", "node", "dash", "node"], domain: "localhost", ip: "127.0.0.53" },
-        { ancestry: ["systemd", "hosted-compute-agent", "Runner.Listener", "Runner.Worker", "bash", "node", "dash", "node"], domain: "github.com", ip: "140.82.116.3" },
-        { ancestry: ["systemd", "hosted-compute-agent", "Runner.Listener", "Runner.Worker", "bash", "node"], domain: "registry.npmjs.org", ip: "104.16.4.34" },
-        { ancestry: ["systemd", "hosted-compute-agent", "Runner.Listener", "Runner.Worker", "bash", "node"], domain: "localhost", ip: "127.0.0.53" },
-        { ancestry: ["systemd", "hosted-compute-agent", "sudo", "provjobd128037216"], domain: "", ip: "168.63.129.16" },
-    ],
-}
+await test("gate 3: ordinary destinations carry no inferred ownership note", () => {
+  for (const name of ["github[.]com", "api.github[.]com", "registry.npmjs[.]org"]) {
+    const lines = EDGE_MD.split("\n").filter((l) => l.includes(name))
+    assert.ok(lines.length > 0, `missing edge for ${name}`)
+    for (const l of lines) {
+      assert.ok(!/\((dns resolver|instance metadata)\)/.test(l), `unexpected note on ${name}`)
+    }
+  }
+  assert.ok(!EDGE_MD.includes("github infra"))
+  assert.ok(!EDGE_MD.includes("garnet sensor upload"))
+})
 
-const canaryReview = () =>
-    buildRunReview({
-        repo: "garnet-labs/runtime-review-testbed",
-        sha: "ac543cb0000000000000000000000000000000000",
-        commitUrl: "https://github.com/garnet-labs/runtime-review-testbed/commit/ac543cb",
-        permalink: "https://app.garnet.ai/p/runtime-review-testbed",
-        docsUrl: DOCS_URL,
-        renderedAt: RENDERED_AT,
-        jobs: [CANARY_JOB],
+await test("gate 4: attribution typography uses metadata + Runner.Worker, with detection override", () => {
+  const attributed = EDGE_MODEL.jobs[0].edges.find(
+    (edge) => edge.github_step !== "" && edge.ancestry.includes("Runner.Worker"),
+  )
+  const scaffolding = EDGE_MODEL.jobs[0].edges.find(
+    (edge) => edge.github_step === "" && !edge.ancestry.includes("Runner.Worker"),
+  )
+  assert.ok(isAttributedWorkload(attributed))
+  assert.ok(!isAttributedWorkload(scaffolding))
+  // Runner scaffolding stays italic even as the ancestor of bold workload;
+  // only processes below `Runner.Worker` are bold.
+  assert.ok(EDGE_MD.includes("<em>Runner.Worker</em>"))
+  assert.ok(!EDGE_MD.includes("<strong>Runner.Worker</strong>"))
+  assert.ok(EDGE_MD.includes("<strong>curl</strong>"))
+  // Unattributed infrastructure renders inside the nested substrate fold in
+  // the comment; it stays fully visible in the Step Summary.
+  assert.ok(EDGE_MD.includes("dns + runner substrate ·"))
+  assert.ok(!EDGE_MD.includes("not shown here"))
+  assert.ok(EDGE_SUMMARY.includes("unknown (not recorded)"))
+
+  const detected = exportReviewModel(reviewFor([workload])).jobs[0].edges.find(
+    (edge) => edge.detections.includes("exec_from_unusual_dir"),
+  )
+  assert.ok(hasRecordedDetection(detected))
+  const detectedMd = renderRunReview(reviewFor([workload]))
+  assert.ok(detectedMd.includes("<strong>node</strong>"))
+  // Detection notes are assertion-layer vocabulary: preview-only, never prod.
+  assert.ok(!detectedMd.includes("detection: exec_from_unusual_dir"))
+})
+
+await test("gate 5: evidence keeps PID-distinct edges while comment rows dedupe destinations", () => {
+  assert.ok(EDGE_SUMMARY.includes("node (pid 4104)"))
+  assert.ok(EDGE_SUMMARY.includes("node (pid 4105)"))
+  assert.ok(!EDGE_MD.includes("[4104"))
+  assert.ok(!EDGE_MD.includes("[4105"))
+  assert.ok(!/×\d/.test(EDGE_MD) && !/×\d/.test(EDGE_SUMMARY))
+  const registryRows = EDGE_MD.slice(0, EDGE_MD.indexOf("\n---\n"))
+    .split("\n")
+    .filter((line) => line.includes("registry.npmjs[.]org"))
+  assert.equal(registryRows.length, 1)
+})
+
+await test("shape: PR comment merges shared ancestry and attaches destinations to terminal processes", () => {
+  // Unattributed scaffolding roots render inside the nested substrate fold
+  // when attributed workload chains exist; systemd renders only after the
+  // substrate fold opens, never in the main tree.
+  const substrateStart = EDGE_MD.indexOf("dns + runner substrate ·")
+  assert.ok(substrateStart !== -1)
+  const systemd = EDGE_MD.indexOf("<em>systemd</em>")
+  assert.ok(systemd === -1 || systemd > substrateStart)
+  const worker = EDGE_MD.indexOf("<em>Runner.Worker</em>")
+  const process = EDGE_MD.indexOf("<strong>node</strong>")
+  const destination = EDGE_MD.indexOf("→ registry.npmjs[.]org")
+  assert.ok(worker !== -1 && worker < process && process < destination)
+  // Both PID-distinct node terminals render (as two rows, without PIDs).
+  assert.ok(EDGE_MD.split("<strong>node</strong>").length - 1 >= 2)
+  assert.ok(!EDGE_MD.includes("systemd › Runner.Worker"))
+})
+
+// ---------------------------------------------------------------------------
+// Gates 6–9 — unknown lineage, IMDS, resolver notes
+// ---------------------------------------------------------------------------
+
+await test("gate 6: empty proc_trees emits one edge with lineage 'unknown (not recorded)'", () => {
+  // Unknown-lineage chains are unattributed: they render inside the nested
+  // substrate fold and stay in the model and Step Summary.
+  const substrate = EDGE_MD.indexOf("dns + runner substrate ·")
+  assert.ok(substrate !== -1)
+  assert.ok(EDGE_MD.indexOf("→ no-lineage[.]example") > substrate)
+  assert.ok(!EDGE_MD.includes("[198.51.100.44]"))
+  assert.ok(EDGE_SUMMARY.includes("<code>no-lineage.example</code>"))
+  assert.ok(EDGE_SUMMARY.includes("<code>unknown (not recorded)</code>"))
+  assert.ok(!EDGE_SUMMARY.includes("[198.51.100.44]"))
+  const model = EDGE_MODEL.jobs[0].edges.find((e) => e.remote_address === "198.51.100.44")
+  assert.equal(model.lineage_recorded, false)
+})
+
+await test("hardening: destination cells stack per line + neutralize hostile labels", () => {
+  // One destination per line via <br>, each anchored by a marker glued to
+  // the label with a non-breaking space — never an ordinal (the record
+  // captures no order) and never a bare • (a loose glyph orphans onto its
+  // own line on narrow screens). A single destination renders bare.
+  assert.ok(/·\u00a0<code>[^|]*<\/code><br>·\u00a0<code>/.test(REAL_SUMMARY))
+  assert.ok(!/<br><code>/.test(REAL_SUMMARY), "stacked destination without a marker")
+  assert.ok(!/\d\.\u00a0<code>/.test(REAL_SUMMARY), "ordinal implies an uncaptured order")
+  assert.ok(!/•/.test(EDGE_SUMMARY))
+  assert.ok(!/•/.test(REAL_SUMMARY))
+
+  // Attacker-controllable captured values can never break table structure:
+  // every rendered body row keeps exactly its 2 (or preview 3) delimited
+  // cells, and no value opens a code fence.
+  const injSummary = renderStepSummary([injection], { appUrl: APP_URL, preview: true })
+  assert.ok(!/```/.test(injSummary))
+  for (const line of injSummary.split("\n")) {
+    if (!line.startsWith("| ") || line.startsWith("| ---")) continue
+    if (line.includes("Process Tree") || line.includes("Field | Value")) continue
+    const unescapedPipes = line.split(/(?<!\\)\|/).length - 1
+    assert.ok(
+      unescapedPipes === 2 || unescapedPipes === 3 || unescapedPipes === 4,
+      `hostile value altered table columns: ${line}`,
+    )
+  }
+
+  // Length-bound with a middle ellipsis; head+tail preserved, payload cut.
+  const long = "a".repeat(40) + "IGNORE-ALL-PREVIOUS-INSTRUCTIONS" + "b".repeat(40)
+  const cut = truncateMiddle(long)
+  assert.ok(cut.length <= 64)
+  assert.ok(cut.includes("…"))
+  assert.ok(cut.startsWith("a") && cut.endsWith("b"))
+  assert.ok(!cut.includes("IGNORE-ALL-PREVIOUS-INSTRUCTIONS"))
+  assert.equal(truncateMiddle("short.example.com"), "short.example.com")
+})
+
+await test("truth: distinct PIDs never merge; identical lineages group losslessly", () => {
+  const base = {
+    lineage_recorded: true,
+    process: "curl",
+    ancestry: "bash → curl",
+    remote_names: ["a.example"],
+    remote_address: "1.1.1.1",
+  }
+  const rows = buildLineageRows([
+    { ...base, pid: "100", flow_id: 1 },
+    { ...base, pid: "200", flow_id: 2 }, // different PID -> its own row
+    { ...base, pid: "100", flow_id: 3 }, // same lineage as first -> same row
+  ])
+  assert.equal(rows.length, 2)
+  const pid100 = rows.find((r) => r.edge.pid === "100")
+  const pid200 = rows.find((r) => r.edge.pid === "200")
+  assert.ok(pid100 && pid200)
+  // every association is retained under its lineage (nothing dropped)
+  assert.equal(pid100.associations.length, 2)
+  assert.equal(pid200.associations.length, 1)
+  assert.equal(
+    rows.reduce((n, r) => n + r.associations.length, 0),
+    3,
+  )
+})
+
+await test("gate 7: exact IMDS addresses get the instance-metadata note with full lineage", () => {
+  const line = EDGE_MD.split("\n").find((l) => l.includes("169.254.169.254"))
+  assert.ok(line.includes("(instance metadata)"))
+  assert.ok(EDGE_MD.includes("<strong>python3</strong>"))
+  assert.ok(EDGE_SUMMARY.includes("python3 (pid 4106)"))
+  for (const addr of ["169.254.169.254", "169.254.170.2", "fd00:ec2::254"]) {
+    assert.deepEqual(
+      edgeNotes({ remote_address: addr, remote_ports: [] }),
+      ["instance metadata"],
+    )
+  }
+  assert.deepEqual(edgeNotes({ remote_address: "169.254.1.1", remote_ports: [] }), [])
+})
+
+await test("gate 8: loopback:53 (including '53 (dns)') gets the resolver note and is counted", () => {
+  // dns-resolver chatter renders inside the nested substrate fold, never the
+  // main tree; the Step Summary keeps the destination.
+  const substrate = EDGE_MD.indexOf("dns + runner substrate ·")
+  assert.ok(substrate !== -1)
+  assert.ok(EDGE_MD.indexOf("→ localhost") > substrate)
+  assert.ok(EDGE_SUMMARY.includes("<code>localhost</code>"))
+  assert.ok(!EDGE_SUMMARY.includes("(dns resolver)"))
+  const previewLine = EDGE_SUMMARY_PREVIEW.split("\n").find((l) =>
+    l.includes("127.0.0.53"),
+  )
+  assert.ok(previewLine.includes("(dns resolver)"))
+  const counts = EDGE_MODEL.jobs[0].counts
+  const addrs = new Set(EDGE_MODEL.jobs[0].edges.map((e) => e.remote_address))
+  assert.ok(addrs.has("127.0.0.53") && addrs.has("127.0.0.1"))
+  assert.equal(counts.destinations, addrs.size)
+})
+
+await test("gate 9: loopback:8080 gets NO resolver note (and still counts)", () => {
+  const line = EDGE_MD.split("\n").find((l) => l.includes("→ 127.0.0.1"))
+  assert.ok(!line.includes("(dns resolver)"))
+  assert.ok(EDGE_SUMMARY.includes("<code>127.0.0.1</code>"))
+  assert.ok(!EDGE_SUMMARY.includes("8080"))
+  const previewLine = EDGE_SUMMARY_PREVIEW.split("\n").find((l) => l.includes("8080"))
+  assert.ok(previewLine.includes("8080"))
+  assert.ok(!previewLine.includes("(dns resolver)"))
+})
+
+await test("gate 9b: nothing subtracts — every edge renders in the main tree or the substrate fold", () => {
+  for (const job of EDGE_MODEL.jobs) {
+    const { shown, substrate } = partitionCommentEdges(job.edges)
+    assert.equal(
+      new Set([...shown, ...substrate].map(
+        (edge) => edge.remote_names.find((name) => name !== "") || edge.remote_address,
+      )).size,
+      new Set(job.edges.map(
+        (edge) => edge.remote_names.find((name) => name !== "") || edge.remote_address,
+      )).size,
+    )
+  assert.ok(shown.length > 0 || substrate.length > 0 || job.edges.length === 0, "a fold tree is never empty")
+  }
+  // The substrate fold summary counts exactly the chains it contains.
+  const md = renderRunReview(reviewFor(recordSet))
+  const foldCounts = [...md.matchAll(/dns \+ runner substrate · (\d+)&nbsp;chain/g)].map((m) => Number(m[1]))
+  const modelSubstrate = exportReviewModel(reviewFor(recordSet)).jobs.map(
+    (job) =>
+      new Set(
+        partitionCommentEdges(job.edges).substrate.map(
+          (edge) => edge.remote_names.find((name) => name !== "") || edge.remote_address,
+        ),
+      ).size,
+  )
+  assert.deepEqual(
+    foldCounts.reduce((a, b) => a + b, 0),
+    modelSubstrate.reduce((a, b) => a + b, 0),
+  )
+  assert.ok(!md.includes("not shown here"))
+})
+
+await test("gate 9c: a dns-only job renders its dns chains in the substrate fold", () => {
+  const dnsOnly = EDGE_MODEL.jobs[0].edges.filter(
+    (e) => /^(127\.|::1$|localhost$)/.test(e.remote_address) &&
+      (e.remote_ports || []).some((p) => String(p).startsWith("53")),
+  )
+  assert.ok(dnsOnly.length > 0)
+  const { shown, substrate } = partitionCommentEdges(dnsOnly)
+  assert.equal(shown.length, 0)
+  assert.equal(substrate.length, dnsOnly.length)
+  const md = renderRunReview(reviewFor(recordSet))
+  assert.ok(md.includes("dns + runner substrate"), "dns-only evidence must stay visible")
+})
+
+await test("gate 9f: every rendered count equals what sits directly beneath it — adjacency truth", () => {
+  const md = renderRunReview(reviewFor(recordSet))
+  const folds = md.split("<details><summary><code>").slice(1)
+  folds.forEach((fold, i) => {
+    // A fold row carries a chain count only when its sentence is capped;
+    // when present it equals the leaves of its main tree.
+    const summary = fold.split("</summary>")[0]
+    const rowMatch = summary.match(/· (\d+)&nbsp;chain/)
+    const mainPre = fold.split("<pre>")[1]
+    if (!mainPre) return
+    const mainTree = mainPre.split("</pre>")[0]
+    const mainArrows = (mainTree.match(/→ /g) || []).length
+    if (rowMatch && Number(rowMatch[1]) === 0) return
+    if (rowMatch) {
+      assert.equal(Number(rowMatch[1]), mainArrows, `job ${i}: row says ${rowMatch[1]}, main tree shows ${mainArrows}`)
+    }
+    // The substrate fold's count equals the rendered rows of its own tree
+    // (a plain <pre> tree, or a quiet diff whose − rows still count as
+    // rendered rows).
+    const sub = fold.match(/substrate · (\d+)&nbsp;chain/)
+    if (sub) {
+      const tail = fold.slice(fold.indexOf("substrate ·"))
+      const block = tail.includes("```diff")
+        ? tail.split("```diff")[1].split("```")[0]
+        : tail.split("<pre>")[1].split("</pre>")[0]
+      const subArrows = (block.match(/→ /g) || []).length
+      assert.equal(Number(sub[1]), subArrows, `job ${i}: substrate says ${sub[1]}, shows ${subArrows}`)
+    }
+  })
+})
+
+await test("gate 9d: metadata counts inflect — singular chain/destination", () => {
+  const singular = renderRunReview(reviewFor([load("real", "normal-run.json")]))
+  const metadata = singular.split("\n").find((l) => l.startsWith("> *"))
+  assert.ok(metadata.includes("1&nbsp;execution chain ·"))
+  assert.ok(metadata.includes("1&nbsp;destination ·"))
+  assert.ok(!metadata.includes("1&nbsp;execution chains"))
+  assert.ok(!metadata.includes("1&nbsp;destinations"))
+})
+
+await test("gate 9e: process display names strip trailing provisioning digits — display only", () => {
+  assert.equal(displayProcessName("provjobd1326539233"), "provjobd")
+  assert.equal(displayProcessName("python3"), "python3")
+  assert.equal(displayProcessName("1234567"), "1234567")
+  const md = renderRunReview(reviewFor(recordSet))
+  assert.ok(!/provjobd\d/.test(md))
+  const model = exportReviewModel(reviewFor(recordSet))
+  assert.ok(JSON.stringify(model).match(/provjobd\d/), "raw names stay in the model")
+})
+
+// ---------------------------------------------------------------------------
+// Gates 10–11 — remote names
+// ---------------------------------------------------------------------------
+
+await test("gate 10: an address-like remote name never double-renders or counts as a domain", () => {
+  const line = EDGE_SUMMARY.split("\n").find((l) => l.includes("140.82.113.23"))
+  assert.ok(!line.includes("(140.82.113.23)"), "identical name rendered beside its address")
+  assert.ok(isAddressLike("140.82.113.23"))
+  const counted = edgeCounts([
+    { remote_address: "140.82.113.23", remote_names: ["140.82.113.23"], remote_ports: [] },
+  ])
+  assert.equal(counted.domains, 0)
+  assert.equal(counted.destinations, 1)
+})
+
+await test("gate 11: secondary/truncated names stay out of prod and remain verbatim in preview", () => {
+  assert.ok(EDGE_SUMMARY.includes("glb-2a3c35-public-internal.githubapp.com"))
+  assert.ok(!EDGE_MD.includes("hosted-compute-watchdog-prod-iad-02.githubapp"))
+  assert.ok(!EDGE_MD.includes("also recorded:"))
+  const previewLine = EDGE_SUMMARY_PREVIEW.split("\n").find((line) =>
+    line.includes("also recorded:"),
+  )
+  assert.ok(previewLine.includes("hosted-compute-watchdog-prod-iad-02.githubapp"))
+  assert.ok(previewLine.includes("also recorded:"))
+  assert.ok(!EDGE_MD.includes("hosted-compute-watchdog-prod-iad-02.githubapp.com"))
+})
+
+await test("gate 11b: non-flow detections annotate only under assertions preview; flow is omitted", () => {
+  assert.deepEqual(
+    edgeNotes({
+      remote_address: "203.0.113.1",
+      remote_ports: ["443"],
+      detections: ["flow", "exec_from_unusual_dir", "network_peer"],
+    }),
+    ["detection: exec_from_unusual_dir", "detection: network_peer"],
+  )
+  assert.deepEqual(
+    edgeNotes(
+      {
+        remote_address: "203.0.113.1",
+        remote_ports: ["443"],
+        detections: ["flow", "exec_from_unusual_dir"],
+      },
+      { detections: false },
+    ),
+    [],
+  )
+  const md = renderRunReview(reviewFor([workload]))
+  assert.ok(!md.includes("detection: exec_from_unusual_dir"))
+  assert.ok(!md.includes("detection: flow"))
+  const prodSummary = renderStepSummary([workload], { appUrl: APP_URL })
+  assert.ok(!prodSummary.includes("detection: exec_from_unusual_dir"))
+  const previewSummary = renderStepSummary([workload], { appUrl: APP_URL, preview: true })
+  assert.ok(previewSummary.includes("detection: exec_from_unusual_dir"))
+  assert.ok(!previewSummary.includes("detection: flow"))
+})
+
+// ---------------------------------------------------------------------------
+// Gates 12–13 — timestamps and pending state
+// ---------------------------------------------------------------------------
+
+await test("gate 12: deterministic sensor timestamp — profile.timestamp only, exact format", () => {
+  assert.equal(formatTimestamp("2026-07-08T05:35:56.123456789Z"), "2026-07-08 05:35:56 UTC")
+  assert.equal(formatTimestamp(""), "")
+  assert.equal(formatTimestamp("not-a-date"), "")
+  assert.ok(EDGE_MD.includes("· 2026-07-08 05:35:56 UTC"))
+  assert.ok(EDGE_SUMMARY.includes("2026-07-08 05:35:56 UTC"))
+  // worth-a-look has no profile.timestamp: no recorded-through, no clock fallback.
+  const md = renderRunReview(reviewFor([worth]))
+  assert.ok(!/\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2} UTC/.test(md.split("\n").find((l) => l.startsWith("> *")) || ""))
+  // Multi-profile: the maximum valid profile timestamp on the metadata line.
+  const multi = renderRunReview(reviewFor(recordSet))
+  const stamps = recordSet.map((p) => formatTimestamp(rawProfile(p).timestamp)).filter(Boolean).sort()
+  const metadata = multi.split("\n").find((l) => l.startsWith("> *"))
+  assert.ok(metadata.includes(`recorded at the kernel by Garnet · ${stamps[stamps.length - 1]}`))
+  // "recorded" appears exactly once on the metadata line.
+  assert.equal(metadata.split("recorded").length - 1, 1)
+})
+
+await test("gate 13: pending state opens explainer and status without timestamp/count/link", () => {
+  const md = renderPendingReview({
+    sha: "ef01a52517e7532ab34aadea58b952c9f1e79ece",
+    commitUrl: `https://github.com/${REPO}/commit/ef01a52517e7532ab34aadea58b952c9f1e79ece`,
+  })
+  assert.ok(md.startsWith(RUNTIME_REVIEW_MARKER))
+  assert.ok(md.includes(COMMENT_MARKER))
+  assert.ok(md.includes("<!-- garnet:commit ef01a52517e7532ab34aadea58b952c9f1e79ece -->"))
+  assert.ok(md.includes("<details open>"))
+  assert.ok(md.includes("💡 How to read this"))
+  assert.ok(md.includes("**Execution Profiles recording for jobs triggered by [`ef01a52`]"))
+  assert.ok(md.includes("⏳ Execution Profiles for this commit are still being recorded"))
+  assert.ok(!md.includes("as of") && !/\d{4}-\d{2}-\d{2} \d{2}:\d{2}/.test(md))
+  assert.ok(!md.includes("jobs recorded") && !md.includes("/public/runs/"))
+})
+
+// ---------------------------------------------------------------------------
+// Gates 14–15 — empty peers and coverage
+// ---------------------------------------------------------------------------
+
+await test("gate 14: a job with empty peers renders exactly 'no outbound destinations recorded.'", () => {
+  const empty = {
+    ...edgeCases,
+    telemetry: undefined,
+    network: { egress: { peers: [] } },
+  }
+  const md = renderRunReview(reviewFor([empty]))
+  assert.ok(md.includes("no outbound destinations recorded."))
+  assert.ok(!md.includes("<details><summary><code>"))
+  const summary = renderStepSummary([empty], { appUrl: APP_URL })
+  assert.ok(summary.includes("no outbound destinations recorded."))
+  assert.ok(!summary.includes("Network telemetry observed"))
+})
+
+await test("gate 15: coverage is only k jobs recorded on this commit", () => {
+  const four = recordSet.slice(0, 4)
+  const partial = renderRunReview(reviewFor(four))
+  const complete = renderRunReview(reviewFor(recordSet))
+  assert.ok(partial.includes("**Execution Profiles recorded for 4 jobs, triggered by"))
+  assert.ok(complete.includes("**Execution Profiles recorded for 5 jobs, triggered by"))
+  for (const md of [partial, complete]) {
+    assert.ok(!/\d+ of \d+ jobs recorded/.test(md))
+    assert.ok(!md.includes(VOCAB.noRunProfile))
+  }
+})
+
+// ---------------------------------------------------------------------------
+// Gates 16–17 — medium truncation
+// ---------------------------------------------------------------------------
+
+function oversizedProfile() {
+  const peers = [
+    {
+      protocol: "tcp",
+      remote_address: "169.254.169.254",
+      remote_names: [],
+      remote_ports: ["80"],
+      proc_trees: [
+        {
+          pid: 1,
+          process: "python3",
+          github_step: "z. metadata",
+          ancestry: ["systemd", "Runner.Worker", "bash", "python3"],
+        },
+      ],
+    },
+  ]
+  for (let i = 0; i < 900; i += 1) {
+    peers.push({
+      protocol: "tcp",
+      remote_address: `198.51.${Math.floor(i / 250)}.${i % 250}`,
+      remote_names: [`host-${String(i).padStart(4, "0")}.very-long-domain-name-for-truncation.example`],
+      remote_ports: ["443"],
+      proc_trees: [
+        {
+          pid: 10000 + i,
+          process: "curl",
+          github_step: `step ${i}`,
+          ancestry: ["systemd", "Runner.Worker", "bash", "node", "sh", "curl"],
+        },
+      ],
     })
+  }
+  return {
+    ...edgeCases,
+    uuid: "99999999-0000-4000-8000-000000000000",
+    network: { egress: { peers } },
+  }
+}
 
-const CANARY = renderRunReview(canaryReview())
+await test("gate 16: oversized PR comment truncates fairly, keeps IMDS, emits exact omission count, fits budget", () => {
+  const review = reviewFor([oversizedProfile()])
+  const md = renderRunReview(review)
+  const bytes = Buffer.byteLength(md, "utf8")
+  assert.ok(bytes <= SIZE_BUDGET, `serialized ${bytes} bytes > ${SIZE_BUDGET}`)
+  const m = md.match(/rendered (\d+) of (\d+) destination associations/)
+  assert.ok(m, "missing exact truncation line")
+  assert.equal(Number(m[2]), 901)
+  assert.ok(Number(m[1]) < 901 && Number(m[1]) > 0)
+  assert.ok(md.includes("169.254.169.254") && md.includes("(instance metadata)"), "IMDS edge evicted")
+  assert.ok(!md.includes("recorded processes"))
+})
+
+await test("gate 16b: PR budget is enforced on serialized UTF-8 bytes", () => {
+  const profile = oversizedProfile()
+  for (const peer of profile.network.egress.peers) {
+    peer.remote_names = (peer.remote_names || []).map((name) => `${name}-界界界界界界界界`)
+  }
+  const md = renderRunReview(reviewFor([profile]))
+  assert.ok(Buffer.byteLength(md, "utf8") <= SIZE_BUDGET)
+  assert.match(md, /rendered \d+ of \d+ destination associations/)
+})
+
+await test("gate 17: oversized Step Summary truncates under 1 MiB with the exact omission line", () => {
+  const big = []
+  for (let i = 0; i < 8; i += 1) {
+    const p = oversizedProfile()
+    p.scenarios = { github: { ...edgeCases.scenarios.github, job: `big-${i}` } }
+    big.push(p)
+  }
+  const summary = renderStepSummary(big, { appUrl: APP_URL })
+  assert.ok(Buffer.byteLength(summary, "utf8") <= STEP_SUMMARY_BUDGET)
+  assert.match(summary, /rendered \d+ of \d+ execution chains/)
+})
 
 // ---------------------------------------------------------------------------
-// Spec §1 banned vocabulary — observations, never verdicts (hard gate).
+// Gates 16b–17b — true final serialized caps: fixed overhead alone overflows
 // ---------------------------------------------------------------------------
-const BANNED_WORDS = [
-    "pass", "passed", "fail", "failed", "attention", "clean", "routine",
-    "usual", "check", "detection", "verdict", "risk", "severity", "threat",
-    "malicious", "suspicious", "block",
+
+function overheadHeavyProfiles(count) {
+  // Many jobs, each with one edge — the fixed per-job fold overhead alone
+  // exceeds the budget even with zero kept edges.
+  const profiles = []
+  for (let i = 0; i < count; i += 1) {
+    profiles.push({
+      uuid: `aaaaaaa${String(i).padStart(1, "0")}-0000-4000-8000-${String(i).padStart(12, "0")}`,
+      timestamp: "2026-07-01T00:00:00Z",
+      scenarios: {
+        github: {
+          repository: REPO,
+          workflow: `workflow-with-a-deliberately-long-name-${"x".repeat(120)}`,
+          job: `job-${String(i).padStart(4, "0")}-${"y".repeat(120)}`,
+          sha: "b".repeat(40),
+          run_id: "31000000002",
+        },
+      },
+      network: {
+        egress: {
+          peers: [
+            {
+              remote_address: "203.0.113.9",
+              remote_names: ["example.com"],
+              remote_ports: ["443"],
+              protocol: "tcp",
+              proc_trees: [{ pid: 100 + i, process: "node", ancestry: ["bash", "node"] }],
+            },
+          ],
+        },
+      },
+    })
+  }
+  return profiles
+}
+
+await test("gate 16b: PR comment cap holds when zero-edge fixed overhead alone overflows — deterministic minimal fallback", () => {
+  const profiles = overheadHeavyProfiles(300)
+  const review = reviewFor(profiles)
+  const md = renderRunReview(review)
+  const bytes = Buffer.byteLength(md, "utf8")
+  assert.ok(bytes <= SIZE_BUDGET, `serialized ${bytes} bytes > ${SIZE_BUDGET}`)
+  assert.ok(md.includes(RUNTIME_REVIEW_MARKER) && md.includes(COMMENT_MARKER), "markers lost")
+  assert.ok(md.includes("**Execution Profiles recorded for "), "headline lost")
+  assert.ok(md.includes("recorded for 300 jobs, triggered by"), "coverage count lost")
+  assert.ok(md.includes(`rendered 0 of ${review.counts.associations} destination associations`), "exact truncation line lost")
+  assert.ok(!md.includes("/public/runs/"), "minimal fallback fabricated a non-exact link")
+  assert.equal(md, renderRunReview(reviewFor(overheadHeavyProfiles(300))), "fallback not deterministic")
+})
+
+await test("gate 16c: multibyte/emoji fixed overhead — minimal fallback cap holds on serialized UTF-8 bytes", () => {
+  // Fixed per-job overhead (workflow/job labels) is dominated by multibyte
+  // characters, so a character count would under-measure the payload by ~4×;
+  // every fallback decision must use Buffer.byteLength(..., 'utf8').
+  const profiles = overheadHeavyProfiles(300).map((p, i) => ({
+    ...p,
+    scenarios: {
+      github: {
+        ...p.scenarios.github,
+        workflow: `🚀界🔥ワークフロー-${"📦".repeat(60)}`,
+        job: `ジョブ-${String(i).padStart(4, "0")}-${"界".repeat(100)}`,
+      },
+    },
+  }))
+  const review = reviewFor(profiles)
+  const md = renderRunReview(review)
+  const bytes = Buffer.byteLength(md, "utf8")
+  assert.ok(bytes <= 60_000, `serialized ${bytes} bytes > 60000`)
+  // The fixture's fold overhead is multibyte-dominated, so the overflow
+  // decision itself must measure serialized UTF-8 bytes, not characters.
+  const fullOverhead = profiles.map((p) => p.scenarios.github.job).join("")
+  assert.ok(Buffer.byteLength(fullOverhead, "utf8") > fullOverhead.length)
+  assert.ok(md.includes(RUNTIME_REVIEW_MARKER) && md.includes(COMMENT_MARKER), "markers lost")
+  assert.ok(md.includes("recorded for 300 jobs, triggered by"), "coverage count lost")
+  assert.ok(md.includes(`rendered 0 of ${review.counts.associations} destination associations`), "exact truncation line lost")
+  assert.equal(md, renderRunReview(reviewFor(profiles)), "fallback not deterministic")
+})
+
+await test("gate 17b: Step Summary cap holds when fixed per-profile overhead alone overflows 1 MiB", () => {
+  const profiles = overheadHeavyProfiles(50).map((p, i) => ({
+    ...p,
+    scenarios: {
+      github: { ...p.scenarios.github, job: `big-${i}-${"z".repeat(30000)}` },
+    },
+  }))
+  const summary = renderStepSummary(profiles, { appUrl: APP_URL })
+  assert.ok(Buffer.byteLength(summary, "utf8") <= STEP_SUMMARY_BUDGET)
+  assert.ok(summary.includes(`## ${VOCAB.stepSummaryHeading}`), "heading lost")
+  assert.match(summary, /50 jobs recorded/)
+  assert.match(summary, /rendered 0 of 50 execution chains/)
+})
+
+// ---------------------------------------------------------------------------
+// Gate — record-faithful empty values
+// ---------------------------------------------------------------------------
+
+await test("gate: recorded empty remote_names/ancestry strings are preserved in the model, skipped by projections, excluded from counts", () => {
+  const profile = {
+    uuid: "cccccccc-0000-4000-8000-00000000000c",
+    timestamp: "2026-07-01T00:00:00Z",
+    scenarios: { github: { repository: REPO, workflow: "ci", job: "empties", sha: "c".repeat(40), run_id: "31000000003" } },
+    network: {
+      egress: {
+        peers: [
+          {
+            remote_address: "203.0.113.20",
+            remote_names: ["", "names.example", ""],
+            remote_ports: ["443"],
+            protocol: "tcp",
+            proc_trees: [{ pid: 42, process: "node", ancestry: ["", "bash", "", "node"] }],
+          },
+        ],
+      },
+    },
+  }
+  const review = reviewFor([profile])
+  const model = exportReviewModel(review)
+  const edge = model.jobs[0].edges[0]
+  // Record-faithful: empty strings preserved verbatim, in record order.
+  assert.deepEqual(edge.remote_names, ["", "names.example", ""])
+  assert.deepEqual(edge.ancestry, ["", "bash", "", "node"])
+  // Empty slots never count; the canonical non-empty recorded name is the
+  // counting and display identity regardless of slot position.
+  assert.equal(model.jobs[0].counts.primary_names, 1)
+  assert.equal(model.jobs[0].counts.domains, 1)
+  // Projections render without empty-name artifacts.
+  const md = renderRunReview(review)
+  assert.ok(md.includes("names[.]example"))
+  assert.ok(!md.includes("also recorded:"))
+  assert.ok(!md.includes("(, names") && !md.includes("example, )"), "empty name rendered")
+})
+
+// ---------------------------------------------------------------------------
+// Gate — generated mockups are byte-gated against fresh renderer output
+// ---------------------------------------------------------------------------
+
+await test("gate: checked-in mockups byte-equal fresh renderer output (states, public contract mockup, combined)", async () => {
+  const mockup = (rel) => readFileSync(join(here, "fixtures", "mockups", rel), "utf8")
+  const normal = await loadProfile("normal-run.json")
+  const worthLive = await loadProfile("worth-a-look-run.json")
+  const normalV215 = await loadProfile("normal-v215.json")
+  const record = await Promise.all(
+    [
+      "record-workload-egress.json",
+      "record-docs-build.json",
+      "record-install-only.json",
+      "record-lint.json",
+      "record-typecheck.json",
+    ].map(loadProfile),
+  )
+  const states = {
+    "1-no-record.md": renderNoRecord("ef01a52517e7532ab34aadea58b952c9f1e79ece"),
+    "2-registry-only.md": renderFromProfiles([normal]).body,
+    "3-workload-egress.md": renderFromProfiles([worthLive]).body,
+    "4-multi-job.md": renderFromProfiles(record).body,
+    "5-raw-profile-no-selector.md": renderFromProfiles([normalV215]).body,
+    "6-public-run-profile.md": renderPublicRunProfileMockup(),
+  }
+  for (const [file, body] of Object.entries(states)) {
+    assert.equal(mockup(file), `${body}\n`, `test/fixtures/mockups/${file} drifted from renderer output`)
+  }
+  const combined = {
+    "combined/1-registry-only.md": renderCombined([normal]),
+    "combined/1-registry-only.preview.md": renderCombined([normal], { preview: true }),
+    "combined/2-workload-egress.md": renderCombined([worthLive]),
+    "combined/2-workload-egress.preview.md": renderCombined([worthLive], {
+      preview: true,
+    }),
+    "combined/3-multi-job.md": renderCombined(record),
+    "combined/3-multi-job.preview.md": renderCombined(record, { preview: true }),
+  }
+  for (const [file, body] of Object.entries(combined)) {
+    assert.equal(mockup(file), body, `test/fixtures/mockups/${file} drifted from renderer output`)
+  }
+})
+
+// ---------------------------------------------------------------------------
+// Gates 18–19 — embargo and injection
+// ---------------------------------------------------------------------------
+
+const CREDENTIAL_TOKENS = [
+  "ghp_SECRETTOKEN",
+  "wJalrXUtnFEMIexampleKEY",
+  "Authorization: Bearer",
+  "secret-tools-DIRNAME9f8e7d6c",
+  "curl-wrapper",
+  "AWS_SECRET_ACCESS_KEY",
 ]
-const BANNED_WORDS_RE = new RegExp(`\\b(${BANNED_WORDS.join("|")})(s|es|ed|ing)?\\b`, "i")
-const BANNED_GLYPHS_RE = /[✅🛑🔍🔴⚠⏳]/u
 
-for (const [name, md] of Object.entries({ ...STATES, canary: CANARY })) {
-    test(`[${name}] canonical marker first, self-marker second`, () => {
-        assert.ok(md.startsWith(RUNTIME_REVIEW_MARKER), "starts with the canonical marker")
-        assert.ok(md.includes(COMMENT_MARKER), "carries the self-marker (takeover window)")
-    })
-    test(`[${name}] anatomy: title + A7 meta line`, () => {
-        assert.ok(md.includes("## Garnet Runtime Review"))
-        assert.match(
-            md,
-            /\[`[0-9a-f]{7}`\]\(https:\/\/github\.com\/[^)]+\/commit\/[^)]+\) · (?:\d+ of \d+ jobs? recorded|\d+ jobs? recorded) · updated \d{2}:\d{2} UTC · [A-Z][a-z]{2} \d{1,2}/,
-        )
-    })
-    test(`[${name}] no banned vocabulary or status glyphs`, () => {
-        const hit = md.match(BANNED_WORDS_RE)
-        assert.ok(!hit, `found banned word "${hit && hit[0]}"`)
-        assert.ok(!BANNED_GLYPHS_RE.test(md), "found a status glyph")
-    })
-    test(`[${name}] no tables, images, svg, color styling, or repo name in meta`, () => {
-        assert.ok(!/^\s*\|/m.test(md), "markdown table found")
-        assert.ok(!/!\[|<svg|style=|color:/i.test(md))
-        assert.ok(!/^`garnet-labs\//m.test(md), "repo name must not lead the meta line (A7)")
-    })
-    test(`[${name}] footer <sub> present, no relative time`, () => {
-        assert.match(md, /<sub>What happened in this PR — each job's processes and where they reached\./)
-        assert.ok(!/\bago\b/.test(md), "the string 'ago' never appears (test 25)")
-    })
+await test("gate 18: credential-shaped argv/executable never leak on any surface", () => {
+  const review = reviewFor([credential])
+  const surfaces = [
+    renderRunReview(review),
+    renderStepSummary([credential], { appUrl: APP_URL }),
+    JSON.stringify(exportReviewModel(review)),
+  ]
+  for (const surface of surfaces) {
+    for (const token of CREDENTIAL_TOKENS) {
+      assert.ok(!surface.includes(token), `leaked: ${token}`)
+    }
+  }
+})
+
+await test("gate 19: HTML/Markdown injection payloads render inert on all renderer-owned surfaces", () => {
+  const review = reviewFor([injection])
+  const surfaces = [renderRunReview(review), renderStepSummary([injection], { appUrl: APP_URL })]
+  for (const surface of surfaces) {
+    // Code spans neutralize HTML/Markdown on GitHub; everything outside them
+    // must carry no raw record-sourced markup at all.
+    const outsideCode = surface.replace(/`[^`\n]*`/g, "`code`")
+    assert.ok(!outsideCode.includes("<script"), "raw <script>")
+    assert.ok(!outsideCode.includes("<img"), "raw <img>")
+    assert.ok(!outsideCode.includes("</pre><img"), "pre-block breakout")
+    assert.ok(!outsideCode.includes("</pre><details"), "pre-block breakout via details")
+    assert.ok(!outsideCode.includes("<details open><summary>x"), "raw injected details")
+    assert.ok(surface.includes("&lt;script&gt;") || surface.includes("&lt;img"), "payload dropped instead of escaped")
+  }
+  // Step Summary: Markdown-image payloads in record-sourced process identity
+  // must stay inside code spans, where GitHub leaves them inert.
+  const summary = renderStepSummary([injection], { appUrl: APP_URL })
+  const outsideCodeSpans = summary
+    .replace(/`[^`\n]*`/g, "`code`")
+    .replace(/<code>[^<]*<\/code>/g, "<code>code</code>")
+  assert.ok(!outsideCodeSpans.includes("!["), "markdown image outside code span")
+  assert.ok(summary.includes("![exfil](//evil.example/x.png)"), "payload dropped instead of contained")
+  // JSON surface: structured, embargo respected, no pre-rendered HTML fields.
+  const json = exportReviewModel(review)
+  const processes = json.jobs[0].edges.map((edge) => edge.process)
+  assert.ok(processes.includes("</pre><img src=x onerror=alert(3)>"))
+  assert.ok(processes.includes("![exfil](//evil.example/x.png)"))
+  assert.ok(!JSON.stringify(json).includes('"executable"') && !JSON.stringify(json).includes('"arguments"'))
+})
+
+// ---------------------------------------------------------------------------
+// Gate 20 — selector and publication policy
+// ---------------------------------------------------------------------------
+
+await test("gate 20a: per-job links use envelope Profile.ID, never raw record UUID", () => {
+  const profileID = "019f5e00-0000-7000-8000-000000000001"
+  const recordUuid = "0f5b2a1c-9d4e-4b7a-8c3d-2e1f6a7b8c9d"
+  const url = profilePermalink(
+    { run_id: "31000000001", profile_id: profileID, uuid: recordUuid },
+    APP_URL,
+    "pr_comment",
+  )
+  assert.equal(
+    url,
+    `https://app.garnet.ai/public/runs/31000000001?profile=${profileID}&utm_source=github&utm_medium=pr_comment`,
+  )
+  assert.ok(!url.includes(recordUuid))
+  assert.ok(EDGE_MD.includes(url.replaceAll("&", "&amp;")), "selector link missing from HTML surface")
+  assert.ok(EDGE_SUMMARY.includes("utm_medium=step_summary"))
+  assert.equal(profilePermalink({ run_id: "1", profile_id: "" }, APP_URL, "pr_comment"), "")
+})
+
+await test("gate 20d: raw profile shape — data.uuid is never a Profile UUID or ?profile= selector", () => {
+  // The live workflow supplies raw profiles (no control-plane envelope).
+  const job = summarizeProfile(edgeCases)
+  assert.equal(job.profile_id, "")
+  assert.equal(job.uuid, edgeCases.uuid)
+  const md = renderRunReview(reviewFor([edgeCases]))
+  const summary = renderStepSummary([edgeCases], { appUrl: APP_URL })
+  assert.ok(!summary.includes("Record UUID"), "raw record UUID leaked into Workload Summary")
+  assert.ok(!summary.includes("Profile UUID"), "raw data.uuid mislabeled as Profile UUID")
+  for (const surface of [md, summary]) {
+    assert.ok(!surface.includes(`?profile=${edgeCases.uuid}`), "raw data.uuid fabricated into a selector")
+    assert.ok(!surface.includes("?profile="), "raw profile must never carry an exact selector")
+  }
+  assert.ok(!md.includes("/public/runs/"), "raw profile fabricated a public CTA")
+})
+
+await test("gate 20e: enveloped profile shape — envelope Profile.ID is 'Profile UUID' and drives the selector", () => {
+  const job = summarizeProfile(edgeCaseEnvelope)
+  assert.equal(job.profile_id, edgeCaseEnvelope.id)
+  assert.equal(job.uuid, edgeCases.uuid)
+  assert.ok(EDGE_SUMMARY.includes(`| Profile UUID | ${edgeCaseEnvelope.id} |`))
+  assert.ok(!EDGE_SUMMARY.includes("Record UUID"))
+  assert.ok(EDGE_MD.includes(`?profile=${edgeCaseEnvelope.id}`.replaceAll("&", "&amp;")))
+  assert.ok(!EDGE_MD.includes(`?profile=${edgeCases.uuid}`))
+})
+
+await test("gate 20b: publication policy is fail-closed with one non-oracular 404", () => {
+  // Exact profile selection — ?profile supplied and resolving.
+  const exact = publicationDecision({
+    visibility: "public",
+    consent: true,
+    revoked: false,
+    profileRequested: true,
+    selectorResolves: true,
+  })
+  assert.deepEqual(exact, { status: 200, body: "render" })
+  const denied = [
+    {},
+    { visibility: "private", consent: true },
+    { visibility: "internal", consent: true },
+    { visibility: "unknown", consent: true },
+    { visibility: "public", consent: false },
+    { visibility: "public", consent: true, revoked: true },
+    // Missing selector and job-only/bare-run requests never render.
+    { visibility: "public", consent: true, revoked: false },
+    // ?profile supplied with an empty/wrong UUID: exact, no fallback.
+    { visibility: "public", consent: true, profileRequested: true, selectorResolves: false },
+    { visibility: "public", consent: true, profileRequested: true },
+    // Publication policy denies even a resolving selector.
+    { visibility: "private", consent: true, profileRequested: true, selectorResolves: true },
+    { visibility: "public", consent: false, profileRequested: true, selectorResolves: true },
+  ]
+  const bodies = new Set()
+  for (const state of denied) {
+    const res = publicationDecision(state)
+    assert.equal(res.status, 404, JSON.stringify(state))
+    bodies.add(res.body)
+  }
+  assert.equal(bodies.size, 1, "denied responses must be indistinguishable")
+})
+
+await test("gate 20c: completed comment renders one exact selector per enveloped job fold", () => {
+  const single = renderRunReview(reviewFor(recordSet))
+  // One selector link per enveloped job fold — the only Garnet links.
+  assert.equal(single.split("utm_medium=pr_comment").length - 1, recordSet.length)
+  assert.equal(single.split("View this job's Execution Profile in Garnet →").length - 1, recordSet.length)
+  const otherRun = JSON.parse(JSON.stringify(recordSet[0]))
+  otherRun.id = "019f5e00-0000-7000-8000-000000000002"
+  otherRun.data.scenarios.github.run_id = "28999999999"
+  otherRun.data.scenarios.github.job = "other-run-job"
+  const multi = renderRunReview(reviewFor([...recordSet, otherRun]))
+  assert.ok(multi.includes("/public/runs/28999999999?profile="))
+  assert.equal(multi.split("utm_medium=pr_comment").length - 1, recordSet.length + 1)
+})
+
+// ---------------------------------------------------------------------------
+// Gate 21 — determinism
+// ---------------------------------------------------------------------------
+
+await test("gate 21: three renders of the same input byte-compare equal", () => {
+  const inputs = [recordSet, [edgeCases], [injection], [oversizedProfile()]]
+  for (const profiles of inputs) {
+    const bodies = [1, 2, 3].map(() => renderRunReview(reviewFor(profiles)))
+    assert.ok(bodies[0] === bodies[1] && bodies[1] === bodies[2])
+    const summaries = [1, 2, 3].map(() => renderStepSummary(profiles, { appUrl: APP_URL }))
+    assert.ok(summaries[0] === summaries[1] && summaries[1] === summaries[2])
+    const models = [1, 2, 3].map(() => JSON.stringify(exportReviewModel(reviewFor(profiles))))
+    assert.ok(models[0] === models[1] && models[1] === models[2])
+  }
+})
+
+await test("gate 21b: comments, models, and the lineage-keyed Step Summary are all canonical (order-independent)", () => {
+  const shuffled = recordSet
+    .map((profile) => JSON.parse(JSON.stringify(profile)))
+    .reverse()
+  for (const envelope of shuffled) {
+    const data = rawProfile(envelope)
+    data.network.egress.peers.reverse()
+    for (const peer of data.network.egress.peers) {
+      if (Array.isArray(peer.proc_trees)) peer.proc_trees.reverse()
+    }
+  }
+  assert.equal(
+    renderRunReview(reviewFor(shuffled)),
+    renderRunReview(reviewFor(recordSet)),
+  )
+  assert.equal(
+    renderStepSummary(shuffled, { appUrl: APP_URL, preview: true }),
+    renderStepSummary(recordSet, { appUrl: APP_URL, preview: true }),
+  )
+  assert.equal(
+    JSON.stringify(exportReviewModel(reviewFor(shuffled))),
+    JSON.stringify(exportReviewModel(reviewFor(recordSet))),
+  )
+})
+
+// ---------------------------------------------------------------------------
+// Ordering + shape locks
+// ---------------------------------------------------------------------------
+
+await test("shape: jobs sort alphabetically by 'workflow / job'; folds are collapsed by default", () => {
+  const review = reviewFor(recordSet)
+  const keys = review.jobs.map((j) => `${j.workflow} / ${j.name}`)
+  assert.deepEqual(keys, [...keys].sort())
+  const md = renderRunReview(review)
+  assert.ok(!md.includes("<details open"))
+})
+
+await test("shape: edges sort into an independently specified exact order (lineage, address, ports, protocol, PID)", () => {
+  // Hand-authored profile whose expected serialized edge order is specified
+  // independently below — NOT derived from the comparator under test.
+  const profile = {
+    uuid: "eeeeeeee-0000-4000-8000-00000000000e",
+    timestamp: "2026-07-01T00:00:00Z",
+    scenarios: { github: { repository: REPO, workflow: "ci", job: "order", sha: "a".repeat(40), run_id: "31000000009" } },
+    network: {
+      egress: {
+        peers: [
+          // Same lineage/address/ports/protocol, PIDs 9 vs 10 (string order: "10" < "9").
+          { remote_address: "10.0.0.1", remote_names: [], remote_ports: ["443"], protocol: "tcp", proc_trees: [{ pid: 9, process: "curl", ancestry: ["bash", "curl"] }, { pid: 10, process: "curl", ancestry: ["bash", "curl"] }] },
+          // Same lineage/address/ports, protocol udp vs tcp above.
+          { remote_address: "10.0.0.1", remote_names: [], remote_ports: ["443"], protocol: "udp", proc_trees: [{ pid: 7, process: "curl", ancestry: ["bash", "curl"] }] },
+          // Same lineage/address, port 80 sorts before 443 ("443" < "80").
+          { remote_address: "10.0.0.1", remote_names: [], remote_ports: ["80"], protocol: "tcp", proc_trees: [{ pid: 8, process: "curl", ancestry: ["bash", "curl"] }] },
+          // Same lineage, address 10.0.0.2 sorts after 10.0.0.1.
+          { remote_address: "10.0.0.2", remote_names: [], remote_ports: ["443"], protocol: "tcp", proc_trees: [{ pid: 6, process: "curl", ancestry: ["bash", "curl"] }] },
+          // Lineage "bash › wget" sorts after "bash › curl".
+          { remote_address: "10.0.0.1", remote_names: [], remote_ports: ["443"], protocol: "tcp", proc_trees: [{ pid: 5, process: "wget", ancestry: ["bash", "wget"] }] },
+          // No proc_trees → lineage "unknown (not recorded)" sorts last.
+          { remote_address: "10.0.0.1", remote_names: [], remote_ports: ["443"], protocol: "tcp", proc_trees: [] },
+        ],
+      },
+    },
+  }
+  const job = summarizeProfile(profile)
+  const got = job.edges.map((e) => [e.ancestry.join(" › ") || "(none)", e.remote_address, e.remote_ports.join(","), e.protocol, e.pid])
+  // Independent expected order (lineage, then address, then ports string,
+  // then protocol, then PID string — all lexicographic).
+  const expected = [
+    ["bash › curl", "10.0.0.1", "443", "tcp", "10"],
+    ["bash › curl", "10.0.0.1", "443", "tcp", "9"],
+    ["bash › curl", "10.0.0.1", "443", "udp", "7"],
+    ["bash › curl", "10.0.0.1", "80", "tcp", "8"],
+    ["bash › curl", "10.0.0.2", "443", "tcp", "6"],
+    ["bash › wget", "10.0.0.1", "443", "tcp", "5"],
+    ["(none)", "10.0.0.1", "443", "tcp", ""],
+  ]
+  assert.deepEqual(got, expected)
+  assert.ok(
+    EDGE_SUMMARY.indexOf("node (pid 4104)") <
+      EDGE_SUMMARY.indexOf("node (pid 4105)"),
+  )
+})
+
+await test("shape: mismatched sensor telemetry stays modeled but is not presented", () => {
+  // edge-cases carries poisoned telemetry (99 domains / 999 connections).
+  assert.ok(!EDGE_MD.includes("999"), "sensor telemetry leaked into the PR comment")
+  assert.ok(!EDGE_SUMMARY.includes("99 unique domains"))
+  assert.ok(!EDGE_SUMMARY.includes("999 connections"))
+  assert.ok(!EDGE_SUMMARY.includes("Network telemetry observed"))
+  assert.ok(!EDGE_SUMMARY.includes("| Source | Metric | Value |"))
+  assert.ok(!EDGE_SUMMARY.includes("Profile discrepancy"))
+  assert.equal(EDGE_MODEL.jobs[0].telemetry.total_connections, 999)
+  assert.notEqual(
+    EDGE_MODEL.jobs[0].telemetry.total_connections,
+    EDGE_MODEL.jobs[0].counts.flows,
+  )
+})
+
+await test("Gate T: pinned v2.15 matrix fixtures satisfy producer invariants", () => {
+  for (const profile of recordSet) {
+    const job = summarizeProfile(profile)
+    assert.equal(job.telemetry.total_connections, job.counts.flows)
+    assert.equal(job.telemetry.total_domains, job.counts.primary_names)
+    assert.deepEqual(telemetryDiscrepancies(job), [])
+  }
+})
+
+await test("Gate T: historical mismatches render without unexplained telemetry", () => {
+  for (const file of ["normal-run.json", "worth-a-look-run.json"]) {
+    const profile = load("real", file)
+    const job = summarizeProfile(profile)
+    assert.ok(telemetryDiscrepancies(job).length > 0)
+    const summary = renderStepSummary([profile], { appUrl: APP_URL })
+    assert.ok(!summary.includes("Network telemetry observed"))
+    assert.ok(!summary.includes(`${job.telemetry.total_domains} unique domains`))
+    assert.ok(!summary.includes(`${job.telemetry.total_connections} connections`))
+    assert.ok(!summary.includes("Profile discrepancy"))
+  }
+})
+
+await test("shape: Step Summary is lineage-keyed (deduped) with preview-only context", () => {
+  assert.ok(EDGE_SUMMARY.startsWith(`## ${VOCAB.stepSummaryHeading}`))
+  assert.ok(
+    EDGE_SUMMARY.indexOf("### Workload Summary") <
+      EDGE_SUMMARY.indexOf("### Network Egress Summary"),
+  )
+  assert.ok(EDGE_SUMMARY.includes("| Process Tree | Destinations |"))
+  assert.ok(!EDGE_SUMMARY.includes("| Destination | Process Tree |"))
+  assert.ok(
+    EDGE_SUMMARY.includes(
+      "Keyed by execution chain; repeated destination names within a chain are collapsed.",
+    ),
+  )
+  assert.ok(!EDGE_SUMMARY.includes("in the profile's own order"))
+  const uuidRow = EDGE_SUMMARY.indexOf("Profile UUID")
+  assert.ok(uuidRow !== -1 && uuidRow < EDGE_SUMMARY.indexOf("| Repository"))
+  assert.ok(EDGE_SUMMARY.includes(`| Profile UUID | ${edgeCaseEnvelope.id} |`))
+  assert.ok(!EDGE_SUMMARY.includes("| Record UUID |"))
+  assert.ok(REAL_SUMMARY.includes("| Branch |"))
+  assert.ok(REAL_SUMMARY.includes("| Triggered by |"))
+  assert.ok(EDGE_SUMMARY.includes("| Run ID / Job |"))
+  assert.ok(EDGE_SUMMARY.includes("<code>node (pid 4104)</code>"))
+  assert.ok(REAL_SUMMARY.includes("<code>systemd</code> → <code>…</code>"))
+  assert.ok(!EDGE_SUMMARY.includes("step: 3. Install dependencies"))
+  assert.ok(!EDGE_SUMMARY.includes("detection:"))
+  assert.ok(!EDGE_SUMMARY.includes("⚠ attention"))
+  assert.ok(!EDGE_SUMMARY.includes("Assertions"))
+  assert.ok(
+    EDGE_SUMMARY_PREVIEW.includes(
+      "<details><summary><strong>Recorded context preview</strong>",
+    ),
+  )
+  assert.ok(EDGE_SUMMARY_PREVIEW.includes("<details><summary><strong>Assertions</strong>"))
+  assert.ok(REAL_SUMMARY.includes("| Check | Result | Context |"))
+  assert.ok(!EDGE_SUMMARY.includes("Network telemetry observed"))
+  assert.ok(REAL_SUMMARY.includes("Network telemetry observed"))
+  assert.ok(EDGE_SUMMARY.includes('<div align="right">'))
+  // Footer: timestamp + one product path; workflow/run/job identity lives
+  // only in the Workload table, and the brand is never doubled beside the CTA.
+  assert.ok(!EDGE_SUMMARY.includes("Powered by Garnet</strong> ·"))
+  assert.ok(!/<sub>workflow /.test(EDGE_SUMMARY))
+  assert.ok(EDGE_SUMMARY.includes("Job summary generated at run-time"))
+  assert.ok(EDGE_SUMMARY.includes("2026-07-08 05:35:56 UTC"))
+
+  const rows = buildDestinationRows(EDGE_REVIEW.jobs[0].edges)
+  const peers = rawProfile(edgeCases).network.egress.peers
+  assert.equal(rows.length, peers.length)
+  assert.deepEqual(
+    rows.map((row) => row.remote_names.find(Boolean) || row.remote_address),
+    peers.map(
+      (peer) =>
+        (peer.remote_names || []).find(Boolean) || String(peer.remote_address || ""),
+    ),
+  )
+  assert.deepEqual(
+    rows.map((row) => row.associations.map((edge) => edge.pid)),
+    peers.map((peer) =>
+      ((peer.proc_trees || []).length ? peer.proc_trees : [null]).map((tree) =>
+        tree?.pid === undefined || tree?.pid === null ? "" : String(tree.pid),
+      ),
+    ),
+  )
+  assert.ok(rows.some((row) => row.associations.some((edge) => edge.pid === "4104")))
+  assert.ok(rows.some((row) => row.associations.length > 1))
+})
+
+await test("shape: assertion evidence renders only when explicitly recorded and previewed", () => {
+  const profile = JSON.parse(JSON.stringify(rawProfile(workload)))
+  profile.assertions = [
+    {
+      class_id: "Network Egress",
+      assertion_id: "no_bad_egress_domain",
+      result: "attention",
+      description: "A process contacted a bad network domain.",
+      evidence: [
+        {
+          timestamp: "2026-07-13T23:54:30Z",
+          event: "network_peer",
+          remote_peer: "bad.example",
+          protocol: "tcp",
+          ports: ["443"],
+          result: "attention",
+          arguments: ["--password=assertion-secret"],
+          executable: "/tmp/assertion-secret",
+        },
+      ],
+    },
+  ]
+  const hidden = renderStepSummary([profile], { appUrl: APP_URL })
+  const preview = renderStepSummary([profile], { appUrl: APP_URL, preview: true })
+  const model = JSON.stringify(
+    exportReviewModel(reviewFor([profile])),
+  )
+  assert.ok(!hidden.includes("bad.example"))
+  assert.ok(preview.includes("| Assertion | Timestamp | Event | Remote Peer | Protocol | Ports | Result |"))
+  assert.ok(preview.includes("bad.example"))
+  assert.ok(preview.includes("network_peer"))
+  assert.ok(!preview.includes("assertion-secret"))
+  assert.ok(!model.includes("assertion-secret"))
+  assert.ok(!model.includes("arguments"))
+  assert.ok(!model.includes("executable"))
+})
+
+await test("shape: recorded matrix job index remains distinct metadata", () => {
+  const data = JSON.parse(JSON.stringify(edgeCases))
+  data.scenarios.github.job_index = 3
+  const envelope = { id: "019f5e00-0000-7000-8000-000000000003", data }
+  const model = exportReviewModel(reviewFor([envelope]))
+  assert.equal(model.jobs[0].job_index, "3")
+  assert.ok(renderStepSummary([envelope]).includes("| Matrix job index | 3 |"))
+})
+
+await test("shape: step attribution renders only as fold-sentence group names — never a step: label", () => {
+  // The `step:` annotation stays Step Summary preview-only; the fold sentence
+  // may name recorded step attributions, always HTML-escaped.
+  assert.ok(!EDGE_MD.includes("step:"))
+  const inj = renderRunReview(reviewFor([injection]))
+  assert.ok(!inj.includes("step:"))
+  assert.ok(!/<script/i.test(inj), "injected markup must stay escaped")
+  // No attributed chains at all → degraded coverage never collapses to an
+  // empty tree: the recorded (escaped) lineage still renders.
+  assert.ok(inj.includes("<pre>"))
+  assert.ok(inj.includes("&lt;"))
+})
+
+await test("shape: completed explainer sits at the bottom, collapsed; pending explainer is open", () => {
+  for (const md of [EDGE_MD, renderRunReview(reviewFor(recordSet))]) {
+    assert.ok(md.includes("<details><summary><sub>💡 How to read this"))
+    assert.ok(!md.includes("<details open><summary><sub>💡 How to read this"))
+    assert.ok(!md.includes("garnet.ai/what-garnet-records"))
+    assert.ok(md.includes("**Execution Profiles recorded for "), "headline missing")
+    // Explainer is the last block, below the divider.
+    const divider = md.lastIndexOf("\n---\n")
+    assert.ok(divider !== -1 && md.indexOf("💡 How to read this") > divider)
+    // Headline precedes the metadata blockquote which precedes the first fold.
+    const headline = md.indexOf("**Execution Profiles recorded for ")
+    const metadata = md.indexOf("> *")
+    assert.ok(headline !== -1 && metadata > headline)
+  }
+  assert.ok(
+    renderPendingReview({ sha: "ef01a52" }).includes(
+      "<details open><summary><sub>💡 How to read this",
+    ),
+  )
+})
+
+await test("copy: public Markdown never emits the internal noun edge/edges", () => {
+  const surfaces = [
+    renderPendingReview({ sha: "ef01a52" }),
+    renderRunReview(reviewFor(recordSet)),
+    renderStepSummary(recordSet, { appUrl: APP_URL, preview: true }),
+  ]
+  for (const surface of surfaces) {
+    assert.ok(!/\bedges?\b/i.test(surface), "internal edge noun leaked")
+  }
+})
+
+// ---------------------------------------------------------------------------
+// 6.5 — comparison states, defang scope, links, count dedup
+// ---------------------------------------------------------------------------
+
+function comparisonReviewFor(profiles, previousJobs, previousSha) {
+  const jobs = profiles.map(summarizeProfile).filter(Boolean)
+  const sha = jobs[0]?.sha || ""
+  return buildRunReview({
+    repo: REPO,
+    sha,
+    commitUrl: sha ? `https://github.com/${REPO}/commit/${sha}` : "",
+    appUrl: APP_URL,
+    appMode: true,
+    jobs,
+    previousSha,
+    previousJobs,
+  })
 }
 
-for (const [name, md] of Object.entries(STATES)) {
-    if (name === "no-record") continue
-    test(`[${name}] lineage trees are four-backtick-fenced with → leaf annotations`, () => {
-        assert.ok(md.includes("````text"), "four-backtick fences (A8)")
-        assert.match(md, /^\s*[├└]─ → [\w.-]+/m)
-    })
-    test(`[${name}] job row: summary line IS the fold summary; named slots + totals`, () => {
-        assert.match(md, /<details( open)?><summary><b><code>[\w-]+<\/code><\/b> — reached .*· \d+ connections?<\/summary>/)
-        assert.match(md, /\[job log ↗\]\(https:\/\/github\.com\/[^)]+\/actions\/runs\/\d+\)/)
-    })
-    test(`[${name}] agent-prompt hint + job log live inside the fold (D6)`, () => {
-        assert.match(md, /<sub>Paste the tree into your review agent · full detail in the Step Summary · \[job log ↗\][^<]*<\/sub>/)
-    })
+const PREV_SHA = "d84f4dc0000000000000000000000000000000dd"
+
+await test("6.5: snapshot (no comparison) renders a plain <pre> tree — no fence, no @@, no +/− markers", () => {
+  assert.ok(!EDGE_MD.includes("```"))
+  assert.ok(!EDGE_MD.includes("@@"))
+  for (const line of EDGE_MD.split("\n")) {
+    assert.ok(!/^[+-] /.test(line), `snapshot carries a diff marker: ${line}`)
+  }
+  assert.ok(EDGE_MD.includes("<pre>"))
+  assert.ok(EDGE_MD.includes("**Execution Profiles recorded for 1 job, triggered by"))
+})
+
+await test("6.5: comparison is only rendered from a supplied previous profiled commit — never fabricated", () => {
+  assert.equal(reviewFor(recordSet).comparison, null)
+  const noJobs = comparisonReviewFor(recordSet, null, PREV_SHA)
+  assert.equal(noJobs.comparison, null)
+  const jobs = recordSet.map(summarizeProfile).filter(Boolean)
+  const noSha = comparisonReviewFor(
+    recordSet,
+    jobs.map((j) => ({ name: j.name, workflow: j.workflow, edges: j.edges })),
+    "",
+  )
+  assert.equal(noSha.comparison, null)
+})
+
+await test("6.5: unchanged comparable jobs collapse with 'no change'; headline says no change", () => {
+  const jobs = recordSet.map(summarizeProfile).filter(Boolean)
+  const previous = jobs.map((j) => ({ name: j.name, workflow: j.workflow, edges: j.edges }))
+  const review = comparisonReviewFor(recordSet, previous, PREV_SHA)
+  const md = renderRunReview(review)
+  assert.ok(md.includes("no change since [`d84f4dc`]("))
+  assert.ok(!md.includes("<details open><summary><code>"))
+  assert.ok(md.includes("· no change"))
+  assert.ok(!md.includes("```diff"))
+  assert.ok(md.includes("<pre>"))
+})
+
+await test("6.5: changed jobs open with an in-fold diff fence and one exact @@ header", () => {
+  const jobs = recordSet.map(summarizeProfile).filter(Boolean)
+  const previous = jobs.map((j) => ({
+    name: j.name,
+    workflow: j.workflow,
+    edges:
+      j.name === "workload-egress"
+        ? j.edges.filter((e) => !(e.remote_names || []).includes("httpbin.org"))
+        : j.edges,
+  }))
+  const review = comparisonReviewFor(recordSet, previous, PREV_SHA)
+  const md = renderRunReview(review)
+  const head7 = review.sha.slice(0, 7)
+  // The metadata line names the change and the previous profiled commit.
+  assert.ok(md.includes("changed since [`d84f4dc`]("))
+  // Changed fold is open, carries a bold delta with the comparison base,
+  // and its tree is a diff fence.
+  assert.ok(md.includes("<details open><summary><b>+"), "changed fold must open and lead with its bold delta")
+  // The fold row carries only its own delta — the comparison base commit
+  // renders once at run scope (metadata) and inside the @@ header.
+  assert.match(md, /<b>\+\d+(&nbsp;−\d+)?<\/b>&nbsp;destinations?/)
+  assert.ok(!/<\/b> since&nbsp;/.test(md), "fold delta repeats the run-scoped comparison sha")
+  assert.ok(md.includes("```diff"))
+  const headers = md.split("\n").filter((l) => l.startsWith("@@"))
+  assert.equal(headers.length, 1, "exactly one @@ header for one changed job")
+  // The @@ header names the commit pair only — the delta lives on the fold
+  // row directly above; the same fact never renders twice back to back.
+  assert.match(headers[0], new RegExp(`^@@ ${head7} vs d84f4dc @@$`))
+  // New chains carry + inside the fence; unchanged jobs stay plain <pre>.
+  assert.ok(md.split("\n").some((l) => l.startsWith("+")))
+  assert.ok(md.includes("<pre>"), "unchanged jobs lost their plain tree")
+  // The fence sits inside the fold: <details open> precedes ```diff.
+  assert.ok(md.indexOf("<details open><summary><b>+") < md.indexOf("```diff"))
+  // Removed chains carry − when the previous profile recorded more.
+  const removedReview = comparisonReviewFor(recordSet, jobs.map((j) => ({
+    name: j.name,
+    workflow: j.workflow,
+    edges: [...j.edges, { ...j.edges[0], remote_names: ["removed.example"], remote_address: "203.0.113.99" }],
+  })), PREV_SHA)
+  const removedMd = renderRunReview(removedReview)
+  assert.ok(removedMd.split("\n").some((l) => l.startsWith("-")), "no − marker for a no-longer-recorded chain")
+  assert.ok(removedMd.includes("removed.example".replace(/\.(?=[^.]*$)/, "[.]")))
+})
+
+await test("6.5: a job that stops being recorded never reads as 'no change'", () => {
+  const jobs = recordSet.map(summarizeProfile).filter(Boolean)
+  const vanishing = jobs.find((j) => j.name === "workload-egress")
+  const survivors = recordSet.filter((r) => summarizeProfile(r).name !== "workload-egress")
+  const previous = jobs.map((j) => ({ name: j.name, workflow: j.workflow, edges: j.edges }))
+  const md = renderRunReview(comparisonReviewFor(survivors, previous, PREV_SHA))
+  const vanishedPartition = partitionCommentEdges(vanishing.edges)
+  const vanishedChains = vanishedPartition.shown.length + vanishedPartition.substrate.length
+
+  assert.ok(!md.includes(`${VOCAB.noChange} since`), "vanished job rendered as no change")
+  assert.ok(md.includes("changed since [`d84f4dc`]("), "vanished chains must read as change")
+  // The removal is visible, adjacent to its own count — never only in the total.
+  const foldSummary = md
+    .split("\n")
+    .find((l) => l.includes(VOCAB.vanishedJobsLabel) && l.includes("<details><summary>"))
+  assert.ok(foldSummary, "vanished jobs render in their own fold")
+  assert.ok(foldSummary.includes(`${vanishedChains}&nbsp;chain${vanishedChains === 1 ? "" : "s"}`))
+  const entry = md
+    .split("\n")
+    .find((l) => l.includes("workload-egress") && l.includes("&nbsp;chain"))
+  assert.ok(entry, "vanished job entry lists the job with its chain count")
+  assert.ok(entry.includes(`${vanishedChains}&nbsp;chain${vanishedChains === 1 ? "" : "s"}`))
+  // History sits below this commit's behavior: the fold follows every job fold row.
+  assert.ok(md.indexOf(foldSummary) > md.lastIndexOf("&nbsp;↗"))
+})
+
+await test("6.5: matrix cells diff against their own previous cell, never each other", () => {
+  const jobs = recordSet.map(summarizeProfile).filter(Boolean)
+  const base = jobs.find((j) => j.name === "workload-egress")
+  const cell = (job_index, edges) => ({ ...base, id: undefined, job_index, edges })
+  const headCells = [cell("0", base.edges), cell("1", base.edges.slice(0, 1))]
+  const previousCells = [
+    { name: base.name, workflow: base.workflow, job_index: "0", edges: base.edges },
+    { name: base.name, workflow: base.workflow, job_index: "1", edges: base.edges.slice(0, 1) },
+  ]
+  const review = buildRunReview({
+    sha: base.sha,
+    jobs: headCells,
+    previousSha: PREV_SHA,
+    previousJobs: previousCells,
+  })
+  const md = renderRunReview(review)
+  // Each cell matches its own index: identical records, so nothing changed.
+  assert.ok(md.includes(`${VOCAB.noChange} since \`d84f4dc\``))
+  assert.ok(!md.includes("```diff"))
+  // Cross-matched cells would diff cell 1's single chain against cell 0's tree.
+  const swapped = buildRunReview({
+    sha: base.sha,
+    jobs: headCells,
+    previousSha: PREV_SHA,
+    previousJobs: [previousCells[1], previousCells[0]],
+  })
+  assert.equal(renderRunReview(swapped), md, "cell pairing depends on order, not identity")
+})
+
+await test("6.6: fold sentence — deterministic grouping, changed-first sort, ≤2 named groups, and K more", () => {
+  const edge = (step, addr, ancestry = ["Runner.Worker", "bash"]) => ({
+    remote_address: addr,
+    remote_names: [],
+    remote_ports: ["443"],
+    detections: [],
+    lineage_recorded: true,
+    pid: "1",
+    process: ancestry[ancestry.length - 1],
+    ancestry,
+    github_step: step,
+  })
+  // Grouping by step attribution; ordinal prefix stripped for display only.
+  const edges = [
+    edge("2. npm test", "203.0.113.1"),
+    edge("2. npm test", "203.0.113.2"),
+    edge("1. npm install", "203.0.113.9"),
+  ]
+  assert.equal(
+    jobSummarySentence(edges),
+    "npm test reached 2\u00a0destinations, npm install reached 1\u00a0destination",
+  )
+  // Deterministic: same input, same bytes; count desc then name lexicographic.
+  assert.equal(jobSummarySentence(edges), jobSummarySentence([...edges].reverse()))
+  // Cap: at most two named groups, remainder collapses to `and K more`.
+  const many = [
+    ...edges,
+    edge("3. lint", "203.0.113.20"),
+    edge("4. build", "203.0.113.21"),
+  ]
+  assert.ok(jobSummarySentence(many).endsWith(", and 2 more"))
+  // Changed groups sort first on comparison comments.
+  const previous = [edge("1. npm install", "203.0.113.9")]
+  const head = [edge("1. npm install", "203.0.113.9"), edge("9. new step", "203.0.113.30")]
+  const delta = compareJobEdges(head, previous)
+  assert.ok(jobSummarySentence(head, delta).startsWith("new step reached 1\u00a0destination"))
+  // No step attribution → no sentence: process-name fallbacks are runner
+  // machinery, never a job's headline summary. The row falls back to counts.
+  assert.equal(
+    jobSummarySentence([edge("", "203.0.113.40", ["Runner.Worker", "provjobd1326539233"])]),
+    "",
+  )
+  // Removed-only change (a group that lost a destination) also sorts first.
+  const shrunkPrev = [
+    edge("5. audit", "203.0.113.50"),
+    edge("5. audit", "203.0.113.51"),
+    edge("2. npm test", "203.0.113.1"),
+    edge("2. npm test", "203.0.113.2"),
+  ]
+  const shrunkHead = [
+    edge("5. audit", "203.0.113.50"),
+    edge("2. npm test", "203.0.113.1"),
+    edge("2. npm test", "203.0.113.2"),
+  ]
+  const shrunkDelta = compareJobEdges(shrunkHead, shrunkPrev)
+  assert.ok(jobSummarySentence(shrunkHead, shrunkDelta).startsWith("audit reached 1\u00a0destination"))
+  // No edges → empty sentence, never a dangling fragment.
+  assert.equal(jobSummarySentence([]), "")
+  // Repeated steps carry distinct ordinal prefixes (`2. build`, `7. build`)
+  // but display identically: grouping is keyed on the display name so the
+  // sentence never names the same step twice with split counts.
+  assert.equal(
+    jobSummarySentence([edge("2. build", "203.0.113.70"), edge("7. build", "203.0.113.71")]),
+    "build reached 2\u00a0destinations",
+  )
+  // Record-sourced step names render as plain text: markdown link syntax and
+  // bare URLs are neutralized so a hostile name can never become a live link.
+  const hostile = jobSummarySentence([edge("1. [click me](https://evil.example)", "203.0.113.80")])
+  assert.ok(hostile.includes("]&#40;"), hostile)
+  assert.ok(hostile.includes("&#58;//"), hostile)
+  assert.ok(!hostile.includes("](https://"), hostile)
+  // The sensor's `NN. Runner Processes` sentinel is not a workflow step:
+  // it is never presented as attribution, so a sentinel-only job renders no
+  // sentence — a fold can never say "Runner Processes reached …".
+  assert.ok(isSentinelStep("99. Runner Processes"))
+  assert.ok(isSentinelStep("Runner Processes"))
+  assert.ok(!isSentinelStep("2. npm test"))
+  assert.equal(
+    jobSummarySentence([
+      edge("99. Runner Processes", "203.0.113.60", ["systemd", "hosted-compute-agent", "sudo", "provjobd1278877480"]),
+    ]),
+    "",
+  )
+})
+
+await test("6.6: fold sentence numbers reconcile with the fold's own tree counts", () => {
+  const md = renderRunReview(reviewFor(recordSet))
+  for (const fold of md.split("<details><summary><code>").slice(1)) {
+    const row = fold.split("</summary>")[0]
+    const groupCounts = [...row.matchAll(/reached (\d+)\u00a0destination/g)].map((m) => Number(m[1]))
+    if (groupCounts.length === 0) continue
+    const treeDestinations = Number((row.match(/(\d+)&nbsp;destination/) || [])[1])
+    if (Number.isNaN(treeDestinations)) continue
+    // Named groups can never exceed the tree they project.
+    for (const n of groupCounts) assert.ok(n <= treeDestinations, `${n} > ${treeDestinations}`)
+  }
+})
+
+await test("6.5: hostnames defang on the PR comment only — Step Summary and JSON stay canonical", () => {
+  assert.equal(defangHostname("registry.npmjs.org"), "registry.npmjs[.]org")
+  assert.equal(defangHostname("localhost"), "localhost")
+  assert.equal(defangHostname("140.82.113.23"), "140.82.113.23")
+  assert.ok(EDGE_MD.includes("registry.npmjs[.]org"))
+  assert.ok(!EDGE_SUMMARY.includes("[.]"))
+  assert.ok(!JSON.stringify(EDGE_MODEL).includes("[.]"))
+})
+
+await test("6.5: the job-id text itself links to the specific Actions job URL, run URL as fallback", () => {
+  const jobs = recordSet.map(summarizeProfile).filter(Boolean)
+  const withJobURL = jobs.map((j) => ({
+    ...j,
+    job_url: `https://github.com/${REPO}/actions/runs/${j.run_id}/job/9${j.id ?? 0}001`,
+  }))
+  const review = buildRunReview({
+    repo: REPO,
+    sha: jobs[0].sha,
+    commitUrl: `https://github.com/${REPO}/commit/${jobs[0].sha}`,
+    appUrl: APP_URL,
+    appMode: true,
+    jobs: withJobURL,
+  })
+  const md = renderRunReview(review)
+  assert.ok(md.includes("/job/9"), "specific job URL not used")
+  assert.match(md, /<a href="[^"]*\/job\/9[^"]*"><code>[^<]+<\/code>&nbsp;↗<\/a>/)
+  // Fallback: without job_url the fold links the run URL.
+  const fallback = renderRunReview(reviewFor(recordSet))
+  assert.match(fallback, /<a href="[^"]*\/actions\/runs\/\d+"><code>[^<]+<\/code>&nbsp;↗<\/a>/)
+})
+
+await test("6.5: count dedup — single-job counts live in the metadata line only; multi-job folds carry per-job counts", () => {
+  // Single job: chains/destinations appear exactly once (metadata).
+  assert.equal(EDGE_MD.split("execution chains").length - 1, 1)
+  const foldLine = EDGE_MD.split("\n").find((l) => l.startsWith("<details><summary><code>"))
+  assert.ok(!/chains/.test(foldLine), "single-job fold row duplicates chain counts")
+  // Multi job: metadata aggregates spell `execution chains` once; fold rows
+  // carry <sub> counts only when the sentence is capped (`and K more`) — a
+  // complete sentence already covers every group and the tree is countable.
+  const multi = renderRunReview(reviewFor(recordSet))
+  assert.equal(multi.split("execution chains").length - 1, 1)
+  const multiLines = multi.split("\n")
+  multiLines.forEach((line, index) => {
+    if (!line.startsWith("<details")) return
+    const summary = line.split("</summary>")[0]
+    if (!summary.includes("&nbsp;↗")) return // job fold rows only
+    const hasSub = /<sub>· \d+&nbsp;chains?/.test(summary)
+    const capped = /, and \d+ more/.test(summary)
+    const hasSentence = /reached \d+\u00a0destination/.test(summary)
+    if (hasSentence && !capped) {
+      assert.ok(!hasSub, `complete-sentence fold carries redundant counts: ${line}`)
+    }
+    if (capped) {
+      assert.ok(hasSub, `capped fold missing its reconciling counts: ${line}`)
+    }
+    if (!hasSentence && !hasSub) {
+      // A fold row with neither sentence nor counts is a substrate-only
+      // job: its body opens directly with the self-counting substrate fold.
+      const body = multiLines.slice(index + 1).find((l) => l !== "")
+      assert.ok(
+        body?.startsWith("<details><summary><sub>"),
+        `countless fold row is not substrate-only: ${line}`,
+      )
+    }
+  })
+  // Fold-row counts inflect: a 1-chain row never reads `1 chains`.
+  assert.ok(!/(?<!\d)1&nbsp;chains/.test(multi))
+  assert.ok(!/(?<!\d)1&nbsp;destinations/.test(multi))
+  assert.ok(!multi.includes("process chains"))
+})
+
+// ---------------------------------------------------------------------------
+// Golden regeneration lock (generated artifacts — never hand-edited)
+// ---------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------
+// Semantic surface linter — catches "same fact rendered twice in one block"
+// (e.g. the telemetry-count footer duplication) that byte-goldens cannot see.
+// ---------------------------------------------------------------------------
+
+await test("lint: no fact family is duplicated within a surface block", () => {
+  const stepSurfaces = [
+    renderStepSummary([load("real", "normal-run.json")], { appUrl: APP_URL }),
+    renderStepSummary([worth], { appUrl: APP_URL }),
+    renderStepSummary(recordSet, { appUrl: APP_URL }),
+    renderStepSummary(recordSet, { appUrl: APP_URL, preview: true }),
+    EDGE_SUMMARY,
+    EDGE_SUMMARY_PREVIEW,
+  ]
+  for (const surface of stepSurfaces) {
+    const violations = lintRenderedSurface(surface, "step-summary")
+    assert.deepEqual(violations, [], violations.join("; "))
+  }
+  const prSurfaces = [
+    renderRunReview(reviewFor([load("real", "normal-run.json")])),
+    renderRunReview(reviewFor(recordSet)),
+    EDGE_MD,
+  ]
+  for (const surface of prSurfaces) {
+    const violations = lintRenderedSurface(surface, "pr")
+    assert.deepEqual(violations, [], violations.join("; "))
+  }
+})
+
+await test("lint: linter actually flags a duplicated telemetry footer", () => {
+  const dup =
+    "Network telemetry observed 9 unique domains, 8 destinations.\n" +
+    '<div align="right"><sub>9 unique domains \u00b7 workflow ci</sub></div>'
+  const violations = lintRenderedSurface(dup, "step-summary")
+  assert.ok(
+    violations.some((v) => v.includes("unique-domain")),
+    `expected a unique-domain violation, got: ${violations.join("; ")}`,
+  )
+})
+
+await test("goldens: every golden byte-matches a fresh render", () => {
+  const goldenDir = join(here, "fixtures", "renderer-testdata", "goldens")
+  const states = {
+    "registry-only": { profiles: [load("real", "normal-run.json")] },
+    "workload-egress": { profiles: [worth] },
+    "multi-job": { profiles: recordSet },
+  }
+  const noRecord = readFileSync(join(goldenDir, "no-record.pr-comment.md"), "utf8")
+  assert.equal(
+    noRecord,
+    `${renderPendingReview({
+      sha: "ef01a52517e7532ab34aadea58b952c9f1e79ece",
+      commitUrl: `https://github.com/${REPO}/commit/ef01a52517e7532ab34aadea58b952c9f1e79ece`,
+    })}\n`,
+  )
+  for (const [name, { profiles }] of Object.entries(states)) {
+    const review = reviewFor(profiles)
+    assert.equal(
+      readFileSync(join(goldenDir, `${name}.pr-comment.md`), "utf8"),
+      `${renderRunReview(review)}\n`,
+      `${name}.pr-comment.md drifted`,
+    )
+    assert.equal(
+      readFileSync(join(goldenDir, `${name}.review-model.json`), "utf8"),
+      `${JSON.stringify(exportReviewModel(review), null, 2)}\n`,
+      `${name}.review-model.json drifted`,
+    )
+    assert.equal(
+      readFileSync(join(goldenDir, `${name}.step-summary.md`), "utf8"),
+      `${renderStepSummary(profiles, { appUrl: APP_URL })}\n`,
+      `${name}.step-summary.md drifted`,
+    )
+    assert.equal(
+      readFileSync(join(goldenDir, `${name}.step-summary.preview.md`), "utf8"),
+      `${renderStepSummary(profiles, { appUrl: APP_URL, preview: true })}\n`,
+      `${name}.step-summary.preview.md drifted`,
+    )
+  }
+})
+
+await test("goldens: every pr-comment golden opens with the category heading byte-exactly", () => {
+  const goldenDir = join(here, "fixtures", "renderer-testdata", "goldens")
+  for (const f of readdirSync(goldenDir).filter((name) => name.endsWith(".pr-comment.md"))) {
+    const body = readFileSync(join(goldenDir, f), "utf8")
+    assert.ok(
+      body.includes("**Execution Profiles record"),
+      `${f} missing the category heading`,
+    )
+  }
+})
+
+// ---------------------------------------------------------------------------
+// Gate 22 — banned-vocabulary copy-lint over every surface and golden
+// ---------------------------------------------------------------------------
+
+await test("gate 22: banned vocabulary absent from every emitted surface and golden", () => {
+  const banned = CONTRACT_VOCAB.bannedVocabulary.map((phrase) => ({
+    phrase,
+    re: new RegExp(
+      `(^|[^a-zA-Z])${phrase.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}($|[^a-zA-Z])`,
+      "i",
+    ),
+  }))
+  const goldenDir = join(here, "fixtures", "renderer-testdata", "goldens")
+  const surfaces = new Map()
+  for (const f of readdirSync(goldenDir)) {
+    surfaces.set(`goldens/${f}`, readFileSync(join(goldenDir, f), "utf8"))
+  }
+  surfaces.set("live:edge-cases.pr", EDGE_MD)
+  surfaces.set("live:edge-cases.summary", EDGE_SUMMARY)
+  surfaces.set("live:pending", renderPendingReview({ sha: "ef01a52" }))
+  surfaces.set("live:multi.pr", renderRunReview(reviewFor(recordSet)))
+  surfaces.set("live:multi.summary", renderStepSummary(recordSet, { appUrl: APP_URL }))
+  // Record-sourced values (e.g. a workflow literally named "Garnet Runtime
+  // Review") are evidence, not renderer copy — mask them before the scan.
+  const recordValues = ["normal-run.json", "worth-a-look-run.json"]
+    .map((f) => rawProfile(load("real", f)).scenarios?.github?.workflow || "")
+    .filter(Boolean)
+  for (const [name, body] of surfaces) {
+    let masked = body
+    for (const value of new Set(recordValues)) {
+      masked = masked.replaceAll(value, "RECORD_VALUE")
+    }
+    for (const { phrase, re } of banned) {
+      assert.ok(!re.test(masked), `banned phrase "${phrase}" found in ${name}`)
+    }
+  }
+})
+
+// ---------------------------------------------------------------------------
+// Gate 24 — commit identity: synthetic merge SHAs resolve to the PR head
+// ---------------------------------------------------------------------------
+
+// Producer-side gate stub: the renderer performs no commit lookups (§8) and
+// renders the SHA it is handed, so the resolution rule — a two-parent
+// synthetic merge commit resolves to its second parent, the PR head;
+// anything else renders unchanged — is locked here as executable spec over
+// a fixture until a producer models it.
+function resolvePrVisibleSha(recordedSha, parents) {
+  return Array.isArray(parents) && parents.length === 2 && parents[1]
+    ? parents[1]
+    : recordedSha
 }
 
-// ---------------------------------------------------------------------------
-// v5.1 acceptance tests 18–27.
-// ---------------------------------------------------------------------------
-test("18: resolver stub renders → dns, never localhost; excluded from candidacy, kept in counts", () => {
-    assert.match(CANARY, /→ dns · 127\.0\.0\.53/)
-    assert.ok(!/`localhost`/.test(CANARY), "localhost never named in prose")
-    assert.match(CANARY, /<summary><b><code>[\w-]+<\/code><\/b> — reached .*· 9 connections<\/summary>/)
-})
-test("19: the sensor's upload renders — garnet upload, excluded from candidacy, kept in counts", () => {
-    assert.match(CANARY, /→ api\.garnet\.ai · 104\.26\.11\.16 — garnet upload/)
-    assert.ok(!CANARY.includes("`api.garnet.ai`"), "garnet upload never headlines or enumerates")
-})
-test("20: runner ancestry compresses to one line; deviation cancels elision", () => {
-    assert.match(CANARY, /└─ GitHub runner ┄ \d+ processes(?: · \d+ connections? → GitHub-owned addresses)?/)
-    assert.ok(!/^\s*[├└]─ systemd$/m.test(CANARY), "systemd never renders as its own node")
-    // Cancellation: a runner-chain member reaching an unclassified destination
-    // renders that branch in full.
-    const cancel = buildRunReview({
-        sha: "ac543cb", renderedAt: RENDERED_AT,
-        jobs: [{ name: "j", connections: [
-            { ancestry: ["systemd", "sudo", "provjobd99"], domain: "transfer.sh", ip: "1.2.3.4" },
-        ] }],
-    })
-    const tree = renderJobTree(cancel.jobs[0])
-    assert.ok(tree.includes("provjobd99"), "member reaching non-GitHub destination renders in full")
-    assert.ok(tree.includes("transfer.sh"))
-})
-test("21: headline destination is never a classified connection (the stub can never headline)", () => {
-    assert.match(CANARY, /In `runtime-review`, `dash` spawned `curl`, which reached `httpbin\.org`\./)
-})
-test("22: named enumeration slots are never all classified/high-frequency entries", () => {
-    assert.match(CANARY, /<b><code>runtime-review<\/code><\/b> — reached <code>httpbin\.org<\/code>, <code>github\.com<\/code>, <code>registry\.npmjs\.org<\/code> and \d+ more · 9 connections/)
-    assert.ok(!/reached <code>registry\.npmjs\.org<\/code>, <code>api\.garnet\.ai<\/code>/.test(CANARY), "slots are salience-ordered, not first-seen")
-})
-test("23: R0 signatures normalize trailing digits; display shows the raw name", () => {
-    assert.equal(normalizeIdentifier("provjobd128037216"), "provjobd*")
-    const a = behaviorSignature({ ancestry: ["sudo", "provjobd128037216"], domain: "x.com" })
-    const b = behaviorSignature({ ancestry: ["sudo", "provjobd131111111"], domain: "x.com" })
-    assert.equal(a, b)
-})
-test("24: link policy — Run Profile ↗ never targets a github.com/actions URL; omitted when absent", () => {
-    assert.ok(!/\[Run Profile ↗\]\(https:\/\/github\.com\/[^)]*\/actions\//.test(CANARY))
-    const noCap = renderRunReview(buildRunReview({
-        sha: "ac543cb", renderedAt: RENDERED_AT,
-        permalink: "https://github.com/garnet-labs/runtime-review-testbed/actions/runs/1",
-        jobs: [CANARY_JOB],
-    }))
-    assert.ok(!noCap.includes("Run Profile ↗"), "footer omits the link rather than mislabeling")
-})
-test("25: timestamps are absolute UTC", () => {
-    assert.match(CANARY, /updated 14:02 UTC · Jul 3/)
-    assert.equal(freshnessStamp(new Date(RENDERED_AT)), "updated 14:02 UTC · Jul 3")
-})
-test("26: hostile process name renders inert inside an intact four-backtick fence; byte-identical reruns", () => {
-    const hostile = buildRunReview({
-        sha: "ac543cb", renderedAt: RENDERED_AT,
-        jobs: [{ name: "j", connections: [
-            { ancestry: ["bash", "```](https://x.com)\u0007"], domain: "example.com", ip: "9.9.9.9" },
-        ] }],
-    })
-    const one = renderRunReview(hostile)
-    const two = renderRunReview(hostile)
-    assert.equal(one, two, "byte-identical across reruns")
-    assert.ok(!/```\]/.test(one), "backtick run neutralized")
-    assert.ok(!one.includes("\u0007"), "control characters stripped")
-    const fences = one.match(/````/g) || []
-    assert.equal(fences.length % 2, 0, "fences stay balanced")
-})
-test("27: a 500-process profile renders under the size budget with explicit collapse markers", () => {
-    const big = {
-        name: "big-job",
-        connections: Array.from({ length: 500 }, (_, i) => ({
-            ancestry: ["bash", `orchestrator-process-${i}`, `worker-subprocess-${i}`, `network-helper-tool-${i}`],
-            domain: `long-destination-hostname-${i}.example-service.example.com`,
-            ip: `10.0.${Math.floor(i / 250)}.${i % 250}`,
-        })),
-    }
-    const review = buildRunReview({ sha: "ac543cb", renderedAt: RENDERED_AT, jobs: [big] })
-    const body = renderRunReview(review)
-    assert.ok(body.length <= SIZE_BUDGET, `body is ${body.length} chars`)
-    assert.ok(body.includes("full tree in the Step Summary"), "collapse marker present")
-    assert.ok(body.includes("## Garnet Runtime Review"))
-    assert.match(body, /<summary><b><code>big-job<\/code><\/b> — reached/, "job line intact")
+// A pull_request-event record: GITHUB_SHA is the synthetic merge commit on
+// refs/pull/N/merge; parents[0] is the base tip, parents[1] the PR head.
+const SYNTHETIC_HEAD = {
+  sha: "9c0ffeeb0a7500000000000000000000000000aa",
+  parents: [
+    "ba5eba5e00000000000000000000000000000000",
+    "ab34ef1200000000000000000000000000000000",
+  ],
+}
+const SYNTHETIC_PREVIOUS = {
+  sha: "5eafd00d000000000000000000000000000000bb",
+  parents: [
+    "ba5eba5e00000000000000000000000000000000",
+    PREV_SHA,
+  ],
+}
+
+function commitIdentityReviewFor(profiles, sha, previousJobs, previousSha) {
+  const jobs = profiles.map(summarizeProfile).filter(Boolean)
+  return buildRunReview({
+    repo: REPO,
+    sha,
+    commitUrl: `https://github.com/${REPO}/commit/${sha}`,
+    appUrl: APP_URL,
+    appMode: true,
+    jobs,
+    previousSha,
+    previousJobs,
+  })
+}
+
+await test("gate 24: a recorded synthetic merge SHA renders as the resolved PR head in headline and comparison", () => {
+  const jobs = recordSet.map(summarizeProfile).filter(Boolean)
+  const previous = jobs.map((j) => ({
+    name: j.name,
+    workflow: j.workflow,
+    edges:
+      j.name === "workload-egress"
+        ? j.edges.filter((e) => !(e.remote_names || []).includes("httpbin.org"))
+        : j.edges,
+  }))
+  const headSha = resolvePrVisibleSha(SYNTHETIC_HEAD.sha, SYNTHETIC_HEAD.parents)
+  const prevSha = resolvePrVisibleSha(SYNTHETIC_PREVIOUS.sha, SYNTHETIC_PREVIOUS.parents)
+  assert.equal(headSha, SYNTHETIC_HEAD.parents[1])
+  assert.equal(prevSha, PREV_SHA)
+
+  const md = renderRunReview(commitIdentityReviewFor(recordSet, headSha, previous, prevSha))
+  const head7 = headSha.slice(0, 7)
+  const prev7 = prevSha.slice(0, 7)
+  // Headline trigger and permalink carry the resolved PR head.
+  assert.ok(md.includes(`triggered by [\`${head7}\`](https://github.com/${REPO}/commit/${headSha})`))
+  // The metadata change clause and the @@ pair carry PR-visible commits only.
+  assert.ok(md.includes(`changed since [\`${prev7}\`](`))
+  const headers = md.split("\n").filter((l) => l.startsWith("@@"))
+  assert.ok(headers.length >= 1, "changed comparison must render an @@ header")
+  for (const header of headers) {
+    assert.match(header, new RegExp(`^@@ ${head7} vs ${prev7} @@$`))
+  }
+  // The synthetic merge commits are invisible on the PR and never render.
+  for (const synthetic of [SYNTHETIC_HEAD.sha, SYNTHETIC_PREVIOUS.sha]) {
+    assert.ok(!md.includes(synthetic.slice(0, 7)), `synthetic merge sha ${synthetic.slice(0, 7)} leaked`)
+  }
 })
 
-// ---------------------------------------------------------------------------
-// v5.2 readability invariants.
-// ---------------------------------------------------------------------------
-test("v5.2: headline is the only prose above the folds — no meta-chatter", () => {
-    assert.ok(!CANARY.includes("all shown below"), "no fold-summary meta-chatter")
-    assert.ok(!CANARY.includes("paste into your review agent</summary>"), "prompt lives inside the fold")
-    assert.match(CANARY, /<sub>Paste the tree into your review agent · full detail in the Step Summary/)
-})
-test("v5.2: salient job's tree focuses on the salient branch; siblings compress", () => {
-    const review = buildRunReview({
-        sha: "ac543cb", renderedAt: RENDERED_AT,
-        jobs: [
-            { name: "e2e", connections: [
-                { ancestry: ["bash", "node", "sh -c", "curl"], domain: "img-cdn-assets.com", ip: "45.137.21.88" },
-                { ancestry: ["bash", "node"], domain: "registry.npmjs.org", ip: "104.16.10.34" },
-                { ancestry: ["bash", "make", "wget"], domain: "cache.example.com", ip: "1.1.1.1" },
-                { ancestry: ["bash", "make", "wget"], domain: "mirror.example.com", ip: "1.1.1.2" },
-            ] },
-            { name: "docs", connections: [
-                { ancestry: ["bash", "node"], domain: "registry.npmjs.org", ip: "104.16.10.34" },
-            ] },
-        ],
-    })
-    const body = renderRunReview(review)
-    assert.ok(body.includes("img-cdn-assets.com"), "salient branch fully expanded")
-    assert.match(body, /┄ \d+ more destinations? · \d+ connections? — full tree in the Step Summary ↗/, "off-path siblings compress to one aggregate line")
-    const fences = body.match(/````text[\s\S]*?````/g) || []
-    assert.ok(!fences[0].includes("cache.example.com") && !fences[0].includes("mirror.example.com"), "non-salient subtree does not enumerate in the salient tree")
-    const summary = renderStepSummary(review)
-    assert.ok(summary.includes("cache.example.com") && summary.includes("mirror.example.com"), "step summary keeps full detail")
-})
-test("v5.2: 4+ jobs — top jobs render individually, the rest group into one fold", () => {
-    const mkJob = (name, dest) => ({
-        name,
-        connections: [{ ancestry: ["bash", "node"], domain: dest, ip: "9.9.9.9" }],
-    })
-    const review = buildRunReview({
-        sha: "ac543cb", renderedAt: RENDERED_AT,
-        jobs: [
-            mkJob("alpha", "one.example.com"),
-            mkJob("beta", "shared.example.com"),
-            mkJob("gamma", "shared.example.com"),
-            mkJob("delta", "shared.example.com"),
-            mkJob("epsilon", "shared.example.com"),
-            mkJob("zeta", "shared.example.com"),
-        ],
-    })
-    const body = renderRunReview(review)
-    assert.match(body, /<details><summary>3 more jobs · \d+ domains? · \d+ connections?<\/summary>/)
-    const three = buildRunReview({
-        sha: "ac543cb", renderedAt: RENDERED_AT,
-        jobs: [mkJob("a", "x.example.com"), mkJob("b", "y.example.com"), mkJob("c", "z.example.com")],
-    })
-    assert.ok(!/more jobs ·/.test(renderRunReview(three)), "no group fold under 5 jobs")
-    // The headline-picked job always renders individually, never inside the
-    // group fold, even when many jobs share its rung and it sorts late by name.
-    const spawn = (name, dest) => ({
-        name,
-        connections: [{ ancestry: ["bash", "sh -c", "curl"], domain: dest, ip: "9.9.9.9" }],
-    })
-    const tie = buildRunReview({
-        sha: "ac543cb", renderedAt: RENDERED_AT,
-        jobs: [
-            spawn("alpha", "shared.example.com"),
-            spawn("beta", "shared.example.com"),
-            spawn("gamma", "shared.example.com"),
-            spawn("delta", "shared.example.com"),
-            spawn("zeta", "aaa-unique.example.com"),
-        ],
-    })
-    const tieBody = renderRunReview(tie)
-    const foldAt = tieBody.indexOf("more jobs ·")
-    const zetaAt = tieBody.indexOf("<b><code>zeta</code></b>")
-    assert.ok(foldAt !== -1 && zetaAt !== -1 && zetaAt < foldAt, "salient job renders before the group fold")
-})
-test("A6: Run Profile permalink derives from the profile's run_id when not explicit", () => {
-    assert.equal(
-        derivePermalink("", [{ run_id: "28674550787" }], "https://app.garnet.ai"),
-        "https://app.garnet.ai/dashboard/runs/28674550787?utm_source=github&utm_medium=pr_comment",
-    )
-    assert.equal(
-        derivePermalink("https://app.garnet.ai/p/x", [{ run_id: "1" }], "https://app.garnet.ai"),
-        "https://app.garnet.ai/p/x",
-        "explicit permalink wins",
-    )
-    assert.equal(derivePermalink("", [{}], "https://app.garnet.ai"), "", "no run_id → omitted")
-    const { review } = renderFromProfiles([worth], {
-        permalink: derivePermalink("", [{ run_id: "99" }], "https://app.garnet.ai"),
-    })
-    assert.match(
-        renderRunReview(review),
-        /\[Run Profile ↗\]\(https:\/\/app\.garnet\.ai\/dashboard\/runs\/99\?utm_source=github&utm_medium=pr_comment\)/,
-    )
-})
-test("v5.2: sensor upload classifies for dev API hosts too", () => {
-    assert.equal(classifyConnection({ ancestry: ["node"], domain: "dev-api.garnet.ai", ip: "1.2.3.4" }), "garnet upload")
-    assert.equal(classifyConnection({ ancestry: ["node"], domain: "api.garnet.ai", ip: "1.2.3.4" }), "garnet upload")
-    assert.equal(classifyConnection({ ancestry: ["node"], domain: "not-garnet.ai", ip: "1.2.3.4" }), "")
+await test("gate 24: on resolution failure the raw recorded SHA renders unchanged — nothing fabricated", () => {
+  for (const parents of [null, [], [SYNTHETIC_HEAD.parents[0]], [...SYNTHETIC_HEAD.parents, "cc00000000000000000000000000000000000000"]]) {
+    assert.equal(resolvePrVisibleSha(SYNTHETIC_HEAD.sha, parents), SYNTHETIC_HEAD.sha)
+  }
+  const md = renderRunReview(commitIdentityReviewFor(recordSet, SYNTHETIC_HEAD.sha, null, ""))
+  const raw7 = SYNTHETIC_HEAD.sha.slice(0, 7)
+  assert.ok(md.includes(`triggered by [\`${raw7}\`](https://github.com/${REPO}/commit/${SYNTHETIC_HEAD.sha})`))
+  // Degradation substitutes nothing: no resolved-parent sha, no placeholder.
+  assert.ok(!md.includes(SYNTHETIC_HEAD.parents[1].slice(0, 7)))
+  assert.ok(!md.includes("`unknown`"))
 })
 
-// ---------------------------------------------------------------------------
-// Progressive disclosure: the Step Summary is the FULL-detail snapshot —
-// every job's complete tree inline (no elision), nothing folded, no markers.
-// ---------------------------------------------------------------------------
-test("step summary renders full detail: trees inline, no folds, no elision, no markers", () => {
-    const { review } = renderFromProfiles([install, worth])
-    const summary = renderStepSummary(review)
-    assert.ok(summary.includes("## Garnet Runtime Review"))
-    assert.ok(!summary.includes("<details"), "step summary must not fold anything")
-    assert.ok(!summary.includes(COMMENT_MARKER), "markers are PR-comment-only")
-    assert.ok(!summary.includes("GitHub runner ┄"), "step summary is the un-elided floor")
-    const trees = summary.match(/````text/g) || []
-    assert.equal(trees.length, review.jobs.filter(j => j.connections.length > 0).length)
-})
-
-// ---------------------------------------------------------------------------
-// S5 — partial coverage: k of n + the one growth CTA.
-// ---------------------------------------------------------------------------
-test("S5: partial coverage renders k of n and the add-the-step growth CTA", () => {
-    const md = STATES["partial-coverage"]
-    assert.match(md, /· 1 of 6 jobs recorded ·/)
-    assert.match(md, /5 jobs not yet recorded — \[add the step ↗\]\(/)
-})
-
-test("S5: unknown coverage degrades to the recorded-only meta line with no CTA", () => {
-    const baseReview = buildRunReview({
-        sha: "ac543cb",
-        renderedAt: RENDERED_AT,
-        jobs: [summarizeProfile(normal)],
-    })
-    const equalReview = buildRunReview({
-        sha: "ac543cb",
-        renderedAt: RENDERED_AT,
-        expectedJobs: 1,
-        jobs: [summarizeProfile(normal)],
-    })
-    const body = renderRunReview(baseReview)
-    const equalBody = renderRunReview(equalReview)
-    assert.match(body, /· 1 job recorded ·/)
-    assert.ok(!body.includes("of 1 job"), "unknown coverage does not invent n")
-    assert.ok(!body.includes("not yet recorded — [add the step ↗]"), "unknown coverage suppresses the CTA")
-    assert.equal(body, equalBody, "absent and equal coverage render the same degraded meta line")
-})
-
-// ---------------------------------------------------------------------------
-// S7 — lineage-absent degradation: no trees, no folds, sentences survive.
-// ---------------------------------------------------------------------------
-test("S7: lineage-absent profile renders without trees or folds", () => {
-    const review = buildRunReview({
-        sha: "ac543cb", renderedAt: RENDERED_AT,
-        jobs: [{ name: "j", connections: [{ ancestry: [], domain: "httpbin.org", ip: "9.9.9.9" }] }],
-    })
-    const body = renderRunReview(review)
-    assert.ok(!body.includes("<details"))
-    assert.ok(!body.includes("````text"))
-    assert.match(body, /^\*\*`j`\*\* — reached `httpbin\.org`/m)
-})
-
-// ---------------------------------------------------------------------------
-// A1 — classification unit coverage.
-// ---------------------------------------------------------------------------
-test("A1: classes derive from identity/provenance only", () => {
-    assert.equal(classifyConnection({ ancestry: [], domain: "localhost", ip: "127.0.0.53" }), "dns")
-    assert.equal(classifyConnection({ ancestry: [], domain: "api.garnet.ai", ip: "1.1.1.1" }), "garnet upload")
-    assert.equal(
-        classifyConnection({ ancestry: ["systemd", "Runner.Worker"], domain: "github.com", ip: "1.1.1.1" }),
-        "github infra",
-    )
-    assert.equal(
-        classifyConnection({ ancestry: ["systemd", "sudo", "provjobd12"], domain: "", ip: "168.63.129.16" }),
-        "github infra",
-    )
-    // Ownership alone is not provenance: GitHub-owned destinations reached from
-    // user code stay unclassified (enumerable evidence).
-    assert.equal(classifyConnection({ ancestry: ["bash", "node"], domain: "github.com", ip: "1.1.1.1" }), "")
-    assert.equal(classifyConnection({ ancestry: ["bash"], domain: "httpbin.org", ip: "9.9.9.9" }), "")
-})
-
-// ---------------------------------------------------------------------------
-// Determinism: same profile payload + render clock in → same comment out.
-// ---------------------------------------------------------------------------
-test("deterministic render: identical bytes across repeated renders", () => {
-    for (let i = 0; i < 3; i++) {
-        assert.equal(renderFromProfiles([install, worth]).body, STATES["multi-job"])
-        assert.equal(renderFromProfiles([worth]).body, STATES["workload-egress"])
-    }
-})
-
-// ---------------------------------------------------------------------------
-// Real-data salience expectations and leaf annotations.
-// ---------------------------------------------------------------------------
-test("R1: multi-job headline names a within-run-unique, unclassified destination", () => {
-    assert.match(STATES["multi-job"], /In `runtime-review`.* — a destination no other job in this run reached\./)
-    assert.ok(!/reached `dns`|reached `api\.garnet\.ai`/.test(STATES["multi-job"].split("\n")[5]))
-})
-test("S4: single-job uniform run falls back to the inventory sentence, fold closed", () => {
-    assert.match(STATES["registry-only"], /In `runtime-review`, \d+ processes reached 1 domain over 1 connection\./)
-    assert.ok(!STATES["registry-only"].includes("<details open>"), "R3 fold renders closed")
-})
-test("real leaf annotated with → domain · ip", () => {
-    assert.ok(STATES["workload-egress"].includes("→ images.unsplash.com · 146.75.94.208"))
-    assert.ok(STATES["registry-only"].includes("→ registry.npmjs.org · 104.16.5.34"))
-})
-
-// ---------------------------------------------------------------------------
-// summarizeProfile over a real captured profile (Phase 1: lineage + egress).
-// ---------------------------------------------------------------------------
-test("summarizeProfile extracts job identity + connections from a real profile", () => {
-    const s = summarizeProfile(worth)
-    assert.equal(s.name, "runtime-review")
-    assert.equal(s.workflow, "Garnet Runtime Review")
-    assert.ok(s.connections.some(c => c.domain === "images.unsplash.com"))
-    assert.ok(s.connections.every(c => Array.isArray(c.ancestry) && c.ancestry.length > 0))
-})
-test("summarizeProfile handles the agentic sample profile", () => {
-    const s = summarizeProfile(sample)
-    assert.equal(s.name, "agentic-coding-session")
-    assert.ok(s.connections.some(c => c.domain === "google.com"))
-})
-
-// ---------------------------------------------------------------------------
-// Vendored fixtures stay in sync with the renderer: the checked-in testbed
-// mockups (mockups/real/*.md at testbed commit b7f2940) must match fresh
-// renders byte-for-byte.
-// ---------------------------------------------------------------------------
-test("fixtures/mockups/*.md match fresh renders byte-for-byte", async () => {
-    const expected = {
-        "1-no-record.md": renderNoRecord(worth.scenarios?.github?.sha || "ef01a52"),
-        "2-registry-only.md": renderFromProfiles([normal], { permalink: CAPABILITY_LINK }).body,
-        "3-workload-egress.md": renderFromProfiles([worth], { permalink: CAPABILITY_LINK }).body,
-        "4-multi-job.md": renderFromProfiles([install, worth], { permalink: CAPABILITY_LINK }).body,
-        "5-updated-commit.md": renderFromProfiles([normal], { permalink: CAPABILITY_LINK }).body,
-        "6-partial-coverage.md": renderFromProfiles([worth], { permalink: CAPABILITY_LINK, expectedJobs: 6 }).body,
-    }
-    for (const [file, body] of Object.entries(expected)) {
-        const onDisk = await readFile(join(fixturesDir, "mockups", file), "utf8")
-        assert.equal(onDisk, `${body}\n`, `${file} diverges from the vendored renderer`)
-    }
-})
-
-// buildRunReview is exercised end-to-end above; assert Phase 1 scope directly.
-test("Phase 1 scope: review carries lineage + egress only", () => {
-    const { review } = renderFromProfiles([worth])
-    assert.ok(Array.isArray(review.jobs))
-    for (const j of review.jobs) {
-        assert.ok(!("files" in j) || !j.files, "files must not render in Phase 1")
-        assert.ok(!("assertions" in j) || !j.assertions, "assertions must not render in Phase 1")
-    }
-    assert.equal(typeof buildRunReview, "function")
-    assert.equal(typeof jobSummaryLine, "function")
-})
+console.log(`\n${passed} passed, ${failed} failed`)
+if (failed > 0) process.exitCode = 1

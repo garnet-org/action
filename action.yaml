@@ -16,18 +16,22 @@ inputs:
         required: false
         default: "https://api.garnet.ai"
     jibril_version:
-        description: "Jibril version (v2.10.8, v0.0, or 'latest')"
+        description: "Jibril version (for example v2.15.0, v0.0, or 'latest'); empty resolves from the action tag"
         required: false
         default: ""
     debug:
         description: "Enable debug mode"
         required: false
         default: "false"
+    preview:
+        description: "Render the full-fidelity Step Summary record (assertions + evidence). Preview shape is unstable and may change without a major version bump"
+        required: false
+        default: "false"
 outputs:
     profile_result:
         description: "Reserved for the companion GitHub App and control plane; this action records the Runtime Review"
     report_url:
-        description: "Link to the Run Profile permalink on app.garnet.ai"
+        description: "Link to the run's Execution Profiles on app.garnet.ai"
     agent_id:
         description: "Identifier for the Jibril sensor instance that recorded this Runtime Review"
 runs:

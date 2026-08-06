@@ -1,21 +1,27 @@
 import { z } from "zod"
-import { firstNonEmptyString, getOptionalRecord } from "./shared.js"
 import {
     buildRunReview,
-    derivePermalink,
+    edgeCounts,
     renderRunReview,
+    summarizeProfile,
     COMMENT_MARKER,
     RUNTIME_REVIEW_MARKER,
+    SIZE_BUDGET,
 } from "./runtime-review.js"
 
 /** @typedef {import("./runtime-review.js").RunReview} RunReview */
-/** @typedef {import("./runtime-review.js").JobRecord} JobRecord */
+/** @typedef {import("./runtime-review.js").JobSummary} JobSummary */
+/** @typedef {import("./runtime-review.js").ReviewEdge} ReviewEdge */
 
 export const ACTION_COMMENT_MARKER = "garnet-action-pr-comment:v1"
 export const COMMIT_MARKER_PREFIX = "garnet-pr-commit:"
 export const LEGACY_COMMENT_STATE_MARKER = "garnet-runtime-visibility"
 
 const COMMENT_STATE_MARKER_PREFIX = "garnet-action-comment-state:"
+
+// GitHub rejects issue comments above this many characters; the final body
+// (rendered review plus the hidden state marker) must stay under it.
+const COMMENT_HARD_LIMIT = 65536
 
 /**
  * @typedef {"pass" | "attention" | "fail" | "unknown"} ProfileResult
@@ -34,63 +40,13 @@ const COMMENT_STATE_MARKER_PREFIX = "garnet-action-comment-state:"
  */
 
 /**
- * @typedef {{ ancestry: string[] }} ProcTree
- */
-
-/**
- * @typedef {{ ancestry?: unknown }} ProcTreeTransformInput
- */
-
-/**
- * @typedef {{
- *   result: ProfileResult
- *   remote_names?: unknown
- *   remote_address?: string | undefined
- *   proc_trees?: unknown
- * }} PeerTransformInput
- */
-
-/**
- * @typedef {{
- *   timestamp: string
- *   scenarios: { github: GitHubScenario }
- *   assertions: AssertionSummary[]
- *   network?: unknown
- *   telemetry?: unknown
- * }} ProfileJsonTransformInput
- */
-
-/**
- * @typedef {{
- *   remote_names: string[]
- *   remote_address: string
- *   proc_trees: ProcTree[]
- *   result: ProfileResult
- * }} EgressPeer
- */
-
-/**
- * @typedef {{
- *   total_domains: number
- *   total_connections: number
- * }} NetworkTelemetry
- */
-
-/**
- * @typedef {{
- *   id: string
- *   result: ProfileResult
- * }} AssertionSummary
- */
-
-/**
+ * One profile as carried inside the sticky-comment state: the GitHub
+ * scenario key fields used by the merge machinery plus the renderer's full
+ * job summary (v6.6.1 shape — edges, assertions, telemetry, metadata).
  * @typedef {{
  *   timestamp: string
  *   github: GitHubScenario
- *   assertions: AssertionSummary[]
- *   egress_peers: EgressPeer[]
- *   telemetry: NetworkTelemetry
- *   report_link: string
+ *   job: JobSummary
  * }} NormalizedProfile
  */
 
@@ -102,36 +58,8 @@ const COMMENT_STATE_MARKER_PREFIX = "garnet-action-comment-state:"
  */
 
 /**
- * @typedef {{ kind: "stale" } | { kind: "updated", state: CommentState }} MergeCommentStateResult
- */
-
-/**
  * @typedef {{
- *   repository: string
- *   run_id: string
- *   job: string
- * }} ReportLinkInput
- */
-
-/**
- * @typedef {{
- *   ancestry: string[]
- *   domain: string
- *   ip: string
- * }} ProfileConnection
- */
-
-/**
- * @typedef {{
- *   version: 1
- *   latest_run: WorkflowRun
- *   profiles: NormalizedProfile[]
- * }} LegacyCommentState
- */
-
-/**
- * @typedef {{
- *   version: 2
+ *   version: 3
  *   workflow_runs: Record<string, WorkflowRun>
  *   profiles: NormalizedProfile[]
  * }} CommentState
@@ -139,41 +67,18 @@ const COMMENT_STATE_MARKER_PREFIX = "garnet-action-comment-state:"
 
 /**
  * Rendering knobs threaded from the action's inputs (all optional, additive).
+ * `firstRun` drives the explainer's open state: true through the PR's
+ * first-commit lifecycle, false on every update after.
  * @typedef {{
- *   expectedJobs?: number
- *   permalinkURL?: string
- *   docsURL?: string
  *   renderedAt?: string | Date
+ *   firstRun?: boolean
  * }} RenderOptions
  */
 
 const DEFAULT_JSON_PROFILE_FILE = "/var/log/jibril.profile.json"
 const DEFAULT_APP_BASE_URL = "https://app.garnet.ai"
-const DEFAULT_DOCS_URL = "https://github.com/garnet-org/action#readme"
 const UTM_SOURCE = "github"
 const UTM_MEDIUM = "pr_comment"
-
-const PROFILE_RESULT_SCHEMA = z.unknown().transform(transformProfileResult)
-
-const PROC_TREE_SCHEMA = z
-    .looseObject({
-        ancestry: z.array(z.string()),
-    })
-    .transform(transformProcTree)
-
-const ASSERTION_SCHEMA = z.looseObject({
-    id: z.string(),
-    result: PROFILE_RESULT_SCHEMA,
-})
-
-const PEER_SCHEMA = z
-    .looseObject({
-        result: PROFILE_RESULT_SCHEMA,
-        remote_names: z.array(z.string()),
-        remote_address: z.string().optional(),
-        proc_trees: z.array(PROC_TREE_SCHEMA),
-    })
-    .transform(transformPeer)
 
 const GITHUB_SCENARIO_SCHEMA = z.object({
     workflow: z.string(),
@@ -185,54 +90,77 @@ const GITHUB_SCENARIO_SCHEMA = z.object({
     job: z.string(),
 })
 
-const PROFILE_NETWORK_SCHEMA = z
-    .object({
-        egress: z
-            .object({
-                peers: z.array(PEER_SCHEMA).optional(),
-            })
-            .optional(),
-    })
-    .optional()
+const REVIEW_EDGE_SCHEMA = z.object({
+    flow_id: z.number(),
+    tree_index: z.number(),
+    remote_address: z.string(),
+    remote_names: z.array(z.string()),
+    remote_ports: z.array(z.string()),
+    protocol: z.string(),
+    result: z.string(),
+    detections: z.array(z.string()),
+    lineage_recorded: z.boolean(),
+    pid: z.string(),
+    process: z.string(),
+    ancestry: z.array(z.string()),
+    github_step: z.string(),
+})
 
-const PROFILE_NETWORK_TELEMETRY_SCHEMA = z
-    .object({
-        network: z
-            .object({
-                egress: z
-                    .object({
-                        total_domains: z.number().optional(),
-                        total_connections: z.number().optional(),
-                    })
-                    .optional(),
-            })
-            .optional(),
-    })
-    .optional()
+const ASSERTION_EVIDENCE_SCHEMA = z.object({
+    timestamp: z.string(),
+    event: z.string(),
+    remote_peer: z.string(),
+    protocol: z.string(),
+    ports: z.string(),
+    result: z.string(),
+})
+
+const JOB_ASSERTION_SCHEMA = z.object({
+    class_id: z.string(),
+    id: z.string(),
+    description: z.string(),
+    result: z.string(),
+    evidence: z.array(ASSERTION_EVIDENCE_SCHEMA),
+})
+
+const JOB_SUMMARY_SCHEMA = z.object({
+    name: z.string(),
+    workflow: z.string(),
+    repository: z.string(),
+    sha: z.string(),
+    run_id: z.string(),
+    run_url: z.string(),
+    profile_id: z.string(),
+    uuid: z.string(),
+    timestamp: z.string(),
+    ref: z.string(),
+    actor: z.string(),
+    job_index: z.string(),
+    flow_count: z.number(),
+    telemetry: z.object({
+        total_domains: z.number().nullable(),
+        total_connections: z.number().nullable(),
+    }),
+    assertions: z.array(JOB_ASSERTION_SCHEMA),
+    edges: z.array(REVIEW_EDGE_SCHEMA),
+    counts: z.object({
+        associations: z.number(),
+        processes: z.number(),
+        destinations: z.number(),
+        primary_names: z.number(),
+        domains: z.number(),
+        flows: z.number(),
+    }),
+})
 
 const NORMALIZED_PROFILE_SCHEMA = z.object({
     timestamp: z.string(),
     github: GITHUB_SCENARIO_SCHEMA,
-    assertions: z.array(ASSERTION_SCHEMA),
-    egress_peers: z.array(PEER_SCHEMA),
-    telemetry: z.object({
-        total_domains: z.number(),
-        total_connections: z.number(),
-    }),
-    report_link: z.string(),
-})
-
-const LEGACY_COMMENT_STATE_SCHEMA = z.object({
-    version: z.literal(1),
-    latest_run: z.object({
-        run_id: z.string(),
-        run_attempt: z.number(),
-    }),
-    profiles: z.array(NORMALIZED_PROFILE_SCHEMA),
+    job: JOB_SUMMARY_SCHEMA,
 })
 
 const COMMENT_STATE_SCHEMA = z.object({
-    version: z.literal(2),
+    version: z.literal(3),
     workflow_runs: z.record(
         z.string(),
         z.object({
@@ -243,71 +171,51 @@ const COMMENT_STATE_SCHEMA = z.object({
     profiles: z.array(NORMALIZED_PROFILE_SCHEMA),
 })
 
-const PROFILE_JSON_SCHEMA = z
-    .looseObject({
-        timestamp: z.string(),
-        scenarios: z.object({
-            github: GITHUB_SCENARIO_SCHEMA,
+// Pre-v3 comment states (versions 1 and 2) carried a reduced profile shape
+// (egress peers without ports/protocol/detections/steps). They are upgraded
+// on read so an in-flight PR keeps its sticky comment across the renderer
+// upgrade; missing fields default to empty.
+const LEGACY_PROC_TREE_SCHEMA = z.looseObject({
+    ancestry: z.array(z.string()),
+})
+
+const LEGACY_PEER_SCHEMA = z.looseObject({
+    remote_names: z.array(z.string()),
+    remote_address: z.string().optional(),
+    proc_trees: z.array(LEGACY_PROC_TREE_SCHEMA),
+    result: z.unknown(),
+})
+
+const LEGACY_PROFILE_SCHEMA = z.looseObject({
+    timestamp: z.string(),
+    github: GITHUB_SCENARIO_SCHEMA,
+    egress_peers: z.array(LEGACY_PEER_SCHEMA),
+    telemetry: z.object({
+        total_domains: z.number(),
+        total_connections: z.number(),
+    }),
+})
+
+const LEGACY_V1_STATE_SCHEMA = z.object({
+    version: z.literal(1),
+    latest_run: z.object({
+        run_id: z.string(),
+        run_attempt: z.number(),
+    }),
+    profiles: z.array(LEGACY_PROFILE_SCHEMA),
+})
+
+const LEGACY_V2_STATE_SCHEMA = z.object({
+    version: z.literal(2),
+    workflow_runs: z.record(
+        z.string(),
+        z.object({
+            run_id: z.string(),
+            run_attempt: z.number(),
         }),
-        assertions: z.array(ASSERTION_SCHEMA),
-        network: PROFILE_NETWORK_SCHEMA,
-        telemetry: PROFILE_NETWORK_TELEMETRY_SCHEMA,
-    })
-    .transform(transformProfileJson)
-
-/**
- * @param {unknown} value
- * @returns {ProfileResult}
- */
-function transformProfileResult(value) {
-    return normalizeResult(value)
-}
-
-/**
- * @param {ProcTreeTransformInput} procTree
- * @returns {ProcTree}
- */
-function transformProcTree(procTree) {
-    const ancestry = Array.isArray(procTree.ancestry) ? procTree.ancestry : []
-    return {
-        ancestry: ancestry.filter(entry => typeof entry === "string" && entry.length > 0),
-    }
-}
-
-/**
- * @param {PeerTransformInput} peer
- * @returns {EgressPeer}
- */
-function transformPeer(peer) {
-    const remoteNames = Array.isArray(peer.remote_names) ? peer.remote_names : []
-    const procTrees = Array.isArray(peer.proc_trees) ? peer.proc_trees : []
-
-    return {
-        remote_names: remoteNames.filter(name => typeof name === "string" && name.length > 0),
-        remote_address: peer.remote_address ?? "",
-        proc_trees: /** @type {ProcTree[]} */ (procTrees),
-        result: peer.result,
-    }
-}
-
-/**
- * @param {ProfileJsonTransformInput} profile
- * @returns {NormalizedProfile}
- */
-function transformProfileJson(profile) {
-    return {
-        timestamp: profile.timestamp,
-        github: profile.scenarios.github,
-        assertions: profile.assertions,
-        egress_peers: getProfileNetworkPeers(profile),
-        telemetry: getProfileNetworkTelemetry(profile),
-        report_link: buildReportLink({
-            repository: profile.scenarios.github.repository,
-            run_id: profile.scenarios.github.run_id,
-            job: profile.scenarios.github.job,
-        }),
-    }
-}
+    ),
+    profiles: z.array(LEGACY_PROFILE_SCHEMA),
+})
 
 /**
  * @returns {string}
@@ -327,23 +235,31 @@ export function getDefaultJsonProfileFile() {
  */
 export function parseProfileJson(content) {
     const parsedContent = JSON.parse(content)
-    const result = PROFILE_JSON_SCHEMA.safeParse(parsedContent)
-    if (result.success) {
-        return result.data
+    const job = summarizeProfile(parsedContent)
+    if (job === null) {
+        throw new Error("Invalid profile JSON: not a profile object")
     }
 
-    const issues = result.error.issues.map(issue => {
-        const path = issue.path.length > 0 ? issue.path.join(".") : "<root>"
-        return `${path}: ${issue.message}`
-    })
-    throw new Error(`Invalid profile JSON: ${issues.join("; ")}`)
+    return {
+        timestamp: job.timestamp,
+        github: {
+            workflow: job.workflow,
+            repository: job.repository,
+            ref: job.ref,
+            sha: job.sha,
+            actor: job.actor,
+            run_id: job.run_id,
+            job: job.name,
+        },
+        job,
+    }
 }
 
 /**
  * @param {CommentState | null} existingState
  * @param {NormalizedProfile} incomingProfile
  * @param {number} runAttempt
- * @returns {MergeCommentStateResult}
+ * @returns {{ kind: "stale" } | { kind: "updated", state: CommentState }}
  */
 export function mergeCommentState(existingState, incomingProfile, runAttempt) {
     const incomingRunID = incomingProfile.github.run_id
@@ -358,7 +274,7 @@ export function mergeCommentState(existingState, incomingProfile, runAttempt) {
         return {
             kind: "updated",
             state: {
-                version: 2,
+                version: 3,
                 workflow_runs: {
                     [workflowKey]: {
                         run_id: incomingRunID,
@@ -387,7 +303,7 @@ export function mergeCommentState(existingState, incomingProfile, runAttempt) {
         return {
             kind: "updated",
             state: {
-                version: 2,
+                version: 3,
                 workflow_runs: {
                     ...existingState.workflow_runs,
                     [workflowKey]: {
@@ -410,7 +326,7 @@ export function mergeCommentState(existingState, incomingProfile, runAttempt) {
     return {
         kind: "updated",
         state: {
-            version: 2,
+            version: 3,
             workflow_runs: existingState.workflow_runs,
             profiles,
         },
@@ -455,7 +371,7 @@ export function mergeCommentStates(states) {
     }
 
     return {
-        version: 2,
+        version: 3,
         workflow_runs: workflowRuns,
         profiles: [...profiles.values()].sort(compareProfiles),
     }
@@ -470,13 +386,24 @@ export function mergeCommentStates(states) {
  * @returns {string}
  */
 export function renderCommentBody(state, options = {}) {
-    const metadata = encodeCommentState(state)
+    const metadata = encodeCommentStateWithinBudget(state)
     const profiles = [...state.profiles].sort(compareProfiles)
     const commitSha = getCommentCommitSha(profiles)
-    const review = buildProfileRunReview(profiles, options)
-    const reviewBody = renderRunReview(review)
+    const review = buildProfileRunReview(profiles)
+    const markerOverhead = Buffer.byteLength(
+        [`<!-- ${ACTION_COMMENT_MARKER} -->`, `<!-- ${COMMIT_MARKER_PREFIX}${commitSha} -->`, `<!-- ${COMMENT_STATE_MARKER_PREFIX}${metadata} -->`, ""].join("\n"),
+        "utf8",
+    )
+    const reviewBody = renderRunReview(review, {
+        explainerOpen: options.firstRun === true,
+        budget: Math.min(SIZE_BUDGET, COMMENT_HARD_LIMIT - markerOverhead),
+    })
 
-    const markerPrefix = `${RUNTIME_REVIEW_MARKER}\n${COMMENT_MARKER}\n`
+    // v6.2 marker block: canonical marker, self marker, then the commit
+    // marker `<!-- garnet:commit {full sha} -->` (all emitted by the
+    // renderer), followed by the action's own state markers.
+    const commitMarker = commitSha !== "" ? `<!-- garnet:commit ${commitSha} -->\n` : ""
+    const markerPrefix = `${RUNTIME_REVIEW_MARKER}\n${COMMENT_MARKER}\n${commitMarker}`
     if (!reviewBody.startsWith(markerPrefix)) {
         throw new Error("rendered review body is missing the runtime-review markers")
     }
@@ -484,6 +411,7 @@ export function renderCommentBody(state, options = {}) {
     return [
         RUNTIME_REVIEW_MARKER,
         COMMENT_MARKER,
+        ...(commitSha !== "" ? [`<!-- garnet:commit ${commitSha} -->`] : []),
         `<!-- ${ACTION_COMMENT_MARKER} -->`,
         `<!-- ${COMMIT_MARKER_PREFIX}${commitSha} -->`,
         `<!-- ${COMMENT_STATE_MARKER_PREFIX}${metadata} -->`,
@@ -496,59 +424,21 @@ export function renderCommentBody(state, options = {}) {
  * Shared by the PR comment and the Step Summary so both surfaces render
  * from the same review.
  * @param {NormalizedProfile[]} profiles
- * @param {RenderOptions} [options]
  * @returns {RunReview}
  */
-export function buildProfileRunReview(profiles, options = {}) {
-    const optionsRecord = /** @type {Record<string, unknown>} */ (options)
-    const jobs = profiles.map(profile => profileToJobRecord(profile))
+export function buildProfileRunReview(profiles) {
     const sha = getCommentCommitSha(profiles)
     const repository = getCommentRepository(profiles)
-    const commitURL = repository !== "" && sha !== "" ? `https://github.com/${repository}/commit/${sha}` : ""
-    const permalink = derivePermalink(
-        firstNonEmptyString(options.permalinkURL, optionsRecord["permalinkUrl"]),
-        jobs,
-        resolveAppBaseURL(),
-    )
+    const commitUrl = repository !== "" && sha !== "" ? `https://github.com/${repository}/commit/${sha}` : ""
+    const appUrl = resolveAppBaseURL()
 
     return buildRunReview({
         repo: repository,
         sha,
-        commitURL,
-        permalink,
-        docsURL: firstNonEmptyString(options.docsURL, optionsRecord["docsUrl"], DEFAULT_DOCS_URL),
-        expectedJobs: options.expectedJobs ?? 0,
-        renderedAt: options.renderedAt ?? new Date(),
-        jobs,
+        commitUrl,
+        appUrl,
+        jobs: profiles.map(profile => profile.job),
     })
-}
-
-/**
- * Collapse one normalized profile into the renderer's job-record shape.
- * @param {NormalizedProfile} profile
- * @returns {JobRecord}
- */
-function profileToJobRecord(profile) {
-    /** @type {ProfileConnection[]} */
-    const connections = []
-    for (const peer of profile.egress_peers) {
-        const domain = peer.remote_names[0] ?? ""
-        const ip = peer.remote_address
-        const ancestries =
-            peer.proc_trees.length > 0 ? peer.proc_trees.map(tree => tree.ancestry.filter(entry => entry !== "")) : [[]]
-        for (const ancestry of ancestries) {
-            connections.push({ ancestry, domain, ip })
-        }
-    }
-
-    return {
-        name: profile.github.job,
-        workflow: profile.github.workflow,
-        sha: profile.github.sha,
-        run_id: profile.github.run_id,
-        run_url: buildGitHubRunLink(profile.github.repository, profile.github.run_id),
-        connections,
-    }
 }
 
 /**
@@ -585,11 +475,89 @@ export function parseCommentState(body) {
             return result.data
         }
 
-        const legacyResult = LEGACY_COMMENT_STATE_SCHEMA.safeParse(parsed)
-        return legacyResult.success ? upgradeLegacyCommentState(legacyResult.data) : null
+        const legacyV2 = LEGACY_V2_STATE_SCHEMA.safeParse(parsed)
+        if (legacyV2.success) {
+            return {
+                version: 3,
+                workflow_runs: legacyV2.data.workflow_runs,
+                profiles: legacyV2.data.profiles.map(upgradeLegacyProfile).sort(compareProfiles),
+            }
+        }
+
+        const legacyV1 = LEGACY_V1_STATE_SCHEMA.safeParse(parsed)
+        if (legacyV1.success) {
+            const profiles = legacyV1.data.profiles.map(upgradeLegacyProfile).sort(compareProfiles)
+            /** @type {Record<string, WorkflowRun>} */
+            const workflowRuns = {}
+            for (const profile of profiles) {
+                workflowRuns[getWorkflowKey(profile)] = legacyV1.data.latest_run
+            }
+            return { version: 3, workflow_runs: workflowRuns, profiles }
+        }
+
+        return null
     } catch {
         return null
     }
+}
+
+/**
+ * A pre-v3 state profile carried egress peers without ports, protocol,
+ * detections, PIDs, or step attribution; the upgrade fills those with
+ * empty defaults so the review still renders every recorded chain.
+ * @param {z.infer<typeof LEGACY_PROFILE_SCHEMA>} profile
+ * @returns {NormalizedProfile}
+ */
+function upgradeLegacyProfile(profile) {
+    /** @type {ReviewEdge[]} */
+    const edges = []
+    profile.egress_peers.forEach((peer, peerIndex) => {
+        const trees = peer.proc_trees.length > 0 ? peer.proc_trees : [{ ancestry: [] }]
+        trees.forEach((tree, treeIndex) => {
+            const ancestry = tree.ancestry.filter(entry => entry !== "")
+            edges.push({
+                flow_id: peerIndex,
+                tree_index: treeIndex,
+                remote_address: peer.remote_address ?? "",
+                remote_names: peer.remote_names.filter(name => name !== ""),
+                remote_ports: [],
+                protocol: "",
+                result: typeof peer.result === "string" ? peer.result : "",
+                detections: [],
+                lineage_recorded: ancestry.length > 0,
+                pid: "",
+                process: ancestry[ancestry.length - 1] ?? "",
+                ancestry,
+                github_step: "",
+            })
+        })
+    })
+
+    /** @type {JobSummary} */
+    const job = {
+        name: profile.github.job,
+        workflow: profile.github.workflow,
+        repository: profile.github.repository,
+        sha: profile.github.sha,
+        run_id: profile.github.run_id,
+        run_url: buildGitHubRunLink(profile.github.repository, profile.github.run_id),
+        profile_id: "",
+        uuid: "",
+        timestamp: profile.timestamp,
+        ref: profile.github.ref,
+        actor: profile.github.actor,
+        job_index: "",
+        flow_count: profile.egress_peers.length,
+        telemetry: {
+            total_domains: profile.telemetry.total_domains,
+            total_connections: profile.telemetry.total_connections,
+        },
+        assertions: [],
+        edges,
+        counts: edgeCounts(edges, profile.egress_peers.length),
+    }
+
+    return { timestamp: profile.timestamp, github: profile.github, job }
 }
 
 /**
@@ -598,6 +566,39 @@ export function parseCommentState(body) {
  */
 function encodeCommentState(state) {
     return Buffer.from(JSON.stringify(state), "utf8").toString("base64url")
+}
+
+// The encoded state rides inside the comment, so it shares the comment's
+// hard limit with the rendered review. When the full state cannot leave the
+// review at least the contract's minimal fallback, assertion evidence rows
+// are dropped from the carried state (assertion results are kept; the
+// Execution Profile remains the untruncated record).
+const STATE_BYTE_BUDGET = COMMENT_HARD_LIMIT - 8192
+
+/**
+ * @param {CommentState} state
+ * @returns {string}
+ */
+function encodeCommentStateWithinBudget(state) {
+    const encoded = encodeCommentState(state)
+    if (encoded.length <= STATE_BYTE_BUDGET) {
+        return encoded
+    }
+
+    /** @type {CommentState} */
+    const slimmed = {
+        version: 3,
+        workflow_runs: state.workflow_runs,
+        profiles: state.profiles.map(profile => ({
+            ...profile,
+            job: {
+                ...profile.job,
+                assertions: profile.job.assertions.map(assertion => ({ ...assertion, evidence: [] })),
+            },
+        })),
+    }
+
+    return encodeCommentState(slimmed)
 }
 
 /**
@@ -635,6 +636,13 @@ function getCommentCommitSha(profiles) {
 }
 
 /**
+ * @typedef {Object} ReportLinkInput
+ * @property {string} repository
+ * @property {string} run_id
+ * @property {string} job
+ */
+
+/**
  * @param {ReportLinkInput} values
  * @returns {string}
  */
@@ -644,9 +652,11 @@ export function buildReportLink(values) {
         return utmTrackedURL(baseURL)
     }
 
-    // TODO: Switch back to the full repository/job route once the dashboard
-    // supports /dashboard/runs/{org}/{repo}/{runID}/{job}.
-    return utmTrackedURL(`${baseURL}/dashboard/runs/${encodeURIComponent(values.run_id)}`)
+    // The tokenless PUBLIC report route (v6.1 §1.1) — never the authed
+    // dashboard, which would wall cold PR traffic behind a login. Run-level:
+    // no `?job=` selector (per-job `?job=` permalinks are the control-plane
+    // GitHub App comment's job — ENG-1355).
+    return utmTrackedURL(`${baseURL}/public/runs/${encodeURIComponent(values.run_id)}`)
 }
 
 /**
@@ -684,9 +694,11 @@ function buildGitHubRunLink(repository, runID) {
 }
 
 /**
+ * The Garnet app base URL for permalinks, mapped from the configured API
+ * host (dev-api → dev-app, …).
  * @returns {string}
  */
-function resolveAppBaseURL() {
+export function resolveAppBaseURL() {
     const apiURL = getConfiguredApiURL()
     if (apiURL === "") {
         return DEFAULT_APP_BASE_URL
@@ -735,8 +747,14 @@ function mapApiHostToAppHost(host) {
 }
 
 /**
- * @param {WorkflowRun} left
- * @param {WorkflowRun} right
+ * @typedef {Object} RunOrderKey
+ * @property {string} run_id
+ * @property {number} run_attempt
+ */
+
+/**
+ * @param {RunOrderKey} left
+ * @param {RunOrderKey} right
  * @returns {number}
  */
 function compareRuns(left, right) {
@@ -757,21 +775,6 @@ function compareRuns(left, right) {
     }
 
     return 0
-}
-
-/**
- * @param {LegacyCommentState} state
- * @returns {CommentState}
- */
-function upgradeLegacyCommentState(state) {
-    return {
-        version: 2,
-        workflow_runs: state.profiles.reduce((accumulator, profile) => {
-            accumulator[getWorkflowKey(profile)] = state.latest_run
-            return accumulator
-        }, /** @type {Record<string, WorkflowRun>} */ ({})),
-        profiles: [...state.profiles].sort(compareProfiles),
-    }
 }
 
 /**
@@ -813,53 +816,6 @@ function toBigInt(value) {
         return BigInt(value)
     } catch {
         return 0n
-    }
-}
-
-/**
- * @param {unknown} value
- * @returns {ProfileResult}
- */
-function normalizeResult(value) {
-    const normalized = getString(value).toLowerCase()
-    if (normalized === "pass" || normalized === "attention" || normalized === "fail") {
-        return normalized
-    }
-    return "unknown"
-}
-
-/**
- * @param {unknown} value
- * @returns {number}
- */
-function getNumber(value) {
-    return typeof value === "number" ? value : 0
-}
-
-/**
- * @param {unknown} profile
- * @returns {EgressPeer[]}
- */
-function getProfileNetworkPeers(profile) {
-    const root = getOptionalRecord(profile)
-    const network = getOptionalRecord(root?.network)
-    const egress = getOptionalRecord(network?.egress)
-    return Array.isArray(egress?.peers) ? egress.peers : []
-}
-
-/**
- * @param {unknown} profile
- * @returns {NetworkTelemetry}
- */
-function getProfileNetworkTelemetry(profile) {
-    const root = getOptionalRecord(profile)
-    const telemetry = getOptionalRecord(root?.telemetry)
-    const network = getOptionalRecord(telemetry?.network)
-    const egress = getOptionalRecord(network?.egress)
-
-    return {
-        total_domains: getNumber(egress?.total_domains),
-        total_connections: getNumber(egress?.total_connections),
     }
 }
 
