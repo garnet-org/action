@@ -2,6 +2,8 @@ import {
     AGENT_CREATED_RESPONSE_SCHEMA,
     API_ERROR_SCHEMA,
     CREATE_AGENT_REQUEST_SCHEMA,
+    EXCHANGE_OIDC_REQUEST_SCHEMA,
+    EXCHANGE_OIDC_RESPONSE_SCHEMA,
     MERGED_NET_POLICIES_REQUEST_SCHEMA,
 } from "./types.js"
 
@@ -9,12 +11,14 @@ import {
  * @typedef {import("./types.js").CreateAgentRequest} CreateAgentRequest
  * @typedef {import("./types.js").AgentCreatedResponse} AgentCreatedResponse
  * @typedef {import("./types.js").MergedNetPoliciesRequest} MergedNetPoliciesRequest
+ * @typedef {import("./types.js").ExchangeOIDCResponse} ExchangeOIDCResponse
  */
 
 /**
  * @typedef {{
  *   baseURL: string
  *   projectToken?: string
+ *   workflowToken?: string
  *   userAgent?: string
  * }} ControlPlaneClientOptions
  */
@@ -26,6 +30,7 @@ import {
  *   query?: URLSearchParams
  *   body?: unknown
  *   accept?: string
+ *   skipAuthHeader?: boolean
  * }} RequestOptions
  */
 
@@ -72,8 +77,13 @@ export class ControlPlaneClient {
             throw new Error("ControlPlaneClient: 'projectToken' must be a string when provided")
         }
 
+        if (options.workflowToken !== undefined && typeof options.workflowToken !== "string") {
+            throw new Error("ControlPlaneClient: 'workflowToken' must be a string when provided")
+        }
+
         this.baseURL = parsedBaseURL.toString().replace(/\/+$/, "")
         this.projectToken = options.projectToken?.trim() ?? ""
+        this.workflowToken = options.workflowToken?.trim() ?? ""
         this.userAgent = options.userAgent ?? "garnet-action"
     }
 
@@ -90,6 +100,24 @@ export class ControlPlaneClient {
         })
 
         return AGENT_CREATED_RESPONSE_SCHEMA.parse(responseJson)
+    }
+
+    /**
+     * @param {string} idToken
+     * @returns {Promise<ExchangeOIDCResponse>}
+     */
+    async exchangeGitHubOIDCForWorkflowToken(idToken) {
+        const payload = EXCHANGE_OIDC_REQUEST_SCHEMA.parse({
+            idToken,
+        })
+        const responseJson = await this.requestJson({
+            method: "POST",
+            path: "/api/v1/github/oidc/exchange",
+            body: payload,
+            skipAuthHeader: true,
+        })
+
+        return EXCHANGE_OIDC_RESPONSE_SCHEMA.parse(responseJson)
     }
 
     /**
@@ -164,8 +192,12 @@ export class ControlPlaneClient {
             "User-Agent": this.userAgent,
         }
 
-        if (this.projectToken !== "") {
-            headers["X-Project-Token"] = this.projectToken
+        if (options.skipAuthHeader !== true) {
+            if (this.workflowToken !== "") {
+                headers["X-Workflow-Token"] = this.workflowToken
+            } else if (this.projectToken !== "") {
+                headers["X-Project-Token"] = this.projectToken
+            }
         }
 
         if (options.body !== undefined) {

@@ -7,7 +7,7 @@ branding:
 inputs:
     api_token:
         description: "Your Garnet API token from app.garnet.ai"
-        required: true
+        required: false
     github_token:
         description: "GitHub token used for pull request comments"
         required: false
