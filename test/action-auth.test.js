@@ -62,10 +62,10 @@ test("gate: jibril sensor version never floats — every ref resolves to an expl
     assert.equal(resolveJibrilVersion("", "v0"), "v0.0")
     assert.equal(resolveJibrilVersion("", "refs/tags/v0"), "v0.0")
     assert.equal(resolveJibrilVersion("", "v1"), "v2.10.4")
-    assert.equal(resolveJibrilVersion("", "v2"), "v2.15.0")
+    assert.equal(resolveJibrilVersion("", "v2"), "v2.16.0")
     // SHA, branch, and exact-tag refs get the same stable pin as v2.
     const pinnedRefs = ["04d0e18c0d3a5a1f9d2b7c6e5f4a3b2c1d0e9f8a", "main", "refs/tags/v2.2.0", ""]
     for (const ref of pinnedRefs) {
-        assert.equal(resolveJibrilVersion("", ref), "v2.15.0", `ref ${JSON.stringify(ref)}`)
+        assert.equal(resolveJibrilVersion("", ref), "v2.16.0", `ref ${JSON.stringify(ref)}`)
     }
 })

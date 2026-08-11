@@ -39979,7 +39979,7 @@ function isMissingOIDCPermissionError(errorMessage) {
 const INSTPATH = "/usr/local/bin"
 // Default Jibril sensor version: the same stable pin as the floating v2 tag,
 // so the sensor never floats under an unchanged action ref.
-const JIBRIL_STABLE_VERSION = "v2.15.0"
+const JIBRIL_STABLE_VERSION = "v2.16.0"
 
 // This function is the main entry point for the script.
 // Returns true when Jibril started successfully, false otherwise.
