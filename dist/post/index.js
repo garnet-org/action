@@ -149983,18 +149983,30 @@ function compactStepSummaryAncestry(edge) {
 }
 
 /**
+ * Renders one recorded chain as a `→`-joined run of code spans. When a
+ * PID footnote map is supplied, the leaf carries a superscript reference
+ * into it instead of an inline `(pid …)` suffix; distinct PIDs always get
+ * distinct references.
  * @param {ReviewEdge} edge
+ * @param {Map<string, number>} [pidRefs]
  */
-function processTreeCell(edge) {
+function processTreeCell(edge, pidRefs) {
   const names = compactStepSummaryAncestry(edge)
   return names
     .map((name, index) => {
       const leaf = index === names.length - 1
-      const value =
-        leaf && edge.pid !== ""
-          ? `${truncateMiddle(name)} (pid ${edge.pid})`
-          : truncateMiddle(name)
-      return `<code>${escapeHtmlCell(value)}</code>`
+      if (leaf && edge.pid !== "") {
+        if (pidRefs !== undefined) {
+          let ref = pidRefs.get(edge.pid)
+          if (ref === undefined) {
+            ref = pidRefs.size + 1
+            pidRefs.set(edge.pid, ref)
+          }
+          return `<code>${escapeHtmlCell(truncateMiddle(name))}</code> <sup>${ref}</sup>`
+        }
+        return `<code>${escapeHtmlCell(`${truncateMiddle(name)} (pid ${edge.pid})`)}</code>`
+      }
+      return `<code>${escapeHtmlCell(truncateMiddle(name))}</code>`
     })
     .join(" → ")
 }
@@ -150070,9 +150082,20 @@ function lineageDestinationsCell(row) {
  * @param {LineageRow[]} rows
  */
 function renderLineageTable(rows) {
+  // PIDs footnote below the table: each leaf carries a superscript
+  // reference, so the tree column reads names-only while every recorded
+  // PID stays visible and distinct PIDs never share a reference.
+  /** @type {Map<string, number>} */
+  const pidRefs = new Map()
   const lines = ["| Process Tree | Destinations |", "| --- | --- |"]
   for (const row of rows) {
-    lines.push(`| ${processTreeCell(row.edge)} | ${lineageDestinationsCell(row)} |`)
+    lines.push(`| ${processTreeCell(row.edge, pidRefs)} | ${lineageDestinationsCell(row)} |`)
+  }
+  if (pidRefs.size > 0) {
+    const notes = [...pidRefs.entries()].map(
+      ([pid, ref]) => `<sup>${ref}</sup> pid ${escapeHtmlCell(pid)}`,
+    )
+    lines.push("", `<sub>${notes.join(" · ")}</sub>`)
   }
   return lines.join("\n")
 }
