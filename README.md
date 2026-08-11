@@ -40,9 +40,9 @@ Get your API token at [app.garnet.ai](https://app.garnet.ai). Start with the Act
 
 <p align="center">
   <img
-    src="docs/images/pr-comment-v661.png"
+    src="docs/images/pr-comment-v695.png"
     width="640"
-    alt="A Garnet Runtime Review PR comment: Execution Profiles recorded for 5 jobs, one fold per job, with the workload-egress job open showing its execution tree and destinations"
+    alt="A Garnet Runtime Review PR comment: Execution Profiles recorded for 5 jobs, one fold per job, each fold showing the job's execution tree with ○ destination leaves and factual bracket notes"
   />
 </p>
 
@@ -61,8 +61,6 @@ The only secret Garnet uses is the API token you pass it. It never reads your ot
 | :--- | :--- | :--- |
 | `contents: read` | Yes | Access workflow context and repository metadata |
 | `pull-requests: write` | Recommended | Post the Runtime Review comment (standalone Action mode; unused once the companion GitHub App owns the comment) |
-
-The action does not require `contents: write`, `actions: write`, or access to any repository secrets beyond the token you pass.
 
 ## Quickstart
 
@@ -107,7 +105,7 @@ jobs:
 >     api_token: ${{ secrets.GARNET_API_TOKEN }}
 > ```
 >
-> The canonical SHA of the latest release is always at [garnet.ai/pins](https://garnet.ai/pins).
+> The canonical SHA of the latest release is always at [garnet.ai/pins](https://garnet.ai/pins). Dependabot bumps SHA pins automatically. Exact tags such as `garnet-org/action@v2.3.0` remain available.
 
 ### 3. Install the companion GitHub App
 
@@ -120,13 +118,7 @@ Two permissions, nothing else:
 | Pull requests | Read & write | Post and update the one Runtime Review comment per commit |
 | Metadata | Read | Required for every GitHub App |
 
-The App writes the comment and does nothing else — no webhooks, no code access. Once installed it owns the comment across every recorded job on the commit, and the Action stands down.
-
-### Versioning
-
-- `garnet-org/action@v2` tracks the latest `v2.x.x` release.
-- Exact tags such as `garnet-org/action@v2.3.0` remain available when you want a fully pinned released version.
-- Pinning to a full commit SHA is the recommended posture for supply-chain safety; Dependabot bumps SHA pins automatically.
+The App writes the comment and does nothing else — no webhooks, no code access. Once installed it owns the comment across every recorded job on the commit, reconciles any comment the Action had already posted, and the Action stands down. The PR converges to a single Runtime Review comment.
 
 ## Not using GitHub Actions?
 
@@ -146,30 +138,28 @@ This action is the easiest way to get Garnet Runtime Review into a GitHub workfl
 
 Full installation guides for every path are in the [Garnet docs](https://docs.garnet.ai).
 
-## Action vs. GitHub App
-
-The Action is the standalone entry point: it records runtime, posts the Runtime Review comment and Step Summary, and only knows the jobs it observed in that run. The companion GitHub App is the full experience: it owns the authoritative Runtime Review comment, can observe true coverage, and can add cross-run management.
-
-When the App is installed, the action stands down on both create and update. The App reconciles any comment the action had already posted, so the PR converges to a single Runtime Review comment.
-
 ## Comment anatomy
 
 One comment per PR, one fold per job, updated in place as each job's profile lands:
 
 - **Headline** — `Execution Profiles recorded for N job(s), triggered by <sha7>`, linking the commit.
-- **Metadata line** — an italic blockquote: `N execution chains · N destinations · recorded at the kernel by Garnet · <UTC timestamp>`, one fact per `·` segment.
-- **One fold per job** — headed `workflow / job ↗`, linking to its Actions run. Inside: the job's execution tree — only processes with recorded egress, destinations as `→ name` leaves under the process that opened them, defanged at the final dot. Workload processes render **bold**, runner scaffolding *italic*; resolver chatter and unattributed runner chains sit in a nested `dns + runner substrate` fold.
+- **Metadata line** — an italic blockquote: `N destinations · recorded at the kernel by Garnet · <UTC timestamp>`, one fact per `·` segment.
+- **One fold per job** — headed `workflow / job ↗ · N destinations`, the job id linking to its Actions run. Inside: one block holding every recorded root of the job's tree; independent roots are separated by a blank line. Plain tree nodes are recorded process names; observed actions render as shaped terminals — `○ destination` for network, defanged at the final dot. A process with an action directly beneath it renders **bold**; `(…)` brackets carry factual context only — `(step: "Run tests")`, `(dns resolver)`, `(cloud metadata)`, `(github infra)`, `(garnet sensor)`, `(ran from /tmp/…)`. A job with no recorded egress stays a plain row keeping its Garnet profile link.
 - **Per-job permalink** — `View this job's Execution Profile in Garnet →`, opening the job's [public run report](https://app.garnet.ai/public/runs/30675075813?profile=019fbaad-dda5-71c3-a8e5-3a4cd96fea21) (`?profile=` selector required — a bare run URL returns 404).
 - **The explainer** — a `💡 How to read this` fold at the bottom teaches the tree with an annotated example:
 
 <pre>
-<em>Runner.Worker</em>                ← the runner: root of the job's execution tree (italic)
-└─ <strong>npm install</strong>               ← a process your job ran (bold)
-   └─ → registry.npmjs[.]org  ← an action: what the process did — an outbound connection, defanged
-      ╰ one chain of processes, root to action: an execution chain
+Runner.Worker          <em>← process on a path</em>
+└─ npm
+   └─ <strong>node</strong>             <em>← process that acted</em>
+      └─ ○ npmjs[.]org <em>← observed action</em>
 </pre>
 
-Once a pull request has two recorded commits, the comment compares against the previous profiled commit: the metadata line carries `changed since <sha7>`, changed job rows lead with the delta (`+1 −0`), and the job's tree renders as a diff headed `@@ <head> vs <previous> @@`.
+follow a path downward to see what ran and what it did — each path to an observed action is an execution chain
+
+names on the path = processes · ○ = observed action · (…) = context
+
+Once a pull request has two recorded commits, the comment compares against the previous profiled commit: the metadata line carries `compared with <sha7>`, changed job rows lead with the bold delta (`+1 −2 destinations`), unchanged rows read `· N destinations · unchanged`, and a changed job's tree renders as a diff headed `@@ <previous sha7> (previous) vs <sha7> (current) @@`. `+` marks a destination only in the current record, `−` one only in the previous record; the marks and the row's delta always reconcile exactly. Jobs recorded previously but not on this commit sit in one collapsed `jobs no longer recorded` fold with their destination counts.
 
 The same full-detail record is appended to the GitHub Actions Job Summary as the **Garnet Execution Summary** (see this [example run](https://github.com/garnet-org/action/actions/runs/23175135499)).
 
@@ -184,12 +174,14 @@ The same full-detail record is appended to the GitHub Actions Job Summary as the
 
 | Input               | Required | Default                 | Description                                    |
 | ------------------- | -------- | ----------------------- | ---------------------------------------------- |
-| `api_token`         | Yes      | —                       | Your Garnet API token from app.garnet.ai       |
+| `api_token`         | Yes¹     | —                       | Your Garnet API token from app.garnet.ai       |
 | `github_token`      | No       | `${{ github.token }}`   | GitHub token used for pull request comments    |
 | `api_url`           | No       | `https://api.garnet.ai` | Garnet API base URL                            |
-| `jibril_version`    | No       | `""` (auto)             | Jibril version (for example `v2.15.0` or `latest`); empty resolves from the action tag, `latest` on branches |
+| `jibril_version`    | No       | `""` (auto)             | Jibril version (for example `v2.15.0`, `v0.0`, or `latest`); empty resolves from the action tag |
 | `debug`             | No       | `false`                 | Enable debug mode and upload logs as artifacts |
 | `preview`           | No       | `false`                 | Render the full-fidelity Step Summary record (assertions + evidence); preview shape is unstable and may change without a major version bump |
+
+¹ Required at runtime, with one exception: on `pull_request` runs from forked repositories, GitHub exposes no secrets, so the action emits a notice, skips recording, and the job continues. An OIDC alternative is landing behind the `GARNET_ACTION_ENABLE_OIDC_AUTH` flag; until that flag is on, the token is the auth path.
 
 ---
 
@@ -204,10 +196,6 @@ The same full-detail record is appended to the GitHub Actions Job Summary as the
 ---
 
 ## Concepts
-
-### What Garnet records
-
-Every recorded job produces one **Execution Profile**: the job's execution chains and the destinations they reached, recorded at the kernel. An execution chain is one path through the process tree, from the runner's root to an action — today, an outbound connection.
 
 ### Why Runtime Review matters
 
@@ -244,6 +232,7 @@ On unsupported platforms (Windows, macOS, arm64) the action logs a warning and s
 | Symptom                                   | Fix                                                                                                    |
 | ----------------------------------------- | ------------------------------------------------------------------------------------------------------ |
 | "API token is required"                   | Confirm `GARNET_API_TOKEN` is set in repository secrets and passed as `api_token`.                     |
+| "Garnet skips profiling on pull requests from forked repositories" | Expected on fork PRs: secrets are unavailable there, so the action skips recording and the job continues. |
 | No PR comment appearing                   | The action posts comments only on `pull_request` events — confirm your workflow includes that trigger. |
 | PR comment says "Resource not accessible" | Add `pull-requests: write` to the workflow `permissions` block.                                        |
 | No summary output                         | Enable `debug: "true"` to upload Jibril logs as artifacts, then inspect `jibril.log` and `jibril.err`. |
