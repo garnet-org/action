@@ -1,0 +1,164 @@
+{
+  "contractVersion": "6.9.5",
+  "repo": "garnet-org/runtime-review-testbed",
+  "sha": "dd44ee55ff6677889900aabbccddee1122334455",
+  "commitUrl": "https://github.com/garnet-org/runtime-review-testbed/commit/dd44ee55ff6677889900aabbccddee1122334455",
+  "appUrl": "https://app.garnet.ai",
+  "appMode": true,
+  "recordedThrough": "2026-08-07 14:00:00 UTC",
+  "counts": {
+    "jobs": 2,
+    "associations": 4,
+    "destinations": 3
+  },
+  "jobs": [
+    {
+      "name": "provision",
+      "workflow": "ci",
+      "run_id": "32000000003",
+      "run_url": "https://github.com/garnet-org/runtime-review-testbed/actions/runs/32000000003",
+      "job_url": "",
+      "profile_id": "",
+      "uuid": "3b7d4c3e-1f6a-4d9c-8e5f-4a3b8c9d0e02",
+      "timestamp": "2026-08-07T14:00:00.000000000Z",
+      "repository": "garnet-org/runtime-review-testbed",
+      "sha": "dd44ee55ff6677889900aabbccddee1122334455",
+      "ref": "",
+      "actor": "",
+      "job_index": "",
+      "flow_count": 2,
+      "telemetry": {
+        "total_domains": null,
+        "total_connections": null
+      },
+      "telemetryDiscrepancies": [],
+      "assertions": [],
+      "counts": {
+        "associations": 2,
+        "processes": 2,
+        "destinations": 2,
+        "primary_names": 0,
+        "domains": 0,
+        "flows": 2
+      },
+      "edges": [
+        {
+          "remote_address": "169.254.169.254",
+          "remote_names": [],
+          "remote_ports": [
+            "80"
+          ],
+          "protocol": "tcp",
+          "result": "",
+          "detections": [],
+          "lineage_recorded": true,
+          "pid": "5101",
+          "process": "python3",
+          "ancestry": [
+            "systemd",
+            "python3"
+          ],
+          "github_step": "",
+          "notes": [
+            "cloud metadata"
+          ]
+        },
+        {
+          "remote_address": "168.63.129.16",
+          "remote_names": [],
+          "remote_ports": [
+            "80"
+          ],
+          "protocol": "tcp",
+          "result": "",
+          "detections": [],
+          "lineage_recorded": true,
+          "pid": "5102",
+          "process": "walinuxagent",
+          "ancestry": [
+            "systemd",
+            "walinuxagent"
+          ],
+          "github_step": "",
+          "notes": []
+        }
+      ]
+    },
+    {
+      "name": "release",
+      "workflow": "ci",
+      "run_id": "32000000003",
+      "run_url": "https://github.com/garnet-org/runtime-review-testbed/actions/runs/32000000003",
+      "job_url": "",
+      "profile_id": "",
+      "uuid": "3b7d4c3e-1f6a-4d9c-8e5f-4a3b8c9d0e01",
+      "timestamp": "2026-08-07T14:00:00.000000000Z",
+      "repository": "garnet-org/runtime-review-testbed",
+      "sha": "dd44ee55ff6677889900aabbccddee1122334455",
+      "ref": "",
+      "actor": "",
+      "job_index": "",
+      "flow_count": 2,
+      "telemetry": {
+        "total_domains": null,
+        "total_connections": null
+      },
+      "telemetryDiscrepancies": [],
+      "assertions": [],
+      "counts": {
+        "associations": 2,
+        "processes": 2,
+        "destinations": 2,
+        "primary_names": 1,
+        "domains": 1,
+        "flows": 2
+      },
+      "edges": [
+        {
+          "remote_address": "169.254.169.254",
+          "remote_names": [],
+          "remote_ports": [
+            "80"
+          ],
+          "protocol": "tcp",
+          "result": "",
+          "detections": [],
+          "lineage_recorded": true,
+          "pid": "5002",
+          "process": "bun",
+          "ancestry": [
+            "systemd",
+            "Runner.Worker",
+            "bash",
+            "bun"
+          ],
+          "github_step": "4. Run integration tests",
+          "notes": [
+            "cloud metadata"
+          ]
+        },
+        {
+          "remote_address": "203.0.113.80",
+          "remote_names": [
+            "artifacts.example.net"
+          ],
+          "remote_ports": [
+            "443"
+          ],
+          "protocol": "tcp",
+          "result": "",
+          "detections": [],
+          "lineage_recorded": true,
+          "pid": "5001",
+          "process": "node",
+          "ancestry": [
+            "systemd",
+            "node"
+          ],
+          "github_step": "5. Publish artifacts",
+          "notes": []
+        }
+      ]
+    }
+  ]
+}

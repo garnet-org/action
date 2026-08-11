@@ -1,5 +1,5 @@
 {
-  "contractVersion": "6.6.1",
+  "contractVersion": "6.9.5",
   "repo": "garnet-org/runtime-review-testbed",
   "sha": "6e5d0d4cf00a92a9e1fe697efe0e41b3ae61533e",
   "commitUrl": "https://github.com/garnet-org/runtime-review-testbed/commit/6e5d0d4cf00a92a9e1fe697efe0e41b3ae61533e",
@@ -345,7 +345,9 @@
             "provjobd1326539233"
           ],
           "github_step": "99. Runner Processes",
-          "notes": []
+          "notes": [
+            "github infra"
+          ]
         }
       ]
     },
@@ -475,7 +477,9 @@
             "provjobd1278877480"
           ],
           "github_step": "99. Runner Processes",
-          "notes": []
+          "notes": [
+            "github infra"
+          ]
         }
       ]
     },
@@ -605,7 +609,9 @@
             "provjobd3832655626"
           ],
           "github_step": "99. Runner Processes",
-          "notes": []
+          "notes": [
+            "github infra"
+          ]
         }
       ]
     },
@@ -806,6 +812,7 @@
           ],
           "github_step": "4. Run workload (${{ matrix.job_name }})",
           "notes": [
+            "garnet sensor",
             "detection: exec_from_unusual_dir"
           ]
         },
@@ -993,7 +1000,9 @@
             "provjobd811584691"
           ],
           "github_step": "99. Runner Processes",
-          "notes": []
+          "notes": [
+            "github infra"
+          ]
         }
       ]
     }

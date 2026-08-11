@@ -10,12 +10,14 @@
 <details open><summary><sub>💡 How to read this</sub></summary>
 
 <pre>
-<em>Runner.Worker</em>                ← the runner: root of the job's execution tree (italic)
-└─ <strong>npm install</strong>               ← a process your job ran (bold)
-   └─ → registry.npmjs[.]org  ← an action: what the process did — an outbound connection, defanged
-      ╰ one chain of processes, root to action: an execution chain
+Runner.Worker          <em>← process on a path</em>
+└─ npm
+   └─ <strong>node</strong>             <em>← process that acted</em>
+      └─ ○ npmjs[.]org <em>← observed action</em>
 </pre>
 
-<sub><i>The tree is every chain the job ran; a process appears only when it acted.</i></sub>
+<sub><i>follow a path downward to see what ran and what it did — each path to an observed action is an execution chain</i></sub>
+
+<sub><i>names on the path = processes · ○ = observed action · (…) = context</i></sub>
 
 </details>

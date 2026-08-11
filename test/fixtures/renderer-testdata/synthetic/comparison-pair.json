@@ -1,0 +1,622 @@
+{
+  "$comment": "Synthetic v6.9.0 comparison fixture — one head/previous profile pair per job, exercising the whole-job destination diff: an honest same-domain name flap (flap-a.example.com@198.51.100.60 → flap-b.example.com@198.51.100.61: one − and one +), rotated runner-infrastructure destinations across jobs, a job whose every chain is runner infrastructure, and a changed plus an unchanged job in one comparison comment.",
+  "head": [
+    {
+      "uuid": "1f5b2a1c-9d4e-4b7a-8c3d-2e1f6a7b8c01",
+      "timestamp": "2026-08-07T12:00:00.000000000Z",
+      "metadata": {
+        "version": "0.2.0"
+      },
+      "scenarios": {
+        "github": {
+          "scenario_type": "github",
+          "workflow": "ci",
+          "job": "api",
+          "repository": "garnet-org/runtime-review-testbed",
+          "run_id": "32000000001",
+          "sha": "bb22cc33dd44ee55ff6677889900aabbccddee11",
+          "server_url": "https://github.com"
+        }
+      },
+      "network": {
+        "egress": {
+          "peers": [
+            {
+              "remote_address": "198.51.100.7",
+              "remote_names": [
+                "kept.example.com"
+              ],
+              "remote_ports": [
+                "443"
+              ],
+              "protocol": "tcp",
+              "proc_trees": [
+                {
+                  "pid": 4001,
+                  "process": "node",
+                  "github_step": "3. Run api tests",
+                  "ancestry": [
+                    "systemd",
+                    "Runner.Worker",
+                    "bash",
+                    "node"
+                  ]
+                }
+              ]
+            },
+            {
+              "remote_address": "203.0.113.14",
+              "remote_names": [
+                "fresh.example.net"
+              ],
+              "remote_ports": [
+                "443"
+              ],
+              "protocol": "tcp",
+              "proc_trees": [
+                {
+                  "pid": 4002,
+                  "process": "node",
+                  "github_step": "3. Run api tests",
+                  "ancestry": [
+                    "systemd",
+                    "Runner.Worker",
+                    "bash",
+                    "node"
+                  ]
+                }
+              ]
+            },
+            {
+              "remote_address": "198.51.100.61",
+              "remote_names": [
+                "flap-b.example.com"
+              ],
+              "remote_ports": [
+                "443"
+              ],
+              "protocol": "tcp",
+              "proc_trees": [
+                {
+                  "pid": 4003,
+                  "process": "node",
+                  "github_step": "3. Run api tests",
+                  "ancestry": [
+                    "systemd",
+                    "Runner.Worker",
+                    "bash",
+                    "node"
+                  ]
+                }
+              ]
+            },
+            {
+              "remote_address": "192.0.2.40",
+              "remote_names": [
+                "cache.internal.example"
+              ],
+              "remote_ports": [
+                "6379"
+              ],
+              "protocol": "tcp",
+              "proc_trees": [
+                {
+                  "pid": 4004,
+                  "process": "node",
+                  "github_step": "3. Run api tests",
+                  "ancestry": [
+                    "systemd",
+                    "Runner.Worker",
+                    "bash",
+                    "node"
+                  ]
+                }
+              ]
+            },
+            {
+              "remote_address": "192.0.2.50",
+              "remote_names": [
+                "telemetry.example"
+              ],
+              "remote_ports": [
+                "443"
+              ],
+              "protocol": "tcp",
+              "proc_trees": [
+                {
+                  "pid": 1901,
+                  "process": "hosted-compute-agent",
+                  "github_step": "",
+                  "ancestry": [
+                    "systemd",
+                    "hosted-compute-agent"
+                  ]
+                }
+              ]
+            },
+            {
+              "remote_address": "140.82.113.9",
+              "remote_names": [
+                "glb-2a3c35-public-internal.githubapp.com"
+              ],
+              "remote_ports": [
+                "443"
+              ],
+              "protocol": "tcp",
+              "proc_trees": [
+                {
+                  "pid": 1902,
+                  "process": "provjobd104857600",
+                  "github_step": "99. Runner Processes",
+                  "ancestry": [
+                    "systemd",
+                    "hosted-compute-agent",
+                    "sudo",
+                    "provjobd104857600"
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "uuid": "1f5b2a1c-9d4e-4b7a-8c3d-2e1f6a7b8c02",
+      "timestamp": "2026-08-07T12:00:00.000000000Z",
+      "metadata": {
+        "version": "0.2.0"
+      },
+      "scenarios": {
+        "github": {
+          "scenario_type": "github",
+          "workflow": "ci",
+          "job": "steady",
+          "repository": "garnet-org/runtime-review-testbed",
+          "run_id": "32000000001",
+          "sha": "bb22cc33dd44ee55ff6677889900aabbccddee11",
+          "server_url": "https://github.com"
+        }
+      },
+      "network": {
+        "egress": {
+          "peers": [
+            {
+              "remote_address": "104.16.24.34",
+              "remote_names": [
+                "registry.npmjs.org"
+              ],
+              "remote_ports": [
+                "443"
+              ],
+              "protocol": "tcp",
+              "proc_trees": [
+                {
+                  "pid": 4101,
+                  "process": "node",
+                  "github_step": "2. Install dependencies",
+                  "ancestry": [
+                    "systemd",
+                    "Runner.Worker",
+                    "bash",
+                    "node"
+                  ]
+                }
+              ]
+            },
+            {
+              "remote_address": "140.82.114.30",
+              "remote_names": [
+                "glb-2a3c35-public-internal.githubapp.com"
+              ],
+              "remote_ports": [
+                "443"
+              ],
+              "protocol": "tcp",
+              "proc_trees": [
+                {
+                  "pid": 1911,
+                  "process": "provjobd209715200",
+                  "github_step": "99. Runner Processes",
+                  "ancestry": [
+                    "systemd",
+                    "hosted-compute-agent",
+                    "sudo",
+                    "provjobd209715200"
+                  ]
+                }
+              ]
+            },
+            {
+              "remote_address": "140.82.115.40",
+              "remote_names": [
+                "hosted-compute-watchdog-prod-iad-03.githubapp.com"
+              ],
+              "remote_ports": [
+                "443"
+              ],
+              "protocol": "tcp",
+              "proc_trees": [
+                {
+                  "pid": 1912,
+                  "process": "hosted-compute-agent",
+                  "github_step": "",
+                  "ancestry": [
+                    "systemd",
+                    "hosted-compute-agent"
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "uuid": "1f5b2a1c-9d4e-4b7a-8c3d-2e1f6a7b8c03",
+      "timestamp": "2026-08-07T12:00:00.000000000Z",
+      "metadata": {
+        "version": "0.2.0"
+      },
+      "scenarios": {
+        "github": {
+          "scenario_type": "github",
+          "workflow": "ci",
+          "job": "warmup",
+          "repository": "garnet-org/runtime-review-testbed",
+          "run_id": "32000000001",
+          "sha": "bb22cc33dd44ee55ff6677889900aabbccddee11",
+          "server_url": "https://github.com"
+        }
+      },
+      "network": {
+        "egress": {
+          "peers": [
+            {
+              "remote_address": "127.0.0.53",
+              "remote_names": [
+                "localhost"
+              ],
+              "remote_ports": [
+                "53 (dns)"
+              ],
+              "protocol": "udp",
+              "proc_trees": [
+                {
+                  "pid": 1921,
+                  "process": "provjobd314572800",
+                  "github_step": "99. Runner Processes",
+                  "ancestry": [
+                    "systemd",
+                    "hosted-compute-agent",
+                    "sudo",
+                    "provjobd314572800"
+                  ]
+                }
+              ]
+            },
+            {
+              "remote_address": "140.82.112.31",
+              "remote_names": [
+                "hosted-compute-watchdog-prod-iad-02.githubapp.com"
+              ],
+              "remote_ports": [
+                "443"
+              ],
+              "protocol": "tcp",
+              "proc_trees": [
+                {
+                  "pid": 1922,
+                  "process": "hosted-compute-agent",
+                  "github_step": "",
+                  "ancestry": [
+                    "systemd",
+                    "hosted-compute-agent"
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "previous": [
+    {
+      "uuid": "0e4a190b-8c3d-4a69-7b2c-1d0e5f6a7b01",
+      "timestamp": "2026-08-06T12:00:00.000000000Z",
+      "metadata": {
+        "version": "0.2.0"
+      },
+      "scenarios": {
+        "github": {
+          "scenario_type": "github",
+          "workflow": "ci",
+          "job": "api",
+          "repository": "garnet-org/runtime-review-testbed",
+          "run_id": "31999999901",
+          "sha": "aa11bb22cc33dd44ee55ff6677889900aabbccdd",
+          "server_url": "https://github.com"
+        }
+      },
+      "network": {
+        "egress": {
+          "peers": [
+            {
+              "remote_address": "198.51.100.7",
+              "remote_names": [
+                "kept.example.com"
+              ],
+              "remote_ports": [
+                "443"
+              ],
+              "protocol": "tcp",
+              "proc_trees": [
+                {
+                  "pid": 3001,
+                  "process": "node",
+                  "github_step": "3. Run api tests",
+                  "ancestry": [
+                    "systemd",
+                    "Runner.Worker",
+                    "bash",
+                    "node"
+                  ]
+                }
+              ]
+            },
+            {
+              "remote_address": "198.51.100.60",
+              "remote_names": [
+                "flap-a.example.com"
+              ],
+              "remote_ports": [
+                "443"
+              ],
+              "protocol": "tcp",
+              "proc_trees": [
+                {
+                  "pid": 3002,
+                  "process": "node",
+                  "github_step": "3. Run api tests",
+                  "ancestry": [
+                    "systemd",
+                    "Runner.Worker",
+                    "bash",
+                    "node"
+                  ]
+                }
+              ]
+            },
+            {
+              "remote_address": "192.0.2.40",
+              "remote_names": [
+                "cache.internal.example"
+              ],
+              "remote_ports": [
+                "6379"
+              ],
+              "protocol": "tcp",
+              "proc_trees": [
+                {
+                  "pid": 1801,
+                  "process": "hosted-compute-agent",
+                  "github_step": "",
+                  "ancestry": [
+                    "systemd",
+                    "hosted-compute-agent"
+                  ]
+                }
+              ]
+            },
+            {
+              "remote_address": "192.0.2.50",
+              "remote_names": [
+                "telemetry.example"
+              ],
+              "remote_ports": [
+                "443"
+              ],
+              "protocol": "tcp",
+              "proc_trees": [
+                {
+                  "pid": 3003,
+                  "process": "node",
+                  "github_step": "3. Run api tests",
+                  "ancestry": [
+                    "systemd",
+                    "Runner.Worker",
+                    "bash",
+                    "node"
+                  ]
+                }
+              ]
+            },
+            {
+              "remote_address": "140.82.112.8",
+              "remote_names": [
+                "glb-2a3c35-public-internal.githubapp.com"
+              ],
+              "remote_ports": [
+                "443"
+              ],
+              "protocol": "tcp",
+              "proc_trees": [
+                {
+                  "pid": 1802,
+                  "process": "provjobd419430400",
+                  "github_step": "99. Runner Processes",
+                  "ancestry": [
+                    "systemd",
+                    "hosted-compute-agent",
+                    "sudo",
+                    "provjobd419430400"
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "uuid": "0e4a190b-8c3d-4a69-7b2c-1d0e5f6a7b02",
+      "timestamp": "2026-08-06T12:00:00.000000000Z",
+      "metadata": {
+        "version": "0.2.0"
+      },
+      "scenarios": {
+        "github": {
+          "scenario_type": "github",
+          "workflow": "ci",
+          "job": "steady",
+          "repository": "garnet-org/runtime-review-testbed",
+          "run_id": "31999999901",
+          "sha": "aa11bb22cc33dd44ee55ff6677889900aabbccdd",
+          "server_url": "https://github.com"
+        }
+      },
+      "network": {
+        "egress": {
+          "peers": [
+            {
+              "remote_address": "104.16.24.34",
+              "remote_names": [
+                "registry.npmjs.org"
+              ],
+              "remote_ports": [
+                "443"
+              ],
+              "protocol": "tcp",
+              "proc_trees": [
+                {
+                  "pid": 3101,
+                  "process": "node",
+                  "github_step": "2. Install dependencies",
+                  "ancestry": [
+                    "systemd",
+                    "Runner.Worker",
+                    "bash",
+                    "node"
+                  ]
+                }
+              ]
+            },
+            {
+              "remote_address": "140.82.113.29",
+              "remote_names": [
+                "glb-2a3c35-public-internal.githubapp.com"
+              ],
+              "remote_ports": [
+                "443"
+              ],
+              "protocol": "tcp",
+              "proc_trees": [
+                {
+                  "pid": 1811,
+                  "process": "provjobd524288000",
+                  "github_step": "99. Runner Processes",
+                  "ancestry": [
+                    "systemd",
+                    "hosted-compute-agent",
+                    "sudo",
+                    "provjobd524288000"
+                  ]
+                }
+              ]
+            },
+            {
+              "remote_address": "140.82.112.31",
+              "remote_names": [
+                "hosted-compute-watchdog-prod-iad-02.githubapp.com"
+              ],
+              "remote_ports": [
+                "443"
+              ],
+              "protocol": "tcp",
+              "proc_trees": [
+                {
+                  "pid": 1812,
+                  "process": "hosted-compute-agent",
+                  "github_step": "",
+                  "ancestry": [
+                    "systemd",
+                    "hosted-compute-agent"
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      }
+    },
+    {
+      "uuid": "0e4a190b-8c3d-4a69-7b2c-1d0e5f6a7b03",
+      "timestamp": "2026-08-06T12:00:00.000000000Z",
+      "metadata": {
+        "version": "0.2.0"
+      },
+      "scenarios": {
+        "github": {
+          "scenario_type": "github",
+          "workflow": "ci",
+          "job": "warmup",
+          "repository": "garnet-org/runtime-review-testbed",
+          "run_id": "31999999901",
+          "sha": "aa11bb22cc33dd44ee55ff6677889900aabbccdd",
+          "server_url": "https://github.com"
+        }
+      },
+      "network": {
+        "egress": {
+          "peers": [
+            {
+              "remote_address": "127.0.0.53",
+              "remote_names": [
+                "localhost"
+              ],
+              "remote_ports": [
+                "53 (dns)"
+              ],
+              "protocol": "udp",
+              "proc_trees": [
+                {
+                  "pid": 1821,
+                  "process": "provjobd629145600",
+                  "github_step": "99. Runner Processes",
+                  "ancestry": [
+                    "systemd",
+                    "hosted-compute-agent",
+                    "sudo",
+                    "provjobd629145600"
+                  ]
+                }
+              ]
+            },
+            {
+              "remote_address": "140.82.114.31",
+              "remote_names": [
+                "hosted-compute-watchdog-prod-iad-02.githubapp.com"
+              ],
+              "remote_ports": [
+                "443"
+              ],
+              "protocol": "tcp",
+              "proc_trees": [
+                {
+                  "pid": 1822,
+                  "process": "hosted-compute-agent",
+                  "github_step": "",
+                  "ancestry": [
+                    "systemd",
+                    "hosted-compute-agent"
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

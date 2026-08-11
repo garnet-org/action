@@ -1,0 +1,132 @@
+[
+  {
+    "$comment": "Synthetic v6.7.0 attribution fixture, job 'release' — a reparented chain (recorded ancestry root systemd, no Runner.Worker) carrying a real recorded workflow step renders in the job's workload tree, and an attributed Runner.Worker→…→bun→169.254.169.254 chain with a recorded step renders bold in the workload tree with the '(cloud metadata)' note.",
+    "uuid": "3b7d4c3e-1f6a-4d9c-8e5f-4a3b8c9d0e01",
+    "timestamp": "2026-08-07T14:00:00.000000000Z",
+    "metadata": {
+      "version": "0.2.0"
+    },
+    "scenarios": {
+      "github": {
+        "scenario_type": "github",
+        "workflow": "ci",
+        "job": "release",
+        "repository": "garnet-org/runtime-review-testbed",
+        "run_id": "32000000003",
+        "sha": "dd44ee55ff6677889900aabbccddee1122334455",
+        "server_url": "https://github.com"
+      }
+    },
+    "network": {
+      "egress": {
+        "peers": [
+          {
+            "remote_address": "203.0.113.80",
+            "remote_names": [
+              "artifacts.example.net"
+            ],
+            "remote_ports": [
+              "443"
+            ],
+            "protocol": "tcp",
+            "proc_trees": [
+              {
+                "pid": 5001,
+                "process": "node",
+                "github_step": "5. Publish artifacts",
+                "ancestry": [
+                  "systemd",
+                  "node"
+                ]
+              }
+            ]
+          },
+          {
+            "remote_address": "169.254.169.254",
+            "remote_names": [],
+            "remote_ports": [
+              "80"
+            ],
+            "protocol": "tcp",
+            "proc_trees": [
+              {
+                "pid": 5002,
+                "process": "bun",
+                "github_step": "4. Run integration tests",
+                "ancestry": [
+                  "systemd",
+                  "Runner.Worker",
+                  "bash",
+                  "bun"
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    }
+  },
+  {
+    "$comment": "Synthetic v6.9.0 bracket-context fixture, job 'provision' — a systemd→python3→169.254.169.254 chain renders in the job's one block with the '(cloud metadata)' note (the same destination another job reaches from a Runner.Worker root, recorded independently), and the Azure wireserver 168.63.129.16 stays a bare address with no vendor label.",
+    "uuid": "3b7d4c3e-1f6a-4d9c-8e5f-4a3b8c9d0e02",
+    "timestamp": "2026-08-07T14:00:00.000000000Z",
+    "metadata": {
+      "version": "0.2.0"
+    },
+    "scenarios": {
+      "github": {
+        "scenario_type": "github",
+        "workflow": "ci",
+        "job": "provision",
+        "repository": "garnet-org/runtime-review-testbed",
+        "run_id": "32000000003",
+        "sha": "dd44ee55ff6677889900aabbccddee1122334455",
+        "server_url": "https://github.com"
+      }
+    },
+    "network": {
+      "egress": {
+        "peers": [
+          {
+            "remote_address": "169.254.169.254",
+            "remote_names": [],
+            "remote_ports": [
+              "80"
+            ],
+            "protocol": "tcp",
+            "proc_trees": [
+              {
+                "pid": 5101,
+                "process": "python3",
+                "github_step": "",
+                "ancestry": [
+                  "systemd",
+                  "python3"
+                ]
+              }
+            ]
+          },
+          {
+            "remote_address": "168.63.129.16",
+            "remote_names": [],
+            "remote_ports": [
+              "80"
+            ],
+            "protocol": "tcp",
+            "proc_trees": [
+              {
+                "pid": 5102,
+                "process": "walinuxagent",
+                "github_step": "",
+                "ancestry": [
+                  "systemd",
+                  "walinuxagent"
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    }
+  }
+]

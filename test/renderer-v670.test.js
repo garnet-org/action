@@ -6,10 +6,10 @@ import { fileURLToPath } from "node:url"
 import {
   addressNameMap,
   buildRunReview,
+  commentEdges,
   compareJobEdges,
   destinationIdentity,
-  partitionCommentEdges,
-  renderJobDiffTree,
+  exportReviewModel,
   renderRunReview,
   summarizeProfile,
   VOCAB,
@@ -55,8 +55,8 @@ const diffFence = (markdown) => {
 const markedDestinations = (fence) =>
   fence
     .split("\n")
-    .filter((line) => /^[+-] .*→ /.test(line))
-    .map((line) => line.slice(line.indexOf("→ ") + 2).replace(/\s+\([^)]*\).*$/, "").trim())
+    .filter((line) => /^[+-] .*○ /.test(line))
+    .map((line) => line.slice(line.indexOf("○ ") + 2).replace(/\s+\([^)]*\).*$/, "").trim())
 
 const destinationDisplay = (id) =>
   id.includes(".") && !/^(?:\d{1,3}\.){3}\d{1,3}$/.test(id)
@@ -73,24 +73,22 @@ const escapedDisplay = (id) =>
 function assertPairSemantics(label, previous, head) {
   const previousJob = summarize(previous)
   const headJob = summarize(head)
-  const headWorkload = partitionCommentEdges(headJob.edges).shown
-  const previousWorkload = partitionCommentEdges(previousJob.edges).shown
-  const workload = compareJobEdges(headWorkload, previousWorkload)
+  // Whole-job destination-identity diff — no partition, no quieting layer.
+  const delta = compareJobEdges(headJob.edges, previousJob.edges)
   const review = reviewForPair(previous, head)
   const markdown = renderRunReview(review)
-  const substrateStart = markdown.indexOf("dns + runner substrate")
-  const mainMarkdown = substrateStart < 0 ? markdown : markdown.slice(0, substrateStart)
-  const fence = diffFence(mainMarkdown)
-  const plus = markedDestinations(fence).filter((_, index) => fence.split("\n").filter((line) => /^[+-] .*→ /.test(line))[index].startsWith("+"))
-  const minus = markedDestinations(fence).filter((_, index) => fence.split("\n").filter((line) => /^[+-] .*→ /.test(line))[index].startsWith("-"))
-  const expectedPlus = [...workload.addedIds].map(destinationDisplay).sort()
-  const expectedMinus = [...workload.removedIds].map(destinationDisplay).sort()
+  const fence = diffFence(markdown)
+  const markedLines = fence.split("\n").filter((line) => /^[+-] .*○ /.test(line))
+  const plus = markedDestinations(fence).filter((_, index) => markedLines[index].startsWith("+"))
+  const minus = markedDestinations(fence).filter((_, index) => markedLines[index].startsWith("-"))
+  const expectedPlus = [...delta.addedIds].map(destinationDisplay).sort()
+  const expectedMinus = [...delta.removedIds].map(destinationDisplay).sort()
   assert.deepEqual([...plus].sort(), expectedPlus, `${label}: added identities`)
   assert.deepEqual([...minus].sort(), expectedMinus, `${label}: removed identities`)
   assert.equal(new Set(plus).size, plus.length, `${label}: duplicate added identity`)
   assert.equal(new Set(minus).size, minus.length, `${label}: duplicate removed identity`)
-  assert.equal(workload.addedCount, expectedPlus.length)
-  assert.equal(workload.removedCount, expectedMinus.length)
+  assert.equal(delta.addedCount, expectedPlus.length)
+  assert.equal(delta.removedCount, expectedMinus.length)
 
   const pairNames = addressNameMap(headJob.edges, previousJob.edges)
   const expectedVisible = new Set(
@@ -104,7 +102,7 @@ function assertPairSemantics(label, previous, head) {
       `${label}: ${identity} is not visible`,
     )
   }
-  return { review, markdown, workload }
+  return { review, markdown, delta }
 }
 
 function mutateDuplicateLeaves(profile) {
@@ -225,21 +223,22 @@ for (const path of fixtureFiles) {
   }
 }
 
-// Run-scope adjacency truth: the metadata's chain/destination numbers count
+// Run-scope adjacency truth: the metadata's destination number counts
 // exactly the rendered head rows (unmarked and `+`; `−` rows belong to the
-// previous record) across every fold, workload and substrate alike.
+// previous record) of the job folds' trees, and chain counts never render
+// on the human surface — the chain aggregate lives in the marker only.
 const undefang = (value) => value.replace(/\[\.\]/g, ".")
 function renderedHeadRows(markdown) {
   const body = markdown.split("\n---\n")[0]
   const rows = []
   for (const line of body.split("\n")) {
-    const arrow = line.indexOf("→ ")
-    if (arrow < 0) continue
+    const terminal = line.indexOf("○ ")
+    if (terminal < 0) continue
     if (/^-/.test(line)) continue
     rows.push(
       undefang(
         line
-          .slice(arrow + 2)
+          .slice(terminal + 2)
           .replace(/<\/?[a-z]+>/g, "")
           .replace(/\s+\([^)]*\).*$/, "")
           .trim(),
@@ -255,19 +254,27 @@ for (const [label, previousName, headName] of pairSpecs) {
     load(join(churnDir, headName)),
   )
   const rows = renderedHeadRows(markdown)
-  const chainsClaim = Number(markdown.match(/(\d+)&nbsp;execution chain/)[1])
-  const destinationsClaim = Number(markdown.match(/(\d+)&nbsp;destination/)[1])
-  assert.equal(chainsClaim, rows.length, `${label}: metadata chains vs rendered rows`)
+  const metadataLine = markdown.split("\n").find((line) => line.startsWith("> *")) ?? ""
+  const destinationsClaim = Number(metadataLine.match(/(\d+)&nbsp;destination/)?.[1] ?? 0)
   assert.equal(
     destinationsClaim,
     new Set(rows).size,
     `${label}: metadata destinations vs rendered identities`,
   )
+  const humanSurface = markdown.replace(/<!--[^]*?-->/g, "")
+  assert.ok(
+    !/\d+(?:&nbsp;| )(?:execution )?chains?\b/.test(humanSurface),
+    `${label}: chain counts never render on the human surface`,
+  )
+  assert.ok(
+    !humanSurface.includes("runner background") && !humanSurface.includes("runner-background"),
+    `${label}: no background partition vocabulary`,
+  )
 }
 
-// Cross-partition unification: a name recorded only on a substrate edge
-// still names the workload row for the same address — the identity never
-// loses its name between the two partitions.
+// Name unification: a name recorded on any of a destination's edges names
+// every rendered row for the same address — the identity never loses its
+// name between chains, and duplicate identities dedupe to one leaf.
 {
   const bare = {
     remote_address: "192.0.2.7",
@@ -288,23 +295,22 @@ for (const [label, previousName, headName] of pairSpecs) {
     ancestry: ["systemd"],
     github_step: "",
   }
-  const { shown, substrate } = partitionCommentEdges([bare, named])
-  assert.equal(shown.length, 1, "cross-partition: one workload row")
-  assert.equal(substrate.length, 0, "cross-partition: no duplicate identity row")
-  assert.deepEqual(
-    shown[0].remote_names,
-    ["unified.example.com"],
-    "cross-partition: workload row carries the captured name",
-  )
+  const projected = commentEdges([bare, named])
+  assert.ok(projected.length >= 1, "projection keeps the recorded chains")
+  for (const edge of projected) {
+    assert.deepEqual(
+      edge.remote_names,
+      ["unified.example.com"],
+      "every projected row carries the captured name",
+    )
+  }
 }
 
-// A vanished job whose record was substrate-only still appears under
-// `jobs no longer recorded` with its comment-register chain count.
+// A vanished job appears under `jobs no longer recorded` with its
+// destination count — the same pointable unit as everywhere else.
 {
   const previous = load(join(churnDir, "pr96-substrate-previous.json"))
   const previousJob = summarize(previous)
-  const previousPartition = partitionCommentEdges(previousJob.edges)
-  assert.equal(previousPartition.shown.length, 0, "specimen must be substrate-only")
   const headJob = summarize(load(join(churnDir, "pr98-workload-head.json")))
   const markdown = renderRunReview(
     buildRunReview({
@@ -318,17 +324,17 @@ for (const [label, previousName, headName] of pairSpecs) {
   )
   assert.ok(
     markdown.includes("jobs no longer recorded"),
-    "vanished substrate-only job must be listed",
+    "vanished job must be listed",
   )
   const entry = markdown
     .split("\n")
-    .find((line) => line.includes("jobs no longer recorded") && line.includes("&nbsp;chain"))
-  const count = Number(entry.match(/(\d+)&nbsp;chain/)[1])
-  assert.equal(
-    count,
-    previousPartition.shown.length + previousPartition.substrate.length,
-    "vanished job counts its comment-register rows",
-  )
+    .find((line) => line.includes("jobs no longer recorded") && line.includes("&nbsp;destination"))
+  const count = Number(entry.match(/(\d+)&nbsp;destination/)[1])
+  const names = addressNameMap(previousJob.edges)
+  const expected = new Set(
+    commentEdges(previousJob.edges).map((edge) => destinationIdentity(edge, names)),
+  ).size
+  assert.equal(count, expected, "vanished job counts its distinct destinations")
 }
 
 // ---------------------------------------------------------------------------
@@ -383,10 +389,7 @@ for (const [label, previousName, headName] of pairSpecs) {
     .split("\n")
     .find((line) => line.startsWith("> *") && line.includes("job changed"))
   assert.ok(jobsLine, "comparison with changes carries a jobs line")
-  const workload = compareJobEdges(
-    partitionCommentEdges(changedJob.edges).shown,
-    partitionCommentEdges(summarize(previous).edges).shown,
-  )
+  const workload = compareJobEdges(changedJob.edges, summarize(previous).edges)
   assert.ok(
     jobsLine.includes(
       `1&nbsp;job changed ${[
@@ -414,8 +417,29 @@ for (const [label, previousName, headName] of pairSpecs) {
   assert.equal(summary.added, workload.addedCount)
   assert.equal(summary.removed, workload.removedCount)
   assert.equal(summary.changed + summary.unchanged + summary.noOutbound, summary.jobs)
-  const metadataChains = Number(markdown.match(/(\d+)&nbsp;execution chain/)[1])
-  assert.equal(summary.chains, metadataChains, "marker chains equal the metadata count")
+  assert.deepEqual(summary.kinds, ["network"], "marker kinds list the observation classes")
+  assert.deepEqual(
+    Object.keys(summary),
+    [
+      "contract",
+      "commit",
+      "previous",
+      "jobs",
+      "changed",
+      "unchanged",
+      "noOutbound",
+      "vanished",
+      "added",
+      "removed",
+      "vanishedDestinations",
+      "chains",
+      "destinations",
+      "kinds",
+    ],
+    "marker key order is contract-locked",
+  )
+  const metadataDestinations = Number(markdown.match(/(\d+)&nbsp;destination/)[1])
+  assert.equal(summary.destinations, metadataDestinations, "marker destinations equal the metadata count")
 
   // Fold budget: one changed job renders open; more changed jobs than the
   // budget renders every job fold collapsed while deltas stay on fold rows.
@@ -535,11 +559,11 @@ const reviewFor = (headProfile, previousProfile = null) => {
   assert.ok(diffFence(markdown).split("\n").some((line) => line.startsWith("- ")), "removal renders as a − row")
 }
 
-// Substrate rows that exist only on the previous record still render: the
-// substrate fold appears with its removals even when the head record has no
-// substrate rows, and its count matches its rendered head rows (zero).
+// A root that exists only on the previous record still renders: its chains
+// render as − rows in the job's one diff fence — no destination silently
+// leaves the comparison.
 {
-  const substratePeer = {
+  const resolverPeer = {
     remote_address: "127.0.0.53",
     remote_names: [],
     remote_ports: ["53"],
@@ -549,45 +573,48 @@ const reviewFor = (headProfile, previousProfile = null) => {
   }
   const previous = syntheticProfile({
     sha: "d".repeat(40),
-    peers: [workloadPeer("198.51.100.7", ["kept.example.com"]), substratePeer],
+    peers: [workloadPeer("198.51.100.7", ["kept.example.com"]), resolverPeer],
   })
   const head = syntheticProfile({
     peers: [workloadPeer("198.51.100.7", ["kept.example.com"])],
   })
   const markdown = renderRunReview(reviewFor(head, previous))
-  assert.ok(markdown.includes("dns + runner substrate"), "previous-only substrate fold renders")
-  assert.ok(markdown.includes("127.0.0.53"), "previous-only substrate row stays visible")
+  const fence = diffFence(markdown)
+  assert.ok(
+    fence.split("\n").some((line) => line.startsWith("- ") && line.includes("127.0.0.53")),
+    "previous-only destination renders as a − row",
+  )
 }
 
-// Partition movement: a destination recorded on both commits never becomes
-// added or removed when its attribution moves between the workload tree and
-// the substrate fold — one job-wide identity scope governs both partitions.
+// Whole-job identity: a destination recorded on both commits never becomes
+// added or removed — even when its recorded ancestry differs between the
+// two records. There is no moved category and no movement note.
 {
-  const moved = "45.55.44.33"
+  const kept = "45.55.44.33"
   const previous = syntheticProfile({
     sha: "e".repeat(40),
     peers: [
       workloadPeer("198.51.100.7", ["kept.example.com"]),
-      workloadPeer(moved, [], {
+      workloadPeer(kept, [], {
         proc_trees: [{ pid: 3, process: "provjobd", github_step: "", ancestry: ["provjobd"] }],
       }),
     ],
   })
   const head = syntheticProfile({
-    peers: [workloadPeer("198.51.100.7", ["kept.example.com"]), workloadPeer(moved, [])],
+    peers: [workloadPeer("198.51.100.7", ["kept.example.com"]), workloadPeer(kept, [])],
   })
   const markdown = renderRunReview(reviewFor(head, previous))
   const fence = diffFence(markdown)
   assert.ok(
-    !fence.split("\n").some((line) => /^[+-] /.test(line) && line.includes(moved)),
-    "partition movement is never an added/removed identity",
+    !fence.split("\n").some((line) => /^[+-] /.test(line) && line.includes(kept)),
+    "an identity present on both commits is never an added/removed identity",
   )
-  assert.ok(markdown.includes(moved), "moved destination stays visible")
+  assert.ok(markdown.includes(kept), "the destination stays visible")
+  assert.ok(!markdown.includes("previously in"), "no movement notes render")
 }
 
-// A job whose workload tree is unchanged but whose substrate fold renders a
-// diff never claims bare `no change`: the fold row scopes the claim to the
-// workload and the substrate fold carries its own movement.
+// A dns-resolver chain renders in the job's one tree as a normal leaf with
+// the `(dns resolver)` note, counted and diffed like every destination.
 {
   const dnsPeer = (address) => ({
     remote_address: address,
@@ -606,27 +633,23 @@ const reviewFor = (headProfile, previousProfile = null) => {
     peers: [workloadPeer("198.51.100.7", ["kept.example.com"]), dnsPeer("127.0.0.53")],
   })
   const markdown = renderRunReview(reviewFor(head, previous))
+  const fence = diffFence(markdown)
+  assert.ok(
+    fence.split("\n").some((line) => line.startsWith("+ ") && line.includes("localhost") && line.includes("(dns resolver)")),
+    "dns leaf renders inline as a + row with its note",
+  )
   const foldRow = markdown
     .split("\n")
     .find((line) => line.includes("<summary>") && line.includes("<code>app</code>")) || ""
-  assert.ok(foldRow.includes(VOCAB.noWorkloadChange), "substrate-only movement scopes the claim to the workload")
-  assert.ok(
-    !new RegExp(`· ${VOCAB.noChange}(\\b|<)`).test(foldRow),
-    "a job whose substrate fold renders a diff never claims bare 'no change'",
-  )
-  const substrateRow = markdown
-    .split("\n")
-    .find((line) => line.includes(VOCAB.substrateFoldLabel)) || ""
-  assert.match(substrateRow, /\+1&nbsp;destination/, "the substrate fold label carries its own movement")
+  assert.match(foldRow, /\+1<\/b>&nbsp;destination/, "the job fold row carries the delta")
 }
 
-// Runner-substrate rotation: GitHub rotates the provisioning daemon's PID
-// suffix and the load balancer's address between runs. The same recorded
-// destination name must stay one identity — never a `−`/`+` pair — and the
-// chain must render inside the collapsed substrate fold, never in the
-// workload tree.
+// Rotation honesty: GitHub rotates the provisioning daemon's PID suffix and
+// the load balancer's address between runs. The same recorded destination
+// name stays one identity — never a `−`/`+` pair — because identity is the
+// recorded name; there is no quieting layer beyond identity itself.
 {
-  const substratePeer = (address, pidSuffix) => ({
+  const infraPeer = (address, pidSuffix) => ({
     remote_address: address,
     remote_names: ["glb-2a3c35-public-internal.githubapp.com"],
     remote_ports: ["443 (https)"],
@@ -642,22 +665,27 @@ const reviewFor = (headProfile, previousProfile = null) => {
   })
   const previous = syntheticProfile({
     sha: "e".repeat(40),
-    peers: [workloadPeer("198.51.100.7", ["kept.example.com"]), substratePeer("140.82.112.99", "999999999")],
+    peers: [workloadPeer("198.51.100.7", ["kept.example.com"]), infraPeer("140.82.112.99", "999999999")],
   })
   const head = syntheticProfile({
-    peers: [workloadPeer("198.51.100.7", ["kept.example.com"]), substratePeer("140.82.114.23", "811584691")],
+    peers: [workloadPeer("198.51.100.7", ["kept.example.com"]), infraPeer("140.82.114.23", "811584691")],
   })
   const markdown = renderRunReview(reviewFor(head, previous))
   assert.ok(
     !diffFence(markdown)
       .split("\n")
       .some((line) => /^[+-] /.test(line) && line.includes("glb-2a3c35-public-internal")),
-    "rotated substrate address is never an added/removed identity",
+    "rotated infra address is never an added/removed identity",
   )
   const lines = markdown.split("\n")
-  const substrateFold = lines.findIndex((line) => line.includes(VOCAB.substrateFoldLabel))
-  const glb = lines.findIndex((line) => line.includes("glb-2a3c35-public-internal"))
-  assert.ok(substrateFold >= 0 && glb > substrateFold, "substrate chain renders inside the substrate fold")
+  assert.ok(
+    lines.some((line) => line.includes("glb-2a3c35-public-internal")),
+    "the infra chain renders in the job's one block",
+  )
+  assert.ok(
+    lines.some((line) => line.includes("glb-2a3c35-public-internal") && line.includes("(github infra)")),
+    "the github infra note renders",
+  )
   assert.ok(
     !lines.some((line) => line.includes("provjobd811584691")),
     "the PID suffix never reaches the rendered tree",
@@ -773,10 +801,11 @@ const reviewFor = (headProfile, previousProfile = null) => {
   assert.equal(parsed.commit, hostileSha, "JSON.parse restores the recorded bytes")
 }
 
-// Attribution alone decides the workload/substrate partition: a recorded
-// detection on an unattributed runner-infrastructure chain keeps its emphasis
-// and detection note inside the substrate fold, never renders in the workload
-// tree, and rotating infra destinations never produce workload +/− rows.
+// One block per job: an unattributed runner-infrastructure chain renders in
+// the same block as the workload chains — a separate whitespace-separated
+// root, never a fold, section, or label of its own. When its recorded name
+// changes between commits, the diff marks it honestly (+ and − rows) and
+// the marks count in the row delta — no quieting layer.
 {
   const infraPeer = (name) =>
     workloadPeer("20.75.202.224", [name], {
@@ -805,29 +834,263 @@ const reviewFor = (headProfile, previousProfile = null) => {
   })
 
   const snapshot = renderRunReview(reviewFor(head))
-  const substrateStart = snapshot.indexOf("dns + runner substrate")
-  assert.ok(substrateStart !== -1, "substrate fold renders")
   assert.ok(
-    !snapshot.slice(0, substrateStart).includes("glb-p4a577"),
-    "infra chain never renders in the workload tree",
+    snapshot.includes("glb-p4a577-public-internal.githubapp[.]com"),
+    "infra destination renders in the job's block",
   )
-  assert.ok(
-    snapshot.slice(substrateStart).includes("glb-p4a577-public-internal.githubapp[.]com"),
-    "infra destination stays visible inside the fold",
+  assert.equal(
+    (snapshot.match(/<details/g) || []).length,
+    2,
+    "one job fold plus the explainer — no extra fold for infrastructure",
   )
-  assert.ok(
-    snapshot.slice(substrateStart).includes("<strong>provjobd</strong>"),
-    "detection keeps emphasis inside the fold",
-  )
+  const pre = snapshot.slice(snapshot.indexOf("<pre>"), snapshot.indexOf("</pre>"))
+  assert.ok(pre.includes("\n\n"), "independent roots separate with one blank line")
 
   const comparison = renderRunReview(reviewFor(head, previous))
-  const workloadFence = diffFence(comparison.slice(0, comparison.indexOf("dns + runner substrate")))
-  assert.deepEqual(
-    markedDestinations(workloadFence),
-    [],
-    "rotated infra destination never renders as workload +/−",
+  const fence = diffFence(comparison)
+  const marked = markedDestinations(fence)
+  assert.ok(
+    marked.includes("glb-p4a577-public-internal.githubapp[.]com"),
+    "the new infra name is an added identity",
+  )
+  assert.ok(
+    marked.includes("hosted-compute-watchdog-prod-eus-02[.]githubapp"),
+    "the old infra name is a removed identity",
   )
 }
 
-console.log(`v6.6.1 semantic and perturbation gates passed for ${pairSpecs.length} real pairs`)
+// ---------------------------------------------------------------------------
+// v6.9.0 gates: git-shaped branch marking, ran-from annotation, honest
+// whole-job diff, snapshot no-header, no meaning in typography alone.
+// ---------------------------------------------------------------------------
+
+const foldRowDelta = (markdown) => {
+  const row = markdown
+    .split("\n")
+    .find((line) => line.includes("<summary>") && line.includes("&nbsp;destination")) || ""
+  const added = Number(row.match(/\+(\d+)/)?.[1] ?? 0)
+  const removed = Number(row.match(/−(\d+)/)?.[1] ?? 0)
+  return { added, removed }
+}
+const markedLeafLines = (fence, mark) =>
+  fence.split("\n").filter((line) => line.startsWith(`${mark} `) && line.includes("○ "))
+const markedLineageLines = (fence, mark) =>
+  fence.split("\n").filter((line) => line.startsWith(`${mark} `) && !line.includes("○ "))
+
+// A genuinely new chain marks the whole new branch from its divergence
+// point — lineage lines included — while fold-row counts stay
+// destination-anchored: marked leaves equal the row's ±.
+{
+  const previous = syntheticProfile({
+    sha: "1".repeat(40),
+    peers: [workloadPeer("198.51.100.7", ["kept.example.com"])],
+  })
+  const head = syntheticProfile({
+    peers: [
+      workloadPeer("198.51.100.7", ["kept.example.com"]),
+      workloadPeer("203.0.113.5", ["fresh.example.org"], {
+        proc_trees: [
+          {
+            pid: 21,
+            process: "python3",
+            github_step: "2. Exfil",
+            ancestry: ["Runner.Worker", "bash", "python3"],
+          },
+        ],
+      }),
+    ],
+  })
+  const markdown = renderRunReview(reviewFor(head, previous))
+  const fence = diffFence(markdown)
+  assert.ok(
+    markedLineageLines(fence, "+").some((line) => line.includes("python3")),
+    "a new chain marks its new lineage lines +",
+  )
+  assert.ok(
+    markedLeafLines(fence, "+").some((line) => line.includes("fresh.example[.]org")),
+    "the new chain's destination leaf is marked +",
+  )
+  const delta = foldRowDelta(markdown)
+  assert.equal(markedLeafLines(fence, "+").length, delta.added, "marked + leaves equal the fold-row +")
+  assert.equal(markedLeafLines(fence, "-").length, delta.removed, "marked − leaves equal the fold-row −")
+}
+
+// A new destination under existing lineage marks only its leaf; the shared
+// lineage stays context. Symmetric for removals: a vanished whole chain
+// marks its lineage −.
+{
+  const previous = syntheticProfile({
+    sha: "2".repeat(40),
+    peers: [
+      workloadPeer("198.51.100.7", ["kept.example.com"]),
+      workloadPeer("192.0.2.44", ["leaving.example.net"], {
+        proc_trees: [
+          {
+            pid: 31,
+            process: "ruby",
+            github_step: "3. Old",
+            ancestry: ["Runner.Worker", "bash", "ruby"],
+          },
+        ],
+      }),
+    ],
+  })
+  const head = syntheticProfile({
+    peers: [
+      workloadPeer("198.51.100.7", ["kept.example.com"]),
+      workloadPeer("203.0.113.9", ["extra.example.org"]),
+    ],
+  })
+  const markdown = renderRunReview(reviewFor(head, previous))
+  const fence = diffFence(markdown)
+  assert.ok(
+    markedLeafLines(fence, "+").some((line) => line.includes("extra.example[.]org")),
+    "new destination under existing lineage marks its leaf",
+  )
+  assert.ok(
+    !markedLineageLines(fence, "+").some((line) => line.includes("node")),
+    "shared lineage under a mixed subtree stays context",
+  )
+  assert.ok(
+    markedLineageLines(fence, "-").some((line) => line.includes("ruby")),
+    "a vanished chain marks its lineage −",
+  )
+  assert.ok(
+    markedLeafLines(fence, "-").some((line) => line.includes("leaving.example[.]net")),
+    "the vanished chain's leaf is marked −",
+  )
+  const delta = foldRowDelta(markdown)
+  assert.equal(markedLeafLines(fence, "+").length, delta.added, "+ leaves equal the fold-row +")
+  assert.equal(markedLeafLines(fence, "-").length, delta.removed, "− leaves equal the fold-row −")
+  // No identity carries both marks in one job.
+  const identity = (line) =>
+    line.slice(line.indexOf("○ ") + 2).replace(/\s+\([^)]*\).*$/, "").trim()
+  const plusIds = new Set(markedLeafLines(fence, "+").map(identity))
+  for (const id of markedLeafLines(fence, "-").map(identity)) {
+    assert.ok(!plusIds.has(id), `identity ${id} carries both + and −`)
+  }
+}
+
+// Executable provenance: a recorded executable under a user-writable temp
+// dir renders `(ran from <dir>/…)` — the recorded directory only. The full
+// path and recorded arguments never render, and the model never carries
+// them.
+{
+  const head = syntheticProfile({
+    peers: [
+      workloadPeer("203.0.113.7", ["payload.example.org"], {
+        proc_trees: [
+          {
+            pid: 41,
+            process: "dropper",
+            github_step: "1. Build",
+            ancestry: ["Runner.Worker", "bash", "dropper"],
+            executable: "/tmp/.hidden/dropper",
+            arguments: "dropper --exfil secret-token",
+          },
+        ],
+      }),
+    ],
+  })
+  const snapshot = renderRunReview(reviewFor(head))
+  assert.ok(
+    snapshot.includes("(ran from /tmp/.hidden/…)"),
+    "the recorded temp directory renders as a ran-from note",
+  )
+  assert.ok(!snapshot.includes("/tmp/.hidden/dropper"), "the full executable path never renders")
+  assert.ok(!snapshot.includes("--exfil"), "recorded arguments never render")
+  const model = JSON.stringify(exportReviewModel(reviewFor(head)))
+  assert.ok(!model.includes("/tmp/.hidden/dropper"), "the review model never carries the full path")
+  assert.ok(!model.includes("--exfil"), "the review model never carries arguments")
+
+  // Ordinary processes stay bare: no detection, no temp-dir executable — no
+  // note.
+  const ordinary = syntheticProfile({
+    peers: [
+      workloadPeer("203.0.113.8", ["plain.example.org"], {
+        proc_trees: [
+          {
+            pid: 42,
+            process: "node",
+            github_step: "1. Build",
+            ancestry: ["Runner.Worker", "bash", "node"],
+            executable: "/usr/bin/node",
+          },
+        ],
+      }),
+    ],
+  })
+  assert.ok(
+    !renderRunReview(reviewFor(ordinary)).includes("ran from"),
+    "ordinary executables carry no ran-from note",
+  )
+}
+
+// Whole-job honesty: an infrastructure-rooted destination change is a real
+// change — it flips the job's changed status, renders in the diff, counts
+// in the fold-row delta and the jobs line. No quiet layer exists.
+{
+  const infraPeer = (address, name) => ({
+    remote_address: address,
+    remote_names: [name],
+    remote_ports: ["443 (https)"],
+    protocol: "tcp",
+    proc_trees: [{ pid: 5, process: "provjobd", github_step: "", ancestry: ["systemd", "provjobd"] }],
+  })
+  const previous = syntheticProfile({
+    sha: "5".repeat(40),
+    peers: [workloadPeer("198.51.100.7", ["kept.example.com"]), infraPeer("140.82.112.1", "glb-rotating.githubapp.com")],
+  })
+  const head = syntheticProfile({
+    peers: [
+      workloadPeer("198.51.100.7", ["kept.example.com"]),
+      infraPeer("140.82.112.1", "glb-rotating.githubapp.com"),
+      infraPeer("140.82.113.9", "new-infra.githubapp.com"),
+    ],
+  })
+  const markdown = renderRunReview(reviewFor(head, previous))
+  const jobsLine = markdown
+    .split("\n")
+    .find((line) => line.startsWith("> *") && line.includes("job changed"))
+  assert.ok(jobsLine, "an infrastructure destination change renders a changed clause")
+  const delta = foldRowDelta(markdown)
+  assert.equal(delta.added, 1, "the fold-row delta counts the new destination")
+  const fence = diffFence(markdown)
+  assert.ok(
+    markedLeafLines(fence, "+").some((line) => line.includes("new-infra.githubapp[.]com")),
+    "the new destination renders as a + row in the job's one diff fence",
+  )
+}
+
+// Snapshot trees have no @@ header line at all.
+{
+  const snapshot = renderRunReview(
+    reviewFor(syntheticProfile({ peers: [workloadPeer("198.51.100.7", ["kept.example.com"])] })),
+  )
+  assert.ok(!snapshot.includes("@@"), "snapshot renders no diff header")
+}
+
+// No meaning in typography alone: diff fences strip emphasis; every
+// emphasized run in a golden sits inside a <pre> snapshot tree, never in a
+// fence — bold/italic stay decoration.
+{
+  const goldensDir = join(here, "fixtures", "renderer-testdata", "goldens")
+  const { readdirSync } = await import("node:fs")
+  for (const name of readdirSync(goldensDir)) {
+    if (!name.endsWith(".md")) continue
+    const golden = readFileSync(join(goldensDir, name), "utf8")
+    let inFence = false
+    for (const line of golden.split("\n")) {
+      if (line.startsWith("```")) inFence = !inFence
+      if (inFence) {
+        assert.ok(
+          !/<\/?(?:em|strong|b|i)>/.test(line),
+          `${name}: emphasis inside a diff fence conveys nothing — remove it`,
+        )
+      }
+    }
+  }
+}
+
+console.log(`v6.9.0 semantic and perturbation gates passed for ${pairSpecs.length} real pairs`)
 

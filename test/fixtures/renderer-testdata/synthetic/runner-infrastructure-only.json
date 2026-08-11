@@ -1,0 +1,72 @@
+{
+  "$comment": "Synthetic v6.9.0 fixture — one job whose every recorded chain is runner infrastructure (no Runner.Worker descent, no real recorded workflow step). It renders as an ordinary job fold: one block holding every recorded root, counted in destinations like any other job, with the Actions link on the row and one Execution Profile call to action in the fold.",
+  "id": "019f2c11-aaaa-7bbb-8ccc-0123456789ab",
+  "data": {
+    "uuid": "2a6c3b2d-0e5f-4c8b-9d4e-3f2a7b8c9d01",
+    "timestamp": "2026-08-07T13:00:00.000000000Z",
+    "metadata": {
+      "version": "0.2.0"
+    },
+    "scenarios": {
+      "github": {
+        "scenario_type": "github",
+        "workflow": "ci",
+        "job": "provision",
+        "repository": "garnet-org/runtime-review-testbed",
+        "run_id": "32000000002",
+        "sha": "cc33dd44ee55ff6677889900aabbccddee112233",
+        "server_url": "https://github.com"
+      }
+    },
+    "network": {
+      "egress": {
+        "peers": [
+          {
+            "remote_address": "127.0.0.53",
+            "remote_names": [
+              "localhost"
+            ],
+            "remote_ports": [
+              "53 (dns)"
+            ],
+            "protocol": "udp",
+            "proc_trees": [
+              {
+                "pid": 2001,
+                "process": "provjobd734003200",
+                "github_step": "99. Runner Processes",
+                "ancestry": [
+                  "systemd",
+                  "hosted-compute-agent",
+                  "sudo",
+                  "provjobd734003200"
+                ]
+              }
+            ]
+          },
+          {
+            "remote_address": "140.82.113.41",
+            "remote_names": [
+              "hosted-compute-watchdog-prod-iad-01.githubapp"
+            ],
+            "remote_ports": [
+              "443"
+            ],
+            "protocol": "tcp",
+            "proc_trees": [
+              {
+                "pid": 2002,
+                "process": "hosted-compute-agent",
+                "github_step": "",
+                "ancestry": [
+                  "systemd",
+                  "hosted-compute-agent"
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    }
+  }
+}
