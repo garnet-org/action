@@ -54,7 +54,7 @@ Runner.Worker          <em>← process on a path</em>
 
 | Field | Value |
 | --- | --- |
-| Profile UUID | 019f1bca-e403-7ef6-ae2d-74c191dbff8e |
+| Profile | [019f1bca-e403-7ef6-ae2d-74c191dbff8e](https://app.garnet.ai/public/runs/28492112239?profile=019f1bca-e403-7ef6-ae2d-74c191dbff8e&utm_source=github&utm_medium=step_summary) |
 | Workflow | Garnet Runtime Review |
 | Repository | garnet-labs/runtime-review-testbed |
 | Branch | refs/pull/22/merge |

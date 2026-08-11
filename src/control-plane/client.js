@@ -5,6 +5,7 @@ import {
     EXCHANGE_OIDC_REQUEST_SCHEMA,
     EXCHANGE_OIDC_RESPONSE_SCHEMA,
     MERGED_NET_POLICIES_REQUEST_SCHEMA,
+    PROFILE_ENVELOPE_PAGE_SCHEMA,
 } from "./types.js"
 
 /**
@@ -12,6 +13,14 @@ import {
  * @typedef {import("./types.js").AgentCreatedResponse} AgentCreatedResponse
  * @typedef {import("./types.js").MergedNetPoliciesRequest} MergedNetPoliciesRequest
  * @typedef {import("./types.js").ExchangeOIDCResponse} ExchangeOIDCResponse
+ * @typedef {import("./types.js").ProfileEnvelopePage} ProfileEnvelopePage
+ */
+
+/**
+ * @typedef {{
+ *   runID?: string
+ *   runAttempt?: string
+ * }} AgentProfilesQuery
  */
 
 /**
@@ -118,6 +127,36 @@ export class ControlPlaneClient {
         })
 
         return EXCHANGE_OIDC_RESPONSE_SCHEMA.parse(responseJson)
+    }
+
+    /**
+     * Lists the profile envelopes recorded for an agent, newest metadata
+     * shape passed through as-is; only the envelope identity fields are
+     * validated.
+     * @param {string} agentID
+     * @param {AgentProfilesQuery} [queryInput]
+     * @returns {Promise<ProfileEnvelopePage>}
+     */
+    async agentProfiles(agentID, queryInput = {}) {
+        if (typeof agentID !== "string" || agentID.trim() === "") {
+            throw new Error("ControlPlaneClient: 'agentID' is required")
+        }
+
+        const query = new URLSearchParams()
+        if (queryInput.runID !== undefined && queryInput.runID !== "") {
+            query.set("run_id", queryInput.runID)
+        }
+        if (queryInput.runAttempt !== undefined && queryInput.runAttempt !== "") {
+            query.set("run_attempt", queryInput.runAttempt)
+        }
+
+        const responseJson = await this.requestJson({
+            method: "GET",
+            path: `/api/v1/agents/${encodeURIComponent(agentID)}/profiles`,
+            query,
+        })
+
+        return PROFILE_ENVELOPE_PAGE_SCHEMA.parse(responseJson)
     }
 
     /**

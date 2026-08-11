@@ -39498,6 +39498,30 @@ const API_ERROR_SCHEMA = object({
     error: schemas_string().min(1),
 })
 
+/**
+ * @typedef {object} ProfileEnvelope
+ * @property {string} id
+ * @property {string} runID
+ * @property {string} job
+ */
+
+/**
+ * @typedef {object} ProfileEnvelopePage
+ * @property {ProfileEnvelope[]} items
+ */
+
+const PROFILE_ENVELOPE_SCHEMA = object({
+        id: schemas_string().min(1),
+        runID: schemas_string().default(""),
+        job: schemas_string().default(""),
+    })
+    .passthrough()
+
+const PROFILE_ENVELOPE_PAGE_SCHEMA = object({
+        items: array(PROFILE_ENVELOPE_SCHEMA).default([]),
+    })
+    .passthrough()
+
 ;// CONCATENATED MODULE: ./src/control-plane/client.js
 
 
@@ -39506,6 +39530,14 @@ const API_ERROR_SCHEMA = object({
  * @typedef {import("./types.js").AgentCreatedResponse} AgentCreatedResponse
  * @typedef {import("./types.js").MergedNetPoliciesRequest} MergedNetPoliciesRequest
  * @typedef {import("./types.js").ExchangeOIDCResponse} ExchangeOIDCResponse
+ * @typedef {import("./types.js").ProfileEnvelopePage} ProfileEnvelopePage
+ */
+
+/**
+ * @typedef {{
+ *   runID?: string
+ *   runAttempt?: string
+ * }} AgentProfilesQuery
  */
 
 /**
@@ -39612,6 +39644,36 @@ class ControlPlaneClient {
         })
 
         return EXCHANGE_OIDC_RESPONSE_SCHEMA.parse(responseJson)
+    }
+
+    /**
+     * Lists the profile envelopes recorded for an agent, newest metadata
+     * shape passed through as-is; only the envelope identity fields are
+     * validated.
+     * @param {string} agentID
+     * @param {AgentProfilesQuery} [queryInput]
+     * @returns {Promise<ProfileEnvelopePage>}
+     */
+    async agentProfiles(agentID, queryInput = {}) {
+        if (typeof agentID !== "string" || agentID.trim() === "") {
+            throw new Error("ControlPlaneClient: 'agentID' is required")
+        }
+
+        const query = new URLSearchParams()
+        if (queryInput.runID !== undefined && queryInput.runID !== "") {
+            query.set("run_id", queryInput.runID)
+        }
+        if (queryInput.runAttempt !== undefined && queryInput.runAttempt !== "") {
+            query.set("run_attempt", queryInput.runAttempt)
+        }
+
+        const responseJson = await this.requestJson({
+            method: "GET",
+            path: `/api/v1/agents/${encodeURIComponent(agentID)}/profiles`,
+            query,
+        })
+
+        return PROFILE_ENVELOPE_PAGE_SCHEMA.parse(responseJson)
     }
 
     /**
@@ -39837,6 +39899,9 @@ function getValidationErrorDetail(payload) {
  */
 
 const INSTPATH = "/usr/local/bin"
+// Default Jibril sensor version: the same stable pin as the floating v2 tag,
+// so the sensor never floats under an unchanged action ref.
+const JIBRIL_STABLE_VERSION = "v2.15.0"
 const OIDC_AUTH_FEATURE_FLAG = "GARNET_ACTION_ENABLE_OIDC_AUTH"
 const GITHUB_APP_ID_PROD = "Iv23lihCfwCfqCxQNpvv"
 const GITHUB_APP_ID_STAGING = "Iv23liUXLYx9mgGKHgZk"
@@ -39879,6 +39944,9 @@ async function run() {
         }
         if (controlPlaneAuth.workflowToken !== "") {
             setSecret(controlPlaneAuth.workflowToken)
+            // The post step reuses this token to resolve the run's profile
+            // envelope ID when no api_token input is available.
+            saveState("controlPlaneWorkflowToken", controlPlaneAuth.workflowToken)
         }
         const GITHUB_TOKEN = getEnv("GITHUB_TOKEN", "")
         if (GITHUB_TOKEN !== "") {
@@ -40009,6 +40077,9 @@ async function run() {
         if (AGENT_TOKEN) setSecret(AGENT_TOKEN)
 
         info(`Created agent with ID: ${AGENT_ID}`)
+
+        // The post step resolves the run's profile envelope ID from this agent.
+        saveState("agentID", AGENT_ID)
 
         // Get network policy
         info("Getting network policy")
@@ -40450,10 +40521,11 @@ function resolveJibrilVersion(inputVersion, actionRef) {
     // - action@v1 stays pinned (do not change)
     if (ref === "v0") return "v0.0"
     if (ref === "v1") return "v2.10.4"
-    if (ref === "v2") return "v2.15.0"
+    if (ref === "v2") return JIBRIL_STABLE_VERSION
 
-    // Default for other refs (branch/SHA/etc).
-    return "latest"
+    // Every other ref (branch/SHA/exact tag) gets the same stable pin as v2:
+    // a root eBPF binary must not change under an unchanged action ref.
+    return JIBRIL_STABLE_VERSION
 }
 
 /**
@@ -43811,20 +43883,27 @@ function renderProfileSummary(job, appUrl, keptDestinations, previewAssertions) 
   lines.push("### Workload Summary", "")
   /** @type {[string, string][]} */
   const rows = []
-  if (job.profile_id !== "") rows.push(["Profile UUID", job.profile_id])
-  if (job.workflow !== "") rows.push(["Workflow", job.workflow])
-  if (job.repository !== "") rows.push(["Repository", job.repository])
-  if (job.ref !== "") rows.push(["Branch", job.ref])
-  if (job.sha !== "") rows.push(["Commit", job.sha])
-  if (job.actor !== "") rows.push(["Triggered by", job.actor])
-  if (job.run_id !== "" || job.name !== "") {
-    rows.push(["Run ID / Job", [job.run_id, job.name].filter(Boolean).join(" / ")])
+  if (job.profile_id !== "") {
+    const profileLink = profilePermalink(job, appUrl, "step_summary")
+    const profileCell =
+      profileLink === ""
+        ? escapeMarkdownCell(job.profile_id)
+        : `[${escapeMarkdownCell(job.profile_id)}](${profileLink})`
+    rows.push(["Profile", profileCell])
   }
-  if (job.job_index !== "") rows.push(["Matrix job index", job.job_index])
+  if (job.workflow !== "") rows.push(["Workflow", escapeMarkdownCell(job.workflow)])
+  if (job.repository !== "") rows.push(["Repository", escapeMarkdownCell(job.repository)])
+  if (job.ref !== "") rows.push(["Branch", escapeMarkdownCell(job.ref)])
+  if (job.sha !== "") rows.push(["Commit", escapeMarkdownCell(job.sha)])
+  if (job.actor !== "") rows.push(["Triggered by", escapeMarkdownCell(job.actor)])
+  if (job.run_id !== "" || job.name !== "") {
+    rows.push(["Run ID / Job", escapeMarkdownCell([job.run_id, job.name].filter(Boolean).join(" / "))])
+  }
+  if (job.job_index !== "") rows.push(["Matrix job index", escapeMarkdownCell(job.job_index)])
   lines.push("| Field | Value |")
   lines.push("| --- | --- |")
   for (const [key, value] of rows) {
-    lines.push(`| ${escapeMarkdownCell(key)} | ${escapeMarkdownCell(value)} |`)
+    lines.push(`| ${escapeMarkdownCell(key)} | ${value} |`)
   }
   lines.push("")
 
@@ -43970,7 +44049,10 @@ function lintRenderedSurface(surface, kind) {
         ["telemetry unique-domain count", /\bunique domain/gi],
         ["telemetry connection count", /\d+ connections?\b/gi],
         ["Powered by Garnet footer", /Powered by Garnet/gi],
-        ["profile permalink", /\?profile=/gi],
+        // The exact profile selector renders in exactly two designated
+        // places: the Workload table's Profile row and the footer CTA.
+        ["profile permalink (Profile row)", /\| Profile \| \[/g],
+        ["profile permalink (footer CTA)", new RegExp(`>${VOCAB.permalinkLabel.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}<`, "g")],
       ]
       for (const [name, re] of families) {
         const n = count(section, re)

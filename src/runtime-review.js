@@ -2768,20 +2768,27 @@ function renderProfileSummary(job, appUrl, keptDestinations, previewAssertions) 
   lines.push("### Workload Summary", "")
   /** @type {[string, string][]} */
   const rows = []
-  if (job.profile_id !== "") rows.push(["Profile UUID", job.profile_id])
-  if (job.workflow !== "") rows.push(["Workflow", job.workflow])
-  if (job.repository !== "") rows.push(["Repository", job.repository])
-  if (job.ref !== "") rows.push(["Branch", job.ref])
-  if (job.sha !== "") rows.push(["Commit", job.sha])
-  if (job.actor !== "") rows.push(["Triggered by", job.actor])
-  if (job.run_id !== "" || job.name !== "") {
-    rows.push(["Run ID / Job", [job.run_id, job.name].filter(Boolean).join(" / ")])
+  if (job.profile_id !== "") {
+    const profileLink = profilePermalink(job, appUrl, "step_summary")
+    const profileCell =
+      profileLink === ""
+        ? escapeMarkdownCell(job.profile_id)
+        : `[${escapeMarkdownCell(job.profile_id)}](${profileLink})`
+    rows.push(["Profile", profileCell])
   }
-  if (job.job_index !== "") rows.push(["Matrix job index", job.job_index])
+  if (job.workflow !== "") rows.push(["Workflow", escapeMarkdownCell(job.workflow)])
+  if (job.repository !== "") rows.push(["Repository", escapeMarkdownCell(job.repository)])
+  if (job.ref !== "") rows.push(["Branch", escapeMarkdownCell(job.ref)])
+  if (job.sha !== "") rows.push(["Commit", escapeMarkdownCell(job.sha)])
+  if (job.actor !== "") rows.push(["Triggered by", escapeMarkdownCell(job.actor)])
+  if (job.run_id !== "" || job.name !== "") {
+    rows.push(["Run ID / Job", escapeMarkdownCell([job.run_id, job.name].filter(Boolean).join(" / "))])
+  }
+  if (job.job_index !== "") rows.push(["Matrix job index", escapeMarkdownCell(job.job_index)])
   lines.push("| Field | Value |")
   lines.push("| --- | --- |")
   for (const [key, value] of rows) {
-    lines.push(`| ${escapeMarkdownCell(key)} | ${escapeMarkdownCell(value)} |`)
+    lines.push(`| ${escapeMarkdownCell(key)} | ${value} |`)
   }
   lines.push("")
 
@@ -2927,7 +2934,10 @@ export function lintRenderedSurface(surface, kind) {
         ["telemetry unique-domain count", /\bunique domain/gi],
         ["telemetry connection count", /\d+ connections?\b/gi],
         ["Powered by Garnet footer", /Powered by Garnet/gi],
-        ["profile permalink", /\?profile=/gi],
+        // The exact profile selector renders in exactly two designated
+        // places: the Workload table's Profile row and the footer CTA.
+        ["profile permalink (Profile row)", /\| Profile \| \[/g],
+        ["profile permalink (footer CTA)", new RegExp(`>${VOCAB.permalinkLabel.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}<`, "g")],
       ]
       for (const [name, re] of families) {
         const n = count(section, re)

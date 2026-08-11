@@ -14,6 +14,7 @@ import {
     pathExists,
 } from "./shared.js"
 import { getPullRequestNumberFromEvent } from "./github-event.js"
+import { ControlPlaneClient } from "./control-plane/client.js"
 import { uploadJibrilArtifacts } from "./post-artifacts.js"
 import { buildReportLink, getDefaultJsonProfileFile, parseProfileJson, resolveAppBaseURL } from "./profile-comment.js"
 import { profilePermalink, renderPendingReview, renderStepSummary, summarizeProfile } from "./runtime-review.js"
@@ -86,6 +87,16 @@ async function run() {
         const profile = await readProfile(debug === "true")
         const renderOptions = getRenderOptions()
 
+        if (profile !== null) {
+            const envelopeID = await resolveProfileEnvelopeID()
+            if (envelopeID !== "") {
+                // The raw on-disk Jibril profile has no control-plane envelope
+                // ID; wrapping it threads the ID into every render so the
+                // exact public profile selector resolves.
+                profile.raw = { id: envelopeID, data: profile.raw }
+            }
+        }
+
         await appendRuntimeReviewSummary(profile, renderOptions)
         if (profile !== null) {
             logProfileReportLink(profile)
@@ -127,6 +138,58 @@ async function readProfile(debug) {
     } catch (error) {
         core.warning(`failed to read ${JSON_PROFILE_LABEL}: ${getErrorMessage(error)}`)
         return null
+    }
+}
+
+/**
+ * Resolves the control-plane envelope ID for this run's profile by listing
+ * the profiles recorded for the agent created in the main step. Fail-closed:
+ * any missing credential, missing agent, ambiguity, or request failure
+ * returns "" and the render keeps its existing linkless behavior.
+ * @returns {Promise<string>}
+ */
+async function resolveProfileEnvelopeID() {
+    const agentID = core.getState("agentID")
+    if (agentID === "") {
+        return ""
+    }
+
+    const projectToken = firstNonEmptyString(core.getInput("api_token"), getEnv("GARNET_API_TOKEN"))
+    const workflowToken = core.getState("controlPlaneWorkflowToken")
+    if (projectToken === "" && workflowToken === "") {
+        return ""
+    }
+
+    const runID = getEnv("GITHUB_RUN_ID")
+    if (runID === "") {
+        return ""
+    }
+
+    try {
+        const client = new ControlPlaneClient({
+            baseURL: firstNonEmptyString(getEnv("GARNET_API_URL"), core.getInput("api_url"), "https://api.garnet.ai"),
+            projectToken,
+            workflowToken,
+        })
+
+        const page = await client.agentProfiles(agentID, {
+            runID,
+            runAttempt: getEnv("GITHUB_RUN_ATTEMPT"),
+        })
+
+        // The main step creates one agent per job, so the agent's profile
+        // list for this run must resolve to exactly one envelope; anything
+        // else is ambiguous and the render stays linkless.
+        const matches = page.items.filter((item) => item.runID === "" || item.runID === runID)
+        const match = matches.length === 1 ? matches[0] : undefined
+        if (match === undefined) {
+            return ""
+        }
+
+        return match.id
+    } catch (error) {
+        core.info(`profile envelope lookup skipped: ${getErrorMessage(error)}`)
+        return ""
     }
 }
 

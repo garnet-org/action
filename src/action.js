@@ -23,6 +23,9 @@ import { getEnv, getErrorMessage, isSupportedArch, isSupportedPlatform, pathExis
  */
 
 const INSTPATH = "/usr/local/bin"
+// Default Jibril sensor version: the same stable pin as the floating v2 tag,
+// so the sensor never floats under an unchanged action ref.
+const JIBRIL_STABLE_VERSION = "v2.15.0"
 const OIDC_AUTH_FEATURE_FLAG = "GARNET_ACTION_ENABLE_OIDC_AUTH"
 const GITHUB_APP_ID_PROD = "Iv23lihCfwCfqCxQNpvv"
 const GITHUB_APP_ID_STAGING = "Iv23liUXLYx9mgGKHgZk"
@@ -65,6 +68,9 @@ export async function run() {
         }
         if (controlPlaneAuth.workflowToken !== "") {
             core.setSecret(controlPlaneAuth.workflowToken)
+            // The post step reuses this token to resolve the run's profile
+            // envelope ID when no api_token input is available.
+            core.saveState("controlPlaneWorkflowToken", controlPlaneAuth.workflowToken)
         }
         const GITHUB_TOKEN = getEnv("GITHUB_TOKEN", "")
         if (GITHUB_TOKEN !== "") {
@@ -195,6 +201,9 @@ export async function run() {
         if (AGENT_TOKEN) core.setSecret(AGENT_TOKEN)
 
         core.info(`Created agent with ID: ${AGENT_ID}`)
+
+        // The post step resolves the run's profile envelope ID from this agent.
+        core.saveState("agentID", AGENT_ID)
 
         // Get network policy
         core.info("Getting network policy")
@@ -455,7 +464,7 @@ StandardOutput=append:/var/log/jibril.log
  * @param {ResolveControlPlaneAuthInput} input
  * @returns {Promise<ControlPlaneAuth>}
  */
-async function resolveControlPlaneAuth(input) {
+export async function resolveControlPlaneAuth(input) {
     if (input.useOIDCAuth !== true) {
         return {
             projectToken: requireApiToken(input.apiToken),
@@ -623,7 +632,7 @@ function isMissingOIDCPermissionError(errorMessage) {
  * @param {string} inputVersion
  * @param {string} actionRef
  */
-function resolveJibrilVersion(inputVersion, actionRef) {
+export function resolveJibrilVersion(inputVersion, actionRef) {
     const v = String(inputVersion || "").trim()
     if (v) return v
 
@@ -636,10 +645,11 @@ function resolveJibrilVersion(inputVersion, actionRef) {
     // - action@v1 stays pinned (do not change)
     if (ref === "v0") return "v0.0"
     if (ref === "v1") return "v2.10.4"
-    if (ref === "v2") return "v2.15.0"
+    if (ref === "v2") return JIBRIL_STABLE_VERSION
 
-    // Default for other refs (branch/SHA/etc).
-    return "latest"
+    // Every other ref (branch/SHA/exact tag) gets the same stable pin as v2:
+    // a root eBPF binary must not change under an unchanged action ref.
+    return JIBRIL_STABLE_VERSION
 }
 
 /**

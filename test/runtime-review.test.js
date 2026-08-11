@@ -1070,14 +1070,35 @@ await test("gate 20d: raw profile shape — data.uuid is never a Profile UUID or
   assert.ok(!md.includes("/public/runs/"), "raw profile fabricated a public CTA")
 })
 
-await test("gate 20e: enveloped profile shape — envelope Profile.ID is 'Profile UUID' and drives the selector", () => {
+await test("gate 20e: enveloped profile shape — envelope Profile.ID is the Profile row and drives the selector", () => {
   const job = summarizeProfile(edgeCaseEnvelope)
   assert.equal(job.profile_id, edgeCaseEnvelope.id)
   assert.equal(job.uuid, edgeCases.uuid)
-  assert.ok(EDGE_SUMMARY.includes(`| Profile UUID | ${edgeCaseEnvelope.id} |`))
+  const link = profilePermalink(job, APP_URL, "step_summary")
+  assert.ok(link !== "")
+  assert.ok(EDGE_SUMMARY.includes(`| Profile | [${edgeCaseEnvelope.id}](${link}) |`))
   assert.ok(!EDGE_SUMMARY.includes("Record UUID"))
   assert.ok(EDGE_MD.includes(`?profile=${edgeCaseEnvelope.id}`.replaceAll("&", "&amp;")))
   assert.ok(!EDGE_MD.includes(`?profile=${edgeCases.uuid}`))
+})
+
+await test("gate: preview material is contained — default bytes carry none of it on any surface", () => {
+  const previewMarkers = [
+    "Recorded context preview",
+    "<details><summary><strong>Assertions</strong>",
+    "| Assertion |",
+    "detection:",
+    "⚠ attention",
+  ]
+  const inputs = [recordSet, [edgeCaseEnvelope], [edgeCases], [worth], [injection]]
+  for (const profiles of inputs) {
+    const defaultSummary = renderStepSummary(profiles, { appUrl: APP_URL })
+    const prComment = renderRunReview(reviewFor(profiles))
+    for (const marker of previewMarkers) {
+      assert.ok(!defaultSummary.includes(marker), `default step summary leaked ${JSON.stringify(marker)}`)
+      assert.ok(!prComment.includes(marker), `PR comment leaked ${JSON.stringify(marker)}`)
+    }
+  }
 })
 
 await test("gate 20b: publication policy is fail-closed with one non-oracular 404", () => {
@@ -1291,9 +1312,9 @@ await test("shape: Step Summary is lineage-keyed (deduped) with preview-only con
     ),
   )
   assert.ok(!EDGE_SUMMARY.includes("in the profile's own order"))
-  const uuidRow = EDGE_SUMMARY.indexOf("Profile UUID")
+  const uuidRow = EDGE_SUMMARY.indexOf("| Profile |")
   assert.ok(uuidRow !== -1 && uuidRow < EDGE_SUMMARY.indexOf("| Repository"))
-  assert.ok(EDGE_SUMMARY.includes(`| Profile UUID | ${edgeCaseEnvelope.id} |`))
+  assert.ok(EDGE_SUMMARY.includes(`| Profile | [${edgeCaseEnvelope.id}](`))
   assert.ok(!EDGE_SUMMARY.includes("| Record UUID |"))
   assert.ok(REAL_SUMMARY.includes("| Branch |"))
   assert.ok(REAL_SUMMARY.includes("| Triggered by |"))

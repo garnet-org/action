@@ -130,7 +130,7 @@ Runner.Worker          <em>← process on a path</em>
 
 | Field | Value |
 | --- | --- |
-| Profile UUID | 019f5de7-59af-7208-a4f7-6cfecaae0c59 |
+| Profile | [019f5de7-59af-7208-a4f7-6cfecaae0c59](https://app.garnet.ai/public/runs/29294366437?profile=019f5de7-59af-7208-a4f7-6cfecaae0c59&utm_source=github&utm_medium=step_summary) |
 | Workflow | ci |
 | Repository | garnet-org/runtime-review-testbed |
 | Branch | refs/pull/76/merge |
@@ -185,7 +185,7 @@ Network telemetry observed 2 unique domains, 2 destinations, 2 connections, and 
 
 | Field | Value |
 | --- | --- |
-| Profile UUID | 019f5de7-571c-78d6-8a61-dd43f61c441c |
+| Profile | [019f5de7-571c-78d6-8a61-dd43f61c441c](https://app.garnet.ai/public/runs/29294366437?profile=019f5de7-571c-78d6-8a61-dd43f61c441c&utm_source=github&utm_medium=step_summary) |
 | Workflow | ci |
 | Repository | garnet-org/runtime-review-testbed |
 | Branch | refs/pull/76/merge |
@@ -243,7 +243,7 @@ Network telemetry observed 4 unique domains, 4 destinations, 4 connections, and 
 
 | Field | Value |
 | --- | --- |
-| Profile UUID | 019f5de7-54b9-704c-a002-a7d9d70b271b |
+| Profile | [019f5de7-54b9-704c-a002-a7d9d70b271b](https://app.garnet.ai/public/runs/29294366437?profile=019f5de7-54b9-704c-a002-a7d9d70b271b&utm_source=github&utm_medium=step_summary) |
 | Workflow | ci |
 | Repository | garnet-org/runtime-review-testbed |
 | Branch | refs/pull/76/merge |
@@ -298,7 +298,7 @@ Network telemetry observed 3 unique domains, 3 destinations, 3 connections, and 
 
 | Field | Value |
 | --- | --- |
-| Profile UUID | 019f5de7-5ca7-7f9d-bfb3-c59ccde51111 |
+| Profile | [019f5de7-5ca7-7f9d-bfb3-c59ccde51111](https://app.garnet.ai/public/runs/29294366437?profile=019f5de7-5ca7-7f9d-bfb3-c59ccde51111&utm_source=github&utm_medium=step_summary) |
 | Workflow | ci |
 | Repository | garnet-org/runtime-review-testbed |
 | Branch | refs/pull/76/merge |
@@ -353,7 +353,7 @@ Network telemetry observed 3 unique domains, 3 destinations, 3 connections, and 
 
 | Field | Value |
 | --- | --- |
-| Profile UUID | 019f5de7-5992-7409-89cf-6d88e0fb46ea |
+| Profile | [019f5de7-5992-7409-89cf-6d88e0fb46ea](https://app.garnet.ai/public/runs/29294366437?profile=019f5de7-5992-7409-89cf-6d88e0fb46ea&utm_source=github&utm_medium=step_summary) |
 | Workflow | ci |
 | Repository | garnet-org/runtime-review-testbed |
 | Branch | refs/pull/76/merge |
