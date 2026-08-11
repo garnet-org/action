@@ -34,7 +34,7 @@ Get your API token at [app.garnet.ai](https://app.garnet.ai). Start with the Act
 
 ## What you get
 
-- **Action stage**: Add the workflow step and Jibril records runtime from that job. The action self-posts a Runtime Review PR comment plus the GitHub Step Summary. Because the Action only knows its own jobs, the coverage line reads `k jobs recorded`, and the Execution Profile permalink is derived from the run_id.
+- **Action stage**: Add the workflow step and Jibril records runtime from that job. The action self-posts a Runtime Review PR comment plus the GitHub Step Summary. Because the Action only knows its own jobs, the headline counts the jobs it saw (`Execution Profiles recorded for N job(s)`), and the Execution Profile permalink is derived from the run_id.
 - **Companion GitHub App stage**: Install the companion GitHub App for the full PR experience. The App owns the authoritative Runtime Review comment, can show true coverage (`k of n`), richer capability permalinks, Slack alerts, and cross-run management.
 - **Chain-level evidence**: When something unexpected runs, you don't just see a domain name — you see the execution chain behind it.
 
@@ -42,7 +42,7 @@ Get your API token at [app.garnet.ai](https://app.garnet.ai). Start with the Act
   <img
     src="docs/images/pr-comment-v695.png"
     width="640"
-    alt="A Garnet Runtime Review PR comment: Execution Profiles recorded for 5 jobs, one fold per job, each fold showing the job's execution tree with ○ destination leaves and factual bracket notes"
+    alt="A Garnet execution comment: Execution Profiles recorded for 5 jobs, one fold per job, each fold showing the job's execution tree with ○ destination leaves and factual bracket notes"
   />
 </p>
 
@@ -61,6 +61,7 @@ The only secret Garnet uses is the API token you pass it. It never reads your ot
 | :--- | :--- | :--- |
 | `contents: read` | Yes | Access workflow context and repository metadata |
 | `pull-requests: write` | Recommended | Post the Runtime Review comment (standalone Action mode; unused once the companion GitHub App owns the comment) |
+| `id-token: write` | Only for OIDC | Request the GitHub OIDC token the action exchanges for a Garnet workflow token (see [Tokenless authentication with OIDC](#tokenless-authentication-with-oidc)) |
 
 ## Quickstart
 
@@ -107,6 +108,24 @@ jobs:
 >
 > The canonical SHA of the latest release is always at [garnet.ai/pins](https://garnet.ai/pins). Dependabot bumps SHA pins automatically. Exact tags such as `garnet-org/action@v2.3.0` remain available.
 
+### Tokenless authentication with OIDC
+
+An opt-in alternative to `api_token`, behind a feature flag. Set the `GARNET_ACTION_ENABLE_OIDC_AUTH` environment variable to `true` and grant `id-token: write`:
+
+```yaml
+    permissions:
+      contents: read
+      pull-requests: write
+      id-token: write
+
+    steps:
+      - uses: garnet-org/action@v2
+        env:
+          GARNET_ACTION_ENABLE_OIDC_AUTH: "true"
+```
+
+With the flag on, the action requests a GitHub OIDC ID token and exchanges it with the Garnet API for a short-lived workflow token — no long-lived secret in the repo. `api_token` becomes optional: when both are configured, OIDC is tried first and the action falls back to `api_token` (with a warning) if the OIDC request or exchange fails. With the flag off (the default), `api_token` is the auth path.
+
 ### 3. Install the companion GitHub App
 
 [Install Garnet Runtime Review](https://github.com/apps/garnet-runtime-review/installations/select_target) on the repos you want recorded, or from Settings → GitHub in [app.garnet.ai](https://app.garnet.ai).
@@ -143,8 +162,8 @@ Full installation guides for every path are in the [Garnet docs](https://docs.ga
 One comment per PR, one fold per job, updated in place as each job's profile lands:
 
 - **Headline** — `Execution Profiles recorded for N job(s), triggered by <sha7>`, linking the commit.
-- **Metadata line** — an italic blockquote: `N destinations · recorded at the kernel by Garnet · <UTC timestamp>`, one fact per `·` segment.
-- **One fold per job** — headed `workflow / job ↗ · N destinations`, the job id linking to its Actions run. Inside: one block holding every recorded root of the job's tree; independent roots are separated by a blank line. Plain tree nodes are recorded process names; observed actions render as shaped terminals — `○ destination` for network, defanged at the final dot. A process with an action directly beneath it renders **bold**; `(…)` brackets carry factual context only — `(step: "Run tests")`, `(dns resolver)`, `(cloud metadata)`, `(github infra)`, `(garnet sensor)`, `(ran from /tmp/…)`. A job with no recorded egress stays a plain row keeping its Garnet profile link.
+- **Meta block** — two blockquote lines: the italic finding first — `N destinations across M jobs` on a first profile, the job segments plus `compared with <sha7>` on a comparison, `No changes since <sha7>` when nothing moved — then one quiet provenance line: `recorded at the kernel by Garnet · <UTC timestamp, minute precision>`.
+- **One fold per job** — headed `workflow / job ↗ · N destinations`, the job id linking to its Actions run. Inside: one block holding every recorded root of the job's tree; independent roots are separated by a blank line. Plain tree nodes are recorded process names; observed actions render as shaped terminals — `○ destination` for network, defanged at the final dot. A process with an action directly beneath it renders **bold**; `(…)` brackets carry factual context only — `(step: "Run tests")`, `(dns resolver)`, `(cloud metadata)`, `(github infra)`, `(github infra · rotated from <previous address>)`, `(garnet sensor)`, `(ran from /tmp/…)`. Within a job's block, workload roots render above infrastructure-rooted ones. A job with no recorded egress stays a plain row keeping its Garnet profile link.
 - **Per-job permalink** — `View this job's Execution Profile in Garnet →`, opening the job's [public run report](https://app.garnet.ai/public/runs/30675075813?profile=019fbaad-dda5-71c3-a8e5-3a4cd96fea21) (`?profile=` selector required — a bare run URL returns 404).
 - **The explainer** — a `💡 How to read this` fold at the bottom teaches the tree with an annotated example:
 
@@ -159,7 +178,7 @@ follow a path downward to see what ran and what it did — each path to an obser
 
 names on the path = processes · ○ = observed action · (…) = context
 
-Once a pull request has two recorded commits, the comment compares against the previous profiled commit: the metadata line carries `compared with <sha7>`, changed job rows lead with the bold delta (`+1 −2 destinations`), unchanged rows read `· N destinations · unchanged`, and a changed job's tree renders as a diff headed `@@ <previous sha7> (previous) vs <sha7> (current) @@`. `+` marks a destination only in the current record, `−` one only in the previous record; the marks and the row's delta always reconcile exactly. Jobs recorded previously but not on this commit sit in one collapsed `jobs no longer recorded` fold with their destination counts.
+Once a pull request has two recorded commits, the comment compares against the previous profiled commit: the finding line carries the job segments (`2 jobs changed +1 −2 destinations · 3 jobs unchanged`) and `compared with <sha7>` — or `No changes since <sha7>` when nothing moved. Changed job rows lead with the bold delta (`+1 −2`), unchanged rows read `· N destinations · unchanged`, and a changed job's tree renders as a diff headed `@@ <previous sha7> (previous) vs <sha7> (current) @@`. `+` marks a destination only in the current record, `−` one only in the previous record; the marks and the row's delta always reconcile exactly. A GitHub-infra address rotation proven by GitHub's published ranges renders as one unmarked context line — `(github infra · rotated from <previous address>)` — and counts in neither side. Jobs recorded previously but not on this commit sit in one collapsed `jobs no longer recorded` fold with their destination counts.
 
 The same full-detail record is appended to the GitHub Actions Job Summary as the **Garnet Execution Summary** (see this [example run](https://github.com/garnet-org/action/actions/runs/23175135499)).
 
@@ -174,14 +193,14 @@ The same full-detail record is appended to the GitHub Actions Job Summary as the
 
 | Input               | Required | Default                 | Description                                    |
 | ------------------- | -------- | ----------------------- | ---------------------------------------------- |
-| `api_token`         | Yes¹     | —                       | Your Garnet API token from app.garnet.ai       |
+| `api_token`         | Yes¹     | —                       | Your Garnet API token from app.garnet.ai (optional when OIDC authentication is enabled and succeeds) |
 | `github_token`      | No       | `${{ github.token }}`   | GitHub token used for pull request comments    |
 | `api_url`           | No       | `https://api.garnet.ai` | Garnet API base URL                            |
-| `jibril_version`    | No       | `""` (auto)             | Jibril version (for example `v2.15.0`, `v0.0`, or `latest`); empty resolves from the action tag |
+| `jibril_version`    | No       | `""` (auto)             | Jibril version (for example `v2.15.0`, `v0.0`, or `latest`); empty resolves from the action ref — `@v0` gets daily builds, every other ref gets the pinned stable release |
 | `debug`             | No       | `false`                 | Enable debug mode and upload logs as artifacts |
 | `preview`           | No       | `false`                 | Render the full-fidelity Step Summary record (assertions + evidence); preview shape is unstable and may change without a major version bump |
 
-¹ Required at runtime, with one exception: on `pull_request` runs from forked repositories, GitHub exposes no secrets, so the action emits a notice, skips recording, and the job continues. An OIDC alternative is landing behind the `GARNET_ACTION_ENABLE_OIDC_AUTH` flag; until that flag is on, the token is the auth path.
+¹ Required at runtime, with two exceptions. When [OIDC authentication](#tokenless-authentication-with-oidc) is enabled and the exchange succeeds, no token is needed. And on `pull_request` runs from forked repositories — where GitHub exposes neither secrets nor OIDC tokens — the action emits a notice, skips recording, and the job continues (`pull_request_target` runs receive secrets and are not skipped).
 
 ---
 
@@ -232,7 +251,8 @@ On unsupported platforms (Windows, macOS, arm64) the action logs a warning and s
 | Symptom                                   | Fix                                                                                                    |
 | ----------------------------------------- | ------------------------------------------------------------------------------------------------------ |
 | "API token is required"                   | Confirm `GARNET_API_TOKEN` is set in repository secrets and passed as `api_token`.                     |
-| "Garnet skips profiling on pull requests from forked repositories" | Expected on fork PRs: secrets are unavailable there, so the action skips recording and the job continues. |
+| "Garnet skips profiling on pull requests from forked repositories" | Expected on fork PRs: secrets and OIDC tokens are unavailable there, so the action skips recording and the job continues. |
+| "missing 'id-token: write' permission" | OIDC is enabled but the workflow lacks the permission — add `id-token: write` to the `permissions` block, or unset `GARNET_ACTION_ENABLE_OIDC_AUTH`. |
 | No PR comment appearing                   | The action posts comments only on `pull_request` events — confirm your workflow includes that trigger. |
 | PR comment says "Resource not accessible" | Add `pull-requests: write` to the workflow `permissions` block.                                        |
 | No summary output                         | Enable `debug: "true"` to upload Jibril logs as artifacts, then inspect `jibril.log` and `jibril.err`. |

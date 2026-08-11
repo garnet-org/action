@@ -23,6 +23,7 @@ import { getEnv, getErrorMessage, isSupportedArch, isSupportedPlatform, pathExis
  */
 
 const INSTPATH = "/usr/local/bin"
+const PINNED_JIBRIL_VERSION = "v2.15.0"
 const OIDC_AUTH_FEATURE_FLAG = "GARNET_ACTION_ENABLE_OIDC_AUTH"
 const GITHUB_APP_ID_PROD = "Iv23lihCfwCfqCxQNpvv"
 const GITHUB_APP_ID_STAGING = "Iv23liUXLYx9mgGKHgZk"
@@ -636,10 +637,11 @@ function resolveJibrilVersion(inputVersion, actionRef) {
     // - action@v1 stays pinned (do not change)
     if (ref === "v0") return "v0.0"
     if (ref === "v1") return "v2.10.4"
-    if (ref === "v2") return "v2.15.0"
+    if (ref === "v2") return PINNED_JIBRIL_VERSION
 
-    // Default for other refs (branch/SHA/etc).
-    return "latest"
+    // Every other ref (branch/SHA/exact tag) gets the same pinned stable
+    // release as v2, so the sensor never floats under a pinned action ref.
+    return PINNED_JIBRIL_VERSION
 }
 
 /**

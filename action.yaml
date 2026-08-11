@@ -17,7 +17,7 @@ inputs:
         required: false
         default: "https://api.garnet.ai"
     jibril_version:
-        description: "Jibril version (for example v2.15.0, v0.0, or 'latest'); empty resolves from the action tag"
+        description: "Jibril version (for example v2.15.0, v0.0, or 'latest'); empty resolves from the action ref — v0 gets daily builds, every other ref gets the pinned stable release"
         required: false
         default: ""
     debug:
