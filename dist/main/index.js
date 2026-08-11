@@ -28687,7 +28687,7 @@ function isHttps(requestUrl) {
     const parsedUrl = new URL(requestUrl);
     return parsedUrl.protocol === 'https:';
 }
-class lib_HttpClient {
+class HttpClient {
     constructor(userAgent, handlers, requestOptions) {
         this._ignoreSslError = false;
         this._allowRedirects = true;
@@ -29294,7 +29294,7 @@ class BasicCredentialHandler {
         });
     }
 }
-class auth_BearerCredentialHandler {
+class BearerCredentialHandler {
     constructor(token) {
         this.token = token;
     }
@@ -29352,13 +29352,13 @@ var oidc_utils_awaiter = (undefined && undefined.__awaiter) || function (thisArg
 
 
 
-class oidc_utils_OidcClient {
+class OidcClient {
     static createHttpClient(allowRetry = true, maxRetry = 10) {
         const requestOptions = {
             allowRetries: allowRetry,
             maxRetries: maxRetry
         };
-        return new HttpClient('actions/oidc-client', [new BearerCredentialHandler(oidc_utils_OidcClient.getRequestToken())], requestOptions);
+        return new HttpClient('actions/oidc-client', [new BearerCredentialHandler(OidcClient.getRequestToken())], requestOptions);
     }
     static getRequestToken() {
         const token = process.env['ACTIONS_ID_TOKEN_REQUEST_TOKEN'];
@@ -29377,7 +29377,7 @@ class oidc_utils_OidcClient {
     static getCall(id_token_url) {
         return oidc_utils_awaiter(this, void 0, void 0, function* () {
             var _a;
-            const httpclient = oidc_utils_OidcClient.createHttpClient();
+            const httpclient = OidcClient.createHttpClient();
             const res = yield httpclient
                 .getJson(id_token_url)
                 .catch(error => {
@@ -29396,13 +29396,13 @@ class oidc_utils_OidcClient {
         return oidc_utils_awaiter(this, void 0, void 0, function* () {
             try {
                 // New ID Token is requested from action service
-                let id_token_url = oidc_utils_OidcClient.getIDTokenUrl();
+                let id_token_url = OidcClient.getIDTokenUrl();
                 if (audience) {
                     const encodedAudience = encodeURIComponent(audience);
                     id_token_url = `${id_token_url}&audience=${encodedAudience}`;
                 }
                 debug(`ID token url is ${id_token_url}`);
-                const id_token = yield oidc_utils_OidcClient.getCall(id_token_url);
+                const id_token = yield OidcClient.getCall(id_token_url);
                 setSecret(id_token);
                 return id_token;
             }
@@ -31000,7 +31000,7 @@ function exportVariable(name, val) {
  * console.log(`Using token: ${apiToken}`); // Outputs: "Using token: ***"
  * ```
  */
-function core_setSecret(secret) {
+function setSecret(secret) {
     command_issueCommand('add-mask', {}, secret);
 }
 /**
@@ -31122,7 +31122,7 @@ function isDebug() {
  * Writes debug message to user log
  * @param message debug message
  */
-function core_debug(message) {
+function debug(message) {
     command_issueCommand('debug', {}, message);
 }
 /**
@@ -39266,6 +39266,42 @@ function preprocess(fn, schema) {
  * }} MergedNetPoliciesRequest
  */
 
+/**
+ * @typedef {{
+ *   idToken: string
+ * }} ExchangeOIDCRequest
+ */
+
+/**
+ * @typedef {"public" | "private" | "internal"} RepositoryVisibility
+ */
+
+/**
+ * @typedef {object} GitHubRunClaims
+ * @property {string} repositoryID
+ * @property {string=} repository
+ * @property {string} repositoryOwnerID
+ * @property {string=} repositoryOwner
+ * @property {RepositoryVisibility} repositoryVisibility
+ * @property {string} runID
+ * @property {string} runAttempt
+ * @property {string=} runNumber
+ * @property {string=} sha
+ * @property {string=} ref
+ * @property {string=} actorID
+ * @property {string=} eventName
+ * @property {string=} workflowRef
+ * @property {string=} jobWorkflowRef
+ * @property {string=} runnerEnvironment
+ */
+
+/**
+ * @typedef {object} ExchangeOIDCResponse
+ * @property {string} workflowToken
+ * @property {string} expiresAt
+ * @property {GitHubRunClaims} github
+ */
+
 const AGENT_GITHUB_CONTEXT_SCHEMA = object({
         job: schemas_string().min(1),
         run_id: schemas_string().min(1),
@@ -39308,6 +39344,36 @@ const MERGED_NET_POLICIES_REQUEST_SCHEMA = object({
     workflow_name: schemas_string().min(1).optional(),
 })
 
+const EXCHANGE_OIDC_REQUEST_SCHEMA = object({
+    idToken: schemas_string().min(1),
+})
+
+const REPOSITORY_VISIBILITY_SCHEMA = schemas_enum(["public", "private", "internal"])
+
+const GITHUB_RUN_CLAIMS_SCHEMA = object({
+    repositoryID: schemas_string().min(1),
+    repository: schemas_string().min(1).optional(),
+    repositoryOwnerID: schemas_string().min(1),
+    repositoryOwner: schemas_string().min(1).optional(),
+    repositoryVisibility: REPOSITORY_VISIBILITY_SCHEMA,
+    runID: schemas_string().min(1),
+    runAttempt: schemas_string().min(1),
+    runNumber: schemas_string().min(1).optional(),
+    sha: schemas_string().min(1).optional(),
+    ref: schemas_string().min(1).optional(),
+    actorID: schemas_string().min(1).optional(),
+    eventName: schemas_string().min(1).optional(),
+    workflowRef: schemas_string().min(1).optional(),
+    jobWorkflowRef: schemas_string().min(1).optional(),
+    runnerEnvironment: schemas_string().min(1).optional(),
+})
+
+const EXCHANGE_OIDC_RESPONSE_SCHEMA = object({
+    workflowToken: schemas_string().min(1),
+    expiresAt: iso_datetime(),
+    github: GITHUB_RUN_CLAIMS_SCHEMA,
+})
+
 const API_ERROR_SCHEMA = object({
     error: schemas_string().min(1),
 })
@@ -39319,12 +39385,14 @@ const API_ERROR_SCHEMA = object({
  * @typedef {import("./types.js").CreateAgentRequest} CreateAgentRequest
  * @typedef {import("./types.js").AgentCreatedResponse} AgentCreatedResponse
  * @typedef {import("./types.js").MergedNetPoliciesRequest} MergedNetPoliciesRequest
+ * @typedef {import("./types.js").ExchangeOIDCResponse} ExchangeOIDCResponse
  */
 
 /**
  * @typedef {{
  *   baseURL: string
  *   projectToken?: string
+ *   workflowToken?: string
  *   userAgent?: string
  * }} ControlPlaneClientOptions
  */
@@ -39336,6 +39404,7 @@ const API_ERROR_SCHEMA = object({
  *   query?: URLSearchParams
  *   body?: unknown
  *   accept?: string
+ *   skipAuthHeader?: boolean
  * }} RequestOptions
  */
 
@@ -39382,8 +39451,13 @@ class ControlPlaneClient {
             throw new Error("ControlPlaneClient: 'projectToken' must be a string when provided")
         }
 
+        if (options.workflowToken !== undefined && typeof options.workflowToken !== "string") {
+            throw new Error("ControlPlaneClient: 'workflowToken' must be a string when provided")
+        }
+
         this.baseURL = parsedBaseURL.toString().replace(/\/+$/, "")
         this.projectToken = options.projectToken?.trim() ?? ""
+        this.workflowToken = options.workflowToken?.trim() ?? ""
         this.userAgent = options.userAgent ?? "garnet-action"
     }
 
@@ -39400,6 +39474,24 @@ class ControlPlaneClient {
         })
 
         return AGENT_CREATED_RESPONSE_SCHEMA.parse(responseJson)
+    }
+
+    /**
+     * @param {string} idToken
+     * @returns {Promise<ExchangeOIDCResponse>}
+     */
+    async exchangeGitHubOIDCForWorkflowToken(idToken) {
+        const payload = EXCHANGE_OIDC_REQUEST_SCHEMA.parse({
+            idToken,
+        })
+        const responseJson = await this.requestJson({
+            method: "POST",
+            path: "/api/v1/github/oidc/exchange",
+            body: payload,
+            skipAuthHeader: true,
+        })
+
+        return EXCHANGE_OIDC_RESPONSE_SCHEMA.parse(responseJson)
     }
 
     /**
@@ -39474,8 +39566,12 @@ class ControlPlaneClient {
             "User-Agent": this.userAgent,
         }
 
-        if (this.projectToken !== "") {
-            headers["X-Project-Token"] = this.projectToken
+        if (options.skipAuthHeader !== true) {
+            if (this.workflowToken !== "") {
+                headers["X-Workflow-Token"] = this.workflowToken
+            } else if (this.projectToken !== "") {
+                headers["X-Project-Token"] = this.projectToken
+            }
         }
 
         if (options.body !== undefined) {
@@ -39620,6 +39716,10 @@ function getValidationErrorDetail(payload) {
  */
 
 const INSTPATH = "/usr/local/bin"
+const OIDC_AUTH_FEATURE_FLAG = "GARNET_ACTION_ENABLE_OIDC_AUTH"
+const GITHUB_APP_ID_PROD = "Iv23lihCfwCfqCxQNpvv"
+const GITHUB_APP_ID_STAGING = "Iv23liUXLYx9mgGKHgZk"
+const GITHUB_APP_ID_DEV = "Iv23li88DidEyxVnAR1p"
 
 // This function is the main entry point for the script.
 // Returns true when Jibril started successfully, false otherwise.
@@ -39632,18 +39732,28 @@ async function run() {
         let JIBRILVER = resolveJibrilVersion(getEnv("JIBRIL_VERSION", ""), getEnv("GITHUB_ACTION_REF", ""))
         const DEBUG = getEnv("DEBUG", "false")
 
-        if (TOKEN === "") {
-            throw new Error(
-                "Input 'api_token' is required. This commonly happens on pull requests from forks, where repository secrets are not exposed to workflows. Add/verify that your workflow passes a valid token to this input, or conditionally skip this action for forked PRs.",
-            )
-        }
+        const useOIDCAuth = getEnv(OIDC_AUTH_FEATURE_FLAG, "false") === "true"
+        const controlPlaneAuth = await resolveControlPlaneAuth({
+            apiURL: API,
+            apiToken: TOKEN,
+            useOIDCAuth,
+        })
 
         // Prevent accidental leakage of tokens in logs.
-        core_setSecret(TOKEN)
+        if (TOKEN !== "") {
+            setSecret(TOKEN)
+        }
+        if (controlPlaneAuth.workflowToken !== "") {
+            setSecret(controlPlaneAuth.workflowToken)
+        }
         const GITHUB_TOKEN = getEnv("GITHUB_TOKEN", "")
-        if (GITHUB_TOKEN) core_setSecret(GITHUB_TOKEN)
+        if (GITHUB_TOKEN !== "") {
+            setSecret(GITHUB_TOKEN)
+        }
         const AI_TOKEN = getEnv("AI_TOKEN", "")
-        if (AI_TOKEN) core_setSecret(AI_TOKEN)
+        if (AI_TOKEN !== "") {
+            setSecret(AI_TOKEN)
+        }
 
         const workspace = getEnv("GITHUB_WORKSPACE")
         if (!workspace) {
@@ -39727,7 +39837,8 @@ async function run() {
 
         const controlPlaneClient = new ControlPlaneClient({
             baseURL: API,
-            projectToken: TOKEN,
+            projectToken: controlPlaneAuth.projectToken,
+            workflowToken: controlPlaneAuth.workflowToken,
         })
 
         // Create agent.
@@ -39761,7 +39872,7 @@ async function run() {
             throw new Error(`Failed to create agent: ${getErrorMessage(error)}`)
         }
 
-        if (AGENT_TOKEN) core_setSecret(AGENT_TOKEN)
+        if (AGENT_TOKEN) setSecret(AGENT_TOKEN)
 
         info(`Created agent with ID: ${AGENT_ID}`)
 
@@ -40005,6 +40116,190 @@ StandardOutput=append:/var/log/jibril.log
 }
 
 /**
+ * @typedef {{
+ *   apiURL: string
+ *   apiToken: string
+ *   useOIDCAuth: boolean
+ * }} ResolveControlPlaneAuthInput
+ */
+
+/**
+ * @typedef {{
+ *   projectToken: string
+ *   workflowToken: string
+ *   workflowTokenExpiresAt: string
+ * }} ControlPlaneAuth
+ */
+
+/**
+ * @param {ResolveControlPlaneAuthInput} input
+ * @returns {Promise<ControlPlaneAuth>}
+ */
+async function resolveControlPlaneAuth(input) {
+    if (input.useOIDCAuth !== true) {
+        return {
+            projectToken: requireApiToken(input.apiToken),
+            workflowToken: "",
+            workflowTokenExpiresAt: "",
+        }
+    }
+
+    const audience = resolveOIDCAudience(input.apiURL)
+
+    const unauthenticatedControlPlaneClient = new ControlPlaneClient({
+        baseURL: input.apiURL,
+    })
+
+    let exchanged
+    try {
+        const idToken = await getGitHubIDToken(audience)
+        exchanged = await unauthenticatedControlPlaneClient.exchangeGitHubOIDCForWorkflowToken(idToken)
+    } catch (error) {
+        const errorMessage = getErrorMessage(error)
+        if (isMissingOIDCPermissionError(errorMessage)) {
+            warning(
+                "OIDC token request failed because this workflow is missing 'id-token: write' permission. Falling back to 'api_token'.",
+            )
+        } else {
+            warning(`OIDC exchange failed (${errorMessage}). Falling back to 'api_token'.`)
+        }
+
+        return {
+            projectToken: requireApiToken(input.apiToken),
+            workflowToken: "",
+            workflowTokenExpiresAt: "",
+        }
+    }
+
+    if (isTimestampExpired(exchanged.expiresAt)) {
+        warning("OIDC workflow token was already expired at issuance time. Retrying once.")
+
+        try {
+            const idToken = await getGitHubIDToken(audience)
+            exchanged = await unauthenticatedControlPlaneClient.exchangeGitHubOIDCForWorkflowToken(idToken)
+        } catch (error) {
+            warning(`OIDC exchange retry failed (${getErrorMessage(error)}). Falling back to 'api_token'.`)
+            return {
+                projectToken: requireApiToken(input.apiToken),
+                workflowToken: "",
+                workflowTokenExpiresAt: "",
+            }
+        }
+
+        if (isTimestampExpired(exchanged.expiresAt)) {
+            warning("OIDC workflow token remains expired after retry. Falling back to 'api_token'.")
+            return {
+                projectToken: requireApiToken(input.apiToken),
+                workflowToken: "",
+                workflowTokenExpiresAt: "",
+            }
+        }
+    }
+
+    info("Using OIDC workflow token for control-plane requests")
+
+    return {
+        projectToken: "",
+        workflowToken: exchanged.workflowToken,
+        workflowTokenExpiresAt: exchanged.expiresAt,
+    }
+}
+
+/**
+ * @param {string} audience
+ * @returns {Promise<string>}
+ */
+async function getGitHubIDToken(audience) {
+    let idToken = ""
+
+    try {
+        idToken = await getIDToken(audience)
+    } catch (error) {
+        const errorMessage = getErrorMessage(error)
+        if (isMissingOIDCPermissionError(errorMessage)) {
+            throw new Error("OIDC token request failed because this workflow is missing 'id-token: write' permission")
+        }
+
+        throw new Error(`OIDC token request failed: ${errorMessage}`)
+    }
+
+    if (idToken.trim() === "") {
+        throw new Error("OIDC token request returned an empty token")
+    }
+
+    return idToken
+}
+
+/**
+ * @param {string} apiURL
+ * @returns {string}
+ */
+function resolveOIDCAudience(apiURL) {
+    try {
+        const url = new URL(apiURL)
+        if (url.host === "api.garnet.ai") {
+            return GITHUB_APP_ID_PROD
+        }
+        if (url.host === "staging-api.garnet.ai") {
+            return GITHUB_APP_ID_STAGING
+        }
+        if (url.host === "dev-api.garnet.ai") {
+            return GITHUB_APP_ID_DEV
+        }
+
+        return GITHUB_APP_ID_DEV
+    } catch {
+        return GITHUB_APP_ID_DEV
+    }
+}
+
+/**
+ * @param {string} value
+ * @returns {boolean}
+ */
+function isTimestampExpired(value) {
+    if (value === "") {
+        return true
+    }
+
+    const expiresAtMs = Date.parse(value)
+    if (Number.isNaN(expiresAtMs)) {
+        return true
+    }
+
+    return expiresAtMs <= Date.now()
+}
+
+/**
+ * @param {string} token
+ * @returns {string}
+ */
+function requireApiToken(token) {
+    if (token !== "") {
+        return token
+    }
+
+    throw new Error(
+        "Input 'api_token' is required when OIDC authentication is unavailable. This commonly happens on pull requests from forks, where repository secrets are not exposed to workflows, or when 'id-token: write' permission is not granted. Add/verify that your workflow passes a valid token to this input, grant 'id-token: write', or conditionally skip this action for forked PRs.",
+    )
+}
+
+/**
+ * @param {string} errorMessage
+ * @returns {boolean}
+ */
+function isMissingOIDCPermissionError(errorMessage) {
+    const normalized = errorMessage.toLowerCase()
+    if (normalized.includes("actions_id_token_request_url")) {
+        return true
+    }
+    if (normalized.includes("id-token") && normalized.includes("permission")) {
+        return true
+    }
+    return false
+}
+
+/**
  * @param {string} inputVersion
  * @param {string} actionRef
  */
@@ -40064,7 +40359,7 @@ async function execCapture(command, args, options = {}) {
  */
 async function execSudo(args, options = {}) {
     if (getEnv("DEBUG") === "true") {
-        core_debug(`$ sudo -E ${args.join(" ")}`)
+        debug(`$ sudo -E ${args.join(" ")}`)
     }
     return exec_exec("sudo", ["-E", ...args], options)
 }
@@ -40091,7 +40386,7 @@ async function downloadFile(url, destPath, opts = {}) {
         throw new Error(`Refusing to download over non-HTTPS: ${requestURL}`)
     }
 
-    const client = new lib_HttpClient("garnet-action", undefined, {
+    const client = new HttpClient("garnet-action", undefined, {
         allowRedirects: true,
         maxRedirects,
         socketTimeout: timeoutMs,

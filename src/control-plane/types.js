@@ -39,6 +39,42 @@ import { z } from "zod"
  * }} MergedNetPoliciesRequest
  */
 
+/**
+ * @typedef {{
+ *   idToken: string
+ * }} ExchangeOIDCRequest
+ */
+
+/**
+ * @typedef {"public" | "private" | "internal"} RepositoryVisibility
+ */
+
+/**
+ * @typedef {object} GitHubRunClaims
+ * @property {string} repositoryID
+ * @property {string=} repository
+ * @property {string} repositoryOwnerID
+ * @property {string=} repositoryOwner
+ * @property {RepositoryVisibility} repositoryVisibility
+ * @property {string} runID
+ * @property {string} runAttempt
+ * @property {string=} runNumber
+ * @property {string=} sha
+ * @property {string=} ref
+ * @property {string=} actorID
+ * @property {string=} eventName
+ * @property {string=} workflowRef
+ * @property {string=} jobWorkflowRef
+ * @property {string=} runnerEnvironment
+ */
+
+/**
+ * @typedef {object} ExchangeOIDCResponse
+ * @property {string} workflowToken
+ * @property {string} expiresAt
+ * @property {GitHubRunClaims} github
+ */
+
 export const AGENT_GITHUB_CONTEXT_SCHEMA = z
     .object({
         job: z.string().min(1),
@@ -80,6 +116,36 @@ export const AGENT_CREATED_RESPONSE_SCHEMA = z.object({
 export const MERGED_NET_POLICIES_REQUEST_SCHEMA = z.object({
     repository_id: z.string().min(1).optional(),
     workflow_name: z.string().min(1).optional(),
+})
+
+export const EXCHANGE_OIDC_REQUEST_SCHEMA = z.object({
+    idToken: z.string().min(1),
+})
+
+export const REPOSITORY_VISIBILITY_SCHEMA = z.enum(["public", "private", "internal"])
+
+export const GITHUB_RUN_CLAIMS_SCHEMA = z.object({
+    repositoryID: z.string().min(1),
+    repository: z.string().min(1).optional(),
+    repositoryOwnerID: z.string().min(1),
+    repositoryOwner: z.string().min(1).optional(),
+    repositoryVisibility: REPOSITORY_VISIBILITY_SCHEMA,
+    runID: z.string().min(1),
+    runAttempt: z.string().min(1),
+    runNumber: z.string().min(1).optional(),
+    sha: z.string().min(1).optional(),
+    ref: z.string().min(1).optional(),
+    actorID: z.string().min(1).optional(),
+    eventName: z.string().min(1).optional(),
+    workflowRef: z.string().min(1).optional(),
+    jobWorkflowRef: z.string().min(1).optional(),
+    runnerEnvironment: z.string().min(1).optional(),
+})
+
+export const EXCHANGE_OIDC_RESPONSE_SCHEMA = z.object({
+    workflowToken: z.string().min(1),
+    expiresAt: z.iso.datetime(),
+    github: GITHUB_RUN_CLAIMS_SCHEMA,
 })
 
 export const API_ERROR_SCHEMA = z.object({

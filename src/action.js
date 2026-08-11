@@ -22,6 +22,10 @@ import { getEnv, getErrorMessage, isSupportedArch, isSupportedPlatform, pathExis
  */
 
 const INSTPATH = "/usr/local/bin"
+const OIDC_AUTH_FEATURE_FLAG = "GARNET_ACTION_ENABLE_OIDC_AUTH"
+const GITHUB_APP_ID_PROD = "Iv23lihCfwCfqCxQNpvv"
+const GITHUB_APP_ID_STAGING = "Iv23liUXLYx9mgGKHgZk"
+const GITHUB_APP_ID_DEV = "Iv23li88DidEyxVnAR1p"
 
 // This function is the main entry point for the script.
 // Returns true when Jibril started successfully, false otherwise.
@@ -34,18 +38,28 @@ export async function run() {
         let JIBRILVER = resolveJibrilVersion(getEnv("JIBRIL_VERSION", ""), getEnv("GITHUB_ACTION_REF", ""))
         const DEBUG = getEnv("DEBUG", "false")
 
-        if (TOKEN === "") {
-            throw new Error(
-                "Input 'api_token' is required. This commonly happens on pull requests from forks, where repository secrets are not exposed to workflows. Add/verify that your workflow passes a valid token to this input, or conditionally skip this action for forked PRs.",
-            )
-        }
+        const useOIDCAuth = getEnv(OIDC_AUTH_FEATURE_FLAG, "false") === "true"
+        const controlPlaneAuth = await resolveControlPlaneAuth({
+            apiURL: API,
+            apiToken: TOKEN,
+            useOIDCAuth,
+        })
 
         // Prevent accidental leakage of tokens in logs.
-        core.setSecret(TOKEN)
+        if (TOKEN !== "") {
+            core.setSecret(TOKEN)
+        }
+        if (controlPlaneAuth.workflowToken !== "") {
+            core.setSecret(controlPlaneAuth.workflowToken)
+        }
         const GITHUB_TOKEN = getEnv("GITHUB_TOKEN", "")
-        if (GITHUB_TOKEN) core.setSecret(GITHUB_TOKEN)
+        if (GITHUB_TOKEN !== "") {
+            core.setSecret(GITHUB_TOKEN)
+        }
         const AI_TOKEN = getEnv("AI_TOKEN", "")
-        if (AI_TOKEN) core.setSecret(AI_TOKEN)
+        if (AI_TOKEN !== "") {
+            core.setSecret(AI_TOKEN)
+        }
 
         const workspace = getEnv("GITHUB_WORKSPACE")
         if (!workspace) {
@@ -129,7 +143,8 @@ export async function run() {
 
         const controlPlaneClient = new ControlPlaneClient({
             baseURL: API,
-            projectToken: TOKEN,
+            projectToken: controlPlaneAuth.projectToken,
+            workflowToken: controlPlaneAuth.workflowToken,
         })
 
         // Create agent.
@@ -404,6 +419,190 @@ StandardOutput=append:/var/log/jibril.log
             await fs.rm(tmpDir, { recursive: true, force: true })
         }
     }
+}
+
+/**
+ * @typedef {{
+ *   apiURL: string
+ *   apiToken: string
+ *   useOIDCAuth: boolean
+ * }} ResolveControlPlaneAuthInput
+ */
+
+/**
+ * @typedef {{
+ *   projectToken: string
+ *   workflowToken: string
+ *   workflowTokenExpiresAt: string
+ * }} ControlPlaneAuth
+ */
+
+/**
+ * @param {ResolveControlPlaneAuthInput} input
+ * @returns {Promise<ControlPlaneAuth>}
+ */
+async function resolveControlPlaneAuth(input) {
+    if (input.useOIDCAuth !== true) {
+        return {
+            projectToken: requireApiToken(input.apiToken),
+            workflowToken: "",
+            workflowTokenExpiresAt: "",
+        }
+    }
+
+    const audience = resolveOIDCAudience(input.apiURL)
+
+    const unauthenticatedControlPlaneClient = new ControlPlaneClient({
+        baseURL: input.apiURL,
+    })
+
+    let exchanged
+    try {
+        const idToken = await getGitHubIDToken(audience)
+        exchanged = await unauthenticatedControlPlaneClient.exchangeGitHubOIDCForWorkflowToken(idToken)
+    } catch (error) {
+        const errorMessage = getErrorMessage(error)
+        if (isMissingOIDCPermissionError(errorMessage)) {
+            core.warning(
+                "OIDC token request failed because this workflow is missing 'id-token: write' permission. Falling back to 'api_token'.",
+            )
+        } else {
+            core.warning(`OIDC exchange failed (${errorMessage}). Falling back to 'api_token'.`)
+        }
+
+        return {
+            projectToken: requireApiToken(input.apiToken),
+            workflowToken: "",
+            workflowTokenExpiresAt: "",
+        }
+    }
+
+    if (isTimestampExpired(exchanged.expiresAt)) {
+        core.warning("OIDC workflow token was already expired at issuance time. Retrying once.")
+
+        try {
+            const idToken = await getGitHubIDToken(audience)
+            exchanged = await unauthenticatedControlPlaneClient.exchangeGitHubOIDCForWorkflowToken(idToken)
+        } catch (error) {
+            core.warning(`OIDC exchange retry failed (${getErrorMessage(error)}). Falling back to 'api_token'.`)
+            return {
+                projectToken: requireApiToken(input.apiToken),
+                workflowToken: "",
+                workflowTokenExpiresAt: "",
+            }
+        }
+
+        if (isTimestampExpired(exchanged.expiresAt)) {
+            core.warning("OIDC workflow token remains expired after retry. Falling back to 'api_token'.")
+            return {
+                projectToken: requireApiToken(input.apiToken),
+                workflowToken: "",
+                workflowTokenExpiresAt: "",
+            }
+        }
+    }
+
+    core.info("Using OIDC workflow token for control-plane requests")
+
+    return {
+        projectToken: "",
+        workflowToken: exchanged.workflowToken,
+        workflowTokenExpiresAt: exchanged.expiresAt,
+    }
+}
+
+/**
+ * @param {string} audience
+ * @returns {Promise<string>}
+ */
+async function getGitHubIDToken(audience) {
+    let idToken = ""
+
+    try {
+        idToken = await core.getIDToken(audience)
+    } catch (error) {
+        const errorMessage = getErrorMessage(error)
+        if (isMissingOIDCPermissionError(errorMessage)) {
+            throw new Error("OIDC token request failed because this workflow is missing 'id-token: write' permission")
+        }
+
+        throw new Error(`OIDC token request failed: ${errorMessage}`)
+    }
+
+    if (idToken.trim() === "") {
+        throw new Error("OIDC token request returned an empty token")
+    }
+
+    return idToken
+}
+
+/**
+ * @param {string} apiURL
+ * @returns {string}
+ */
+function resolveOIDCAudience(apiURL) {
+    try {
+        const url = new URL(apiURL)
+        if (url.host === "api.garnet.ai") {
+            return GITHUB_APP_ID_PROD
+        }
+        if (url.host === "staging-api.garnet.ai") {
+            return GITHUB_APP_ID_STAGING
+        }
+        if (url.host === "dev-api.garnet.ai") {
+            return GITHUB_APP_ID_DEV
+        }
+
+        return GITHUB_APP_ID_DEV
+    } catch {
+        return GITHUB_APP_ID_DEV
+    }
+}
+
+/**
+ * @param {string} value
+ * @returns {boolean}
+ */
+function isTimestampExpired(value) {
+    if (value === "") {
+        return true
+    }
+
+    const expiresAtMs = Date.parse(value)
+    if (Number.isNaN(expiresAtMs)) {
+        return true
+    }
+
+    return expiresAtMs <= Date.now()
+}
+
+/**
+ * @param {string} token
+ * @returns {string}
+ */
+function requireApiToken(token) {
+    if (token !== "") {
+        return token
+    }
+
+    throw new Error(
+        "Input 'api_token' is required when OIDC authentication is unavailable. This commonly happens on pull requests from forks, where repository secrets are not exposed to workflows, or when 'id-token: write' permission is not granted. Add/verify that your workflow passes a valid token to this input, grant 'id-token: write', or conditionally skip this action for forked PRs.",
+    )
+}
+
+/**
+ * @param {string} errorMessage
+ * @returns {boolean}
+ */
+function isMissingOIDCPermissionError(errorMessage) {
+    const normalized = errorMessage.toLowerCase()
+    if (normalized.includes("actions_id_token_request_url")) {
+        return true
+    }
+    if (normalized.includes("id-token") && normalized.includes("permission")) {
+        return true
+    }
+    return false
 }
 
 /**
