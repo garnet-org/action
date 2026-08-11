@@ -39873,9 +39873,87 @@ function getValidationErrorDetail(payload) {
     return `${message}; ${fieldErrors.join("; ")}`
 }
 
+;// CONCATENATED MODULE: ./src/oidc.js
+// GitHub OIDC helpers shared by the main and post steps. Each step requests
+// its own ID token so no exchanged credential is ever persisted to runner
+// state between steps.
+
+
+
+
+const OIDC_AUTH_FEATURE_FLAG = "GARNET_ACTION_ENABLE_OIDC_AUTH"
+
+const GITHUB_APP_ID_PROD = "Iv23lihCfwCfqCxQNpvv"
+const GITHUB_APP_ID_STAGING = "Iv23liUXLYx9mgGKHgZk"
+const GITHUB_APP_ID_DEV = "Iv23li88DidEyxVnAR1p"
+
+/**
+ * @param {string} apiURL
+ * @returns {string}
+ */
+function resolveOIDCAudience(apiURL) {
+    try {
+        const url = new URL(apiURL)
+        if (url.host === "api.garnet.ai") {
+            return GITHUB_APP_ID_PROD
+        }
+        if (url.host === "staging-api.garnet.ai") {
+            return GITHUB_APP_ID_STAGING
+        }
+        if (url.host === "dev-api.garnet.ai") {
+            return GITHUB_APP_ID_DEV
+        }
+
+        return GITHUB_APP_ID_DEV
+    } catch {
+        return GITHUB_APP_ID_DEV
+    }
+}
+
+/**
+ * @param {string} audience
+ * @returns {Promise<string>}
+ */
+async function getGitHubIDToken(audience) {
+    let idToken = ""
+
+    try {
+        idToken = await getIDToken(audience)
+    } catch (error) {
+        const errorMessage = getErrorMessage(error)
+        if (isMissingOIDCPermissionError(errorMessage)) {
+            throw new Error("OIDC token request failed because this workflow is missing 'id-token: write' permission")
+        }
+
+        throw new Error(`OIDC token request failed: ${errorMessage}`)
+    }
+
+    if (idToken.trim() === "") {
+        throw new Error("OIDC token request returned an empty token")
+    }
+
+    return idToken
+}
+
+/**
+ * @param {string} errorMessage
+ * @returns {boolean}
+ */
+function isMissingOIDCPermissionError(errorMessage) {
+    const normalized = errorMessage.toLowerCase()
+    if (normalized.includes("actions_id_token_request_url")) {
+        return true
+    }
+    if (normalized.includes("id-token") && normalized.includes("permission")) {
+        return true
+    }
+    return false
+}
+
 ;// CONCATENATED MODULE: ./src/action.js
 // This script installs jibril, calls the control-plane API to create the
 // agent and fetch network policy, and sets up Jibril as a systemd service.
+
 
 
 
@@ -39902,10 +39980,6 @@ const INSTPATH = "/usr/local/bin"
 // Default Jibril sensor version: the same stable pin as the floating v2 tag,
 // so the sensor never floats under an unchanged action ref.
 const JIBRIL_STABLE_VERSION = "v2.15.0"
-const OIDC_AUTH_FEATURE_FLAG = "GARNET_ACTION_ENABLE_OIDC_AUTH"
-const GITHUB_APP_ID_PROD = "Iv23lihCfwCfqCxQNpvv"
-const GITHUB_APP_ID_STAGING = "Iv23liUXLYx9mgGKHgZk"
-const GITHUB_APP_ID_DEV = "Iv23li88DidEyxVnAR1p"
 
 // This function is the main entry point for the script.
 // Returns true when Jibril started successfully, false otherwise.
@@ -39944,9 +40018,6 @@ async function run() {
         }
         if (controlPlaneAuth.workflowToken !== "") {
             setSecret(controlPlaneAuth.workflowToken)
-            // The post step reuses this token to resolve the run's profile
-            // envelope ID when no api_token input is available.
-            saveState("controlPlaneWorkflowToken", controlPlaneAuth.workflowToken)
         }
         const GITHUB_TOKEN = getEnv("GITHUB_TOKEN", "")
         if (GITHUB_TOKEN !== "") {
@@ -40411,54 +40482,6 @@ async function resolveControlPlaneAuth(input) {
 }
 
 /**
- * @param {string} audience
- * @returns {Promise<string>}
- */
-async function getGitHubIDToken(audience) {
-    let idToken = ""
-
-    try {
-        idToken = await getIDToken(audience)
-    } catch (error) {
-        const errorMessage = getErrorMessage(error)
-        if (isMissingOIDCPermissionError(errorMessage)) {
-            throw new Error("OIDC token request failed because this workflow is missing 'id-token: write' permission")
-        }
-
-        throw new Error(`OIDC token request failed: ${errorMessage}`)
-    }
-
-    if (idToken.trim() === "") {
-        throw new Error("OIDC token request returned an empty token")
-    }
-
-    return idToken
-}
-
-/**
- * @param {string} apiURL
- * @returns {string}
- */
-function resolveOIDCAudience(apiURL) {
-    try {
-        const url = new URL(apiURL)
-        if (url.host === "api.garnet.ai") {
-            return GITHUB_APP_ID_PROD
-        }
-        if (url.host === "staging-api.garnet.ai") {
-            return GITHUB_APP_ID_STAGING
-        }
-        if (url.host === "dev-api.garnet.ai") {
-            return GITHUB_APP_ID_DEV
-        }
-
-        return GITHUB_APP_ID_DEV
-    } catch {
-        return GITHUB_APP_ID_DEV
-    }
-}
-
-/**
  * @param {string} value
  * @returns {boolean}
  */
@@ -40487,21 +40510,6 @@ function requireApiToken(token) {
     throw new Error(
         "Input 'api_token' is required when OIDC authentication is unavailable. This commonly happens on pull requests from forks, where repository secrets are not exposed to workflows, or when 'id-token: write' permission is not granted. Add/verify that your workflow passes a valid token to this input, grant 'id-token: write', or conditionally skip this action for forked PRs.",
     )
-}
-
-/**
- * @param {string} errorMessage
- * @returns {boolean}
- */
-function isMissingOIDCPermissionError(errorMessage) {
-    const normalized = errorMessage.toLowerCase()
-    if (normalized.includes("actions_id_token_request_url")) {
-        return true
-    }
-    if (normalized.includes("id-token") && normalized.includes("permission")) {
-        return true
-    }
-    return false
 }
 
 /**

@@ -78780,7 +78780,7 @@ function isHttps(requestUrl) {
     const parsedUrl = new URL(requestUrl);
     return parsedUrl.protocol === 'https:';
 }
-class lib_HttpClient {
+class HttpClient {
     constructor(userAgent, handlers, requestOptions) {
         this._ignoreSslError = false;
         this._allowRedirects = true;
@@ -79387,7 +79387,7 @@ class BasicCredentialHandler {
         });
     }
 }
-class auth_BearerCredentialHandler {
+class BearerCredentialHandler {
     constructor(token) {
         this.token = token;
     }
@@ -79445,13 +79445,13 @@ var oidc_utils_awaiter = (undefined && undefined.__awaiter) || function (thisArg
 
 
 
-class oidc_utils_OidcClient {
+class OidcClient {
     static createHttpClient(allowRetry = true, maxRetry = 10) {
         const requestOptions = {
             allowRetries: allowRetry,
             maxRetries: maxRetry
         };
-        return new HttpClient('actions/oidc-client', [new BearerCredentialHandler(oidc_utils_OidcClient.getRequestToken())], requestOptions);
+        return new HttpClient('actions/oidc-client', [new BearerCredentialHandler(OidcClient.getRequestToken())], requestOptions);
     }
     static getRequestToken() {
         const token = process.env['ACTIONS_ID_TOKEN_REQUEST_TOKEN'];
@@ -79470,7 +79470,7 @@ class oidc_utils_OidcClient {
     static getCall(id_token_url) {
         return oidc_utils_awaiter(this, void 0, void 0, function* () {
             var _a;
-            const httpclient = oidc_utils_OidcClient.createHttpClient();
+            const httpclient = OidcClient.createHttpClient();
             const res = yield httpclient
                 .getJson(id_token_url)
                 .catch(error => {
@@ -79489,13 +79489,13 @@ class oidc_utils_OidcClient {
         return oidc_utils_awaiter(this, void 0, void 0, function* () {
             try {
                 // New ID Token is requested from action service
-                let id_token_url = oidc_utils_OidcClient.getIDTokenUrl();
+                let id_token_url = OidcClient.getIDTokenUrl();
                 if (audience) {
                     const encodedAudience = encodeURIComponent(audience);
                     id_token_url = `${id_token_url}&audience=${encodedAudience}`;
                 }
                 debug(`ID token url is ${id_token_url}`);
-                const id_token = yield oidc_utils_OidcClient.getCall(id_token_url);
+                const id_token = yield OidcClient.getCall(id_token_url);
                 setSecret(id_token);
                 return id_token;
             }
@@ -81093,7 +81093,7 @@ function exportVariable(name, val) {
  * console.log(`Using token: ${apiToken}`); // Outputs: "Using token: ***"
  * ```
  */
-function core_setSecret(secret) {
+function setSecret(secret) {
     command_issueCommand('add-mask', {}, secret);
 }
 /**
@@ -81215,7 +81215,7 @@ function isDebug() {
  * Writes debug message to user log
  * @param message debug message
  */
-function core_debug(message) {
+function debug(message) {
     command_issueCommand('debug', {}, message);
 }
 /**
@@ -91683,8 +91683,8 @@ function getBackendIdsFromToken() {
             workflowRunBackendId: scopeParts[1],
             workflowJobRunBackendId: scopeParts[2]
         };
-        core_debug(`Workflow Run Backend ID: ${ids.workflowRunBackendId}`);
-        core_debug(`Workflow Job Run Backend ID: ${ids.workflowJobRunBackendId}`);
+        debug(`Workflow Run Backend ID: ${ids.workflowRunBackendId}`);
+        debug(`Workflow Job Run Backend ID: ${ids.workflowJobRunBackendId}`);
         return ids;
     }
     throw InvalidJwtError;
@@ -91713,12 +91713,12 @@ function maskSigUrl(url) {
         const parsedUrl = new URL(url);
         const signature = parsedUrl.searchParams.get('sig');
         if (signature) {
-            core_setSecret(signature);
-            core_setSecret(encodeURIComponent(signature));
+            setSecret(signature);
+            setSecret(encodeURIComponent(signature));
         }
     }
     catch (error) {
-        core_debug(`Failed to parse URL: ${url} ${error instanceof Error ? error.message : String(error)}`);
+        debug(`Failed to parse URL: ${url} ${error instanceof Error ? error.message : String(error)}`);
     }
 }
 /**
@@ -91744,7 +91744,7 @@ function maskSigUrl(url) {
  */
 function maskSecretUrls(body) {
     if (typeof body !== 'object' || body === null) {
-        core_debug('body is not an object or is null');
+        debug('body is not an object or is null');
         return;
     }
     if ('signed_upload_url' in body &&
@@ -91790,8 +91790,8 @@ class ArtifactHttpClient {
         if (retryMultiplier) {
             this.retryMultiplier = retryMultiplier;
         }
-        this.httpClient = new lib_HttpClient(userAgent, [
-            new auth_BearerCredentialHandler(token)
+        this.httpClient = new HttpClient(userAgent, [
+            new BearerCredentialHandler(token)
         ]);
     }
     // This function satisfies the Rpc interface. It is compatible with the JSON
@@ -91799,7 +91799,7 @@ class ArtifactHttpClient {
     request(service, method, contentType, data) {
         return artifact_twirp_client_awaiter(this, void 0, void 0, function* () {
             const url = new URL(`/twirp/${service}/${method}`, this.baseUrl).href;
-            core_debug(`[Request] ${method} ${url}`);
+            debug(`[Request] ${method} ${url}`);
             const headers = {
                 'Content-Type': contentType
             };
@@ -91823,11 +91823,11 @@ class ArtifactHttpClient {
                     const response = yield operation();
                     const statusCode = response.message.statusCode;
                     rawBody = yield response.readBody();
-                    core_debug(`[Response] - ${response.message.statusCode}`);
-                    core_debug(`Headers: ${JSON.stringify(response.message.headers, null, 2)}`);
+                    debug(`[Response] - ${response.message.statusCode}`);
+                    debug(`Headers: ${JSON.stringify(response.message.headers, null, 2)}`);
                     const body = JSON.parse(rawBody);
                     maskSecretUrls(body);
-                    core_debug(`Body: ${JSON.stringify(body, null, 2)}`);
+                    debug(`Body: ${JSON.stringify(body, null, 2)}`);
                     if (this.isSuccessStatusCode(statusCode)) {
                         return { response, body };
                     }
@@ -91842,7 +91842,7 @@ class ArtifactHttpClient {
                 }
                 catch (error) {
                     if (error instanceof SyntaxError) {
-                        core_debug(`Raw Body: ${rawBody}`);
+                        debug(`Raw Body: ${rawBody}`);
                     }
                     if (error instanceof UsageError) {
                         throw error;
@@ -141054,7 +141054,7 @@ function uploadToBlobStorage(authenticatedUploadURL, uploadStream, contentType) 
         const bufferSize = getUploadChunkSize();
         const blobClient = new BlobClient(authenticatedUploadURL);
         const blockBlobClient = blobClient.getBlockBlobClient();
-        core_debug(`Uploading artifact to blob storage with maxConcurrency: ${maxConcurrency}, bufferSize: ${bufferSize}, contentType: ${contentType}`);
+        debug(`Uploading artifact to blob storage with maxConcurrency: ${maxConcurrency}, bufferSize: ${bufferSize}, contentType: ${contentType}`);
         const uploadCallback = (progress) => {
             info(`Uploaded bytes ${progress.loadedBytes}`);
             uploadByteCount = progress.loadedBytes;
@@ -141134,7 +141134,7 @@ class WaterMarkedUploadStream extends external_stream_.Transform {
 }
 function createRawFileUploadStream(filePath) {
     return stream_awaiter(this, void 0, void 0, function* () {
-        core_debug(`Creating raw file upload stream for: ${filePath}`);
+        debug(`Creating raw file upload stream for: ${filePath}`);
         const bufferSize = getUploadChunkSize();
         const uploadStream = new WaterMarkedUploadStream(bufferSize);
         // Check if symlink and resolve the source path
@@ -141175,7 +141175,7 @@ var zip_awaiter = (undefined && undefined.__awaiter) || function (thisArg, _argu
 const DEFAULT_COMPRESSION_LEVEL = 6;
 function createZipUploadStream(uploadSpecification_1) {
     return zip_awaiter(this, arguments, void 0, function* (uploadSpecification, compressionLevel = DEFAULT_COMPRESSION_LEVEL) {
-        core_debug(`Creating Artifact archive with compressionLevel: ${compressionLevel}`);
+        debug(`Creating Artifact archive with compressionLevel: ${compressionLevel}`);
         const zip = archiver.create('zip', {
             highWaterMark: getUploadChunkSize(),
             zlib: { level: compressionLevel }
@@ -141204,8 +141204,8 @@ function createZipUploadStream(uploadSpecification_1) {
         }
         const bufferSize = getUploadChunkSize();
         const zipUploadStream = new WaterMarkedUploadStream(bufferSize);
-        core_debug(`Zip write high watermark value ${zipUploadStream.writableHighWaterMark}`);
-        core_debug(`Zip read high watermark value ${zipUploadStream.readableHighWaterMark}`);
+        debug(`Zip write high watermark value ${zipUploadStream.writableHighWaterMark}`);
+        debug(`Zip read high watermark value ${zipUploadStream.readableHighWaterMark}`);
         zip.pipe(zipUploadStream);
         zip.finalize();
         return zipUploadStream;
@@ -141229,10 +141229,10 @@ const zipWarningCallback = (error) => {
     }
 };
 const zipFinishCallback = () => {
-    core_debug('Zip stream for upload has finished.');
+    debug('Zip stream for upload has finished.');
 };
 const zipEndCallback = () => {
-    core_debug('Zip stream for upload has ended.');
+    debug('Zip stream for upload has ended.');
 };
 //# sourceMappingURL=zip.js.map
 ;// CONCATENATED MODULE: ./node_modules/@actions/artifact/lib/internal/upload/types.js
@@ -146174,7 +146174,7 @@ function streamExtract(url, directory, skipDecompress) {
             }
             catch (error) {
                 retryCount++;
-                core_debug(`Failed to download artifact after ${retryCount} retries due to ${error.message}. Retrying in 5 seconds...`);
+                debug(`Failed to download artifact after ${retryCount} retries due to ${error.message}. Retrying in 5 seconds...`);
                 // wait 5 seconds before retrying
                 yield new Promise(resolve => setTimeout(resolve, 5000));
             }
@@ -146185,7 +146185,7 @@ function streamExtract(url, directory, skipDecompress) {
 function streamExtractExternal(url_1, directory_1) {
     return download_artifact_awaiter(this, arguments, void 0, function* (url, directory, opts = {}) {
         const { timeout = 30 * 1000, skipDecompress = false } = opts;
-        const client = new lib_HttpClient(getUserAgentString());
+        const client = new HttpClient(getUserAgentString());
         const response = yield client.get(url);
         if (response.message.statusCode !== 200) {
             throw new Error(`Unexpected HTTP response from blob storage: ${response.message.statusCode} ${response.message.statusMessage}`);
@@ -146212,8 +146212,8 @@ function streamExtractExternal(url_1, directory_1) {
             // Use path.basename to extract only the filename component
             fileName = external_path_.basename(decodeURIComponent(rawName.trim()));
         }
-        core_debug(`Content-Type: ${contentType}, mimeType: ${mimeType}, urlEndsWithZip: ${urlEndsWithZip}, isZip: ${isZip}, skipDecompress: ${skipDecompress}`);
-        core_debug(`Content-Disposition: ${contentDisposition}, fileName: ${fileName}`);
+        debug(`Content-Type: ${contentType}, mimeType: ${mimeType}, urlEndsWithZip: ${urlEndsWithZip}, isZip: ${isZip}, skipDecompress: ${skipDecompress}`);
+        debug(`Content-Disposition: ${contentDisposition}, fileName: ${fileName}`);
         let sha256Digest = undefined;
         return new Promise((resolve, reject) => {
             const timerFn = () => {
@@ -146223,7 +146223,7 @@ function streamExtractExternal(url_1, directory_1) {
             };
             const timer = setTimeout(timerFn, timeout);
             const onError = (error) => {
-                core_debug(`response.message: Artifact download failed: ${error.message}`);
+                debug(`response.message: Artifact download failed: ${error.message}`);
                 clearTimeout(timer);
                 reject(error);
             };
@@ -146291,8 +146291,8 @@ function downloadArtifactPublic(artifactId, repositoryOwner, repositoryName, tok
             if (options === null || options === void 0 ? void 0 : options.expectedHash) {
                 if ((options === null || options === void 0 ? void 0 : options.expectedHash) !== extractResponse.sha256Digest) {
                     digestMismatch = true;
-                    core_debug(`Computed digest: ${extractResponse.sha256Digest}`);
-                    core_debug(`Expected digest: ${options.expectedHash}`);
+                    debug(`Computed digest: ${extractResponse.sha256Digest}`);
+                    debug(`Expected digest: ${options.expectedHash}`);
                 }
             }
         }
@@ -146334,8 +146334,8 @@ function downloadArtifactInternal(artifactId, options) {
             if (options === null || options === void 0 ? void 0 : options.expectedHash) {
                 if ((options === null || options === void 0 ? void 0 : options.expectedHash) !== extractResponse.sha256Digest) {
                     digestMismatch = true;
-                    core_debug(`Computed digest: ${extractResponse.sha256Digest}`);
-                    core_debug(`Expected digest: ${options.expectedHash}`);
+                    debug(`Computed digest: ${extractResponse.sha256Digest}`);
+                    debug(`Expected digest: ${options.expectedHash}`);
                 }
             }
         }
@@ -146348,11 +146348,11 @@ function downloadArtifactInternal(artifactId, options) {
 function resolveOrCreateDirectory() {
     return download_artifact_awaiter(this, arguments, void 0, function* (downloadPath = getGitHubWorkspaceDir()) {
         if (!(yield download_artifact_exists(downloadPath))) {
-            core_debug(`Artifact destination folder does not exist, creating: ${downloadPath}`);
+            debug(`Artifact destination folder does not exist, creating: ${downloadPath}`);
             yield external_fs_promises_namespaceObject.mkdir(downloadPath, { recursive: true });
         }
         else {
-            core_debug(`Artifact destination folder already exists: ${downloadPath}`);
+            debug(`Artifact destination folder already exists: ${downloadPath}`);
         }
         return downloadPath;
     });
@@ -146378,7 +146378,7 @@ function getRetryOptions(defaultOptions, retries = defaultMaxRetryNumber, exempt
     // see: https://github.com/actions/toolkit/blob/4fbc5c941a57249b19562015edbd72add14be93d/packages/github/src/utils.ts#L15
     // We pass these in here so they are not overridden.
     const requestOptions = Object.assign(Object.assign({}, defaultOptions.request), { retries });
-    core_debug(`GitHub client configured with: (retries: ${requestOptions.retries}, retry-exempt-status-code: ${(_a = retryOptions.doNotRetry) !== null && _a !== void 0 ? _a : 'octokit default: [400, 401, 403, 404, 422]'})`);
+    debug(`GitHub client configured with: (retries: ${requestOptions.retries}, retry-exempt-status-code: ${(_a = retryOptions.doNotRetry) !== null && _a !== void 0 ? _a : 'octokit default: [400, 401, 403, 404, 422]'})`);
     return [retryOptions, requestOptions];
 }
 //# sourceMappingURL=retry-options.js.map
@@ -146547,7 +146547,7 @@ function getArtifactPublic(artifactName, workflowRunId, repositoryOwner, reposit
         let artifact = getArtifactResp.data.artifacts[0];
         if (getArtifactResp.data.artifacts.length > 1) {
             artifact = getArtifactResp.data.artifacts.sort((a, b) => b.id - a.id)[0];
-            core_debug(`More than one artifact found for a single name, returning newest (id: ${artifact.id})`);
+            debug(`More than one artifact found for a single name, returning newest (id: ${artifact.id})`);
         }
         return {
             artifact: {
@@ -146581,7 +146581,7 @@ function getArtifactInternal(artifactName) {
         let artifact = res.artifacts[0];
         if (res.artifacts.length > 1) {
             artifact = res.artifacts.sort((a, b) => Number(b.databaseId) - Number(a.databaseId))[0];
-            core_debug(`More than one artifact found for a single name, returning newest (id: ${artifact.databaseId})`);
+            debug(`More than one artifact found for a single name, returning newest (id: ${artifact.databaseId})`);
         }
         return {
             artifact: {
@@ -146661,7 +146661,7 @@ function deleteArtifactInternal(artifactName) {
         let artifact = listRes.artifacts[0];
         if (listRes.artifacts.length > 1) {
             artifact = listRes.artifacts.sort((a, b) => Number(b.databaseId) - Number(a.databaseId))[0];
-            core_debug(`More than one artifact found for a single name, returning newest (id: ${artifact.databaseId})`);
+            debug(`More than one artifact found for a single name, returning newest (id: ${artifact.databaseId})`);
         }
         const req = {
             workflowRunBackendId: artifact.workflowRunBackendId,
@@ -146743,7 +146743,7 @@ function listArtifactsPublic(workflowRunId_1, repositoryOwner_1, repositoryName_
         currentPageNumber++;
         // Iterate over any remaining pages
         for (currentPageNumber; currentPageNumber <= numberOfPages; currentPageNumber++) {
-            core_debug(`Fetching page ${currentPageNumber} of artifact list`);
+            debug(`Fetching page ${currentPageNumber} of artifact list`);
             const { data: listArtifactResponse } = yield github.request('GET /repos/{owner}/{repo}/actions/runs/{run_id}/artifacts', {
                 owner: repositoryOwner,
                 repo: repositoryName,
@@ -147058,7 +147058,7 @@ async function copyReadableLogFile(artifactDir, src, destName) {
       silent: true,
     })
     if (cpResult.exitCode !== 0) {
-      core_debug(
+      debug(
         `Skipping ${destName}: source may not exist (cp exit ${cpResult.exitCode})`,
       )
       return false
@@ -151783,7 +151783,85 @@ function getCreateRecheckDelayMs(profile) {
     return CREATE_RECHECK_MIN_DELAY_MS + (hash % CREATE_RECHECK_SPREAD_MS)
 }
 
+;// CONCATENATED MODULE: ./src/oidc.js
+// GitHub OIDC helpers shared by the main and post steps. Each step requests
+// its own ID token so no exchanged credential is ever persisted to runner
+// state between steps.
+
+
+
+
+const OIDC_AUTH_FEATURE_FLAG = "GARNET_ACTION_ENABLE_OIDC_AUTH"
+
+const GITHUB_APP_ID_PROD = "Iv23lihCfwCfqCxQNpvv"
+const GITHUB_APP_ID_STAGING = "Iv23liUXLYx9mgGKHgZk"
+const GITHUB_APP_ID_DEV = "Iv23li88DidEyxVnAR1p"
+
+/**
+ * @param {string} apiURL
+ * @returns {string}
+ */
+function resolveOIDCAudience(apiURL) {
+    try {
+        const url = new URL(apiURL)
+        if (url.host === "api.garnet.ai") {
+            return GITHUB_APP_ID_PROD
+        }
+        if (url.host === "staging-api.garnet.ai") {
+            return GITHUB_APP_ID_STAGING
+        }
+        if (url.host === "dev-api.garnet.ai") {
+            return GITHUB_APP_ID_DEV
+        }
+
+        return GITHUB_APP_ID_DEV
+    } catch {
+        return GITHUB_APP_ID_DEV
+    }
+}
+
+/**
+ * @param {string} audience
+ * @returns {Promise<string>}
+ */
+async function getGitHubIDToken(audience) {
+    let idToken = ""
+
+    try {
+        idToken = await getIDToken(audience)
+    } catch (error) {
+        const errorMessage = getErrorMessage(error)
+        if (isMissingOIDCPermissionError(errorMessage)) {
+            throw new Error("OIDC token request failed because this workflow is missing 'id-token: write' permission")
+        }
+
+        throw new Error(`OIDC token request failed: ${errorMessage}`)
+    }
+
+    if (idToken.trim() === "") {
+        throw new Error("OIDC token request returned an empty token")
+    }
+
+    return idToken
+}
+
+/**
+ * @param {string} errorMessage
+ * @returns {boolean}
+ */
+function isMissingOIDCPermissionError(errorMessage) {
+    const normalized = errorMessage.toLowerCase()
+    if (normalized.includes("actions_id_token_request_url")) {
+        return true
+    }
+    if (normalized.includes("id-token") && normalized.includes("permission")) {
+        return true
+    }
+    return false
+}
+
 ;// CONCATENATED MODULE: ./src/post.js
+
 
 
 
@@ -151930,8 +152008,9 @@ async function resolveProfileEnvelopeID() {
         return ""
     }
 
+    const baseURL = firstNonEmptyString(getEnv("GARNET_API_URL"), getInput("api_url"), "https://api.garnet.ai")
     const projectToken = firstNonEmptyString(getInput("api_token"), getEnv("GARNET_API_TOKEN"))
-    const workflowToken = getState("controlPlaneWorkflowToken")
+    const workflowToken = projectToken === "" ? await resolvePostWorkflowToken(baseURL) : ""
     if (projectToken === "" && workflowToken === "") {
         return ""
     }
@@ -151943,7 +152022,7 @@ async function resolveProfileEnvelopeID() {
 
     try {
         const client = new ControlPlaneClient({
-            baseURL: firstNonEmptyString(getEnv("GARNET_API_URL"), getInput("api_url"), "https://api.garnet.ai"),
+            baseURL,
             projectToken,
             workflowToken,
         })
@@ -151965,6 +152044,34 @@ async function resolveProfileEnvelopeID() {
         return match.id
     } catch (error) {
         info(`profile envelope lookup skipped: ${getErrorMessage(error)}`)
+        return ""
+    }
+}
+
+/**
+ * Exchanges a fresh GitHub OIDC ID token for a control-plane workflow token,
+ * for the post step's profile envelope lookup. The token is never persisted
+ * between steps; the post step performs its own exchange. Fail-closed: flag
+ * off, missing permission, or any exchange failure returns "".
+ * @param {string} baseURL
+ * @returns {Promise<string>}
+ */
+async function resolvePostWorkflowToken(baseURL) {
+    const useOIDCAuth = getEnv(OIDC_AUTH_FEATURE_FLAG, "false") === "true"
+    if (useOIDCAuth !== true) {
+        return ""
+    }
+
+    try {
+        const idToken = await getGitHubIDToken(resolveOIDCAudience(baseURL))
+        const client = new ControlPlaneClient({ baseURL })
+        const exchanged = await client.exchangeGitHubOIDCForWorkflowToken(idToken)
+        if (exchanged.workflowToken !== "") {
+            setSecret(exchanged.workflowToken)
+        }
+        return exchanged.workflowToken
+    } catch (error) {
+        info(`post-step OIDC exchange skipped: ${getErrorMessage(error)}`)
         return ""
     }
 }

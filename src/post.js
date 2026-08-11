@@ -19,6 +19,7 @@ import { uploadJibrilArtifacts } from "./post-artifacts.js"
 import { buildReportLink, getDefaultJsonProfileFile, parseProfileJson, resolveAppBaseURL } from "./profile-comment.js"
 import { profilePermalink, renderPendingReview, renderStepSummary, summarizeProfile } from "./runtime-review.js"
 import { publishPullRequestComment } from "./pr-comment.js"
+import { OIDC_AUTH_FEATURE_FLAG, getGitHubIDToken, resolveOIDCAudience } from "./oidc.js"
 
 /** @typedef {import("./profile-comment.js").NormalizedProfile} NormalizedProfile */
 /** @typedef {import("./profile-comment.js").RenderOptions} RenderOptions */
@@ -154,8 +155,9 @@ async function resolveProfileEnvelopeID() {
         return ""
     }
 
+    const baseURL = firstNonEmptyString(getEnv("GARNET_API_URL"), core.getInput("api_url"), "https://api.garnet.ai")
     const projectToken = firstNonEmptyString(core.getInput("api_token"), getEnv("GARNET_API_TOKEN"))
-    const workflowToken = core.getState("controlPlaneWorkflowToken")
+    const workflowToken = projectToken === "" ? await resolvePostWorkflowToken(baseURL) : ""
     if (projectToken === "" && workflowToken === "") {
         return ""
     }
@@ -167,7 +169,7 @@ async function resolveProfileEnvelopeID() {
 
     try {
         const client = new ControlPlaneClient({
-            baseURL: firstNonEmptyString(getEnv("GARNET_API_URL"), core.getInput("api_url"), "https://api.garnet.ai"),
+            baseURL,
             projectToken,
             workflowToken,
         })
@@ -189,6 +191,34 @@ async function resolveProfileEnvelopeID() {
         return match.id
     } catch (error) {
         core.info(`profile envelope lookup skipped: ${getErrorMessage(error)}`)
+        return ""
+    }
+}
+
+/**
+ * Exchanges a fresh GitHub OIDC ID token for a control-plane workflow token,
+ * for the post step's profile envelope lookup. The token is never persisted
+ * between steps; the post step performs its own exchange. Fail-closed: flag
+ * off, missing permission, or any exchange failure returns "".
+ * @param {string} baseURL
+ * @returns {Promise<string>}
+ */
+async function resolvePostWorkflowToken(baseURL) {
+    const useOIDCAuth = getEnv(OIDC_AUTH_FEATURE_FLAG, "false") === "true"
+    if (useOIDCAuth !== true) {
+        return ""
+    }
+
+    try {
+        const idToken = await getGitHubIDToken(resolveOIDCAudience(baseURL))
+        const client = new ControlPlaneClient({ baseURL })
+        const exchanged = await client.exchangeGitHubOIDCForWorkflowToken(idToken)
+        if (exchanged.workflowToken !== "") {
+            core.setSecret(exchanged.workflowToken)
+        }
+        return exchanged.workflowToken
+    } catch (error) {
+        core.info(`post-step OIDC exchange skipped: ${getErrorMessage(error)}`)
         return ""
     }
 }
