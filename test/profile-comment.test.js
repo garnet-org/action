@@ -98,13 +98,14 @@ test("comment body renders byte-identically to the reference v6.6.1 render path"
     assert.equal(content, reference.slice(markerPrefix.length))
 })
 
-test("comment body carries the v6.6.1 anatomy: headline, meta line, job fold, explainer tree", () => {
+test("comment body carries the v6.9 anatomy: headline, meta line, job fold, explainer tree", () => {
     assert.match(body, /\*\*Execution Profiles recorded for 1 job, triggered by \[`[0-9a-f]{7}`\]/)
     assert.ok(body.includes("execution chain"))
     assert.ok(body.includes("recorded at the kernel by Garnet"))
     assert.ok(body.includes("💡 How to read this"))
     assert.ok(body.includes("<pre>"))
-    assert.ok(body.includes("one chain of processes, root to action: an execution chain"))
+    assert.ok(body.includes("follow a path downward to see what ran and what it did"))
+    assert.ok(body.includes("names on the path = processes · ○ = observed action · (…) = context"))
     assert.ok(!body.includes("````text"), "the canonical tree replaced the text fence")
     assert.ok(!body.includes("job log ↗"), "the separate run-link label is retired (A7)")
     assert.ok(!body.includes("?job="), "no legacy ?job= selector (ENG-1355)")

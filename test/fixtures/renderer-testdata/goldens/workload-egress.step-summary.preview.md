@@ -27,7 +27,7 @@ Keyed by execution chain; repeated destination names within a chain are collapse
 | --- | --- | --- |
 | <code>registry.npmjs.org [104.16.8.34] :443</code> | <code>systemd</code> → <code>…</code> → <code>Runner.Worker</code> → <code>bash</code> → <code>npm install</code> | — |
 | <code>registry.npmjs.org [104.16.8.34] :443</code> | <code>systemd</code> → <code>…</code> → <code>npm test</code> → <code>sh</code> → <code>node</code> | — |
-| <code>api.garnet.ai [104.26.11.16] :443</code> | <code>systemd</code> → <code>…</code> → <code>npm test</code> → <code>sh</code> → <code>node</code> | — |
+| <code>api.garnet.ai [104.26.11.16] :443</code> | <code>systemd</code> → <code>…</code> → <code>npm test</code> → <code>sh</code> → <code>node</code> | (garnet sensor) |
 | <code>github.com [140.82.113.3] :443</code> | <code>systemd</code> → <code>…</code> → <code>npm test</code> → <code>sh</code> → <code>node</code> | — |
 | <code>images.unsplash.com [146.75.94.208] :443 · also recorded: dualstack.com.imgix.map.fastly.net, unsplash.imgix.net</code> | <code>systemd</code> → <code>…</code> → <code>npm test</code> → <code>sh</code> → <code>node</code> | — |
 

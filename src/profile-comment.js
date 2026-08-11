@@ -104,6 +104,9 @@ const REVIEW_EDGE_SCHEMA = z.object({
     process: z.string(),
     ancestry: z.array(z.string()),
     github_step: z.string(),
+    // Kept for the ran-from provenance note only — the full path never
+    // renders; historical states without it default to empty.
+    executable: z.string().default(""),
 })
 
 const ASSERTION_EVIDENCE_SCHEMA = z.object({
@@ -529,6 +532,7 @@ function upgradeLegacyProfile(profile) {
                 process: ancestry[ancestry.length - 1] ?? "",
                 ancestry,
                 github_step: "",
+                executable: "",
             })
         })
     })

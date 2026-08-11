@@ -1,5 +1,5 @@
 {
-  "contractVersion": "6.6.1",
+  "contractVersion": "6.9.5",
   "repo": "garnet-org/runtime-review-testbed",
   "sha": "ef01a52517e7532ab34aadea58b952c9f1e79ece",
   "commitUrl": "https://github.com/garnet-org/runtime-review-testbed/commit/ef01a52517e7532ab34aadea58b952c9f1e79ece",
@@ -129,7 +129,9 @@
             "node"
           ],
           "github_step": "",
-          "notes": []
+          "notes": [
+            "garnet sensor"
+          ]
         },
         {
           "remote_address": "140.82.113.3",

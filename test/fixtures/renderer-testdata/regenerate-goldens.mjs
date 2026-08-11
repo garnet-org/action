@@ -41,16 +41,23 @@ async function loadProfile(name) {
 
 /**
  * @param {unknown[]} profiles
+ * @param {unknown[] | null} [previousProfiles]
  */
-function reviewFor(profiles) {
+function reviewFor(profiles, previousProfiles = null) {
     const jobs = profiles.map(summarizeProfile).filter(job => job !== null)
     const sha = jobs[0]?.sha ?? ""
+    const previousJobs = previousProfiles !== null
+        ? previousProfiles.map(summarizeProfile).filter(job => job !== null)
+        : null
     return buildRunReview({
         repo: REPO,
         sha,
         commitUrl: sha !== "" ? `https://github.com/${REPO}/commit/${sha}` : "",
         appUrl: APP_URL,
         jobs,
+        ...(previousJobs !== null
+            ? { previousSha: previousJobs[0]?.sha ?? "", previousJobs }
+            : {}),
     })
 }
 
@@ -67,22 +74,42 @@ async function main() {
     )
     console.log("wrote goldens/no-record.pr-comment.md")
 
-    /** @type {Record<string, string[]>} */
+    const comparisonPair = JSON.parse(
+        await readFile(join(here, "synthetic", "comparison-pair.json"), "utf8"),
+    )
+    const runnerInfrastructureOnly = JSON.parse(
+        await readFile(join(here, "synthetic", "runner-infrastructure-only.json"), "utf8"),
+    )
+    const attributionCases = JSON.parse(
+        await readFile(join(here, "synthetic", "attribution-cases.json"), "utf8"),
+    )
+
+    /** @type {Record<string, { files?: string[], profiles?: unknown[], previous?: unknown[] }>} */
     const states = {
-        "registry-only": ["normal-run.json"],
-        "workload-egress": ["worth-a-look-run.json"],
-        "multi-job": [
-            "record-workload-egress.json",
-            "record-docs-build.json",
-            "record-install-only.json",
-            "record-lint.json",
-            "record-typecheck.json",
-        ],
+        "registry-only": { files: ["normal-run.json"] },
+        "workload-egress": { files: ["worth-a-look-run.json"] },
+        "multi-job": {
+            files: [
+                "record-workload-egress.json",
+                "record-docs-build.json",
+                "record-install-only.json",
+                "record-lint.json",
+                "record-typecheck.json",
+            ],
+        },
+        "runner-infrastructure-only": { profiles: [runnerInfrastructureOnly] },
+        attribution: { profiles: attributionCases },
+        "multi-job-comparison": {
+            profiles: comparisonPair.head,
+            previous: comparisonPair.previous,
+        },
     }
 
-    for (const [name, files] of Object.entries(states)) {
-        const profiles = await Promise.all(files.map(loadProfile))
-        const review = reviewFor(profiles)
+    for (const [name, state] of Object.entries(states)) {
+        const profiles = state.files !== undefined
+            ? await Promise.all(state.files.map(loadProfile))
+            : (state.profiles ?? [])
+        const review = reviewFor(profiles, state.previous ?? null)
         await writeFile(join(goldenDir, `${name}.pr-comment.md`), `${renderRunReview(review)}\n`)
         await writeFile(
             join(goldenDir, `${name}.review-model.json`),

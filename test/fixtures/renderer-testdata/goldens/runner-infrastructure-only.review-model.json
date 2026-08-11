@@ -1,0 +1,96 @@
+{
+  "contractVersion": "6.9.5",
+  "repo": "garnet-org/runtime-review-testbed",
+  "sha": "cc33dd44ee55ff6677889900aabbccddee112233",
+  "commitUrl": "https://github.com/garnet-org/runtime-review-testbed/commit/cc33dd44ee55ff6677889900aabbccddee112233",
+  "appUrl": "https://app.garnet.ai",
+  "appMode": true,
+  "recordedThrough": "2026-08-07 13:00:00 UTC",
+  "counts": {
+    "jobs": 1,
+    "associations": 2,
+    "destinations": 2
+  },
+  "jobs": [
+    {
+      "name": "provision",
+      "workflow": "ci",
+      "run_id": "32000000002",
+      "run_url": "https://github.com/garnet-org/runtime-review-testbed/actions/runs/32000000002",
+      "job_url": "",
+      "profile_id": "019f2c11-aaaa-7bbb-8ccc-0123456789ab",
+      "uuid": "2a6c3b2d-0e5f-4c8b-9d4e-3f2a7b8c9d01",
+      "timestamp": "2026-08-07T13:00:00.000000000Z",
+      "repository": "garnet-org/runtime-review-testbed",
+      "sha": "cc33dd44ee55ff6677889900aabbccddee112233",
+      "ref": "",
+      "actor": "",
+      "job_index": "",
+      "flow_count": 2,
+      "telemetry": {
+        "total_domains": null,
+        "total_connections": null
+      },
+      "telemetryDiscrepancies": [],
+      "assertions": [],
+      "counts": {
+        "associations": 2,
+        "processes": 2,
+        "destinations": 2,
+        "primary_names": 2,
+        "domains": 2,
+        "flows": 2
+      },
+      "edges": [
+        {
+          "remote_address": "140.82.113.41",
+          "remote_names": [
+            "hosted-compute-watchdog-prod-iad-01.githubapp"
+          ],
+          "remote_ports": [
+            "443"
+          ],
+          "protocol": "tcp",
+          "result": "",
+          "detections": [],
+          "lineage_recorded": true,
+          "pid": "2002",
+          "process": "hosted-compute-agent",
+          "ancestry": [
+            "systemd",
+            "hosted-compute-agent"
+          ],
+          "github_step": "",
+          "notes": [
+            "github infra"
+          ]
+        },
+        {
+          "remote_address": "127.0.0.53",
+          "remote_names": [
+            "localhost"
+          ],
+          "remote_ports": [
+            "53 (dns)"
+          ],
+          "protocol": "udp",
+          "result": "",
+          "detections": [],
+          "lineage_recorded": true,
+          "pid": "2001",
+          "process": "provjobd734003200",
+          "ancestry": [
+            "systemd",
+            "hosted-compute-agent",
+            "sudo",
+            "provjobd734003200"
+          ],
+          "github_step": "99. Runner Processes",
+          "notes": [
+            "dns resolver"
+          ]
+        }
+      ]
+    }
+  ]
+}

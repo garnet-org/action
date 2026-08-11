@@ -15,8 +15,8 @@ import {
 } from "./shared.js"
 import { getPullRequestNumberFromEvent } from "./github-event.js"
 import { uploadJibrilArtifacts } from "./post-artifacts.js"
-import { getDefaultJsonProfileFile, parseProfileJson, resolveAppBaseURL } from "./profile-comment.js"
-import { renderPendingReview, renderStepSummary } from "./runtime-review.js"
+import { buildReportLink, getDefaultJsonProfileFile, parseProfileJson, resolveAppBaseURL } from "./profile-comment.js"
+import { profilePermalink, renderPendingReview, renderStepSummary, summarizeProfile } from "./runtime-review.js"
 import { publishPullRequestComment } from "./pr-comment.js"
 
 /** @typedef {import("./profile-comment.js").NormalizedProfile} NormalizedProfile */
@@ -88,6 +88,7 @@ async function run() {
 
         await appendRuntimeReviewSummary(profile, renderOptions)
         if (profile !== null) {
+            logProfileReportLink(profile)
             await publishProfilerComment(profile.normalized, renderOptions)
         }
     } catch (err) {
@@ -170,6 +171,40 @@ async function appendRuntimeReviewSummary(profile, renderOptions) {
 
     await fs.appendFile(summaryFile, `\n${content}\n`)
     core.info("Garnet Runtime Summary written to job summary")
+}
+
+/**
+ * Logs the public Run Profile report link to the job log so it is reachable
+ * from every run (push, schedule, forks without comment permissions), not
+ * only from PR comments and the Step Summary. The exact per-profile selector
+ * is preferred when the profile carries an envelope ID; otherwise the
+ * run-level report link is logged. The page enforces the fail-closed
+ * publication policy, so the URL resolves only for public, consented
+ * profiles.
+ * @param {LoadedProfile} profile
+ * @returns {void}
+ */
+function logProfileReportLink(profile) {
+    const job = summarizeProfile(profile.raw)
+
+    let link = ""
+    if (job !== null) {
+        link = profilePermalink(job, resolveAppBaseURL(), "ci_log")
+    }
+
+    if (link === "") {
+        link = buildReportLink({
+            repository: getEnv("GITHUB_REPOSITORY"),
+            run_id: getEnv("GITHUB_RUN_ID"),
+            job: getEnv("GITHUB_JOB"),
+        })
+    }
+
+    if (link === "") {
+        return
+    }
+
+    core.info(`Garnet Run Profile report: ${link}`)
 }
 
 /**
