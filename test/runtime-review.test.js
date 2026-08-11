@@ -350,10 +350,8 @@ await test("gate 4: one meaning per style — bold marks the process that acted"
 })
 
 await test("gate 5: evidence keeps PID-distinct edges while comment rows dedupe destinations", () => {
-  const pid4104 = EDGE_SUMMARY.match(/<sup>(\d+)<\/sup> pid 4104/)
-  const pid4105 = EDGE_SUMMARY.match(/<sup>(\d+)<\/sup> pid 4105/)
-  assert.ok(pid4104 !== null && pid4105 !== null)
-  assert.notEqual(pid4104[1], pid4105[1], "distinct PIDs must never share a footnote reference")
+  assert.ok(EDGE_SUMMARY.includes("<sub>pid&nbsp;4104</sub>"))
+  assert.ok(EDGE_SUMMARY.includes("<sub>pid&nbsp;4105</sub>"))
   assert.ok(!EDGE_MD.includes("[4104"))
   assert.ok(!EDGE_MD.includes("[4105"))
   assert.ok(!/×\d/.test(EDGE_MD) && !/×\d/.test(EDGE_SUMMARY))
@@ -459,7 +457,7 @@ await test("gate 7: exact IMDS addresses get the instance-metadata note with ful
   const line = EDGE_MD.split("\n").find((l) => l.includes("169.254.169.254"))
   assert.ok(line.includes("(cloud metadata)"))
   assert.ok(EDGE_MD.includes("<strong>python3</strong>"))
-  assert.ok(EDGE_SUMMARY.includes("pid 4106"))
+  assert.ok(EDGE_SUMMARY.includes("<sub>pid&nbsp;4106</sub>"))
   assert.deepEqual(
     edgeNotes({ remote_address: "169.254.169.254", remote_ports: [] }),
     ["cloud metadata"],
@@ -1258,8 +1256,8 @@ await test("shape: edges sort into an independently specified exact order (linea
   ]
   assert.deepEqual(got, expected)
   assert.ok(
-    EDGE_SUMMARY.indexOf("pid 4104") <
-      EDGE_SUMMARY.indexOf("pid 4105"),
+    EDGE_SUMMARY.indexOf("pid&nbsp;4104") <
+      EDGE_SUMMARY.indexOf("pid&nbsp;4105"),
   )
 })
 
@@ -1321,8 +1319,7 @@ await test("shape: Step Summary is lineage-keyed (deduped) with preview-only con
   assert.ok(REAL_SUMMARY.includes("| Branch |"))
   assert.ok(REAL_SUMMARY.includes("| Triggered by |"))
   assert.ok(EDGE_SUMMARY.includes("| Run ID / Job |"))
-  assert.ok(EDGE_SUMMARY.includes("<code>node</code> <sup>"))
-  assert.ok(EDGE_SUMMARY.includes("pid 4104"))
+  assert.ok(EDGE_SUMMARY.includes("</code> <sub>pid&nbsp;4104</sub>"))
   // The preview recorded-context table keeps its inline PID form.
   assert.ok(EDGE_SUMMARY_PREVIEW.includes("<code>node (pid 4104)</code>"))
   assert.ok(REAL_SUMMARY.includes("<code>systemd</code> → <code>…</code>"))

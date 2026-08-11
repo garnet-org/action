@@ -145,10 +145,8 @@ Keyed by execution chain; repeated destination names within a chain are collapse
 
 | Process Tree | Destinations |
 | --- | --- |
-| <code>systemd</code> → <code>…</code> → <code>Runner.Worker</code> → <code>bash</code> → <code>node</code> <sup>1</sup> | · <code>registry.npmjs.org</code><br>· <code>localhost</code> |
-| <code>systemd</code> → <code>hosted-compute-agent</code> → <code>sudo</code> → <code>provjobd920019609</code> <sup>2</sup> | <code>localhost</code> |
-
-<sub><sup>1</sup> pid 2384 · <sup>2</sup> pid 1867</sub>
+| <code>systemd</code> → <code>…</code> → <code>Runner.Worker</code> → <code>bash</code> → <code>node</code> <sub>pid&nbsp;2384</sub> | · <code>registry.npmjs.org</code><br>· <code>localhost</code> |
+| <code>systemd</code> → <code>hosted-compute-agent</code> → <code>sudo</code> → <code>provjobd920019609</code> <sub>pid&nbsp;1867</sub> | <code>localhost</code> |
 
 Network telemetry observed 2 unique domains, 2 destinations, 2 connections, and 2 flows.
 
@@ -182,11 +180,9 @@ Keyed by execution chain; repeated destination names within a chain are collapse
 
 | Process Tree | Destinations |
 | --- | --- |
-| <code>systemd</code> → <code>hosted-compute-agent</code> <sup>1</sup> | <code>140.82.112.23</code> |
-| <code>systemd</code> → <code>…</code> → <code>Runner.Worker</code> → <code>bash</code> → <code>node</code> <sup>2</sup> | · <code>registry.npmjs.org</code><br>· <code>localhost</code> |
-| <code>systemd</code> → <code>hosted-compute-agent</code> → <code>sudo</code> → <code>provjobd1326539233</code> <sup>3</sup> | · <code>localhost</code><br>· <code>hosted-compute-watchdog-prod-iad-01.githubapp</code> |
-
-<sub><sup>1</sup> pid 1878 · <sup>2</sup> pid 2371 · <sup>3</sup> pid 1893</sub>
+| <code>systemd</code> → <code>hosted-compute-agent</code> <sub>pid&nbsp;1878</sub> | <code>140.82.112.23</code> |
+| <code>systemd</code> → <code>…</code> → <code>Runner.Worker</code> → <code>bash</code> → <code>node</code> <sub>pid&nbsp;2371</sub> | · <code>registry.npmjs.org</code><br>· <code>localhost</code> |
+| <code>systemd</code> → <code>hosted-compute-agent</code> → <code>sudo</code> → <code>provjobd1326539233</code> <sub>pid&nbsp;1893</sub> | · <code>localhost</code><br>· <code>hosted-compute-watchdog-prod-iad-01.githubapp</code> |
 
 Network telemetry observed 4 unique domains, 4 destinations, 4 connections, and 4 flows.
 
@@ -220,10 +216,8 @@ Keyed by execution chain; repeated destination names within a chain are collapse
 
 | Process Tree | Destinations |
 | --- | --- |
-| <code>systemd</code> → <code>hosted-compute-agent</code> <sup>1</sup> | <code>140.82.113.24</code> |
-| <code>systemd</code> → <code>hosted-compute-agent</code> → <code>sudo</code> → <code>provjobd1278877480</code> <sup>2</sup> | · <code>localhost</code><br>· <code>hosted-compute-watchdog-prod-iad-02.githubapp</code> |
-
-<sub><sup>1</sup> pid 1854 · <sup>2</sup> pid 1868</sub>
+| <code>systemd</code> → <code>hosted-compute-agent</code> <sub>pid&nbsp;1854</sub> | <code>140.82.113.24</code> |
+| <code>systemd</code> → <code>hosted-compute-agent</code> → <code>sudo</code> → <code>provjobd1278877480</code> <sub>pid&nbsp;1868</sub> | · <code>localhost</code><br>· <code>hosted-compute-watchdog-prod-iad-02.githubapp</code> |
 
 Network telemetry observed 3 unique domains, 3 destinations, 3 connections, and 3 flows.
 
@@ -257,10 +251,8 @@ Keyed by execution chain; repeated destination names within a chain are collapse
 
 | Process Tree | Destinations |
 | --- | --- |
-| <code>systemd</code> → <code>hosted-compute-agent</code> <sup>1</sup> | <code>140.82.114.24</code> |
-| <code>systemd</code> → <code>hosted-compute-agent</code> → <code>sudo</code> → <code>provjobd3832655626</code> <sup>2</sup> | · <code>localhost</code><br>· <code>hosted-compute-watchdog-prod-iad-02.githubapp</code> |
-
-<sub><sup>1</sup> pid 1878 · <sup>2</sup> pid 1893</sub>
+| <code>systemd</code> → <code>hosted-compute-agent</code> <sub>pid&nbsp;1878</sub> | <code>140.82.114.24</code> |
+| <code>systemd</code> → <code>hosted-compute-agent</code> → <code>sudo</code> → <code>provjobd3832655626</code> <sub>pid&nbsp;1893</sub> | · <code>localhost</code><br>· <code>hosted-compute-watchdog-prod-iad-02.githubapp</code> |
 
 Network telemetry observed 3 unique domains, 3 destinations, 3 connections, and 3 flows.
 
@@ -294,13 +286,11 @@ Keyed by execution chain; repeated destination names within a chain are collapse
 
 | Process Tree | Destinations |
 | --- | --- |
-| <code>systemd</code> → <code>hosted-compute-agent</code> <sup>1</sup> | <code>140.82.113.23</code> |
-| <code>systemd</code> → <code>…</code> → <code>Runner.Worker</code> → <code>bash</code> → <code>node</code> <sup>2</sup> | · <code>registry.npmjs.org</code><br>· <code>localhost</code> |
-| <code>systemd</code> → <code>…</code> → <code>node</code> → <code>dash</code> → <code>node</code> <sup>3</sup> | · <code>registry.npmjs.org</code><br>· <code>api.garnet.ai</code><br>· <code>localhost</code><br>· <code>github.com</code> |
-| <code>systemd</code> → <code>…</code> → <code>node</code> → <code>dash</code> → <code>curl</code> <sup>4</sup> | · <code>httpbin.org</code><br>· <code>localhost</code> |
-| <code>systemd</code> → <code>hosted-compute-agent</code> → <code>sudo</code> → <code>provjobd811584691</code> <sup>5</sup> | · <code>localhost</code><br>· <code>hosted-compute-watchdog-prod-iad-02.githubapp</code> |
-
-<sub><sup>1</sup> pid 1849 · <sup>2</sup> pid 2361 · <sup>3</sup> pid 2384 · <sup>4</sup> pid 2396 · <sup>5</sup> pid 1864</sub>
+| <code>systemd</code> → <code>hosted-compute-agent</code> <sub>pid&nbsp;1849</sub> | <code>140.82.113.23</code> |
+| <code>systemd</code> → <code>…</code> → <code>Runner.Worker</code> → <code>bash</code> → <code>node</code> <sub>pid&nbsp;2361</sub> | · <code>registry.npmjs.org</code><br>· <code>localhost</code> |
+| <code>systemd</code> → <code>…</code> → <code>node</code> → <code>dash</code> → <code>node</code> <sub>pid&nbsp;2384</sub> | · <code>registry.npmjs.org</code><br>· <code>api.garnet.ai</code><br>· <code>localhost</code><br>· <code>github.com</code> |
+| <code>systemd</code> → <code>…</code> → <code>node</code> → <code>dash</code> → <code>curl</code> <sub>pid&nbsp;2396</sub> | · <code>httpbin.org</code><br>· <code>localhost</code> |
+| <code>systemd</code> → <code>hosted-compute-agent</code> → <code>sudo</code> → <code>provjobd811584691</code> <sub>pid&nbsp;1864</sub> | · <code>localhost</code><br>· <code>hosted-compute-watchdog-prod-iad-02.githubapp</code> |
 
 Network telemetry observed 7 unique domains, 8 destinations, 8 connections, and 8 flows.
 

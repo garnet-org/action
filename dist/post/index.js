@@ -149983,32 +149983,28 @@ function compactStepSummaryAncestry(edge) {
 }
 
 /**
- * Renders one recorded chain as a `→`-joined run of code spans. When a
- * PID footnote map is supplied, the leaf carries a superscript reference
- * into it instead of an inline `(pid …)` suffix; distinct PIDs always get
- * distinct references.
+ * Renders one recorded chain as a `→`-joined run of code spans. With
+ * `pidAsFootnote`, the leaf's PID renders as a small `<sub>` note in the
+ * same cell instead of an inline `(pid …)` suffix; every recorded PID
+ * stays visible in its own row.
  * @param {ReviewEdge} edge
- * @param {Map<string, number>} [pidRefs]
+ * @param {boolean} [pidAsFootnote]
  */
-function processTreeCell(edge, pidRefs) {
+function processTreeCell(edge, pidAsFootnote) {
   const names = compactStepSummaryAncestry(edge)
-  return names
+  const chain = names
     .map((name, index) => {
       const leaf = index === names.length - 1
-      if (leaf && edge.pid !== "") {
-        if (pidRefs !== undefined) {
-          let ref = pidRefs.get(edge.pid)
-          if (ref === undefined) {
-            ref = pidRefs.size + 1
-            pidRefs.set(edge.pid, ref)
-          }
-          return `<code>${escapeHtmlCell(truncateMiddle(name))}</code> <sup>${ref}</sup>`
-        }
+      if (leaf && edge.pid !== "" && pidAsFootnote !== true) {
         return `<code>${escapeHtmlCell(`${truncateMiddle(name)} (pid ${edge.pid})`)}</code>`
       }
       return `<code>${escapeHtmlCell(truncateMiddle(name))}</code>`
     })
     .join(" → ")
+  if (pidAsFootnote === true && edge.pid !== "") {
+    return `${chain} <sub>pid&nbsp;${escapeHtmlCell(edge.pid)}</sub>`
+  }
+  return chain
 }
 
 /**
@@ -150078,24 +150074,15 @@ function lineageDestinationsCell(row) {
 
 /**
  * GitHub-native lineage-first table: one recorded process lineage per row with
- * its deduped destinations nested.
+ * its deduped destinations nested. The row's PID renders as a small footnote
+ * in the same cell, so the tree reads names-only while every recorded PID
+ * stays visible next to its own chain.
  * @param {LineageRow[]} rows
  */
 function renderLineageTable(rows) {
-  // PIDs footnote below the table: each leaf carries a superscript
-  // reference, so the tree column reads names-only while every recorded
-  // PID stays visible and distinct PIDs never share a reference.
-  /** @type {Map<string, number>} */
-  const pidRefs = new Map()
   const lines = ["| Process Tree | Destinations |", "| --- | --- |"]
   for (const row of rows) {
-    lines.push(`| ${processTreeCell(row.edge, pidRefs)} | ${lineageDestinationsCell(row)} |`)
-  }
-  if (pidRefs.size > 0) {
-    const notes = [...pidRefs.entries()].map(
-      ([pid, ref]) => `<sup>${ref}</sup> pid ${escapeHtmlCell(pid)}`,
-    )
-    lines.push("", `<sub>${notes.join(" · ")}</sub>`)
+    lines.push(`| ${processTreeCell(row.edge, true)} | ${lineageDestinationsCell(row)} |`)
   }
   return lines.join("\n")
 }
