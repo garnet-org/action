@@ -10,6 +10,7 @@ import * as os from "node:os"
 import * as path from "node:path"
 import { pipeline } from "node:stream/promises"
 import { createGitHubContext, getProfileJobName, getWorkflowFilePath } from "./github-context.js"
+import { resolveForkSkip } from "./fork-run.js"
 import { ControlPlaneClient } from "./control-plane/client.js"
 import { getEnv, getErrorMessage, isSupportedArch, isSupportedPlatform, pathExists, waitForDelay } from "./shared.js"
 
@@ -39,6 +40,19 @@ export async function run() {
         const DEBUG = getEnv("DEBUG", "false")
 
         const useOIDCAuth = getEnv(OIDC_AUTH_FEATURE_FLAG, "false") === "true"
+
+        if (TOKEN === "") {
+            const forkSkip = await resolveForkSkip({
+                eventName: getEnv("GITHUB_EVENT_NAME"),
+                eventPath: getEnv("GITHUB_EVENT_PATH"),
+                repository: getEnv("GITHUB_REPOSITORY"),
+            })
+            if (forkSkip.skip) {
+                core.notice(forkSkip.reason)
+                return false
+            }
+        }
+
         const controlPlaneAuth = await resolveControlPlaneAuth({
             apiURL: API,
             apiToken: TOKEN,
