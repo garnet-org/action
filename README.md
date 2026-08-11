@@ -46,6 +46,8 @@ Get your API token at [app.garnet.ai](https://app.garnet.ai). Start with the Act
   />
 </p>
 
+<p align="center"><sub>The action's own comment shape (renderer v6.9.5); the companion GitHub App comment adds true coverage and cross-run comparison.</sub></p>
+
 ## What Garnet sees
 
 The only secret Garnet uses is the API token you pass it. It never reads your other secrets, and never writes to your repo.
@@ -177,7 +179,7 @@ The same full-detail record is appended to the GitHub Actions Job Summary as the
 | `api_token`         | Yes¹     | —                       | Your Garnet API token from app.garnet.ai       |
 | `github_token`      | No       | `${{ github.token }}`   | GitHub token used for pull request comments    |
 | `api_url`           | No       | `https://api.garnet.ai` | Garnet API base URL                            |
-| `jibril_version`    | No       | `""` (auto)             | Jibril version (for example `v2.15.0`, `v0.0`, or `latest`); empty resolves from the action tag |
+| `jibril_version`    | No       | `""` (auto)             | Jibril version (for example `v2.15.0`, `v0.0`, or `latest`); empty resolves to the pinned stable release for your action ref (daily builds on `@v0`) |
 | `debug`             | No       | `false`                 | Enable debug mode and upload logs as artifacts |
 | `preview`           | No       | `false`                 | Render the full-fidelity Step Summary record (assertions + evidence); preview shape is unstable and may change without a major version bump |
 
