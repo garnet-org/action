@@ -147,7 +147,7 @@ One comment per PR, one fold per job, updated in place as each job's profile lan
 - **Headline** — `Execution Profiles recorded for N job(s), triggered by <sha7>`, linking the commit.
 - **Metadata line** — an italic blockquote: `N destinations · recorded at the kernel by Garnet · <UTC timestamp>`, one fact per `·` segment.
 - **One fold per job** — headed `workflow / job ↗ · N destinations`, the job id linking to its Actions run. Inside: one block holding every recorded root of the job's tree; independent roots are separated by a blank line. Plain tree nodes are recorded process names; observed actions render as shaped terminals — `○ destination` for network, defanged at the final dot. A process with an action directly beneath it renders **bold**; `(…)` brackets carry factual context only — `(step: "Run tests")`, `(dns resolver)`, `(cloud metadata)`, `(github infra)`, `(garnet sensor)`, `(ran from /tmp/…)`. A job with no recorded egress stays a plain row keeping its Garnet profile link.
-- **Per-job permalink** — `View this job's Execution Profile in Garnet →`, opening the job's [public run report](https://app.garnet.ai/public/runs/30675075813?profile=019fbaad-dda5-71c3-a8e5-3a4cd96fea21) (`?profile=` selector required — a bare run URL returns 404).
+- **Per-job permalink** — `View this job's Execution Profile in Garnet →`, opening the job's [public run report](https://app.garnet.ai/public/runs/31257440827?profile=019fe15d-b34f-7803-820a-ecf58404a278) (`?profile=` selector required — a bare run URL returns 404).
 - **The explainer** — a `💡 How to read this` fold at the bottom teaches the tree with an annotated example:
 
 <pre>
