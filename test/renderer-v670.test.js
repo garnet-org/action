@@ -255,12 +255,35 @@ for (const [label, previousName, headName] of pairSpecs) {
   )
   const rows = renderedHeadRows(markdown)
   const metadataLine = markdown.split("\n").find((line) => line.startsWith("> *")) ?? ""
-  const destinationsClaim = Number(metadataLine.match(/(\d+)&nbsp;destination/)?.[1] ?? 0)
-  assert.equal(
-    destinationsClaim,
-    new Set(rows).size,
-    `${label}: metadata destinations vs rendered identities`,
-  )
+  if (metadataLine.includes("compared with")) {
+    // v6.9.8 finding-first meta: a comparison claims the delta, not a
+    // total — reconcile `+A −R` against the marked fence lines.
+    const addedClaim = Number(metadataLine.match(/\+(\d+)/)?.[1] ?? 0)
+    const removedClaim = Number(metadataLine.match(/−(\d+)/)?.[1] ?? 0)
+    assert.ok(
+      addedClaim + removedClaim > 0 || metadataLine.includes("No changes"),
+      `${label}: comparison meta carries the delta or a no-change finding`,
+    )
+    const fence = diffFence(markdown)
+    const markedLines = fence.split("\n").filter((line) => /^[+-] .*○ /.test(line))
+    assert.equal(
+      addedClaim,
+      markedLines.filter((line) => line.startsWith("+")).length,
+      `${label}: metadata added vs marked lines`,
+    )
+    assert.equal(
+      removedClaim,
+      markedLines.filter((line) => line.startsWith("-")).length,
+      `${label}: metadata removed vs marked lines`,
+    )
+  } else {
+    const destinationsClaim = Number(metadataLine.match(/(\d+)&nbsp;destination/)?.[1] ?? 0)
+    assert.equal(
+      destinationsClaim,
+      new Set(rows).size,
+      `${label}: metadata destinations vs rendered identities`,
+    )
+  }
   const humanSurface = markdown.replace(/<!--[^]*?-->/g, "")
   assert.ok(
     !/\d+(?:&nbsp;| )(?:execution )?chains?\b/.test(humanSurface),
@@ -438,8 +461,11 @@ for (const [label, previousName, headName] of pairSpecs) {
     ],
     "marker key order is contract-locked",
   )
-  const metadataDestinations = Number(markdown.match(/(\d+)&nbsp;destination/)[1])
-  assert.equal(summary.destinations, metadataDestinations, "marker destinations equal the metadata count")
+  // v6.9.8 comparison meta is finding-first — it claims the delta, not the
+  // total; the total stays machine-readable in the marker.
+  const metaLine = markdown.split("\n").find((line) => line.startsWith("> *")) ?? ""
+  assert.equal(Number(metaLine.match(/\+(\d+)/)?.[1] ?? 0), summary.added, "metadata added equals the marker")
+  assert.equal(Number(metaLine.match(/−(\d+)/)?.[1] ?? 0), summary.removed, "metadata removed equals the marker")
 
   // Fold budget: one changed job renders open; more changed jobs than the
   // budget renders every job fold collapsed while deltas stay on fold rows.

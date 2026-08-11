@@ -3,10 +3,11 @@
 <!-- garnet-runtime-review -->
 <!-- garnet-run-profile -->
 <!-- garnet:commit 786a5bc8680486720bcf5dae13931de95d89b5ec -->
-<!-- garnet:summary {"contract":"6.9.5","commit":"786a5bc8680486720bcf5dae13931de95d89b5ec","previous":null,"jobs":1,"changed":null,"unchanged":null,"noOutbound":null,"vanished":null,"added":null,"removed":null,"vanishedDestinations":null,"chains":1,"destinations":1,"kinds":["network"]} -->
+<!-- garnet:summary {"contract":"6.9.8","commit":"786a5bc8680486720bcf5dae13931de95d89b5ec","previous":null,"jobs":1,"changed":null,"unchanged":null,"noOutbound":null,"vanished":null,"added":null,"removed":null,"vanishedDestinations":null,"chains":1,"destinations":1,"kinds":["network"]} -->
 **Execution Profiles recorded for 1 job, triggered by [`786a5bc`](https://github.com/garnet-org/runtime-review-testbed/commit/786a5bc8680486720bcf5dae13931de95d89b5ec)**
 
-> *1&nbsp;destination · recorded at the kernel by Garnet*
+> *1&nbsp;destination*
+> <sub>recorded at the kernel by Garnet</sub>
 
 <details><summary><code>Garnet Runtime Review</code> / <a href="https://github.com/garnet-labs/runtime-review-testbed/actions/runs/28488074733"><code>runtime-review</code>&nbsp;↗</a> · 1&nbsp;destination</summary>
 
@@ -52,6 +53,7 @@ Runner.Worker          <em>← process on a path</em>
 | Workflow | Garnet Runtime Review |
 | Repository | garnet-labs/runtime-review-testbed |
 | Branch | refs/pull/22/merge |
+| Pull request | [#22](https://github.com/garnet-labs/runtime-review-testbed/pull/22) |
 | Commit | 786a5bc8680486720bcf5dae13931de95d89b5ec |
 | Triggered by | devin-ai-integration[bot] |
 | Run ID / Job | 28488074733 / runtime-review |
@@ -63,6 +65,16 @@ Keyed by execution chain; repeated destination names within a chain are collapse
 | Process Tree | Destinations |
 | --- | --- |
 | <code>systemd</code> → <code>…</code> → <code>Runner.Worker</code> → <code>bash</code> → <code>npm install</code> | <code>registry.npmjs.org</code> |
+
+<details><summary><sub>Full recorded tree</sub></summary>
+
+<pre>
+Runner.Worker
+└─ bash
+   └─ <strong>npm install</strong>
+      └─ ○ registry.npmjs.org
+</pre>
+</details>
 
 <details><summary><strong>Recorded context preview</strong></summary>
 

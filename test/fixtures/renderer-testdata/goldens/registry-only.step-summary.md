@@ -8,6 +8,7 @@
 | Workflow | Garnet Runtime Review |
 | Repository | garnet-labs/runtime-review-testbed |
 | Branch | refs/pull/22/merge |
+| Pull request | [#22](https://github.com/garnet-labs/runtime-review-testbed/pull/22) |
 | Commit | 786a5bc8680486720bcf5dae13931de95d89b5ec |
 | Triggered by | devin-ai-integration[bot] |
 | Run ID / Job | 28488074733 / runtime-review |
@@ -19,6 +20,16 @@ Keyed by execution chain; repeated destination names within a chain are collapse
 | Process Tree | Destinations |
 | --- | --- |
 | <code>systemd</code> → <code>…</code> → <code>Runner.Worker</code> → <code>bash</code> → <code>npm install</code> | <code>registry.npmjs.org</code> |
+
+<details><summary><sub>Full recorded tree</sub></summary>
+
+<pre>
+Runner.Worker
+└─ bash
+   └─ <strong>npm install</strong>
+      └─ ○ registry.npmjs.org
+</pre>
+</details>
 
 <div align="right">
 <a href="https://app.garnet.ai/public/runs/28488074733?profile=019f1b61-9f3c-7ac8-a8ed-0c07bf1546af&amp;utm_source=github&amp;utm_medium=step_summary">View this job's Execution Profile in Garnet →</a>

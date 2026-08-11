@@ -1,10 +1,11 @@
 <!-- garnet-runtime-review -->
 <!-- garnet-run-profile -->
 <!-- garnet:commit dd44ee55ff6677889900aabbccddee1122334455 -->
-<!-- garnet:summary {"contract":"6.9.5","commit":"dd44ee55ff6677889900aabbccddee1122334455","previous":null,"jobs":2,"changed":null,"unchanged":null,"noOutbound":null,"vanished":null,"added":null,"removed":null,"vanishedDestinations":null,"chains":4,"destinations":4,"kinds":["network"]} -->
+<!-- garnet:summary {"contract":"6.9.8","githubMeta":"2026-08-08","commit":"dd44ee55ff6677889900aabbccddee1122334455","previous":null,"jobs":2,"changed":null,"unchanged":null,"noOutbound":null,"vanished":null,"added":null,"removed":null,"vanishedDestinations":null,"chains":4,"destinations":4,"recorded":"2026-08-07 14:00:00 UTC","kinds":["network"]} -->
 **Execution Profiles recorded for 2 jobs, triggered by [`dd44ee5`](https://github.com/garnet-org/runtime-review-testbed/commit/dd44ee55ff6677889900aabbccddee1122334455)**
 
-> *4&nbsp;destinations · recorded at the kernel by Garnet · 2026-08-07 14:00:00 UTC*
+> *4&nbsp;destinations across 2&nbsp;jobs*
+> <sub>recorded at the kernel by Garnet · 2026-08-07 14:00 UTC</sub>
 
 <details><summary><code>ci</code> / <a href="https://github.com/garnet-org/runtime-review-testbed/actions/runs/32000000003"><code>provision</code>&nbsp;↗</a> · 2&nbsp;destinations</summary>
 

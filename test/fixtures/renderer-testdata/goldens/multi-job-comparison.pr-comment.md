@@ -1,14 +1,13 @@
 <!-- garnet-runtime-review -->
 <!-- garnet-run-profile -->
 <!-- garnet:commit bb22cc33dd44ee55ff6677889900aabbccddee11 -->
-<!-- garnet:summary {"contract":"6.9.5","commit":"bb22cc33dd44ee55ff6677889900aabbccddee11","previous":"aa11bb22cc33dd44ee55ff6677889900aabbccdd","jobs":3,"changed":2,"unchanged":1,"noOutbound":0,"vanished":0,"added":3,"removed":2,"vanishedDestinations":0,"chains":11,"destinations":11,"kinds":["network"]} -->
+<!-- garnet:summary {"contract":"6.9.8","githubMeta":"2026-08-08","commit":"bb22cc33dd44ee55ff6677889900aabbccddee11","previous":"aa11bb22cc33dd44ee55ff6677889900aabbccdd","jobs":3,"changed":1,"unchanged":2,"noOutbound":0,"vanished":0,"added":2,"removed":1,"vanishedDestinations":0,"chains":11,"destinations":11,"recorded":"2026-08-07 12:00:00 UTC","kinds":["network"]} -->
 **Execution Profiles recorded for 3 jobs, triggered by [`bb22cc3`](https://github.com/garnet-org/runtime-review-testbed/commit/bb22cc33dd44ee55ff6677889900aabbccddee11)**
 
-> *11&nbsp;destinations · compared with [`aa11bb2`](https://github.com/garnet-org/runtime-review-testbed/commit/aa11bb22cc33dd44ee55ff6677889900aabbccdd) · recorded at the kernel by Garnet · 2026-08-07 12:00:00 UTC*
->
-> *2&nbsp;jobs changed +3&nbsp;−2&nbsp;destinations · 1&nbsp;job unchanged*
+> *1&nbsp;job changed +2&nbsp;−1&nbsp;destinations · 2&nbsp;jobs unchanged · compared with [`aa11bb2`](https://github.com/garnet-org/runtime-review-testbed/commit/aa11bb22cc33dd44ee55ff6677889900aabbccdd)*
+> <sub>recorded at the kernel by Garnet · 2026-08-07 12:00 UTC</sub>
 
-<details open><summary><b>+2&nbsp;−1</b>&nbsp;destinations · <code>ci</code> / <a href="https://github.com/garnet-org/runtime-review-testbed/actions/runs/32000000001"><code>api</code>&nbsp;↗</a></summary>
+<details open><summary><b>+2&nbsp;−1</b> · <code>ci</code> / <a href="https://github.com/garnet-org/runtime-review-testbed/actions/runs/32000000001"><code>api</code>&nbsp;↗</a></summary>
 
 ```diff
 @@ aa11bb2 (previous) vs bb22cc3 (current) @@
@@ -31,23 +30,21 @@
 
 </details>
 
-<details open><summary><b>+1&nbsp;−1</b>&nbsp;destinations · <code>ci</code> / <a href="https://github.com/garnet-org/runtime-review-testbed/actions/runs/32000000001"><code>steady</code>&nbsp;↗</a></summary>
+<details><summary><code>ci</code> / <a href="https://github.com/garnet-org/runtime-review-testbed/actions/runs/32000000001"><code>steady</code>&nbsp;↗</a> · 3&nbsp;destinations · unchanged</summary>
 
-```diff
-@@ aa11bb2 (previous) vs bb22cc3 (current) @@
-  systemd
-  └─ hosted-compute-agent
-     ├─ sudo
-     │  └─ provjobd
-     │     └─ ○ glb-2a3c35-public-internal.githubapp[.]com (github infra)
--    ├─ ○ hosted-compute-watchdog-prod-iad-02.githubapp[.]com (140.82.112.31) (github infra)
-+    └─ ○ hosted-compute-watchdog-prod-iad-03.githubapp[.]com (140.82.115.40) (github infra)
- 
-  Runner.Worker
-  └─ bash
-     └─ node (step: "Install dependencies")
-        └─ ○ registry.npmjs[.]org
-```
+<pre>
+Runner.Worker
+└─ bash
+   └─ <strong>node</strong> <em>(step: &quot;Install dependencies&quot;)</em>
+      └─ ○ registry.npmjs[.]org
+
+systemd
+└─ <strong>hosted-compute-agent</strong>
+   ├─ sudo
+   │  └─ <strong>provjobd</strong>
+   │     └─ ○ glb-2a3c35-public-internal.githubapp[.]com <em>(github infra)</em>
+   └─ ○ hosted-compute-watchdog-prod-iad-03.githubapp[.]com <em>(github infra)</em>
+</pre>
 
 </details>
 

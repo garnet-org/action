@@ -107,7 +107,7 @@ jobs:
 >     api_token: ${{ secrets.GARNET_API_TOKEN }}
 > ```
 >
-> The canonical SHA of the latest release is always at [garnet.ai/pins](https://garnet.ai/pins). Dependabot bumps SHA pins automatically. Exact tags such as `garnet-org/action@v2.3.0` remain available.
+> The canonical SHA of the latest release is always at [garnet.ai/pins](https://garnet.ai/pins). Dependabot bumps SHA pins automatically. Exact tags such as `garnet-org/action@v2.2.0` remain available.
 
 ### 3. Install the companion GitHub App
 

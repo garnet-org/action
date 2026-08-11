@@ -21,6 +21,7 @@ import {
   SIZE_BUDGET,
   STEP_SUMMARY_BUDGET,
   summarizeProfile,
+  renderJobTree,
   isSentinelStep,
   compareJobEdges,
   buildRunReview,
@@ -129,8 +130,8 @@ const EDGE_MODEL = exportReviewModel(EDGE_REVIEW)
 // Contract lock
 // ---------------------------------------------------------------------------
 
-await test("contract: vocab.json is the v6.9.5 machine-readable lock", () => {
-  assert.equal(CONTRACT_VOCAB.version, "6.9.5")
+await test("contract: vocab.json is the v6.9.8 machine-readable lock", () => {
+  assert.equal(CONTRACT_VOCAB.version, "6.9.8")
   assert.equal(VOCAB.terminalNetwork, "○")
   assert.equal(CONTRACT_VOCAB.copy.terminalFile, "□")
   assert.equal(CONTRACT_VOCAB.copy.terminalExecution, "▷")
@@ -501,7 +502,10 @@ await test("gate 8: loopback:53 (including '53 (dns)') gets the resolver note an
   // the `(dns resolver)` note; the Step Summary keeps the destination.
   assert.ok(EDGE_MD.includes("○ localhost <em>(dns resolver)</em>"))
   assert.ok(EDGE_SUMMARY.includes("<code>localhost</code>"))
-  assert.ok(!EDGE_SUMMARY.includes("(dns resolver)"))
+  // The resolver note appears only inside the full-tree fold (PR-comment
+  // grammar) — never in the lineage table above it.
+  const summaryFoldStart = EDGE_SUMMARY.indexOf("<details><summary><sub>Full recorded tree")
+  assert.ok(!EDGE_SUMMARY.slice(0, summaryFoldStart).includes("(dns resolver)"))
   const previewLine = EDGE_SUMMARY_PREVIEW.split("\n").find((l) =>
     l.includes("127.0.0.53"),
   )
@@ -576,7 +580,7 @@ await test("gate 9f: every fold-row destination count equals the distinct ○ id
 await test("gate 9d: metadata counts inflect — destinations only, no chain counts", () => {
   const singular = renderRunReview(reviewFor([load("real", "normal-run.json")]))
   const metadata = singular.split("\n").find((l) => l.startsWith("> *"))
-  assert.ok(metadata.includes("1&nbsp;destination ·"))
+  assert.ok(metadata.includes("1&nbsp;destination*"))
   assert.ok(!metadata.includes("execution chain"), "chain counts never render on the human surface")
   assert.ok(!metadata.includes("runner-background"))
   assert.ok(!/1&nbsp;destinations/.test(singular))
@@ -657,18 +661,21 @@ await test("gate 12: deterministic sensor timestamp — profile.timestamp only, 
   assert.equal(formatTimestamp("2026-07-08T05:35:56.123456789Z"), "2026-07-08 05:35:56 UTC")
   assert.equal(formatTimestamp(""), "")
   assert.equal(formatTimestamp("not-a-date"), "")
-  assert.ok(EDGE_MD.includes("· 2026-07-08 05:35:56 UTC"))
+  // The comment's provenance line carries the stamp at minute precision;
+  // the Step Summary keeps the record's full-precision stamp.
+  assert.ok(EDGE_MD.includes("· 2026-07-08 05:35 UTC"))
   assert.ok(EDGE_SUMMARY.includes("2026-07-08 05:35:56 UTC"))
   // worth-a-look has no profile.timestamp: no recorded-through, no clock fallback.
   const md = renderRunReview(reviewFor([worth]))
-  assert.ok(!/\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2} UTC/.test(md.split("\n").find((l) => l.startsWith("> *")) || ""))
-  // Multi-profile: the maximum valid profile timestamp on the metadata line.
+  assert.ok(!/\d{4}-\d{2}-\d{2} \d{2}:\d{2}(:\d{2})? UTC/.test(md.split("\n").find((l) => l.startsWith("> <sub>")) || ""))
+  // Multi-profile: the maximum valid profile timestamp on the provenance line.
   const multi = renderRunReview(reviewFor(recordSet))
   const stamps = recordSet.map((p) => formatTimestamp(rawProfile(p).timestamp)).filter(Boolean).sort()
-  const metadata = multi.split("\n").find((l) => l.startsWith("> *"))
-  assert.ok(metadata.includes(`recorded at the kernel by Garnet · ${stamps[stamps.length - 1]}`))
-  // "recorded" appears exactly once on the metadata line.
-  assert.equal(metadata.split("recorded").length - 1, 1)
+  const provenance = multi.split("\n").find((l) => l.startsWith("> <sub>"))
+  const minutePrecision = stamps[stamps.length - 1].replace(/(\d{2}:\d{2}):\d{2}/, "$1")
+  assert.ok(provenance.includes(`recorded at the kernel by Garnet · ${minutePrecision}`))
+  // "recorded" appears exactly once on the provenance line.
+  assert.equal(provenance.split("recorded").length - 1, 1)
 })
 
 await test("gate 13: pending state opens explainer and status without timestamp/count/link", () => {
@@ -1022,7 +1029,15 @@ await test("gate 19: HTML/Markdown injection payloads render inert on all render
   const outsideCodeSpans = summary
     .replace(/`[^`\n]*`/g, "`code`")
     .replace(/<code>[^<]*<\/code>/g, "<code>code</code>")
+    .replace(/<pre>[\s\S]*?<\/pre>/g, "<pre>pre</pre>")
   assert.ok(!outsideCodeSpans.includes("!["), "markdown image outside code span")
+  // <pre> content is an HTML block on GitHub — Markdown stays unprocessed —
+  // but raw HTML must still arrive escaped there.
+  const preBlocks = summary.match(/<pre>[\s\S]*?<\/pre>/g) ?? []
+  for (const block of preBlocks) {
+    assert.ok(!block.includes("<script"), "raw <script> inside pre")
+    assert.ok(!block.includes("<img"), "raw <img> inside pre")
+  }
   assert.ok(summary.includes("![exfil](//evil.example/x.png)"), "payload dropped instead of contained")
   // JSON surface: structured, embargo respected, no pre-rendered HTML fields.
   const json = exportReviewModel(review)
@@ -1080,6 +1095,44 @@ await test("gate 20e: enveloped profile shape — envelope Profile.ID is the Pro
   assert.ok(!EDGE_SUMMARY.includes("Record UUID"))
   assert.ok(EDGE_MD.includes(`?profile=${edgeCaseEnvelope.id}`.replaceAll("&", "&amp;")))
   assert.ok(!EDGE_MD.includes(`?profile=${edgeCases.uuid}`))
+})
+
+await test("gate: step summary PR link — pull_request refs link the PR row; other refs omit it", () => {
+  const prJob = summarizeProfile(workload)
+  assert.equal(
+    prJob.pr_url,
+    "https://github.com/garnet-org/runtime-review-testbed/pull/76",
+  )
+  assert.ok(REAL_SUMMARY.includes("| Pull request | [#76](https://github.com/garnet-org/runtime-review-testbed/pull/76) |"))
+
+  const nonPRJob = summarizeProfile(edgeCaseEnvelope)
+  assert.equal(nonPRJob.pr_url, "")
+  assert.ok(!EDGE_SUMMARY.includes("| Pull request |"))
+
+  // Malformed / missing PR metadata fails closed.
+  const malformed = structuredClone(edgeCases)
+  malformed.scenarios.github.ref = "refs/pull//merge"
+  assert.equal(summarizeProfile(malformed).pr_url, "")
+  const noRepo = structuredClone(workload)
+  const noRepoData = noRepo.data ?? noRepo
+  noRepoData.scenarios.github.repository = ""
+  assert.equal(summarizeProfile(noRepo).pr_url, "")
+})
+
+await test("gate: step summary full-tree fold — collapsed by default, absolute grammar, no diff markers", () => {
+  assert.ok(EDGE_SUMMARY.includes("<details><summary><sub>Full recorded tree</sub></summary>"))
+  assert.ok(!EDGE_SUMMARY.includes("<details open"))
+  const job = summarizeProfile(edgeCaseEnvelope)
+  const tree = renderJobTree(job, job.edges, { defang: false })
+  assert.ok(EDGE_SUMMARY.includes(tree))
+  // Step Summary stays canonical — no defanged hostnames in the fold.
+  assert.ok(!tree.includes("[.]"))
+  // Absolute view only — no comparison material inside the fold.
+  const foldStart = EDGE_SUMMARY.indexOf("<details><summary><sub>Full recorded tree")
+  const foldEnd = EDGE_SUMMARY.indexOf("</details>", foldStart)
+  const fold = EDGE_SUMMARY.slice(foldStart, foldEnd)
+  assert.ok(!/^[+−-] /m.test(fold.replace(/<[^>]+>/g, "")))
+  assert.ok(!fold.includes("no longer recorded"))
 })
 
 await test("gate: preview material is contained — default bytes carry none of it on any surface", () => {
@@ -1505,13 +1558,14 @@ await test("6.5: unchanged comparable jobs collapse with 'unchanged'; metadata s
   const previous = jobs.map((j) => ({ name: j.name, workflow: j.workflow, edges: j.edges }))
   const review = comparisonReviewFor(recordSet, previous, PREV_SHA)
   const md = renderRunReview(review)
-  assert.ok(md.includes("compared with [`d84f4dc`]("))
+  // Zero-delta comparison: the verdict is the finding.
+  assert.ok(md.includes("No changes since [`d84f4dc`]("))
   assert.ok(!md.includes("changed since"), "retired comparison copy")
   assert.ok(!md.includes("<details open><summary><code>"))
   assert.ok(md.includes("· unchanged"))
   assert.ok(!md.includes("```diff"))
   assert.ok(md.includes("<pre>"))
-  // Nothing changed and nothing vanished: no jobs line renders.
+  // Nothing changed and nothing vanished: no job segments render.
   assert.ok(!md.includes("job changed") && !md.includes("jobs changed"))
 })
 
@@ -1606,7 +1660,7 @@ await test("6.5: matrix cells diff against their own previous cell, never each o
   })
   const md = renderRunReview(review)
   // Each cell matches its own index: identical records, so nothing changed.
-  assert.ok(md.includes("compared with \`d84f4dc\`"))
+  assert.ok(md.includes("No changes since \`d84f4dc\`"))
   assert.ok(md.includes("· unchanged"))
   assert.ok(!md.includes("```diff"))
   // Cross-matched cells would diff cell 1's single chain against cell 0's tree.
