@@ -21,6 +21,7 @@ import { buildReportLink, getDefaultJsonProfileFile, parseProfileJson, resolveAp
 import { profilePermalink, renderPendingReview, renderStepSummary, summarizeProfile } from "./runtime-review.js"
 import { publishPullRequestComment } from "./pr-comment.js"
 import { OIDC_AUTH_FEATURE_FLAG, getGitHubIDToken, resolveOIDCAudience } from "./oidc.js"
+import { isCommentPermissionError } from "./pr-comment-error.js"
 
 /** @typedef {import("./profile-comment.js").NormalizedProfile} NormalizedProfile */
 /** @typedef {import("./profile-comment.js").RenderOptions} RenderOptions */
@@ -382,6 +383,15 @@ async function publishProfilerComment(profile, renderOptions) {
         })
         core.info(`PR comment ${result}`)
     } catch (error) {
+        if (isCommentPermissionError(error)) {
+            core.info(
+                "PR comment skipped: the workflow token cannot comment on this pull request. " +
+                    "The Garnet GitHub App is the supported comment path and needs no workflow permissions: " +
+                    "https://github.com/apps/garnet-runtime-review/installations/select_target. " +
+                    "To publish from this action instead, grant this workflow `pull-requests: write`.",
+            )
+            return
+        }
         core.warning(`failed to publish PR comment: ${formatPullRequestCommentPublishError(error)}`)
     }
 }
@@ -399,12 +409,6 @@ function formatPullRequestCommentPublishError(error) {
     }
     if (details.apiCode !== undefined) {
         messageParts.push(`api_code=${details.apiCode}`)
-    }
-
-    if (details.statusCode === 403 && getErrorMessage(error).includes("Resource not accessible by integration")) {
-        messageParts.push(
-            "hint=The token cannot comment on this PR. Ensure `permissions` include `pull-requests: write` (or `issues: write`) and note that fork PR workflows may still run with read-only tokens.",
-        )
     }
 
     return messageParts.join("; ")

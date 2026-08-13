@@ -151984,7 +151984,53 @@ function isMissingOIDCPermissionError(errorMessage) {
     return false
 }
 
+;// CONCATENATED MODULE: ./src/pr-comment-error.js
+// Classification of GitHub API errors raised while publishing the Runtime
+// Review PR comment.
+
+
+
+/**
+ * Returns true when the comment publish failed because the workflow token
+ * lacks permission to comment on the pull request. GitHub reports this as
+ * HTTP 403 "Resource not accessible by integration", the normal state for
+ * workflows whose `permissions` grant only `contents: read`.
+ * @param {unknown} error
+ * @returns {boolean}
+ */
+function isCommentPermissionError(error) {
+    if (getStatusCode(error) !== 403) {
+        return false
+    }
+
+    return getErrorMessage(error).includes("Resource not accessible by integration")
+}
+
+/**
+ * @param {unknown} error
+ * @returns {number | undefined}
+ */
+function getStatusCode(error) {
+    const errorRecord = shared_getOptionalRecord(error)
+    if (errorRecord === null) {
+        return undefined
+    }
+
+    const statusCode = getOptionalNumber(errorRecord.status)
+    if (statusCode !== undefined) {
+        return statusCode
+    }
+
+    const response = shared_getOptionalRecord(errorRecord.response)
+    if (response === null) {
+        return undefined
+    }
+
+    return getOptionalNumber(response.status)
+}
+
 ;// CONCATENATED MODULE: ./src/post.js
+
 
 
 
@@ -152358,6 +152404,15 @@ async function publishProfilerComment(profile, renderOptions) {
         })
         info(`PR comment ${result}`)
     } catch (error) {
+        if (isCommentPermissionError(error)) {
+            info(
+                "PR comment skipped: the workflow token cannot comment on this pull request. " +
+                    "The Garnet GitHub App is the supported comment path and needs no workflow permissions: " +
+                    "https://github.com/apps/garnet-runtime-review/installations/select_target. " +
+                    "To publish from this action instead, grant this workflow `pull-requests: write`.",
+            )
+            return
+        }
         warning(`failed to publish PR comment: ${formatPullRequestCommentPublishError(error)}`)
     }
 }
@@ -152375,12 +152430,6 @@ function formatPullRequestCommentPublishError(error) {
     }
     if (details.apiCode !== undefined) {
         messageParts.push(`api_code=${details.apiCode}`)
-    }
-
-    if (details.statusCode === 403 && getErrorMessage(error).includes("Resource not accessible by integration")) {
-        messageParts.push(
-            "hint=The token cannot comment on this PR. Ensure `permissions` include `pull-requests: write` (or `issues: write`) and note that fork PR workflows may still run with read-only tokens.",
-        )
     }
 
     return messageParts.join("; ")
