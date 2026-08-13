@@ -31147,7 +31147,7 @@ function warning(message, properties = {}) {
  * @param properties optional properties to add to the annotation.
  */
 function notice(message, properties = {}) {
-    command_issueCommand('notice', utils_toCommandProperties(properties), message instanceof Error ? message.toString() : message);
+    issueCommand('notice', toCommandProperties(properties), message instanceof Error ? message.toString() : message);
 }
 /**
  * Writes info to log with console.log.
@@ -40001,7 +40001,7 @@ async function run() {
                 repository: getEnv("GITHUB_REPOSITORY"),
             })
             if (forkSkip.skip) {
-                notice(forkSkip.reason)
+                info(forkSkip.reason)
                 return false
             }
         }

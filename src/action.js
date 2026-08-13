@@ -48,7 +48,7 @@ export async function run() {
                 repository: getEnv("GITHUB_REPOSITORY"),
             })
             if (forkSkip.skip) {
-                core.notice(forkSkip.reason)
+                core.info(forkSkip.reason)
                 return false
             }
         }
