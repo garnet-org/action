@@ -152015,6 +152015,18 @@ function isMissingOIDCPermissionError(errorMessage) {
 const JSON_PROFILE_LABEL = "JSON profile"
 const DOCS_URL = "https://github.com/garnet-org/action#readme"
 
+// On stop, jibril reprocesses every remaining task and flow before it writes
+// the JSON profile, so on long jobs `systemctl stop` can block for many
+// minutes (the unit allows up to TimeoutStopSec=600). The post step bounds
+// its own wait instead of inheriting that ceiling; both bounds are
+// overridable through environment variables for jobs with large backlogs.
+const STOP_TIMEOUT_ENV = "GARNET_POST_STOP_TIMEOUT_SECONDS"
+const DEFAULT_STOP_TIMEOUT_SECONDS = 300
+const PROFILE_WAIT_ENV = "GARNET_POST_PROFILE_WAIT_SECONDS"
+const DEFAULT_PROFILE_WAIT_SECONDS = 60
+const PROFILE_POLL_INTERVAL_MS = 5000
+const STOP_TIMED_OUT_EXIT_CODE = 124
+
 // This is the post step for the action. It is called by the GitHub Actions
 // runtime. It stops the Jibril service so the daemon flushes all pending events
 // and writes the JSON profile before we read it. It then renders the Garnet
@@ -152049,11 +152061,38 @@ async function run() {
             return
         }
 
-        // Stop the Jibril service so the daemon flushes all pending events.
-        info("stopping jibril service")
-        await exec_exec("sudo", ["systemctl", "stop", "jibril.service"], {
-            ignoreReturnCode: true,
-        })
+        const jsonProfilerFile = firstNonEmptyString(getState("jsonProfilerFile"), getDefaultJsonProfileFile())
+
+        // Stop the Jibril service so the daemon flushes all pending events and
+        // writes the JSON profile, with a bounded wait. When the bound is hit
+        // only this client stops waiting; the unit keeps stopping in the
+        // background, so the profile file is polled for a further grace period.
+        const stopTimeoutSeconds = parsePositiveInteger(getEnv(STOP_TIMEOUT_ENV), DEFAULT_STOP_TIMEOUT_SECONDS)
+        info(`stopping jibril service (waiting up to ${stopTimeoutSeconds}s)`)
+        const stopExitCode = await exec_exec(
+            "sudo",
+            ["timeout", `${stopTimeoutSeconds}s`, "systemctl", "stop", "jibril.service"],
+            {
+                ignoreReturnCode: true,
+            },
+        )
+
+        if (stopExitCode === STOP_TIMED_OUT_EXIT_CODE) {
+            const profileWaitSeconds = parsePositiveInteger(getEnv(PROFILE_WAIT_ENV), DEFAULT_PROFILE_WAIT_SECONDS)
+            info(
+                `jibril is still flushing its event backlog after ${stopTimeoutSeconds}s (set ${STOP_TIMEOUT_ENV} to change the bound); ` +
+                    `waiting up to ${profileWaitSeconds}s more for the ${JSON_PROFILE_LABEL} at ${jsonProfilerFile}`,
+            )
+            const appeared = await waitForRootFile(jsonProfilerFile, profileWaitSeconds * 1000)
+            if (!appeared) {
+                info(
+                    `${JSON_PROFILE_LABEL} was not written within the bounded wait; ` +
+                        "the Runtime Review below is rendered without this run's profile",
+                )
+            }
+        }
+
+        await logJibrilServiceState()
 
         // Upload jibril logs as artifacts when debug is enabled (only after service stops).
         // Get the debug state from the main.js.
@@ -152062,7 +152101,7 @@ async function run() {
             await uploadJibrilArtifacts()
         }
 
-        const profile = await readProfile(debug === "true")
+        const profile = await readProfile(jsonProfilerFile, debug === "true")
         const renderOptions = getRenderOptions()
 
         if (profile !== null) {
@@ -152091,12 +152130,11 @@ async function run() {
  * profile is missing or unreadable. Returns both the raw parsed JSON (the
  * Step Summary renders the full-detail report from it, v6.1 §8) and the
  * normalized shape used by the PR-comment state machinery.
+ * @param {string} jsonProfilerFile
  * @param {boolean} debug
  * @returns {Promise<LoadedProfile | null>}
  */
-async function readProfile(debug) {
-    const jsonProfilerFile = firstNonEmptyString(getState("jsonProfilerFile"), getDefaultJsonProfileFile())
-
+async function readProfile(jsonProfilerFile, debug) {
     try {
         const jsonProfile = await readOptionalRootFile(jsonProfilerFile)
         if (jsonProfile === "") {
@@ -152420,6 +152458,65 @@ function getApiCodeFromErrorList(value) {
     }
 
     return undefined
+}
+
+/**
+ * Polls until the file exists with non-empty content or the deadline
+ * passes. Returns true when the file appeared.
+ * @param {string} filePath
+ * @param {number} deadlineMs
+ * @returns {Promise<boolean>}
+ */
+async function waitForRootFile(filePath, deadlineMs) {
+    const deadline = Date.now() + deadlineMs
+    for (;;) {
+        const content = await readOptionalRootFile(filePath)
+        if (content !== "") {
+            return true
+        }
+        if (Date.now() >= deadline) {
+            return false
+        }
+        await waitForDelay(PROFILE_POLL_INTERVAL_MS)
+    }
+}
+
+/**
+ * Logs the jibril unit state so runs with a missing or partial profile
+ * carry enough context to diagnose (still deactivating, killed on the
+ * stop timeout, or exited cleanly).
+ * @returns {Promise<void>}
+ */
+async function logJibrilServiceState() {
+    try {
+        const result = await getExecOutput(
+            "sudo",
+            ["systemctl", "show", "jibril.service", "-p", "ActiveState", "-p", "Result", "-p", "ExecMainStatus"],
+            {
+                silent: true,
+                ignoreReturnCode: true,
+            },
+        )
+        const state = result.stdout.trim().split("\n").join(", ")
+        if (state !== "") {
+            info(`jibril service state: ${state}`)
+        }
+    } catch (error) {
+        info(`could not read jibril service state: ${getErrorMessage(error)}`)
+    }
+}
+
+/**
+ * @param {string} value
+ * @param {number} def
+ * @returns {number}
+ */
+function parsePositiveInteger(value, def) {
+    const parsedValue = Number.parseInt(value, 10)
+    if (Number.isSafeInteger(parsedValue) && parsedValue > 0) {
+        return parsedValue
+    }
+    return def
 }
 
 /**
