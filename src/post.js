@@ -22,6 +22,7 @@ import { profilePermalink, renderPendingReview, renderStepSummary, summarizeProf
 import { publishPullRequestComment } from "./pr-comment.js"
 import { OIDC_AUTH_FEATURE_FLAG, getGitHubIDToken, resolveOIDCAudience } from "./oidc.js"
 import { isCommentPermissionError } from "./pr-comment-error.js"
+import { parseSystemdTimespanSeconds } from "./systemd-timespan.js"
 
 /** @typedef {import("./profile-comment.js").NormalizedProfile} NormalizedProfile */
 /** @typedef {import("./profile-comment.js").RenderOptions} RenderOptions */
@@ -40,13 +41,17 @@ import { isCommentPermissionError } from "./pr-comment-error.js"
 const JSON_PROFILE_LABEL = "JSON profile"
 const DOCS_URL = "https://github.com/garnet-org/action#readme"
 
-// On stop, jibril reprocesses every remaining task and flow before it writes
-// the JSON profile, so on long jobs `systemctl stop` can block for many
-// minutes (the unit allows up to TimeoutStopSec=600). The post step bounds
-// its own wait instead of inheriting that ceiling; both bounds are
-// overridable through environment variables for jobs with large backlogs.
+// On stop, jibril reprocesses every remaining task and flow and writes the
+// JSON profile only when that flush completes, so on long jobs
+// `systemctl stop` can block for several minutes. The unit itself bounds the
+// flush (TimeoutStopSec, 600s today; systemd SIGKILLs past it), so the post
+// step waits for the stop to complete — aligned to the unit's own deadline
+// plus a small grace — rather than abandoning a still-deactivating service
+// and losing the profile. The bound stays overridable for consumers that
+// prefer a shorter post step over profile capture on heavy jobs.
 const STOP_TIMEOUT_ENV = "GARNET_POST_STOP_TIMEOUT_SECONDS"
-const DEFAULT_STOP_TIMEOUT_SECONDS = 300
+const FALLBACK_STOP_TIMEOUT_SECONDS = 600
+const STOP_TIMEOUT_GRACE_SECONDS = 30
 const PROFILE_WAIT_ENV = "GARNET_POST_PROFILE_WAIT_SECONDS"
 const DEFAULT_PROFILE_WAIT_SECONDS = 60
 const PROFILE_POLL_INTERVAL_MS = 5000
@@ -88,12 +93,14 @@ async function run() {
 
         const jsonProfilerFile = firstNonEmptyString(core.getState("jsonProfilerFile"), getDefaultJsonProfileFile())
 
-        // Stop the Jibril service so the daemon flushes all pending events and
-        // writes the JSON profile, with a bounded wait. When the bound is hit
-        // only this client stops waiting; the unit keeps stopping in the
-        // background, so the profile file is polled for a further grace period.
-        const stopTimeoutSeconds = parsePositiveInteger(getEnv(STOP_TIMEOUT_ENV), DEFAULT_STOP_TIMEOUT_SECONDS)
-        core.info(`stopping jibril service (waiting up to ${stopTimeoutSeconds}s)`)
+        // Stop the Jibril service and wait for the stop to complete so the
+        // daemon flushes all pending events and writes the JSON profile. The
+        // wait is aligned to the unit's own stop deadline (TimeoutStopSec)
+        // plus a grace period, because the profile is written only when the
+        // flush completes: abandoning a still-deactivating service loses it.
+        const stopTimeoutSeconds = await resolveStopTimeoutSeconds()
+        const stopStart = Date.now()
+        core.info(`stopping jibril service (waiting up to ${stopTimeoutSeconds}s for the event flush to complete)`)
         const stopExitCode = await exec.exec(
             "sudo",
             ["timeout", `${stopTimeoutSeconds}s`, "systemctl", "stop", "jibril.service"],
@@ -101,20 +108,25 @@ async function run() {
                 ignoreReturnCode: true,
             },
         )
+        core.info(`jibril service stop finished in ${Math.round((Date.now() - stopStart) / 1000)}s`)
 
+        const profileWaitSeconds = parsePositiveInteger(getEnv(PROFILE_WAIT_ENV), DEFAULT_PROFILE_WAIT_SECONDS)
         if (stopExitCode === STOP_TIMED_OUT_EXIT_CODE) {
-            const profileWaitSeconds = parsePositiveInteger(getEnv(PROFILE_WAIT_ENV), DEFAULT_PROFILE_WAIT_SECONDS)
             core.info(
-                `jibril is still flushing its event backlog after ${stopTimeoutSeconds}s (set ${STOP_TIMEOUT_ENV} to change the bound); ` +
+                `jibril was still flushing its event backlog after ${stopTimeoutSeconds}s (set ${STOP_TIMEOUT_ENV} to change the bound); ` +
                     `waiting up to ${profileWaitSeconds}s more for the ${JSON_PROFILE_LABEL} at ${jsonProfilerFile}`,
             )
-            const appeared = await waitForRootFile(jsonProfilerFile, profileWaitSeconds * 1000)
-            if (!appeared) {
-                core.info(
-                    `${JSON_PROFILE_LABEL} was not written within the bounded wait; ` +
-                        "the Runtime Review below is rendered without this run's profile",
-                )
-            }
+        }
+
+        // The profile file is written by the daemon as its final act before
+        // exiting; a short poll covers the race between the stop returning
+        // and the file landing on disk.
+        const appeared = await waitForRootFile(jsonProfilerFile, profileWaitSeconds * 1000)
+        if (!appeared) {
+            core.info(
+                `${JSON_PROFILE_LABEL} was not written within the bounded wait; ` +
+                    "the Runtime Review below is rendered without this run's profile",
+            )
         }
 
         await logJibrilServiceState()
@@ -532,6 +544,42 @@ async function logJibrilServiceState() {
     } catch (error) {
         core.info(`could not read jibril service state: ${getErrorMessage(error)}`)
     }
+}
+
+/**
+ * Resolves how long the post step waits for `systemctl stop` to complete.
+ * An explicit environment override wins; otherwise the unit's own
+ * TimeoutStopSec is read live (so the bound tracks the unit instead of a
+ * hardcoded copy) plus a grace period, with a fallback when the unit
+ * property is unreadable or infinite.
+ * @returns {Promise<number>}
+ */
+async function resolveStopTimeoutSeconds() {
+    const override = parsePositiveInteger(getEnv(STOP_TIMEOUT_ENV), 0)
+    if (override > 0) {
+        return override
+    }
+
+    try {
+        const result = await exec.getExecOutput(
+            "sudo",
+            ["systemctl", "show", "jibril.service", "-p", "TimeoutStopUSec", "--value"],
+            {
+                silent: true,
+                ignoreReturnCode: true,
+            },
+        )
+        if (result.exitCode === 0) {
+            const unitSeconds = parseSystemdTimespanSeconds(result.stdout.trim())
+            if (unitSeconds !== null) {
+                return unitSeconds + STOP_TIMEOUT_GRACE_SECONDS
+            }
+        }
+    } catch (error) {
+        core.info(`could not read jibril unit stop timeout: ${getErrorMessage(error)}`)
+    }
+
+    return FALLBACK_STOP_TIMEOUT_SECONDS + STOP_TIMEOUT_GRACE_SECONDS
 }
 
 /**
