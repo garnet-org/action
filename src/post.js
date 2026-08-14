@@ -44,13 +44,14 @@ const DOCS_URL = "https://github.com/garnet-org/action#readme"
 // On stop, jibril reprocesses every remaining task and flow and writes the
 // JSON profile only when that flush completes, so on long jobs
 // `systemctl stop` can block for several minutes. The unit itself bounds the
-// flush (TimeoutStopSec, 600s today; systemd SIGKILLs past it), so the post
+// flush (TimeoutStopSec, raised by the main step's drop-in; systemd SIGKILLs
+// past it), so the post
 // step waits for the stop to complete — aligned to the unit's own deadline
 // plus a small grace — rather than abandoning a still-deactivating service
 // and losing the profile. The bound stays overridable for consumers that
 // prefer a shorter post step over profile capture on heavy jobs.
 const STOP_TIMEOUT_ENV = "GARNET_POST_STOP_TIMEOUT_SECONDS"
-const FALLBACK_STOP_TIMEOUT_SECONDS = 600
+const FALLBACK_STOP_TIMEOUT_SECONDS = 1800
 const STOP_TIMEOUT_GRACE_SECONDS = 30
 const PROFILE_WAIT_ENV = "GARNET_POST_PROFILE_WAIT_SECONDS"
 const DEFAULT_PROFILE_WAIT_SECONDS = 60

@@ -39980,6 +39980,14 @@ const INSTPATH = "/usr/local/bin"
 // Default Jibril sensor version: the same stable pin as the floating v2 tag,
 // so the sensor never floats under an unchanged action ref.
 const JIBRIL_STABLE_VERSION = "v2.16.0"
+// Stop ceiling for the jibril unit. On stop the daemon flushes its whole
+// event backlog and writes the JSON profile only when the flush completes;
+// the binary's stock TimeoutStopSec=600 has been observed SIGKILLing the
+// flush mid-way on ~60-minute jobs, losing the profile. The drop-in raises
+// the ceiling so heavy flushes complete; the post step reads the effective
+// value live and bounds its own wait to it.
+const JIBRIL_STOP_TIMEOUT_ENV = "GARNET_JIBRIL_STOP_TIMEOUT_SECONDS"
+const DEFAULT_JIBRIL_STOP_TIMEOUT_SECONDS = 1800
 
 // This function is the main entry point for the script.
 // Returns true when Jibril started successfully, false otherwise.
@@ -40274,6 +40282,17 @@ StandardOutput=append:/var/log/jibril.log
         await promises_namespaceObject.writeFile(loggingConfPath, loggingConf)
         await execSudo(["cp", loggingConfPath, "/etc/systemd/system/jibril.service.d/logging.conf"])
 
+        // Raise the unit's stop ceiling so the shutdown event flush can
+        // complete and the JSON profile gets written on heavy jobs.
+        const stopTimeoutSeconds = resolveStopTimeoutSeconds(getEnv(JIBRIL_STOP_TIMEOUT_ENV, ""))
+        info(`Configuring Jibril stop timeout (${stopTimeoutSeconds}s)`)
+        const stopTimeoutConf = `[Service]
+TimeoutStopSec=${stopTimeoutSeconds}
+`
+        const stopTimeoutConfPath = external_node_path_namespaceObject.join(tmpDir, "stop-timeout.conf")
+        await promises_namespaceObject.writeFile(stopTimeoutConfPath, stopTimeoutConf)
+        await execSudo(["cp", stopTimeoutConfPath, "/etc/systemd/system/jibril.service.d/stop-timeout.conf"])
+
         // Verify installed files.
         if (DEBUG === "true") {
             try {
@@ -40534,6 +40553,23 @@ function resolveJibrilVersion(inputVersion, actionRef) {
     // Every other ref (branch/SHA/exact tag) gets the same stable pin as v2:
     // a root eBPF binary must not change under an unchanged action ref.
     return JIBRIL_STABLE_VERSION
+}
+
+/**
+ * Resolves the stop ceiling written into the unit's drop-in. An explicit
+ * positive-integer environment override wins; otherwise the default is used.
+ * @param {string} overrideValue
+ * @returns {number}
+ */
+function resolveStopTimeoutSeconds(overrideValue) {
+    const text = String(overrideValue === undefined || overrideValue === null ? "" : overrideValue).trim()
+    if (text !== "" && /^\d+$/.test(text)) {
+        const parsed = Number.parseInt(text, 10)
+        if (Number.isSafeInteger(parsed) && parsed > 0) {
+            return parsed
+        }
+    }
+    return DEFAULT_JIBRIL_STOP_TIMEOUT_SECONDS
 }
 
 /**
