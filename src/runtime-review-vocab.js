@@ -123,7 +123,7 @@ export const CONTRACT_VOCAB = {
       "remote_ports (every value, verbatim — explicit Step Summary preview only; the PR comment and production summary show no ports/protocol/address annotations)",
       "protocol (explicit Step Summary preview only)",
       "peer result (recorded ATTENTION is explicit Step Summary preview only)",
-      "leaf pid ((pid N) renders on the Step Summary process leaf only, never the PR comment)",
+      "leaf pid (renders on the Step Summary only, never the PR comment: the lineage table carries it as small same-cell sub text — '<sub>pid&nbsp;N</sub>' after the chain — and the explicit preview keeps the inline '(pid N)' suffix on the leaf)",
       "leaf process comm name (Step Summary only)",
       "ancestry names in record order",
       "github_step (escaped, labeled 'step:', attribution metadata only)",
@@ -260,7 +260,7 @@ export const CONTRACT_VOCAB = {
       "Process Tree",
       "Destinations"
     ],
-    "treePivot": "lineage-first: one '| Process Tree | Destinations |' table row per distinct process lineage keyed on (lineage_recorded, pid, process, ancestry); different PIDs never merge; each row nests that lineage's destinations with identical destination names collapsed (telemetry counts derive from the profile, not rows); compact trees retain the first node and final three nodes with an explicit ellipsis between them; the leaf carries '(pid N)'; each destination is bullet-anchored; captured names are length-bounded with a middle ellipsis",
+    "treePivot": "lineage-first: one '| Process Tree | Destinations |' table row per distinct process lineage keyed on (lineage_recorded, pid, process, ancestry); different PIDs never merge; each row nests that lineage's destinations with identical destination names collapsed (telemetry counts derive from the profile, not rows); compact trees retain the first node and final three nodes with an explicit ellipsis between them; the leaf's PID renders as small same-cell sub text after the chain — '<sub>pid&nbsp;N</sub>' — never inline in the leaf's code span (the explicit preview keeps the inline '(pid N)' suffix); each destination is bullet-anchored; captured names are length-bounded with a middle ellipsis",
     "telemetry": "one sentence: Network telemetry observed N unique domains, M destinations, C connections, and F flows. Unique domains and connections pass through from sensor telemetry; destinations and flows remain independently derived from the record",
     "assertions": "omitted by default; assertions: preview renders a collapsed source-context table plus a collapsed Check | Result | Context fold and an evidence table only for record-backed assertions[].evidence",
     "footer": "right-aligned workflow · run · job · profile.timestamp (provenance only, no telemetry counts), then Powered by Garnet · exact Run Profile link; followed by Job summary generated at run-time"
