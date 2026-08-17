@@ -28229,6 +28229,9 @@ module.exports = __WEBPACK_EXTERNAL_createRequire(import.meta.url)("util");
 /******/ }
 /******/ 
 /************************************************************************/
+/******/ /* webpack/runtime/asset-relocator-loader */
+/******/ if (typeof __nccwpck_require__ !== 'undefined') __nccwpck_require__.ab = decodeURIComponent(new URL('.', import.meta.url).pathname).slice(import.meta.url.match(/^file:\/\/\/\w:/) ? 1 : 0, -1) + "/";
+/******/ 
 /******/ /* webpack/runtime/create fake namespace object */
 /******/ (() => {
 /******/ 	var getProto = Object.getPrototypeOf ? (obj) => (Object.getPrototypeOf(obj)) : (obj) => (obj.__proto__);
@@ -28286,10 +28289,6 @@ module.exports = __WEBPACK_EXTERNAL_createRequire(import.meta.url)("util");
 /******/ 		Object.defineProperty(exports, '__esModule', { value: true });
 /******/ 	};
 /******/ })();
-/******/ 
-/******/ /* webpack/runtime/compat */
-/******/ 
-/******/ if (typeof __nccwpck_require__ !== 'undefined') __nccwpck_require__.ab = new URL('.', import.meta.url).pathname.slice(import.meta.url.match(/^file:\/\/\/\w:/) ? 1 : 0, -1) + "/";
 /******/ 
 /************************************************************************/
 var __webpack_exports__ = {};
@@ -40292,8 +40291,10 @@ async function resolveControlPlaneAuth(input) {
         const errorMessage = getErrorMessage(error)
         if (isMissingOIDCPermissionError(errorMessage)) {
             warning(
-                "OIDC token request failed because this workflow is missing 'id-token: write' permission. Falling back to 'api_token'.",
+                "github: OIDC token request failed because this workflow is missing 'id-token: write' permission. Falling back to 'api_token'.",
             )
+        } else if (errorMessage.startsWith("OIDC token request failed")) {
+            warning(`github: ${errorMessage}. Falling back to 'api_token'.`)
         } else {
             warning(`OIDC exchange failed (${errorMessage}). Falling back to 'api_token'.`)
         }
@@ -40312,7 +40313,12 @@ async function resolveControlPlaneAuth(input) {
             const idToken = await getGitHubIDToken(audience)
             exchanged = await unauthenticatedControlPlaneClient.exchangeGitHubOIDCForWorkflowToken(idToken)
         } catch (error) {
-            warning(`OIDC exchange retry failed (${getErrorMessage(error)}). Falling back to 'api_token'.`)
+            const errorMessage = getErrorMessage(error)
+            if (errorMessage.startsWith("OIDC token request failed")) {
+                warning(`github: ${errorMessage}. Falling back to 'api_token'.`)
+            } else {
+                warning(`OIDC exchange retry failed (${errorMessage}). Falling back to 'api_token'.`)
+            }
             return {
                 projectToken: requireApiToken(input.apiToken),
                 workflowToken: "",
