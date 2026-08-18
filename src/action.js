@@ -478,8 +478,10 @@ async function resolveControlPlaneAuth(input) {
         const errorMessage = getErrorMessage(error)
         if (isMissingOIDCPermissionError(errorMessage)) {
             core.warning(
-                "OIDC token request failed because this workflow is missing 'id-token: write' permission. Falling back to 'api_token'.",
+                "github: OIDC token request failed because this workflow is missing 'id-token: write' permission. Falling back to 'api_token'.",
             )
+        } else if (errorMessage.startsWith("OIDC token request failed")) {
+            core.warning(`github: ${errorMessage}. Falling back to 'api_token'.`)
         } else {
             core.warning(`OIDC exchange failed (${errorMessage}). Falling back to 'api_token'.`)
         }
@@ -498,7 +500,12 @@ async function resolveControlPlaneAuth(input) {
             const idToken = await getGitHubIDToken(audience)
             exchanged = await unauthenticatedControlPlaneClient.exchangeGitHubOIDCForWorkflowToken(idToken)
         } catch (error) {
-            core.warning(`OIDC exchange retry failed (${getErrorMessage(error)}). Falling back to 'api_token'.`)
+            const errorMessage = getErrorMessage(error)
+            if (errorMessage.startsWith("OIDC token request failed")) {
+                core.warning(`github: ${errorMessage}. Falling back to 'api_token'.`)
+            } else {
+                core.warning(`OIDC exchange retry failed (${errorMessage}). Falling back to 'api_token'.`)
+            }
             return {
                 projectToken: requireApiToken(input.apiToken),
                 workflowToken: "",
