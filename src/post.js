@@ -361,25 +361,25 @@ function logProfileReportLink(profile) {
 async function publishProfilerComment(profile, renderOptions) {
     const eventPath = getEnv("GITHUB_EVENT_PATH")
     if (eventPath === "") {
-        core.info("GITHUB_EVENT_PATH is not set, skipping PR comment")
+        core.info("github: GITHUB_EVENT_PATH is not set, skipping PR comment")
         return
     }
 
     const repository = getEnv("GITHUB_REPOSITORY")
     if (repository === "") {
-        core.warning("GITHUB_REPOSITORY is not set, skipping PR comment")
+        core.warning("github: GITHUB_REPOSITORY is not set, skipping PR comment")
         return
     }
 
     const token = firstNonEmptyString(core.getState("githubToken"), getEnv("GITHUB_TOKEN"))
     if (token === "") {
-        core.warning("github_token is not set, skipping PR comment")
+        core.warning("github: github_token is not set, skipping PR comment")
         return
     }
 
     const pullRequestNumber = await getPullRequestNumberFromEvent(eventPath)
     if (pullRequestNumber === null) {
-        core.info("workflow is not running for a pull request, skipping PR comment")
+        core.info("github: workflow is not running for a pull request, skipping PR comment")
         return
     }
 
@@ -394,18 +394,18 @@ async function publishProfilerComment(profile, renderOptions) {
             runAttempt,
             renderOptions,
         })
-        core.info(`PR comment ${result}`)
+        core.info(`github: PR comment ${result}`)
     } catch (error) {
         if (isCommentPermissionError(error)) {
             core.info(
-                "PR comment skipped: the workflow token cannot comment on this pull request. " +
+                "github: PR comment skipped: the workflow token cannot comment on this pull request. " +
                     "The Garnet GitHub App is the supported comment path and needs no workflow permissions: " +
                     "https://github.com/apps/garnet-runtime-review/installations/select_target. " +
                     "To publish from this action instead, grant this workflow `pull-requests: write`.",
             )
             return
         }
-        core.warning(`failed to publish PR comment: ${formatPullRequestCommentPublishError(error)}`)
+        core.warning(`github: failed to publish PR comment: ${formatPullRequestCommentPublishError(error)}`)
     }
 }
 

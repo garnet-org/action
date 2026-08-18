@@ -187,7 +187,12 @@ test("run(): fork + no credentials exits success without starting jibril", async
     await rm(dirname(eventPath), { recursive: true, force: true })
 })
 
-test("post step: no-ops cleanly when jibril never started", async () => {
+test("post step: no-ops cleanly when jibril never started", async function (t) {
+    if (process.platform !== "linux") {
+        t.skip("Linux-only behavior: post step exits early on non-Linux platforms")
+        return
+    }
+
     const stateDir = await mkdtemp(join(tmpdir(), "garnet-post-test-"))
     const stateFile = join(stateDir, "state")
     await writeFile(stateFile, "")
