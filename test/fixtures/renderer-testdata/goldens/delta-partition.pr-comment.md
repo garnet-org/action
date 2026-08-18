@@ -1,7 +1,7 @@
 <!-- garnet-runtime-review -->
 <!-- garnet-run-profile -->
 <!-- garnet:commit 7777777777777777777777777777777777777777 -->
-<!-- garnet:summary {"contract":"6.10.0","commit":"7777777777777777777777777777777777777777","previous":"8888888888888888888888888888888888888888","jobs":1,"changed":1,"unchanged":0,"noOutbound":0,"vanished":0,"added":1,"removed":0,"backgroundAdded":2,"backgroundRemoved":2,"vanishedDestinations":0,"chains":4,"destinations":4,"kinds":["network"]} -->
+<!-- garnet:summary {"contract":"6.10.0","githubMeta":"2026-08-08","commit":"7777777777777777777777777777777777777777","previous":"8888888888888888888888888888888888888888","jobs":1,"changed":1,"unchanged":0,"noOutbound":0,"vanished":0,"added":1,"removed":0,"backgroundAdded":2,"backgroundRemoved":2,"vanishedDestinations":0,"chains":4,"destinations":4,"recorded":"2026-08-07 18:30:00 UTC","kinds":["network"]} -->
 **Execution Profiles recorded for 1 job, triggered by [`7777777`](https://github.com/garnet-org/runtime-review-testbed/commit/7777777777777777777777777777777777777777)**
 
 > *1&nbsp;job changed +1&nbsp;destination · compared with [`8888888`](https://github.com/garnet-org/runtime-review-testbed/commit/8888888888888888888888888888888888888888)*

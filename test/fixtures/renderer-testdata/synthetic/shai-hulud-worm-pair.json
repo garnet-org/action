@@ -1,0 +1,220 @@
+{
+  "$comment": "Shai-Hulud falsifier (v6.10.0): a compromised npm postinstall (npm \u2192 node \u2192 sh \u2192 bun) exfiltrates via GitHub-owned and cloud-metadata destinations. Ancestry is workload (Runner.Worker descent), so every one of its destinations lands in the headline delta \u2014 destination identity (github/azure-looking names) never quiets a count. The stable substrate root (provjobd \u2192 results storage) holds still and renders unmarked with no boundary label.",
+  "head": [
+    {
+      "uuid": "1c2d3e4f-aaaa-4bbb-8ccc-d1e2f3a4b5c6",
+      "timestamp": "2026-08-07T18:30:00.000000000Z",
+      "metadata": {
+        "version": "0.2.0"
+      },
+      "scenarios": {
+        "github": {
+          "scenario_type": "github",
+          "workflow": "ci",
+          "job": "install",
+          "repository": "garnet-labs/posthog",
+          "run_id": "32100000007",
+          "sha": "7777777777777777777777777777777777777777",
+          "server_url": "https://github.com"
+        }
+      },
+      "network": {
+        "egress": {
+          "peers": [
+            {
+              "remote_address": "104.16.30.34",
+              "remote_names": [
+                "registry.npmjs.org"
+              ],
+              "remote_ports": [
+                "443"
+              ],
+              "protocol": "tcp",
+              "proc_trees": [
+                {
+                  "pid": 9001,
+                  "process": "node",
+                  "ancestry": [
+                    "systemd",
+                    "Runner.Worker",
+                    "npm",
+                    "node"
+                  ],
+                  "github_step": "3. Install"
+                }
+              ]
+            },
+            {
+              "remote_address": "20.60.153.129",
+              "remote_names": [
+                "resultsstorageeus2.blob.core.windows.net"
+              ],
+              "remote_ports": [
+                "443"
+              ],
+              "protocol": "tcp",
+              "proc_trees": [
+                {
+                  "pid": 412,
+                  "process": "provjobd",
+                  "ancestry": [
+                    "systemd",
+                    "hosted-compute-agent",
+                    "sudo",
+                    "provjobd"
+                  ],
+                  "github_step": null
+                }
+              ]
+            },
+            {
+              "remote_address": "140.82.112.6",
+              "remote_names": [
+                "api.github.com"
+              ],
+              "remote_ports": [
+                "443"
+              ],
+              "protocol": "tcp",
+              "proc_trees": [
+                {
+                  "pid": 9107,
+                  "process": "bun",
+                  "ancestry": [
+                    "systemd",
+                    "Runner.Worker",
+                    "npm",
+                    "node",
+                    "sh",
+                    "bun"
+                  ],
+                  "github_step": "3. Install"
+                }
+              ]
+            },
+            {
+              "remote_address": "185.199.108.133",
+              "remote_names": [
+                "release-assets.githubusercontent.com"
+              ],
+              "remote_ports": [
+                "443"
+              ],
+              "protocol": "tcp",
+              "proc_trees": [
+                {
+                  "pid": 9107,
+                  "process": "bun",
+                  "ancestry": [
+                    "systemd",
+                    "Runner.Worker",
+                    "npm",
+                    "node",
+                    "sh",
+                    "bun"
+                  ],
+                  "github_step": "3. Install"
+                }
+              ]
+            },
+            {
+              "remote_address": "169.254.169.254",
+              "remote_names": [],
+              "remote_ports": [
+                "443"
+              ],
+              "protocol": "tcp",
+              "proc_trees": [
+                {
+                  "pid": 9107,
+                  "process": "bun",
+                  "ancestry": [
+                    "systemd",
+                    "Runner.Worker",
+                    "npm",
+                    "node",
+                    "sh",
+                    "bun"
+                  ],
+                  "github_step": "3. Install"
+                }
+              ]
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "previous": [
+    {
+      "uuid": "1c2d3e4f-aaaa-4bbb-8ccc-d1e2f3a4b5c6",
+      "timestamp": "2026-08-07T18:30:00.000000000Z",
+      "metadata": {
+        "version": "0.2.0"
+      },
+      "scenarios": {
+        "github": {
+          "scenario_type": "github",
+          "workflow": "ci",
+          "job": "install",
+          "repository": "garnet-labs/posthog",
+          "run_id": "32100000006",
+          "sha": "8888888888888888888888888888888888888888",
+          "server_url": "https://github.com"
+        }
+      },
+      "network": {
+        "egress": {
+          "peers": [
+            {
+              "remote_address": "104.16.30.34",
+              "remote_names": [
+                "registry.npmjs.org"
+              ],
+              "remote_ports": [
+                "443"
+              ],
+              "protocol": "tcp",
+              "proc_trees": [
+                {
+                  "pid": 9001,
+                  "process": "node",
+                  "ancestry": [
+                    "systemd",
+                    "Runner.Worker",
+                    "npm",
+                    "node"
+                  ],
+                  "github_step": "3. Install"
+                }
+              ]
+            },
+            {
+              "remote_address": "20.60.153.129",
+              "remote_names": [
+                "resultsstorageeus2.blob.core.windows.net"
+              ],
+              "remote_ports": [
+                "443"
+              ],
+              "protocol": "tcp",
+              "proc_trees": [
+                {
+                  "pid": 412,
+                  "process": "provjobd",
+                  "ancestry": [
+                    "systemd",
+                    "hosted-compute-agent",
+                    "sudo",
+                    "provjobd"
+                  ],
+                  "github_step": null
+                }
+              ]
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

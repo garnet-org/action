@@ -1,0 +1,121 @@
+{
+  "$comment": "Synthetic v6.8.0 git-shaped branch-marking fixture — one head/previous pair. The head record adds (a) a genuinely new chain (Runner.Worker → bash → python3 → pip → pypi.example.org) whose whole branch marks + from its divergence point, and (b) a new destination (fresh.example.net) under existing lineage (node) that marks only the leaf. The previous record loses a whole branch (Runner.Worker → bash → go → proxy.golang.example) symmetrically marked −.",
+  "head": [
+    {
+      "uuid": "2a6c3b2d-0e5f-4c8b-9d4e-3f2a7b8c9d02",
+      "timestamp": "2026-08-07T16:00:00.000000000Z",
+      "metadata": { "version": "0.2.0" },
+      "scenarios": {
+        "github": {
+          "scenario_type": "github",
+          "workflow": "ci",
+          "job": "branches",
+          "repository": "garnet-org/runtime-review-testbed",
+          "run_id": "32000000020",
+          "sha": "bb22cc33dd44ee55ff6677889900aabbccddee11",
+          "server_url": "https://github.com"
+        }
+      },
+      "network": {
+        "egress": {
+          "peers": [
+            {
+              "remote_address": "198.51.100.7",
+              "remote_names": ["kept.example.com"],
+              "remote_ports": ["443"],
+              "protocol": "tcp",
+              "proc_trees": [
+                {
+                  "pid": 5001,
+                  "process": "node",
+                  "github_step": "2. Run tests",
+                  "ancestry": ["systemd", "Runner.Worker", "bash", "node"]
+                }
+              ]
+            },
+            {
+              "remote_address": "198.51.100.8",
+              "remote_names": ["fresh.example.net"],
+              "remote_ports": ["443"],
+              "protocol": "tcp",
+              "proc_trees": [
+                {
+                  "pid": 5001,
+                  "process": "node",
+                  "github_step": "2. Run tests",
+                  "ancestry": ["systemd", "Runner.Worker", "bash", "node"]
+                }
+              ]
+            },
+            {
+              "remote_address": "198.51.100.9",
+              "remote_names": ["pypi.example.org"],
+              "remote_ports": ["443"],
+              "protocol": "tcp",
+              "proc_trees": [
+                {
+                  "pid": 5002,
+                  "process": "pip",
+                  "github_step": "3. Install tools",
+                  "ancestry": ["systemd", "Runner.Worker", "bash", "python3", "pip"]
+                }
+              ]
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "previous": [
+    {
+      "uuid": "2a6c3b2d-0e5f-4c8b-9d4e-3f2a7b8c9d03",
+      "timestamp": "2026-08-06T16:00:00.000000000Z",
+      "metadata": { "version": "0.2.0" },
+      "scenarios": {
+        "github": {
+          "scenario_type": "github",
+          "workflow": "ci",
+          "job": "branches",
+          "repository": "garnet-org/runtime-review-testbed",
+          "run_id": "32000000019",
+          "sha": "aa11bb22cc33dd44ee55ff6677889900aabbccdd",
+          "server_url": "https://github.com"
+        }
+      },
+      "network": {
+        "egress": {
+          "peers": [
+            {
+              "remote_address": "198.51.100.7",
+              "remote_names": ["kept.example.com"],
+              "remote_ports": ["443"],
+              "protocol": "tcp",
+              "proc_trees": [
+                {
+                  "pid": 4901,
+                  "process": "node",
+                  "github_step": "2. Run tests",
+                  "ancestry": ["systemd", "Runner.Worker", "bash", "node"]
+                }
+              ]
+            },
+            {
+              "remote_address": "198.51.100.10",
+              "remote_names": ["proxy.golang.example"],
+              "remote_ports": ["443"],
+              "protocol": "tcp",
+              "proc_trees": [
+                {
+                  "pid": 4902,
+                  "process": "go",
+                  "github_step": "4. Build binary",
+                  "ancestry": ["systemd", "Runner.Worker", "bash", "go"]
+                }
+              ]
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

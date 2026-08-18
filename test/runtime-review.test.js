@@ -1795,6 +1795,9 @@ await test("goldens: every golden byte-matches a fresh render", () => {
   const comparisonPair = load("synthetic", "comparison-pair.json")
   const deltaPartitionPair = load("synthetic", "delta-partition-pair.json")
   const backgroundOnlyPair = load("synthetic", "background-only-pair.json")
+  const rotationPair = load("synthetic", "rotation-pair.json")
+  const branchMarking = load("synthetic", "branch-marking.json")
+  const shaiHuludWormPair = load("synthetic", "shai-hulud-worm-pair.json")
   // Every generated golden is locked, comparison states included — an
   // unlocked golden silently drifts from the renderer that writes it.
   const states = {
@@ -1816,6 +1819,18 @@ await test("goldens: every golden byte-matches a fresh render", () => {
     "background-only": {
       profiles: backgroundOnlyPair.head,
       previous: backgroundOnlyPair.previous,
+    },
+    "infra-rotation": {
+      profiles: rotationPair.head,
+      previous: rotationPair.previous,
+    },
+    "branch-marking": {
+      profiles: branchMarking.head,
+      previous: branchMarking.previous,
+    },
+    "shai-hulud-worm": {
+      profiles: shaiHuludWormPair.head,
+      previous: shaiHuludWormPair.previous,
     },
   }
   const noRecord = readFileSync(join(goldenDir, "no-record.pr-comment.md"), "utf8")

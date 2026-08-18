@@ -472,6 +472,7 @@ for (const [label, previousName, headName] of pairSpecs) {
     Object.keys(summary),
     [
       "contract",
+      "githubMeta",
       "commit",
       "previous",
       "jobs",
@@ -486,6 +487,7 @@ for (const [label, previousName, headName] of pairSpecs) {
       "vanishedDestinations",
       "chains",
       "destinations",
+      "recorded",
       "kinds",
     ],
     "marker key order is contract-locked",

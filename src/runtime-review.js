@@ -50,6 +50,7 @@ import { isIP } from "node:net"
 
 import { CONTRACT_VOCAB } from "./runtime-review-vocab.js"
 import { PUBLIC_SUFFIX_RULES } from "./public-suffix-rules.js"
+import { GITHUB_META_IP_RANGES } from "./github-meta-ip-ranges.js"
 
 export { CONTRACT_VOCAB }
 
@@ -183,6 +184,7 @@ export { CONTRACT_VOCAB }
  *   removedCount: number
  *   backgroundAddedCount: number
  *   backgroundRemovedCount: number
+ *   rotations: Map<string, string>
  * }} EdgeDelta
  */
 
@@ -1526,6 +1528,68 @@ export function compareJobEdges(headEdges, previousEdges) {
   const prevIds = new Set(previousEdges.map((edge) => destinationIdentity(edge, names)))
   const addedIds = new Set([...headIds].filter((id) => !prevIds.has(id)))
   const removedIds = new Set([...prevIds].filter((id) => !headIds.has(id)))
+  // Provable-rotation join (contract comment.rotationJoin): a −/+ pair is one
+  // rotating GitHub infrastructure identity when the owning recorded process
+  // is the same and both recorded addresses sit in the same published GitHub
+  // service block — either two bare-address identities (a lease rotation) or
+  // two named identities sharing one registrable domain (a pool
+  // reassignment). A joined pair is unmarked and uncounted, and the current
+  // line carries the identity it replaced. Data, not heuristics: the ranges
+  // and the public-suffix rules are vendored contract bytes, and anything
+  // unprovable stays an honest −/+.
+  /** @type {Map<string, string>} */
+  const rotations = new Map()
+  /**
+   * Join candidates on one side, grouped by [owning process, block, domain].
+   * @param {ReviewEdge[]} edges
+   * @param {Set<string>} ids
+   * @returns {Map<string, Map<string, ReviewEdge>>}
+   */
+  function rotationCandidates(edges, ids) {
+    /** @type {Map<string, Map<string, ReviewEdge>>} */
+    const byGroup = new Map()
+    for (const edge of [...edges].sort(edgeComparator)) {
+      const id = destinationIdentity(edge, names)
+      if (!ids.has(id)) continue
+      // An address-like identity is bare even when the record aliases the
+      // address to itself in remote_names — live captures do exactly that.
+      const bare = isAddressLike(id)
+      const domain = bare ? "" : registrableDomain(id)
+      if (!bare && domain === "") continue
+      const block = githubInfraBlock(edge.remote_address)
+      if (block === "") continue
+      const path = commentTreePath(edge)
+      const owner = path[path.length - 1] ?? ""
+      const key = JSON.stringify([owner, block, domain])
+      let group = byGroup.get(key)
+      if (group === undefined) {
+        group = new Map()
+        byGroup.set(key, group)
+      }
+      if (!group.has(id)) group.set(id, edge)
+    }
+    return byGroup
+  }
+  const removedGroups = rotationCandidates(previousEdges, removedIds)
+  const addedGroups = rotationCandidates(headEdges, addedIds)
+  // Deterministic pairing: groups in sorted key order, identities in sorted
+  // order, and every identity joins at most once.
+  for (const key of [...removedGroups.keys()].sort()) {
+    const addedGroup = addedGroups.get(key)
+    if (addedGroup === undefined) continue
+    const removedGroup = removedGroups.get(key)
+    if (removedGroup === undefined) continue
+    const removedList = [...removedGroup.keys()].filter((id) => removedIds.has(id)).sort()
+    const addedList = [...addedGroup.keys()].filter((id) => addedIds.has(id)).sort()
+    const pairs = Math.min(removedList.length, addedList.length)
+    for (let index = 0; index < pairs; index += 1) {
+      const addedID = addedList[index] ?? ""
+      const removedID = removedList[index] ?? ""
+      rotations.set(addedID, removedID)
+      addedIds.delete(addedID)
+      removedIds.delete(removedID)
+    }
+  }
   /** @type {Map<string, ReviewEdge>} */
   const removedByID = new Map()
   for (const edge of [...previousEdges].sort(edgeComparator)) {
@@ -1551,6 +1615,7 @@ export function compareJobEdges(headEdges, previousEdges) {
     removedCount: workloadRemoved.length,
     backgroundAddedCount: addedIds.size - workloadAdded.length,
     backgroundRemovedCount: removedIds.size - workloadRemoved.length,
+    rotations,
   }
 }
 
@@ -1621,6 +1686,85 @@ export function registrableDomain(name) {
   if (labels.length <= suffixLen) return ""
   return labels.slice(labels.length - suffixLen - 1).join(".")
 }
+/**
+ * The retrieval date of the vendored published GitHub meta ranges, carried in
+ * the garnet:summary marker so a stale range list is diagnosable from any
+ * live comment.
+ */
+export const GITHUB_META_RETRIEVED = GITHUB_META_IP_RANGES.retrieved
+
+// Service blocks only (web/api): the `actions` block is runner address space,
+// where an attacker-controlled endpoint in another org can sit, so a
+// same-process substitution there is weaker proof and never joins.
+const GITHUB_META_BLOCKS = [...new Set([...GITHUB_META_IP_RANGES.web, ...GITHUB_META_IP_RANGES.api])]
+
+/**
+ * The numeric value of an IPv4/IPv6 literal, or null when the text is not one.
+ * @param {string} address
+ * @returns {bigint | null}
+ */
+function ipToBigInt(address) {
+  if (address.includes(":")) {
+    // IPv6 (no embedded-IPv4 forms in the vendored data).
+    const [head, tail] = address.split("::")
+    const headParts = head === undefined || head === "" ? [] : head.split(":")
+    const tailParts = tail === undefined || tail === "" ? [] : tail.split(":")
+    if (tail === undefined && headParts.length !== 8) return null
+    const parts = [
+      ...headParts,
+      ...Array(8 - headParts.length - tailParts.length).fill("0"),
+      ...tailParts,
+    ]
+    if (parts.length !== 8 || parts.some((part) => !/^[0-9a-fA-F]{1,4}$/.test(part))) return null
+    return parts.reduce((acc, part) => (acc << 16n) | BigInt(parseInt(part, 16)), 0n)
+  }
+  const octets = address.split(".")
+  if (octets.length !== 4 || octets.some((o) => !/^\d{1,3}$/.test(o) || Number(o) > 255)) {
+    return null
+  }
+  return octets.reduce((acc, o) => (acc << 8n) | BigInt(Number(o)), 0n)
+}
+
+/**
+ * One parsed published block: its text, family, and the shift/value pair the
+ * prefix match compares.
+ * @typedef {{ cidr: string, v6: boolean, shift: bigint, value: bigint }} MetaBlock
+ */
+
+/** @type {MetaBlock[]} */
+const GITHUB_META_PARSED = GITHUB_META_BLOCKS.map((cidr) => {
+  const [networkText, prefixText] = cidr.split("/")
+  const network = networkText ?? ""
+  const v6 = network.includes(":")
+  const bits = v6 ? 128n : 32n
+  const prefix = BigInt(prefixText ?? "0")
+  const value = ipToBigInt(network) ?? 0n
+  return { cidr, v6, shift: bits - prefix, value: value >> (bits - prefix) }
+})
+
+/**
+ * The published GitHub infrastructure block containing an address, else "".
+ * Longest (most specific) matching prefix wins so the join key is stable.
+ * @param {string} address
+ * @returns {string}
+ */
+export function githubInfraBlock(address) {
+  const text = String(address ?? "")
+  const value = ipToBigInt(text)
+  if (value === null) return ""
+  const v6 = text.includes(":")
+  /** @type {MetaBlock | null} */
+  let best = null
+  for (const block of GITHUB_META_PARSED) {
+    if (block.v6 !== v6) continue
+    if (value >> block.shift === block.value) {
+      if (best === null || block.shift < best.shift) best = block
+    }
+  }
+  return best === null ? "" : best.cidr
+}
+
+
 
 /**
  * @param {TreeNode} node
@@ -1640,8 +1784,9 @@ function diffNodeLine(node, { steps = true, inheritedSteps = new Set() } = {}) {
 /**
  * @param {ReviewEdge} edge
  * @param {boolean} [annotateAddress]
+ * @param {string} [rotatedFrom]
  */
-function diffLeafLine(edge, annotateAddress = false) {
+function diffLeafLine(edge, annotateAddress = false, rotatedFrom = "") {
   const identity = edgePrimaryDestination(edge)
   const parts = [VOCAB.terminalNetwork, fenceText(defangHostname(truncateMiddle(identity)))]
   // A marked (+/−) leaf carries the recorded address as one trailing bracket
@@ -1651,7 +1796,20 @@ function diffLeafLine(edge, annotateAddress = false) {
   if (annotateAddress && edge.remote_address !== "" && edge.remote_address !== identity) {
     parts.push(`(${fenceText(edge.remote_address)})`)
   }
-  for (const note of edgeNotes(edge, { detections: false })) parts.push(`(${fenceText(note)})`)
+  // A joined rotation carries the trust cue and the identity it replaced in
+  // one bracket, so the line reads as context with its provenance attached.
+  if (rotatedFrom !== "") {
+    parts.push(
+      `(${fenceText(
+        `${CONTRACT_VOCAB.notes.githubInfrastructure.text} · rotated from ${defangHostname(rotatedFrom)}`,
+      )})`,
+    )
+  }
+  for (const note of edgeNotes(edge, { detections: false })) {
+    // One bracket per fact: the rotation bracket already names GitHub infra.
+    if (rotatedFrom !== "" && note === CONTRACT_VOCAB.notes.githubInfrastructure.text) continue
+    parts.push(`(${fenceText(note)})`)
+  }
   return parts.join(" ")
 }
 
@@ -1689,8 +1847,17 @@ function diffBranchMark(node, marks) {
  * @param {Map<ReviewEdge, string>} marks
  * @param {Set<ReviewEdge>} annotated
  * @param {Set<string>} [inheritedSteps]
+ * @param {Map<ReviewEdge, string>} [rotatedByEdge]
  */
-function renderDiffChildren(node, prefix, lines, marks, annotated, inheritedSteps = new Set()) {
+function renderDiffChildren(
+  node,
+  prefix,
+  lines,
+  marks,
+  annotated,
+  inheritedSteps = new Set(),
+  rotatedByEdge = new Map(),
+) {
   /** @type {({ kind: "process", child: TreeNode } | { kind: "destination", edge: ReviewEdge })[]} */
   const entries = [
     ...node.children.map((child) => ({ kind: /** @type {"process"} */ ("process"), child })),
@@ -1710,11 +1877,16 @@ function renderDiffChildren(node, prefix, lines, marks, annotated, inheritedStep
         marks,
         annotated,
         inheritSteps(entry.child, inheritedSteps),
+        rotatedByEdge,
       )
     } else {
       const mark = marks.get(entry.edge) ?? " "
       lines.push(
-        `${mark} ${prefix}${branch}${diffLeafLine(entry.edge, annotated.has(entry.edge))}`,
+        `${mark} ${prefix}${branch}${diffLeafLine(
+          entry.edge,
+          annotated.has(entry.edge),
+          rotatedByEdge.get(entry.edge) ?? "",
+        )}`,
       )
     }
   })
@@ -1742,10 +1914,19 @@ export function renderJobDiffTree(job, delta, headSha, previousSha) {
     const currentNamed = current?.remote_names.some((name) => name !== "")
     if (!current || (named && !currentNamed)) representatives.set(id, edge)
   }
+  // Provable-rotation join: the joined identity renders unmarked, carrying
+  // the identity it replaced. More than one rotation in a fence would turn
+  // every line into an annotation, so the fence summarizes them instead
+  // (contract comment.rotationJoin).
+  /** @type {Map<ReviewEdge, string>} */
+  const rotatedByEdge = new Map()
   const unionEdges = [...representatives.entries()].map(([id, edge]) => {
     marks.set(edge, delta.addedIds.has(id) ? "+" : delta.removedIds.has(id) ? "-" : " ")
+    const rotatedFrom = delta.rotations.get(id)
+    if (rotatedFrom !== undefined) rotatedByEdge.set(edge, rotatedFrom)
     return edge
   })
+  if (rotatedByEdge.size > 1) rotatedByEdge.clear()
   unionEdges.sort((a, b) => {
     const ka = destinationIdentity(a, names)
     const kb = destinationIdentity(b, names)
@@ -1827,7 +2008,15 @@ export function renderJobDiffTree(job, delta, headSha, previousSha) {
     if (index > 0) lines.push(" ")
     const mark = diffBranchMark(child, marks)
     lines.push(`${mark} ${diffNodeLine(child)}${boundaryLabel(child)}`)
-    renderDiffChildren(child, "", lines, marks, annotated, inheritSteps(child, new Set()))
+    renderDiffChildren(
+      child,
+      "",
+      lines,
+      marks,
+      annotated,
+      inheritSteps(child, new Set()),
+      rotatedByEdge,
+    )
   })
   return lines.join("\n")
 }
@@ -2339,6 +2528,7 @@ function machineSummaryMarker(review, accounting) {
   const comparing = review.comparison !== null
   const summary = {
     contract: CONTRACT_VOCAB.version,
+    githubMeta: GITHUB_META_RETRIEVED,
     commit: review.sha,
     previous: review.comparison !== null ? review.comparison.previousSha : null,
     jobs: review.jobs.length,
@@ -2353,6 +2543,7 @@ function machineSummaryMarker(review, accounting) {
     vanishedDestinations: comparing ? accounting.vanishedDestinations : null,
     chains,
     destinations,
+    recorded: review.recordedThrough !== "" ? review.recordedThrough : null,
     kinds: ["network"],
   }
   // `--` is escaped inside JSON strings so a hostile record-sourced value
@@ -2414,11 +2605,20 @@ function renderCommentBody(review, kept, { explainerOpen = false } = {}) {
       `<details${open ? " open" : ""}><summary>${jobSummaryLine(job, { delta: delta ?? null, treeEdges: shown })}</summary>`,
     )
     lines.push("")
+    /** @type {string[]} */
+    const fenceNotes = []
     if (hasDelta && delta !== null && delta !== undefined) {
       lines.push("```diff")
       lines.push(renderJobDiffTree({ ...job, edges: shown }, delta, review.sha, previousSha))
       lines.push("```")
       lines.push("")
+      // Several provable rotations in one fence read as one quiet summary
+      // instead of an annotation on every line (contract comment.rotationJoin).
+      if (delta.rotations.size > 1) {
+        fenceNotes.push(
+          `<i>${delta.rotations.size} addresses rotated (${CONTRACT_VOCAB.notes.githubInfrastructure.text})</i>`,
+        )
+      }
     } else if (shown.length > 0) {
       lines.push("<pre>")
       lines.push(renderJobTree(job, shown))
@@ -2426,7 +2626,11 @@ function renderCommentBody(review, kept, { explainerOpen = false } = {}) {
       lines.push("")
     }
     if (shownRaw.length < job.edges.length) {
-      lines.push(`<sub>${truncationLine(shownRaw.length, job.edges.length)}</sub>`)
+      fenceNotes.push(truncationLine(shownRaw.length, job.edges.length))
+    }
+    // Quiet notes under a fence merge into one line — never stacked.
+    if (fenceNotes.length > 0) {
+      lines.push(`<sub>${fenceNotes.join(" · ")}</sub>`)
       lines.push("")
     }
     const link = profilePermalink(job, review.appUrl, "pr_comment")

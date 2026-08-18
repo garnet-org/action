@@ -1,7 +1,7 @@
 <!-- garnet-runtime-review -->
 <!-- garnet-run-profile -->
 <!-- garnet:commit dd44ee55ff6677889900aabbccddee1122334455 -->
-<!-- garnet:summary {"contract":"6.10.0","commit":"dd44ee55ff6677889900aabbccddee1122334455","previous":null,"jobs":2,"changed":null,"unchanged":null,"noOutbound":null,"vanished":null,"added":null,"removed":null,"backgroundAdded":null,"backgroundRemoved":null,"vanishedDestinations":null,"chains":4,"destinations":4,"kinds":["network"]} -->
+<!-- garnet:summary {"contract":"6.10.0","githubMeta":"2026-08-08","commit":"dd44ee55ff6677889900aabbccddee1122334455","previous":null,"jobs":2,"changed":null,"unchanged":null,"noOutbound":null,"vanished":null,"added":null,"removed":null,"backgroundAdded":null,"backgroundRemoved":null,"vanishedDestinations":null,"chains":4,"destinations":4,"recorded":"2026-08-07 14:00:00 UTC","kinds":["network"]} -->
 **Execution Profiles recorded for 2 jobs, triggered by [`dd44ee5`](https://github.com/garnet-org/runtime-review-testbed/commit/dd44ee55ff6677889900aabbccddee1122334455)**
 
 > *4&nbsp;destinations across 2&nbsp;jobs*
