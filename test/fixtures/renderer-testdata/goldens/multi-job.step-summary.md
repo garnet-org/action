@@ -74,18 +74,18 @@ Keyed by execution chain; repeated destination names within a chain are collapse
 <details><summary><sub>Full recorded tree</sub></summary>
 
 <pre>
+Runner.Worker
+└─ bash
+   └─ <strong>node</strong> <em>(step: &quot;Run workload&quot;)</em>
+      ├─ ○ localhost <em>(dns resolver)</em>
+      └─ ○ registry.npmjs.org
+
 systemd
 └─ <strong>hosted-compute-agent</strong>
    ├─ sudo
    │  └─ <strong>provjobd</strong> <em>(ran from /tmp/…)</em>
    │     └─ ○ hosted-compute-watchdog-prod-iad-01.githubapp <em>(github infra)</em>
    └─ ○ 140.82.112.23
-
-Runner.Worker
-└─ bash
-   └─ <strong>node</strong> <em>(step: &quot;Run workload&quot;)</em>
-      ├─ ○ localhost <em>(dns resolver)</em>
-      └─ ○ registry.npmjs.org
 </pre>
 </details>
 
@@ -229,13 +229,6 @@ Keyed by execution chain; repeated destination names within a chain are collapse
 <details><summary><sub>Full recorded tree</sub></summary>
 
 <pre>
-systemd
-└─ <strong>hosted-compute-agent</strong>
-   ├─ sudo
-   │  └─ <strong>provjobd</strong> <em>(ran from /tmp/…)</em>
-   │     └─ ○ hosted-compute-watchdog-prod-iad-02.githubapp <em>(github infra)</em>
-   └─ ○ 140.82.113.23
-
 Runner.Worker
 └─ bash
    └─ <strong>node</strong> <em>(step: &quot;Run workload&quot;)</em>
@@ -248,6 +241,13 @@ Runner.Worker
       │     └─ ○ github.com
       ├─ ○ localhost <em>(dns resolver)</em>
       └─ ○ registry.npmjs.org
+
+systemd
+└─ <strong>hosted-compute-agent</strong>
+   ├─ sudo
+   │  └─ <strong>provjobd</strong> <em>(ran from /tmp/…)</em>
+   │     └─ ○ hosted-compute-watchdog-prod-iad-02.githubapp <em>(github infra)</em>
+   └─ ○ 140.82.113.23
 </pre>
 </details>
 

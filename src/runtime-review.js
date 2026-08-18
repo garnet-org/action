@@ -181,6 +181,8 @@ export { CONTRACT_VOCAB }
  *   removed: ReviewEdge[]
  *   addedCount: number
  *   removedCount: number
+ *   backgroundAddedCount: number
+ *   backgroundRemovedCount: number
  * }} EdgeDelta
  */
 
@@ -254,6 +256,8 @@ export const VOCAB = {
   explainerLabel: CONTRACT_VOCAB.copy.explainerLabel,
   explainerReadingLine: CONTRACT_VOCAB.copy.explainerReadingLine,
   explainerComparisonLine: CONTRACT_VOCAB.copy.explainerComparisonLine,
+  explainerBackgroundSegment: CONTRACT_VOCAB.copy.explainerBackgroundSegment,
+  runnerBackground: CONTRACT_VOCAB.copy.runnerBackground,
   explainerLegendLine: CONTRACT_VOCAB.copy.explainerLegendLine,
   explainerCalloutPath: CONTRACT_VOCAB.copy.explainerCalloutPath,
   explainerCalloutActed: CONTRACT_VOCAB.copy.explainerCalloutActed,
@@ -1341,6 +1345,35 @@ function annotatedStepNames(node, inherited) {
 }
 
 /**
+ * A workload root descends through `Runner.Worker` or bears a recorded step
+ * anywhere in its subtree; every other recorded root (e.g. systemd) is
+ * runner infrastructure. Structural facts only — names of destinations or
+ * deeper processes never classify.
+ * @param {TreeNode} node
+ * @returns {boolean}
+ */
+function isWorkloadRoot(node) {
+  if (node.name === "Runner.Worker") return true
+  // Unrecorded lineage attributes to the workload: an unprovable line never
+  // quiets a count, so its root never carries the boundary label either.
+  if (node.name === VOCAB.unknownLineage) return true
+  if (recordedStepNames(node).length > 0) return true
+  return node.children.some(isWorkloadRoot)
+}
+
+/**
+ * Root order within a job block: workload roots render before
+ * infrastructure-rooted ones so the signal is never buried below runner
+ * plumbing — snapshot and comparison alike; canonical order holds within
+ * each group.
+ * @param {TreeNode[]} children
+ * @returns {TreeNode[]}
+ */
+function orderedJobRoots(children) {
+  return [...children.filter(isWorkloadRoot), ...children.filter((child) => !isWorkloadRoot(child))]
+}
+
+/**
  * @param {TreeNode} node
  * @param {Set<string>} inherited
  */
@@ -1450,7 +1483,7 @@ export function renderJobTree(job, edges = job.edges, opts = {}) {
   // One block holds every recorded root; independent recorded ancestry
   // roots are separated by one blank line — whitespace means independent
   // recorded roots in the same job, never another category.
-  root.children.forEach((child, index) => {
+  orderedJobRoots(root.children).forEach((child, index) => {
     if (index > 0) lines.push("")
     lines.push(processNodeLine(child, { steps: true }))
     renderTreeChildren(child, "", lines, {
@@ -1499,14 +1532,64 @@ export function compareJobEdges(headEdges, previousEdges) {
     const id = destinationIdentity(edge, names)
     if (removedIds.has(id) && !removedByID.has(id)) removedByID.set(id, edge)
   }
+  // Delta partition (contract comment.deltaPartition): each added/removed
+  // identity attributes to the workload or to the runner background by the
+  // structural root rule. The headline counts are workload-attributed only;
+  // background movement keeps its own quiet counts. Every identity stays in
+  // addedIds/removedIds, so every mark still renders — only count placement
+  // partitions, never visibility.
+  const headWorkload = workloadIdentitySet(headEdges, names)
+  const previousWorkload = workloadIdentitySet(previousEdges, names)
+  const workloadAdded = [...addedIds].filter((id) => headWorkload.has(id))
+  const workloadRemoved = [...removedIds].filter((id) => previousWorkload.has(id))
   return {
     addedIds,
     removedIds,
     added: addedIds,
     removed: [...removedByID.values()],
-    addedCount: addedIds.size,
-    removedCount: removedIds.size,
+    addedCount: workloadAdded.length,
+    removedCount: workloadRemoved.length,
+    backgroundAddedCount: addedIds.size - workloadAdded.length,
+    backgroundRemovedCount: removedIds.size - workloadRemoved.length,
   }
+}
+
+/**
+ * Workload attribution of destination identities on one side of a job
+ * comparison (contract comment.deltaPartition). Edges group by recorded
+ * root; a root attributes to the workload when any of its edges descends
+ * through `Runner.Worker` or bears a recorded step — the same structural
+ * rule as rootOrdering. Unrecorded lineage attributes to the workload: an
+ * unprovable line never quiets a count. An identity is workload-attributed
+ * when any of its edges is. Names of destinations, processes, hostnames, or
+ * domains never classify.
+ * @param {ReviewEdge[]} edges
+ * @param {Map<string, string>} names
+ * @returns {Set<string>}
+ */
+function workloadIdentitySet(edges, names) {
+  /** @type {Set<string>} */
+  const workloadRoots = new Set()
+  /** @type {[ReviewEdge, string][]} */
+  const roots = []
+  for (const edge of edges) {
+    const path = commentTreePath(edge)
+    const root = path[0] ?? ""
+    roots.push([edge, root])
+    if (
+      !edge.lineage_recorded ||
+      path.includes("Runner.Worker") ||
+      stepAnnotationName(edge.github_step) !== ""
+    ) {
+      workloadRoots.add(root)
+    }
+  }
+  /** @type {Set<string>} */
+  const ids = new Set()
+  for (const [edge, root] of roots) {
+    if (workloadRoots.has(root)) ids.add(destinationIdentity(edge, names))
+  }
+  return ids
 }
 
 /**
@@ -1693,11 +1776,57 @@ export function renderJobDiffTree(job, delta, headSha, previousSha) {
     `@@ ${fenceText(previousSha.slice(0, 7) || "unknown")} (previous) vs ${fenceText(headSha.slice(0, 7) || "unknown")} (current) @@`,
   ]
   const root = treeForAssociations(unionEdges)
-  root.children.forEach((child, index) => {
+  // Findings first: workload roots render before infrastructure roots, and
+  // within each group roots carrying any marked (+/−) line render before
+  // all-context roots — a workload change is never buried below runner
+  // plumbing; canonical order holds within each tier.
+  /** @type {(node: TreeNode) => boolean} */
+  const subtreeHasMark = (node) =>
+    node.associations.some((edge) => (marks.get(edge) ?? " ") !== " ") ||
+    node.children.some(subtreeHasMark)
+  /** @type {(children: TreeNode[]) => TreeNode[]} */
+  const withMarks = (children) => [
+    ...children.filter(subtreeHasMark),
+    ...children.filter((child) => !subtreeHasMark(child)),
+  ]
+  const orderedRoots = [
+    ...withMarks(root.children.filter(isWorkloadRoot)),
+    ...withMarks(root.children.filter((child) => !isWorkloadRoot(child))),
+  ]
+  // Boundary label: a moved non-workload root announces its subtree's marks
+  // where the secondary evidence begins — '(runner background · +A −B)' in
+  // the fence's plain parenthetical context grammar. The count sits beside
+  // the marks it counts; workload roots and unmoved roots carry no label.
+  /** @type {(node: TreeNode) => { added: number, removed: number }} */
+  const subtreeMarkCounts = (node) => {
+    const counts = { added: 0, removed: 0 }
+    /** @type {(n: TreeNode) => void} */
+    const walk = (n) => {
+      for (const edge of n.associations) {
+        const mark = marks.get(edge) ?? " "
+        if (mark === "+") counts.added += 1
+        if (mark === "-") counts.removed += 1
+      }
+      n.children.forEach(walk)
+    }
+    walk(node)
+    return counts
+  }
+  /** @type {(child: TreeNode) => string} */
+  const boundaryLabel = (child) => {
+    if (isWorkloadRoot(child)) return ""
+    const { added, removed } = subtreeMarkCounts(child)
+    if (added + removed === 0) return ""
+    const sides = []
+    if (added > 0) sides.push(`+${added}`)
+    if (removed > 0) sides.push(`−${removed}`)
+    return ` (${VOCAB.runnerBackground} · ${sides.join(" ")})`
+  }
+  orderedRoots.forEach((child, index) => {
     // Independent recorded roots separate with one fence-safe " " line.
     if (index > 0) lines.push(" ")
     const mark = diffBranchMark(child, marks)
-    lines.push(`${mark} ${diffNodeLine(child)}`)
+    lines.push(`${mark} ${diffNodeLine(child)}${boundaryLabel(child)}`)
     renderDiffChildren(child, "", lines, marks, annotated, inheritSteps(child, new Set()))
   })
   return lines.join("\n")
@@ -1719,15 +1848,16 @@ function countPhrase(n, unit) {
  * inflects on the total moved identities.
  * @param {number} added
  * @param {number} removed
- * @param {{ bold?: boolean }} [options]
+ * @param {{ bold?: boolean, unit?: boolean }} [options]
  */
-function deltaPhrase(added, removed, { bold = true } = {}) {
+function deltaPhrase(added, removed, { bold = true, unit = true } = {}) {
   const sides = []
   if (added > 0) sides.push(`+${added}`)
   if (removed > 0) sides.push(`−${removed}`)
-  const unit = added + removed === 1 ? "destination" : "destinations"
   const numbers = sides.join("&nbsp;")
-  return `${bold ? `<b>${numbers}</b>` : numbers}&nbsp;${unit}`
+  const marked = bold ? `<b>${numbers}</b>` : numbers
+  if (!unit) return marked
+  return `${marked}&nbsp;${added + removed === 1 ? "destination" : "destinations"}`
 }
 
 /**
@@ -1759,9 +1889,9 @@ const truncationLine = (x, y) =>
 /**
  * Concise orientation fold with a lineage-exact mini tree. Open while
  * pending and on the first recorded result; collapsed on later updates.
- * @param {{ open?: boolean, comparison?: boolean }} [options]
+ * @param {{ open?: boolean, comparison?: boolean, background?: boolean }} [options]
  */
-export function renderExplainer({ open = false, comparison = false } = {}) {
+export function renderExplainer({ open = false, comparison = false, background = false } = {}) {
   // One mini tree of exactly the constructs the real renderer emits, with
   // ← arrow callouts aligned in one italic column at visible offset 23 —
   // every callout line fits ~44 monospace columns, so the tree teaches
@@ -1783,7 +1913,11 @@ export function renderExplainer({ open = false, comparison = false } = {}) {
     `<sub><i>${VOCAB.explainerLegendLine}</i></sub>`,
   ]
   if (comparison) {
-    lines.push("", `<sub><i>${VOCAB.explainerComparisonLine}</i></sub>`)
+    // The legend teaches the boundary-label vocabulary only when a label
+    // actually renders above it.
+    const segments = [VOCAB.explainerComparisonLine]
+    if (background) segments.push(VOCAB.explainerBackgroundSegment)
+    lines.push("", `<sub><i>${segments.join(" · ")}</i></sub>`)
   }
   lines.push("", "</details>")
   return lines.join("\n")
@@ -1838,6 +1972,16 @@ export function isSentinelStep(name) {
 }
 
 /**
+ * Total background-attributed movement in a job delta.
+ * @param {JobDelta | null | undefined} delta
+ * @returns {number}
+ */
+function backgroundDelta(delta) {
+  if (delta === null || delta === undefined) return 0
+  return delta.backgroundAddedCount + delta.backgroundRemovedCount
+}
+
+/**
  * Fold summary row — the row's facts are the identity and the destination
  * count; no step-name sentence, no chain counts. Changed rows lead with
  * the bold delta as their only destination fact; unchanged comparison rows
@@ -1856,12 +2000,19 @@ function jobSummaryLine(job, { delta = null, treeEdges = null } = {}) {
   // so what moved reads top-to-bottom without reading a single job name.
   // The comparison base commit renders once at run scope (metadata line) and
   // inside the diff's @@ header — the fold row carries only its own delta.
+  // The meta block's changed segment names the destination unit once for
+  // the whole comment; the fold row carries only its own bold split.
   const changed = delta !== null && delta.addedCount + delta.removedCount > 0
-  if (changed) parts.push(`${deltaPhrase(delta.addedCount, delta.removedCount)} ·`)
+  if (changed) {
+    parts.push(`${deltaPhrase(delta.addedCount, delta.removedCount, { unit: false })} ·`)
+  }
   parts.push(jobIdentity(job))
-  if (!changed) {
-    parts.push(`· ${countPhrase(treeCounts, "destination")}`)
-    if (delta !== null) parts.push(`· ${VOCAB.noChange}`)
+  if (!changed) parts.push(`· ${countPhrase(treeCounts, "destination")}`)
+  // The workload-scoped 'unchanged' claim only renders when the runner
+  // background held still too — a row never claims 'unchanged' beside a
+  // quiet background split.
+  if (delta !== null && !changed && backgroundDelta(delta) === 0) {
+    parts.push(`· ${VOCAB.noChange}`)
   }
   return parts.join(" ")
 }
@@ -1974,7 +2125,9 @@ function metaBlock(review, accounting) {
       accounting.changedJobs === 0 &&
       accounting.vanishedJobCount === 0 &&
       accounting.added === 0 &&
-      accounting.removed === 0
+      accounting.removed === 0 &&
+      accounting.backgroundAdded === 0 &&
+      accounting.backgroundRemoved === 0
     if (zeroDelta) {
       // Zero-delta comparison: the verdict is the finding.
       findings.push(`No changes ${VOCAB.sinceWord} ${previousCommitRef(comparisonReview)}`)
@@ -2135,18 +2288,26 @@ function changeAccounting(review) {
     noOutboundJobs: 0,
     added: 0,
     removed: 0,
+    backgroundAdded: 0,
+    backgroundRemoved: 0,
   }
   for (const job of review.jobs) {
     let tier
     const delta = deltas ? deltas.get(job.id) : null
-    // A destination delta outranks an empty head record: a job whose whole
-    // record left is a changed job, never "no outbound destinations".
+    if (delta !== null && delta !== undefined) {
+      totals.backgroundAdded += delta.backgroundAddedCount
+      totals.backgroundRemoved += delta.backgroundRemovedCount
+    }
+    // A workload destination delta outranks an empty head record: a job
+    // whose whole record left is a changed job, never "no outbound
+    // destinations". Background-only movement never makes a changed job —
+    // the fold row and fence carry it, the changed count does not.
     if (delta !== null && delta !== undefined && delta.addedCount + delta.removedCount > 0) {
       tier = 0
       totals.changedJobs += 1
       totals.added += delta.addedCount
       totals.removed += delta.removedCount
-    } else if (job.edges.length === 0) {
+    } else if (job.edges.length === 0 && backgroundDelta(delta ?? null) === 0) {
       tier = 2
       totals.noOutboundJobs += 1
     } else {
@@ -2187,6 +2348,8 @@ function machineSummaryMarker(review, accounting) {
     vanished: comparing ? accounting.vanishedJobCount : null,
     added: comparing ? accounting.added : null,
     removed: comparing ? accounting.removed : null,
+    backgroundAdded: comparing ? accounting.backgroundAdded : null,
+    backgroundRemoved: comparing ? accounting.backgroundRemoved : null,
     vanishedDestinations: comparing ? accounting.vanishedDestinations : null,
     chains,
     destinations,
@@ -2220,6 +2383,10 @@ function renderCommentBody(review, kept, { explainerOpen = false } = {}) {
     const delta = deltas ? deltas.get(job.id) : null
     const changed =
       delta !== null && delta !== undefined && delta.addedCount + delta.removedCount > 0
+    // Any movement — workload or runner background — renders the marked
+    // fence; only a workload delta makes a changed job (bold row, open
+    // fold, changed count).
+    const hasDelta = changed || backgroundDelta(delta ?? null) > 0
     const keptCount = kept.get(job.id) ?? job.edges.length
     const retained = new Set(retentionOrder(job.edges).slice(0, keptCount))
     const shownRaw = job.edges.filter((e) => retained.has(e))
@@ -2229,7 +2396,7 @@ function renderCommentBody(review, kept, { explainerOpen = false } = {}) {
     // An empty projection renders a plain row that keeps the job's
     // Execution Profile link when known — an empty egress projection never
     // implies Garnet observed nothing.
-    if (job.edges.length === 0 && !changed) {
+    if (job.edges.length === 0 && !hasDelta) {
       const link = profilePermalink(job, review.appUrl, "pr_comment")
       const profilePart =
         link !== ""
@@ -2247,7 +2414,7 @@ function renderCommentBody(review, kept, { explainerOpen = false } = {}) {
       `<details${open ? " open" : ""}><summary>${jobSummaryLine(job, { delta: delta ?? null, treeEdges: shown })}</summary>`,
     )
     lines.push("")
-    if (changed) {
+    if (hasDelta && delta !== null && delta !== undefined) {
       lines.push("```diff")
       lines.push(renderJobDiffTree({ ...job, edges: shown }, delta, review.sha, previousSha))
       lines.push("```")
@@ -2299,7 +2466,16 @@ function renderCommentBody(review, kept, { explainerOpen = false } = {}) {
   // first-profile comment.
   lines.push("---")
   lines.push("")
-  lines.push(renderExplainer({ open: explainerOpen, comparison: review.comparison !== null }))
+  // The legend teaches the boundary-label vocabulary only when a label
+  // actually renders above it.
+  const hasBackgroundLabel = lines.some((line) => line.includes(`(${VOCAB.runnerBackground} ·`))
+  lines.push(
+    renderExplainer({
+      open: explainerOpen,
+      comparison: review.comparison !== null,
+      background: hasBackgroundLabel,
+    }),
+  )
 
   while (lines.length > 0 && lines[lines.length - 1] === "") lines.pop()
   return lines.join("\n")

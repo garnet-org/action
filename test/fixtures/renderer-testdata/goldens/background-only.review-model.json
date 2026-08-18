@@ -1,0 +1,119 @@
+{
+  "contractVersion": "6.10.0",
+  "repo": "garnet-org/runtime-review-testbed",
+  "sha": "7777777777777777777777777777777777777777",
+  "commitUrl": "https://github.com/garnet-org/runtime-review-testbed/commit/7777777777777777777777777777777777777777",
+  "appUrl": "https://app.garnet.ai",
+  "appMode": true,
+  "recordedThrough": "2026-08-07 18:30:00 UTC",
+  "counts": {
+    "jobs": 1,
+    "associations": 3,
+    "destinations": 3
+  },
+  "jobs": [
+    {
+      "name": "build",
+      "workflow": "ci",
+      "run_id": "32100000003",
+      "run_url": "https://github.com/garnet-labs/posthog/actions/runs/32100000003",
+      "job_url": "",
+      "profile_id": "",
+      "uuid": "3e4f5a6b-cccc-4ddd-8eee-f3a4b5c6d7e8",
+      "timestamp": "2026-08-07T18:30:00.000000000Z",
+      "repository": "garnet-labs/posthog",
+      "sha": "7777777777777777777777777777777777777777",
+      "ref": "",
+      "actor": "",
+      "job_index": "",
+      "flow_count": 3,
+      "telemetry": {
+        "total_domains": null,
+        "total_connections": null
+      },
+      "telemetryDiscrepancies": [],
+      "assertions": [],
+      "counts": {
+        "associations": 3,
+        "processes": 3,
+        "destinations": 3,
+        "primary_names": 3,
+        "domains": 3,
+        "flows": 3
+      },
+      "edges": [
+        {
+          "remote_address": "104.16.30.34",
+          "remote_names": [
+            "registry.npmjs.org"
+          ],
+          "remote_ports": [
+            "443"
+          ],
+          "protocol": "tcp",
+          "result": "",
+          "detections": [],
+          "lineage_recorded": true,
+          "pid": "9101",
+          "process": "node",
+          "ancestry": [
+            "systemd",
+            "Runner.Worker",
+            "npm",
+            "node"
+          ],
+          "github_step": "3. Install",
+          "notes": []
+        },
+        {
+          "remote_address": "140.82.114.22",
+          "remote_names": [
+            "glb-p4a577-public-internal.githubapp.com"
+          ],
+          "remote_ports": [
+            "443"
+          ],
+          "protocol": "tcp",
+          "result": "",
+          "detections": [],
+          "lineage_recorded": true,
+          "pid": "9103",
+          "process": "provjobd",
+          "ancestry": [
+            "systemd",
+            "hosted-compute-",
+            "sudo",
+            "provjobd"
+          ],
+          "github_step": "",
+          "notes": [
+            "github infra"
+          ]
+        },
+        {
+          "remote_address": "20.60.10.4",
+          "remote_names": [
+            "resultsstorageeus2.blob.core.windows.net"
+          ],
+          "remote_ports": [
+            "443"
+          ],
+          "protocol": "tcp",
+          "result": "",
+          "detections": [],
+          "lineage_recorded": true,
+          "pid": "9102",
+          "process": "provjobd",
+          "ancestry": [
+            "systemd",
+            "hosted-compute-",
+            "sudo",
+            "provjobd"
+          ],
+          "github_step": "",
+          "notes": []
+        }
+      ]
+    }
+  ]
+}

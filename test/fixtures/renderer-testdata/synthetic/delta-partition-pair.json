@@ -1,0 +1,210 @@
+{
+  "$comment": "Permanent delta-partition fixture (v6.9.9): the reader-cost case from the posthog cold-read \u2014 one workload addition attributable to the PR (evil-mirror under Runner.Worker -> npm -> node) beside one-sided runner-substrate churn (an Azure results-storage blob hostname swap and a GitHub infra bare IP replaced by a githubapp.com name; different registrable identities, so no provable rotation join). The fixed render headlines '1 job changed +1 destination' with the churn in the quiet 'runner background +2 -2' split; every moved line stays marked in the job's one fence.",
+  "head": [
+    {
+      "uuid": "1c2d3e4f-aaaa-4bbb-8ccc-d1e2f3a4b5c6",
+      "timestamp": "2026-08-07T18:30:00.000000000Z",
+      "metadata": {
+        "version": "0.2.0"
+      },
+      "scenarios": {
+        "github": {
+          "scenario_type": "github",
+          "workflow": "ci",
+          "job": "build",
+          "repository": "garnet-labs/posthog",
+          "run_id": "32100000002",
+          "sha": "7777777777777777777777777777777777777777",
+          "server_url": "https://github.com"
+        }
+      },
+      "network": {
+        "egress": {
+          "peers": [
+            {
+              "remote_address": "104.16.30.34",
+              "remote_names": [
+                "registry.npmjs.org"
+              ],
+              "remote_ports": [
+                "443"
+              ],
+              "protocol": "tcp",
+              "proc_trees": [
+                {
+                  "pid": 9001,
+                  "process": "node",
+                  "ancestry": [
+                    "systemd",
+                    "Runner.Worker",
+                    "npm",
+                    "node"
+                  ],
+                  "github_step": "3. Install"
+                }
+              ]
+            },
+            {
+              "remote_address": "198.51.100.60",
+              "remote_names": [
+                "evil-mirror.example.com"
+              ],
+              "remote_ports": [
+                "443"
+              ],
+              "protocol": "tcp",
+              "proc_trees": [
+                {
+                  "pid": 9002,
+                  "process": "node",
+                  "ancestry": [
+                    "systemd",
+                    "Runner.Worker",
+                    "npm",
+                    "node"
+                  ],
+                  "github_step": "3. Install"
+                }
+              ]
+            },
+            {
+              "remote_address": "20.60.10.4",
+              "remote_names": [
+                "resultsstorageeus2.blob.core.windows.net"
+              ],
+              "remote_ports": [
+                "443"
+              ],
+              "protocol": "tcp",
+              "proc_trees": [
+                {
+                  "pid": 9003,
+                  "process": "provjobd",
+                  "ancestry": [
+                    "systemd",
+                    "hosted-compute-",
+                    "sudo",
+                    "provjobd"
+                  ]
+                }
+              ]
+            },
+            {
+              "remote_address": "140.82.114.22",
+              "remote_names": [
+                "glb-p4a577-public-internal.githubapp.com"
+              ],
+              "remote_ports": [
+                "443"
+              ],
+              "protocol": "tcp",
+              "proc_trees": [
+                {
+                  "pid": 9004,
+                  "process": "provjobd",
+                  "ancestry": [
+                    "systemd",
+                    "hosted-compute-",
+                    "sudo",
+                    "provjobd"
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "previous": [
+    {
+      "uuid": "2d3e4f5a-bbbb-4ccc-8ddd-e2f3a4b5c6d7",
+      "timestamp": "2026-08-07T17:30:00.000000000Z",
+      "metadata": {
+        "version": "0.2.0"
+      },
+      "scenarios": {
+        "github": {
+          "scenario_type": "github",
+          "workflow": "ci",
+          "job": "build",
+          "repository": "garnet-labs/posthog",
+          "run_id": "32100000002",
+          "sha": "8888888888888888888888888888888888888888",
+          "server_url": "https://github.com"
+        }
+      },
+      "network": {
+        "egress": {
+          "peers": [
+            {
+              "remote_address": "104.16.30.34",
+              "remote_names": [
+                "registry.npmjs.org"
+              ],
+              "remote_ports": [
+                "443"
+              ],
+              "protocol": "tcp",
+              "proc_trees": [
+                {
+                  "pid": 9005,
+                  "process": "node",
+                  "ancestry": [
+                    "systemd",
+                    "Runner.Worker",
+                    "npm",
+                    "node"
+                  ],
+                  "github_step": "3. Install"
+                }
+              ]
+            },
+            {
+              "remote_address": "20.60.11.9",
+              "remote_names": [
+                "resultsstoragewus3.blob.core.windows.net"
+              ],
+              "remote_ports": [
+                "443"
+              ],
+              "protocol": "tcp",
+              "proc_trees": [
+                {
+                  "pid": 9006,
+                  "process": "provjobd",
+                  "ancestry": [
+                    "systemd",
+                    "hosted-compute-",
+                    "sudo",
+                    "provjobd"
+                  ]
+                }
+              ]
+            },
+            {
+              "remote_address": "140.82.113.23",
+              "remote_names": [],
+              "remote_ports": [
+                "443"
+              ],
+              "protocol": "tcp",
+              "proc_trees": [
+                {
+                  "pid": 9007,
+                  "process": "provjobd",
+                  "ancestry": [
+                    "systemd",
+                    "hosted-compute-",
+                    "sudo",
+                    "provjobd"
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

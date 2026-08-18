@@ -130,8 +130,13 @@ const EDGE_MODEL = exportReviewModel(EDGE_REVIEW)
 // Contract lock
 // ---------------------------------------------------------------------------
 
-await test("contract: vocab.json is the v6.9.8 machine-readable lock", () => {
-  assert.equal(CONTRACT_VOCAB.version, "6.9.8")
+await test("contract: vocab.json is the v6.10.0 machine-readable lock", () => {
+  assert.equal(CONTRACT_VOCAB.version, "6.10.0")
+  assert.equal(CONTRACT_VOCAB.copy.runnerBackground, "runner background")
+  assert.equal(
+    CONTRACT_VOCAB.copy.explainerBackgroundSegment,
+    "runner background = the runner's infrastructure, not your workflow",
+  )
   assert.equal(VOCAB.terminalNetwork, "○")
   assert.equal(CONTRACT_VOCAB.copy.terminalFile, "□")
   assert.equal(CONTRACT_VOCAB.copy.terminalExecution, "▷")
@@ -1591,7 +1596,9 @@ await test("6.5: changed jobs open with an in-fold diff fence and one exact @@ h
   assert.ok(md.includes("<details open><summary><b>+"), "changed fold must open and lead with its bold delta")
   // The fold row carries only its own delta — the comparison base commit
   // renders once at run scope (metadata) and inside the @@ header.
-  assert.match(md, /<b>\+\d+(&nbsp;−\d+)?<\/b>&nbsp;destinations?/)
+  // v6.10.0: the row carries the bold split alone; the destination unit is
+  // named once in the meta block.
+  assert.match(md, /<b>\+\d+(&nbsp;−\d+)?<\/b> ·/)
   assert.ok(!/<\/b> since&nbsp;/.test(md), "fold delta repeats the run-scoped comparison sha")
   assert.ok(md.includes("```diff"))
   const headers = md.split("\n").filter((l) => l.startsWith("@@"))
@@ -1785,10 +1792,31 @@ await test("lint: linter actually flags a duplicated telemetry footer", () => {
 
 await test("goldens: every golden byte-matches a fresh render", () => {
   const goldenDir = join(here, "fixtures", "renderer-testdata", "goldens")
+  const comparisonPair = load("synthetic", "comparison-pair.json")
+  const deltaPartitionPair = load("synthetic", "delta-partition-pair.json")
+  const backgroundOnlyPair = load("synthetic", "background-only-pair.json")
+  // Every generated golden is locked, comparison states included — an
+  // unlocked golden silently drifts from the renderer that writes it.
   const states = {
     "registry-only": { profiles: [load("real", "normal-run.json")] },
     "workload-egress": { profiles: [worth] },
     "multi-job": { profiles: recordSet },
+    "runner-infrastructure-only": {
+      profiles: [load("synthetic", "runner-infrastructure-only.json")],
+    },
+    attribution: { profiles: load("synthetic", "attribution-cases.json") },
+    "multi-job-comparison": {
+      profiles: comparisonPair.head,
+      previous: comparisonPair.previous,
+    },
+    "delta-partition": {
+      profiles: deltaPartitionPair.head,
+      previous: deltaPartitionPair.previous,
+    },
+    "background-only": {
+      profiles: backgroundOnlyPair.head,
+      previous: backgroundOnlyPair.previous,
+    },
   }
   const noRecord = readFileSync(join(goldenDir, "no-record.pr-comment.md"), "utf8")
   assert.equal(
@@ -1798,8 +1826,13 @@ await test("goldens: every golden byte-matches a fresh render", () => {
       commitUrl: `https://github.com/${REPO}/commit/ef01a52517e7532ab34aadea58b952c9f1e79ece`,
     })}\n`,
   )
-  for (const [name, { profiles }] of Object.entries(states)) {
-    const review = reviewFor(profiles)
+  for (const [name, { profiles, previous }] of Object.entries(states)) {
+    const previousJobs =
+      previous === undefined ? null : previous.map(summarizeProfile).filter(Boolean)
+    const review =
+      previousJobs === null
+        ? reviewFor(profiles)
+        : comparisonReviewFor(profiles, previousJobs, previousJobs[0]?.sha ?? "")
     assert.equal(
       readFileSync(join(goldenDir, `${name}.pr-comment.md`), "utf8"),
       `${renderRunReview(review)}\n`,

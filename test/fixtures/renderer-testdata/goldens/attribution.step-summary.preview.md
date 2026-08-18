@@ -15,8 +15,19 @@ Keyed by execution chain; repeated destination names within a chain are collapse
 
 | Process Tree | Destinations |
 | --- | --- |
-| <code>systemd</code> → <code>python3 (pid 5101)</code> | <code>169.254.169.254</code> |
-| <code>systemd</code> → <code>walinuxagent (pid 5102)</code> | <code>168.63.129.16</code> |
+| <code>systemd</code> → <code>python3</code> <sub>pid&nbsp;5101</sub> | <code>169.254.169.254</code> |
+| <code>systemd</code> → <code>walinuxagent</code> <sub>pid&nbsp;5102</sub> | <code>168.63.129.16</code> |
+
+<details><summary><sub>Full recorded tree</sub></summary>
+
+<pre>
+systemd
+├─ <strong>walinuxagent</strong>
+│  └─ ○ 168.63.129.16
+└─ <strong>python3</strong>
+   └─ ○ 169.254.169.254 <em>(cloud metadata)</em>
+</pre>
+</details>
 
 <details><summary><strong>Recorded context preview</strong></summary>
 
@@ -59,8 +70,22 @@ Keyed by execution chain; repeated destination names within a chain are collapse
 
 | Process Tree | Destinations |
 | --- | --- |
-| <code>systemd</code> → <code>Runner.Worker</code> → <code>bash</code> → <code>bun (pid 5002)</code> | <code>169.254.169.254</code> |
-| <code>systemd</code> → <code>node (pid 5001)</code> | <code>artifacts.example.net</code> |
+| <code>systemd</code> → <code>Runner.Worker</code> → <code>bash</code> → <code>bun</code> <sub>pid&nbsp;5002</sub> | <code>169.254.169.254</code> |
+| <code>systemd</code> → <code>node</code> <sub>pid&nbsp;5001</sub> | <code>artifacts.example.net</code> |
+
+<details><summary><sub>Full recorded tree</sub></summary>
+
+<pre>
+Runner.Worker
+└─ bash
+   └─ <strong>bun</strong> <em>(step: &quot;Run integration tests&quot;)</em>
+      └─ ○ 169.254.169.254 <em>(cloud metadata)</em>
+
+systemd
+└─ <strong>node</strong> <em>(step: &quot;Publish artifacts&quot;)</em>
+   └─ ○ artifacts.example.net
+</pre>
+</details>
 
 <details><summary><strong>Recorded context preview</strong></summary>
 

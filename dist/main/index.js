@@ -40813,22 +40813,22 @@ var external_node_net_ = __nccwpck_require__(7030);
 ;// CONCATENATED MODULE: ./src/runtime-review-vocab.js
 /**
  * Machine-readable contract lock — vendored byte-exact from
- * garnet-org/runtime-review-testbed contract/vocab.json at contract v6.9.8
- * (the bytes control-plane main ships at 33e4d89). Vendored so the renderer
- * needs no filesystem read at runtime; never hand-edit values outside a
- * contract sync.
+ * garnet-org/runtime-review-testbed contract/vocab.json at contract v6.10.0
+ * (testbed main b2fa17a; the same bytes control-plane ships). Vendored so the
+ * renderer needs no filesystem read at runtime; never hand-edit values outside
+ * a contract sync.
  */
 
 const runtime_review_vocab_CONTRACT_VOCAB = {
-  "$schema_comment": "Machine-readable execution-comment contract lock (v6.9.8) — single source for exact emitted copy, comparison identity, lossless projection, deterministic factual notes, medium limits, selector/privacy requirements, and deferrals. Consumed by cmd/garnet-runtime-review/review.mjs. Locked by docs/ux-contract.md.",
-  "version": "6.9.8",
+  "$schema_comment": "Machine-readable execution-comment contract lock (v6.10.0) — single source for exact emitted copy, comparison identity, lossless projection, deterministic factual notes, medium limits, selector/privacy requirements, and deferrals. Consumed by cmd/garnet-runtime-review/review.mjs. Locked by docs/ux-contract.md.",
+  "version": "6.10.0",
   "profileFormatVersion": "0.2.0",
   "copy": {
     "headlineLead": "Execution Profiles recorded for",
     "headlineTemplate": "**Execution Profiles recorded for <N> job(s), triggered by [`<sha7>`](<commit-url>)** — the one headline, bold body register, never a `#` heading; all counts and change facts live in the metadata line and job folds",
     "headlinePendingLead": "Execution Profiles recording for jobs triggered by",
     "headlinePendingTemplate": "**Execution Profiles recording for jobs triggered by [`<sha7>`](<commit-url>)**",
-    "metadataTemplate": "two blockquote lines in every recorded state — the finding line then one quiet provenance line; zero-delta comparison (nothing changed, nothing vanished): '> *No changes since [`<prev7>`](<prev-commit-url>)*' — the verdict is the finding; comparison with changes: '> *<X> job(s) changed +A&nbsp;−R&nbsp;destination(s) · <Y> job(s) unchanged [· <Z> job(s) with no outbound destinations] [· <W> job(s) no longer recorded] · compared with [`<prev7>`](<prev-commit-url>)*'; snapshot/first profile: '> *<N>&nbsp;destination(s) [across <M>&nbsp;jobs]*'; both followed by '> <sub>recorded at the kernel by Garnet [· <UTC timestamp, minute precision>]</sub>' — noun facts only, each · segment one fact; every comparison segment is a job count over the folds/entries rendered below and the segments sum to the comment's rendered jobs plus the vanished fold's entries (adjacency gate); +A −R are the whole-job destination delta totals with the unit named and zero sides dropped; vanished jobs and their destinations render exclusively in the 'no longer recorded' segment and fold, never double-counted (adjacency gate); the snapshot destination count totals the job folds' trees exactly (dns-resolver leaves included, every recorded root); chain counts never render on the human surface — the chain aggregate lives in the garnet:summary marker and the full profile, and the concept lives in the explainer sentence ('each path to an observed action is an execution chain'); 'compared with' names the comparison; see comment.metaWeight for the weight rules",
+    "metadataTemplate": "two blockquote lines in every recorded state — the finding line then one quiet provenance line; zero-delta comparison (nothing changed, nothing vanished): '> *No changes since [`<prev7>`](<prev-commit-url>)*' — the verdict is the finding; comparison with changes: '> *<X> job(s) changed +A&nbsp;−R&nbsp;destination(s) · <Y> job(s) unchanged [· <Z> job(s) with no outbound destinations recorded] [· <W> job(s) no longer recorded] · compared with [`<prev7>`](<prev-commit-url>)*'; snapshot/first profile: '> *<N>&nbsp;destination(s) [across <M>&nbsp;jobs]*'; both followed by '> <sub>recorded at the kernel by Garnet [· <UTC timestamp, minute precision>]</sub>' — noun facts only, each · segment one fact; every comparison segment is a job count over the folds/entries rendered below and the segments sum to the comment's rendered jobs plus the vanished fold's entries (adjacency gate); +A −R are the workload-attributed destination delta totals (comment.deltaPartition) with the unit named and zero sides dropped; runner-background movement renders no count segment on the meta line or fold row — its marks stay visible in the owning fence beneath a root labelled with the boundary cue (runnerBackgroundRule), and a comparison whose only movement is background never renders the 'No changes' verdict — its unchanged segment reads plainly; vanished jobs and their destinations render exclusively in the 'no longer recorded' segment and fold, never double-counted (adjacency gate); the snapshot destination count totals the job folds' trees exactly (dns-resolver leaves included, every recorded root); chain counts never render on the human surface — the chain aggregate lives in the garnet:summary marker and the full profile, and the concept lives in the explainer sentence ('each path to an observed action is an execution chain'); 'compared with' names the comparison; see comment.metaWeight for the weight rules",
     "stepSummaryHeading": "Garnet Execution Summary",
     "artifact": "Execution Profile",
     "data": "the record",
@@ -40844,13 +40844,14 @@ const runtime_review_vocab_CONTRACT_VOCAB = {
     "explainerLabel": "💡 How to read this",
     "explainerReadingLine": "follow a path downward to see what ran and what it did — each path to an observed action is an execution chain",
     "explainerComparisonLine": "+ only in the current record · − only in the previous record",
+    "explainerBackgroundSegment": "runner background = the runner's infrastructure, not your workflow",
     "explainerCalloutPath": "process on a path",
     "explainerCalloutActed": "process that acted",
     "explainerCalloutAction": "observed action",
     "pendingStatus": "⏳ Execution Profiles for this commit are still being recorded — this comment updates in place as jobs finish.",
     "truncationTemplate": "rendered X of Y destination associations",
     "noChange": "unchanged",
-    "noChangeRule": "the row reads '· <N>&nbsp;destinations · unchanged' — adjacency scopes the claim: 'unchanged' sits directly after the destination count, so it claims the destination projection only (ancestry, steps, and other recorded context may differ); a bare standalone 'no changes' never renders (the zero-delta meta verdict always names its comparison: 'No changes since <prev7>')",
+    "noChangeRule": "the row reads '· <N>&nbsp;destinations · unchanged' — adjacency scopes the claim: 'unchanged' sits directly after the destination count, so it claims the destination projection only (ancestry, steps, and other recorded context may differ); 'unchanged' renders only when the runner background held still too — a row with background movement drops 'unchanged' and carries the bare destination count, the fence's boundary label owning the explanation (runnerBackgroundRule), so a row never claims 'unchanged' above visible marks; a bare standalone 'no changes' never renders (the zero-delta meta verdict always names its comparison: 'No changes since <prev7>')",
     "terminalNetwork": "○",
     "terminalFile": "□",
     "terminalExecution": "▷",
@@ -40858,7 +40859,7 @@ const runtime_review_vocab_CONTRACT_VOCAB = {
     "bracketContextRule": "every '(…)' annotation is factual context: recorded directly (step:, ran from) or deterministically derived from recorded evidence (dns resolver, cloud metadata, github infra, github infra · rotated from, garnet sensor); annotation names stay short, recognizable, and true — no annotation names a fact the record does not deterministically prove (the IMDS constant is provider-generic, so its annotation never names a cloud vendor) — never speculative; annotations decorate lines and never determine grouping, counting, layout, folding, marks, or comparison",
     "sinceWord": "since",
     "vanishedJobsLabel": "jobs no longer recorded",
-    "jobsLineNoOutbound": "with no outbound destinations",
+    "jobsLineNoOutbound": "with no outbound destinations recorded",
     "jobsLineVanished": "no longer recorded",
     "jobsLineChanged": "changed",
     "jobsLineUnchanged": "unchanged",
@@ -40866,35 +40867,38 @@ const runtime_review_vocab_CONTRACT_VOCAB = {
     "whatIsGarnetLabel": "What is Garnet →",
     "whatIsGarnetUrl": "https://docs.garnet.ai?utm_source=github&utm_medium=pr_comment",
     "egressCentricScope": "The record is egress-centric; processes without recorded egress do not appear.",
-    "jobBlockRuling": "the job is the only semantic container: one top-level row per job, one <pre>/diff block per fold, holding every recorded root of that job — independent recorded ancestry roots render in the same block separated by one blank line, with no invented common parent and no category labels between them (whitespace means independent recorded roots in the same job, never 'background', 'substrate', or another job); reliable facts determine structure — job scope, recorded kernel ancestry, observed actions; unreliable metadata (step attribution) decorates and never determines grouping, counting, layout, folding, or comparison; nothing subtracts — every recorded chain renders in its owning job's block",
+    "jobBlockRuling": "the job is the only semantic container: one top-level row per job, one <pre>/diff block per fold, holding every recorded root of that job — independent recorded ancestry roots render in the same block separated by one blank line, with no invented common parent and no category labels between them (whitespace means independent recorded roots in the same job, never a category or another job — the one in-block attribution cue is the boundary label '(runner background · +A −B)' on a moved non-workload root (runnerBackgroundRule) — parenthetical context on the root's own line, never a heading, category row, or detached section); reliable facts determine structure — job scope, recorded kernel ancestry, observed actions; unreliable metadata (step attribution) decorates and never determines grouping, counting, layout, folding, or comparison; nothing subtracts — every recorded chain renders in its owning job's block",
     "foldSentence": "the PR-comment fold row carries no step-name sentence — its facts are the identity and the counts; recorded step attributions render in the tree itself and in the Step Summary evidence register ('\"<recorded step name>\"' — recorded free text in double quotes, identifiers in code ticks, renderer glue plain); never an interpretation — no salience, safety, or intent vocabulary",
     "countDedup": "a count renders only where the reader can point at the counted things: destinations are the pointable ○ leaves, so every job fold row carries 'N destination(s)' totalling the distinct destination leaves in its block; chain counts never render on the human surface (the tree prefix-merges shared ancestry, so chains are not pointable objects) — the chain aggregate lives in the garnet:summary marker only; one destination fact per row: a changed row's destination fact is its bold '+A −R' delta (unit named once, in the meta block) and it carries no second count; the snapshot metadata destination count totals the job folds' trees exactly ('−' rows never count) while capture multiplicity stays in the evidence register; every rendered number counts what sits directly beneath or behind it",
     "explainerLegendLine": "names on the path = processes · ○ = observed action · (…) = context",
-    "rotationSummaryTemplate": "<N> addresses rotated (github infra)"
+    "rotationSummaryTemplate": "<N> addresses rotated (github infra)",
+    "runnerBackground": "runner background",
+    "runnerBackgroundRule": "runner-background movement never renders a count or phrase on the meta line or fold row — the reviewer's registers stay one: the headline, jobs line, and bold fold-row delta speak workload movement only; the single visible cue is the boundary label inside the owning fence — a non-workload root line whose subtree carries a +/− mark appends the parenthetical context '(runner background · +A −B)' (counts of the marks in its own subtree; a side at zero drops), placed at the exact visual boundary where the secondary evidence begins so the count sits beside the marks it counts, in the fence's plain parenthetical context grammar; an unmoved background root carries no label; run-level background delta totals live in the garnet:summary marker only (backgroundAdded/backgroundRemoved — the machine register keeps both ledgers); an all-workload-still comparison whose background moved renders the unchanged segment plainly ('<Y> job(s) unchanged') and never the 'No changes' verdict — the fence marks plus the boundary label own the explanation"
   },
   "comment": {
     "heading": "one bold-body headline stating the primitive — Execution Profiles belong to jobs, the commit is the trigger; the product name never appears in the headline",
     "headlineTypography": "bold body register with one linked short sha, never a `#` heading — no counts, no delta clause; counts live in the metadata line, deltas in job folds",
     "countDedup": "chain counts never render on the human surface (the garnet:summary marker carries the aggregate); every job fold row carries 'N destination(s)' — the distinct ○ destination leaves its block holds; a changed row's destination fact is its bold '+A −R' delta (unit named once, in the meta block) with no second count; a rendered number always counts what sits directly beneath or behind it and never renders twice for the same scope",
     "foldRow": "<code>Workflow</code> / <a href=\"<actions job URL>\"><code>job-id</code>&nbsp;↗</a> · <N>&nbsp;destination(s) — the job-id text plus ↗ is the hyperlink (GitHub-context link class); target is the specific Actions job URL when known, else the run URL; each matrix cell is its own job/fold and the cell identity lives in the job-id slot; the row carries no step-name sentence — step attributions render in the tree and the Step Summary evidence register; every current job gets one top-level row: jobs with comment-visible observations expand into one fold; an empty projection renders a plain <sub> row ('… — no outbound destinations recorded.') that keeps the job's Execution Profile link when known, so an empty egress projection never implies Garnet observed nothing",
-    "foldRowChanged": "<b>+A&nbsp;−R</b> · <identity> — the bold delta leads the row (the left edge is the scan column) and is the row's only destination fact; the destination unit is named once per comment, in the meta block's changed segment, so the fold row never repeats it (metaWeight); numbers glued with &nbsp; so the split never wraps apart; the fold renders open within foldOpenBudget",
-    "foldRowUnchanged": "· <N>&nbsp;destination(s) · unchanged — adjacency scopes the claim to the destination projection (the count sits directly before it); the comparison base sha renders in the metadata line and on changed fold rows' diff headers only; the fold renders collapsed",
+    "foldRowChanged": "<b>+A&nbsp;−R</b> · <identity> — the bold delta leads the row (the left edge is the scan column) and counts workload-attributed movement only (deltaPartition); the row carries no second register — background movement in the same job is explained by the boundary label inside the fence (runnerBackgroundRule), so the row's bold delta equals the workload marks beneath and the labelled counts equal the background marks beneath (adjacency gate); the destination unit is named once per comment, in the meta block's changed segment, so the fold row never repeats it (metaWeight); numbers glued with &nbsp; so the split never wraps apart; the fold renders open within foldOpenBudget",
+    "foldRowUnchanged": "· <N>&nbsp;destination(s) · unchanged — adjacency scopes the claim to the destination projection (the count sits directly before it); when only the runner background moved the row reads '· <N>&nbsp;destination(s)' — no 'unchanged' claim and no count split — and the fold body renders the marked diff fence with the boundary label on the moved background root (runnerBackgroundRule), collapsed and never counted as a changed job; the comparison base sha renders in the metadata line and on changed fold rows' diff headers only; the fold renders collapsed",
     "snapshotTree": "no comparison / first profile: <pre> tree — one block per job, every recorded root, whitespace-separated; one meaning per style: <strong> marks the process that acted (an observed action directly beneath it), <em> wraps annotations only ((…) bracket context), everything else plain; no +/−, no @@ anywhere",
     "changedTree": "changed job: the fold's tree renders as a ```diff fence — same tree walk over the union of current and previous recorded roots (whitespace-separated, one blank line as a fence-safe ' ' line); leaf lines only in this commit's record carry +, no-longer-recorded leaf lines carry −, unchanged ancestry/leaves are context; every mark counts in +A −R and every counted change renders marked — marks and the row delta reconcile exactly (no quieting layer, no uncounted marks); a wholly new branch marks its process lines + from the divergence point (a process line whose every rendered leaf is +) and a wholly vanished branch marks its process lines − — marked process lines never count in +A −R, which stay destination-anchored; a marked (+/−) leaf line carries the recorded remote_address as one trailing bracket annotation — '(198.51.100.60)' — only when, within the same job's diff fence, an oppositely-marked line shares the same registrable domain (eTLD+1, computed from the versioned public-suffix table vendored at contract/public_suffix_list.dat — data, not heuristics; context, never counting); both lines of such a pair carry their recorded addresses; a marked line with no oppositely-marked same-domain counterpart stays clean; bare-address identities are never annotated (the address is the label); context lines and snapshot <pre> trees carry no address annotation, and a marked line never carries two; one @@ header at the top: '@@ <previous-sha> (previous) vs <head-sha> (current) @@' — snapshot <pre> trees carry no header; typography is sacrificed inside the fence",
     "defang": "hostnames are defanged on the PR-comment surface only (example[.]com — final dot bracketed) so untrusted destinations never autolink; address literals are left verbatim; Step Summary, model JSON, and the public report stay canonical",
-    "explainerPlacement": "bottom of the comment, under a --- divider, <details><summary><sub>💡 How to read this</sub></summary>; closed by default, open only on a first-profile comment; body is one <pre> mini tree — Runner.Worker → npm → <strong>node</strong> → ○ npmjs[.]org, bare recorded process names, no command strings, exactly the constructs the real renderer emits — with ← arrow callouts on the lines they describe, aligned in one italic column at visible offset 23 so every callout line fits ~44 monospace columns and reads without horizontal scroll at 390px: '← process on a path' on the root, '← process that acted' on the bold node, '← observed action' on the ○ leaf; beneath the pre, italic <sub><i>…</i></sub> lines in order: the one reading sentence 'follow a path downward to see what ran and what it did — each path to an observed action is an execution chain', the one legend line 'names on the path = processes · ○ = observed action · (…) = context' (the legend carries the (…) teaching — a fourth on-tree callout would push past the phone budget), and — comparison comments only — '+ only in the current record · − only in the previous record'; proportional text wraps instead of scrolling; no defensive or philosophy prose",
+    "explainerPlacement": "bottom of the comment, under a --- divider, <details><summary><sub>💡 How to read this</sub></summary>; closed by default, open only on a first-profile comment; body is one <pre> mini tree — Runner.Worker → npm → <strong>node</strong> → ○ npmjs[.]org, bare recorded process names, no command strings, exactly the constructs the real renderer emits — with ← arrow callouts on the lines they describe, aligned in one italic column at visible offset 23 so every callout line fits ~44 monospace columns and reads without horizontal scroll at 390px: '← process on a path' on the root, '← process that acted' on the bold node, '← observed action' on the ○ leaf; beneath the pre, italic <sub><i>…</i></sub> lines in order: the one reading sentence 'follow a path downward to see what ran and what it did — each path to an observed action is an execution chain', the one legend line 'names on the path = processes · ○ = observed action · (…) = context' (the legend carries the (…) teaching — a fourth on-tree callout would push past the phone budget), and — comparison comments only — '+ only in the current record · − only in the previous record', which appends ' · <explainerBackgroundSegment>' exactly when a boundary label renders in the comment (the legend teaches only vocabulary the page uses); proportional text wraps instead of scrolling; no defensive or philosophy prose",
     "foldOpenRuling": "deliberate quiet-by-default fold scheme, deterministic and rule-based (no salience heuristics): the only job folds that ever render open are changed comparison folds, and only while the comment carries at most foldOpenBudget changed jobs — when more jobs changed than the budget, every job fold renders collapsed and the jobs line plus fold-row deltas carry the change facts; snapshot folds, first-profile folds, unchanged folds, and the vanished fold always render collapsed (fold rows carry the counts, so a collapsed comment still states every fact); the explainer opens only while pending and on the first recorded result and collapses on every later update — nothing subtracts, folds just stop shouting",
     "foldOpenBudget": 3,
-    "jobOrdering": "comparison comments order job rows by decision relevance, deterministically: changed jobs first, then unchanged jobs, then no-outbound rows (above the vanished fold); within a tier the canonical alphabetic 'workflow / job' order holds; a job with a destination delta is a changed job even when its head record is empty (a fully emptied job renders its removals, never the no-outbound line); snapshot comments group jobs with destinations (folds) above no-outbound quiet rows — alphabetic within each group — so the fold run is never split by quiet rows on any comment; ordering is a projection of the same complete evidence — no tier is dropped or truncated by rank",
+    "jobOrdering": "comparison comments order job rows by decision relevance, deterministically: changed jobs first, then unchanged jobs, then no-outbound rows (above the vanished fold); within a tier the canonical alphabetic 'workflow / job' order holds; a job with a workload-attributed destination delta is a changed job even when its head record is empty (a fully emptied job renders its removals, never the no-outbound line); a job whose only movement is runner background orders as unchanged — and still renders its fence, never the no-outbound row; snapshot comments group jobs with destinations (folds) above no-outbound quiet rows — alphabetic within each group — so the fold run is never split by quiet rows on any comment; ordering is a projection of the same complete evidence — no tier is dropped or truncated by rank",
     "metaWeight": "the meta block weighs finding over provenance in every recorded state: line one is the italic finding — on a zero-delta comparison the qualitative verdict 'No changes since <prev7>' (counts stay on fold rows and in the marker); on comparison comments with movement the job segments ('<X> job(s) changed +A&nbsp;−R&nbsp;destination(s)', unchanged, no-outbound, no-longer-recorded — each counting the folds/entries rendered beneath it, segments summing to the rendered jobs plus vanished entries, never salience or safety vocabulary) followed by 'compared with <prev7>'; on snapshot/first-profile comments the destination total ('<N> destination(s) [across <M> jobs]'); line two is one quiet '<sub>' provenance line — 'recorded at the kernel by Garnet' plus the record's timestamp at minute precision (the full-precision stamp lives in the garnet:summary marker 'recorded' key) — and provenance never renders anywhere else; a unit word counts one set once on the human surface: comparison comments carry no visible destination total (it lives in the marker only) and the changed fold row carries its bold '+A −R' split without repeating the unit named in the meta block; quiet notes under one fence merge into a single <sub> line; pending comments carry no meta block (no record exists yet — the hourglass status is the whole fact)",
-    "machineSummary": "one HTML comment marker '<!-- garnet:summary {json} -->' after the commit marker with fixed key order (contract, githubMeta, commit, previous, jobs, changed, unchanged, noOutbound, vanished, added, removed, vanishedDestinations, chains, destinations, recorded, kinds); 'chains' is the machine-register chain aggregate (never rendered on the human surface); 'kinds' lists the observation classes present (today ['network']); 'githubMeta' is the retrieval date of the vendored published GitHub infrastructure ranges (contract/github-meta-ip-ranges.json 'retrieved') so a stale range list is diagnosable from any live comment; 'recorded' is the record's full-precision timestamp (null when the record carries none) — the human meta block renders it at minute precision; every other number equals the corresponding rendered count (adjacency gate); comparison-only fields are null on snapshot comments; '--' inside JSON string values is escaped so no record-sourced value can terminate the comment and JSON.parse restores the recorded bytes; agents read the marker, humans read the surface — same truth, two registers",
+    "machineSummary": "one HTML comment marker '<!-- garnet:summary {json} -->' after the commit marker with fixed key order (contract, githubMeta, commit, previous, jobs, changed, unchanged, noOutbound, vanished, added, removed, backgroundAdded, backgroundRemoved, vanishedDestinations, chains, destinations, recorded, kinds); 'added'/'removed' are the workload-attributed delta totals and 'backgroundAdded'/'backgroundRemoved' the runner-background totals (deltaPartition) — the four sum to every marked line; 'chains' is the machine-register chain aggregate (never rendered on the human surface); 'kinds' lists the observation classes present (today ['network']); 'githubMeta' is the retrieval date of the vendored published GitHub infrastructure ranges (contract/github-meta-ip-ranges.json 'retrieved') so a stale range list is diagnosable from any live comment; 'recorded' is the record's full-precision timestamp (null when the record carries none) — the human meta block renders it at minute precision; every other number equals the corresponding rendered count (adjacency gate); comparison-only fields are null on snapshot comments; '--' inside JSON string values is escaped so no record-sourced value can terminate the comment and JSON.parse restores the recorded bytes; agents read the marker, humans read the surface — same truth, two registers",
     "resolutionLayering": "the evidence register is lossless and keeps PID-distinct associations; the human comment register deduplicates rendered destination identities; ancestry is recorded name-only, so name-level prefix merging loses nothing and splitting name-identical ancestors would invent distinctions the sensor did not record; tree order is deterministic by identity key and never claims chronology",
     "previousProfiledCommit": "the unit of change is strictly the previous profiled commit (this PR, else named base-branch commit); visible copy says 'compared with <sha>' exactly once, in the metadata line — the word 'baseline' never renders",
-    "comparisonIdentity": "a job is matched to its previous-commit counterpart by workflow + job name + matrix cell index; matrix cells never diff against each other, and a cell with no counterpart diffs against nothing (all chains new)",
+    "comparisonIdentity": "a job is matched to its previous-commit counterpart by workflow + job name + matrix cell index; matrix cells never diff against each other, and a cell with no counterpart diffs against nothing (all chains new); one record per job identity per commit — when the same commit is recorded by more than one run (a flaky-CI rerun), the latest recorded run's profile supersedes; earlier runs never accumulate beside it, so a rerun can never double a job in the next comparison",
     "destinationIdentity": "comparison identity is the canonical recorded name — the first non-empty non-address-like remote_names value, else the first non-empty value — else remote_address, normalized per job; an address-like alias never outranks a recorded hostname; an address-only edge joins a named edge for that address when either side records the name; process paths, PIDs, ports, and capture order never create comparison identities; identities whose address and recorded name both change are honestly distinct — the record shows one − and one + until record-side DNS-answer evidence makes the join provable (deferred); the one further provable join is rotationJoin — github-infra rotation (bare-address lease rotation or same-registrable-domain pool reassignment) proven by the vendored published ranges",
-    "rotationJoin": "the one provable identity join beyond recorded names: a − and a + in the same job's comparison join as one provable GitHub infrastructure identity when the owning (leaf) recorded process is the same and both recorded addresses sit inside the same published GitHub SERVICE block — the web/api blocks of contract/github-meta-ip-ranges.json (versioned data vendored from api.github.com/meta, the same class as public_suffix_list.dat, refreshed by committing new bytes, never fetched at render time) — never the actions block: actions is runner address space where an attacker-controlled endpoint in another org can sit, so a same-process substitution there is weaker proof and stays an honest −/+, and the pair is either (a) two bare-address identities with no recorded name on either side — a lease rotation — or (b) two named identities sharing one registrable domain (eTLD+1 via the vendored public suffix list) — a pool reassignment (e.g. glb-*.githubapp.com hostname swaps); the joined pair renders as one unmarked context line '○ <current identity> (github infra · rotated from <previous identity>)', counts in neither +A nor −R, and the evidence register keeps both raw identities and addresses; the join keys on the owning process name, not the full recorded ancestry — live records show ancestry jitter (sudo→provjobd vs provjobd) that must not defeat a provable join; pairing is deterministic — candidates group by (owning process, published block, registrable domain — empty for bare addresses), groups pair in sorted key order and identities zip in canonical identity order, each identity joins at most once even when its raw edges land in several owner groups (a consumed identity is filtered from later groups so −R never under-counts), leftovers stay marked, and identical records render identical bytes regardless of raw edge order; the joined line carries exactly one bracket — the rotation bracket already names github infra, so the plain '(github infra)' suffix note never repeats beside it; anything unprovable stays an honest −/+: an identity whose recorded address is missing or outside the published ranges never joins, and named identities with different registrable domains never join; rejected alternatives, locked so they are never re-litigated: no substrate tier excluding systemd/provjobd-rooted chains from deltas (name-based and workload-influenceable — a designed blind spot), and no blanket 'bare addresses never alone create a delta' rule (it would silence nameless exfiltration) — only the published-range + same-owning-process proof joins; presentation: exactly one provable rotation in a job's fence keeps its inline '(github infra · rotated from <previous identity>)' bracket, while two or more summarize as one quiet italic note under the fence — '<N> addresses rotated (github infra)' — with the rotated lines rendering as plain unmarked context (per-line annotations never dominate the diff; the evidence register keeps every raw identity either way); these join/classification rules are the single source for every consumer — comment renderer, action fallback, and evidence parsers alike vendor this contract and never implement their own substrate/noise heuristics (a parser-only quieting fix is the anti-pattern)",
+    "rotationJoin": "the one provable identity join beyond recorded names: a − and a + in the same job's comparison join as one provable GitHub infrastructure identity when the owning (leaf) recorded process is the same and both recorded addresses sit inside the same published GitHub SERVICE block — the web/api blocks of contract/github-meta-ip-ranges.json (versioned data vendored from api.github.com/meta, the same class as public_suffix_list.dat, refreshed by committing new bytes, never fetched at render time) — never the actions block: actions is runner address space where an attacker-controlled endpoint in another org can sit, so a same-process substitution there is weaker proof and stays an honest −/+, and the pair is either (a) two bare-address identities — a lease rotation; an identity is bare whenever it is address-like, including live captures that self-alias a nameless address (remote_names carrying only the address itself) — or (b) two named identities sharing one registrable domain (eTLD+1 via the vendored public suffix list) — a pool reassignment (e.g. glb-*.githubapp.com hostname swaps); the joined pair renders as one unmarked context line '○ <current identity> (github infra · rotated from <previous identity>)', counts in neither +A nor −R, and the evidence register keeps both raw identities and addresses; the join keys on the owning process name, not the full recorded ancestry — live records show ancestry jitter (sudo→provjobd vs provjobd) that must not defeat a provable join; pairing is deterministic — candidates group by (owning process, published block, registrable domain — empty for bare addresses), groups pair in sorted key order and identities zip in canonical identity order, each identity joins at most once even when its raw edges land in several owner groups (a consumed identity is filtered from later groups so −R never under-counts), leftovers stay marked, and identical records render identical bytes regardless of raw edge order; the joined line carries exactly one bracket — the rotation bracket already names github infra, so the plain '(github infra)' suffix note never repeats beside it; anything unprovable stays an honest −/+: an identity whose recorded address is missing or outside the published ranges never joins, and named identities with different registrable domains never join; rejected alternatives, locked so they are never re-litigated: no NAME-BASED substrate tier excluding systemd/provjobd-rooted chains from deltas (workload-influenceable — a designed blind spot; the v6.9.9 deltaPartition is structural, never name-based, and re-places counts without excluding any identity from the diff), and no blanket 'bare addresses never alone create a delta' rule (it would silence nameless exfiltration) — only the published-range + same-owning-process proof joins; presentation: exactly one provable rotation in a job's fence keeps its inline '(github infra · rotated from <previous identity>)' bracket, while two or more summarize as one quiet italic note under the fence — '<N> addresses rotated (github infra)' — with the rotated lines rendering as plain unmarked context (per-line annotations never dominate the diff; the evidence register keeps every raw identity either way); these join/classification rules are the single source for every consumer — comment renderer, action fallback, and evidence parsers alike vendor this contract and never implement their own substrate/noise heuristics (a parser-only quieting fix is the anti-pattern)",
     "stabilityGate": "identity resolution is idempotent across re-runs of an unchanged commit: comparing two or more recorded live profiles of the same head commit must produce zero deltas — every job unchanged — even when GitHub infra lease rotation flapped bare addresses between runs; CI gates this over real captured records (the public trust measure)",
-    "unionDiff": "one identity-set diff per job over every recorded chain in the job — the whole job's destination projection, no partition; per identity the outcome is added, removed, or unchanged; canonical destination changed → it counts — no equivalence heuristics, no quieting layer (identity-sorted rows keep a same-domain rotated pair adjacent and address-annotated so rotation reads at a glance, as context); the single exception is the provable rotationJoin — a github-infra rotation (bare-address lease rotation or same-registrable-domain pool reassignment) proven by the vendored published ranges renders as one unmarked annotated context line and counts in neither side; invariant (adjacency gate): no destination identity renders with both marks in one job, and an identity present on both commits renders no mark anywhere",
+    "deltaPartition": "count placement partitions by structural attribution; visibility never partitions: after the rotation join, each surviving added/removed identity attributes to the workload or to the runner background by the same structural rule as rootOrdering — an identity is workload-attributed when any of its edges sits under a root whose edges descend through Runner.Worker or bear a recorded step, and unrecorded lineage attributes to the workload (an unprovable line never quiets a count); destination names, process names, hostnames, IPs, and domains never classify; the meta line's '+A −R', the bold fold-row delta, and the changed-job count speak workload-attributed movement only — runner-substrate churn (image/pool/cache variance moving destinations regardless of the diff) can no longer read as a workload change; background movement stays fully visible: its marks render in the owning job's fence exactly like workload marks, counted only by the boundary label on the owning background root (runnerBackgroundRule) and by the marker's backgroundAdded/backgroundRemoved; a background-only-moved job renders its fence collapsed and never counts as changed; the classification is machinery, never reader-facing taxonomy — the reviewer sees one primary delta and one labelled boundary, not two ledgers; nothing subtracts — the partition moves counts, never lines",
+    "unionDiff": "one identity-set diff per job over every recorded chain in the job — the whole job's destination projection; per identity the outcome is added, removed, or unchanged; canonical destination changed → it counts, in the workload or background split its attribution places it (deltaPartition) — no equivalence heuristics, no quieting layer (identity-sorted rows keep a same-domain rotated pair adjacent and address-annotated so rotation reads at a glance, as context); the single exception is the provable rotationJoin — a github-infra rotation (bare-address lease rotation or same-registrable-domain pool reassignment) proven by the vendored published ranges renders as one unmarked annotated context line and counts in neither side; invariant (adjacency gate): no destination identity renders with both marks in one job, an identity present on both commits renders no mark anywhere, and a job's workload split plus its background split together equal its marked lines",
     "ordering": "comment and diff destinations and process groups sort deterministically by normalized destination identity; capture order and process-path reshaping never change bytes; findings first inside a changed job's fence: recorded roots carrying any marked (+/−) line render before all-context roots, so a workload change is never buried below rotation or other context churn — canonical order holds within each tier (gated)",
     "dualRegister": "human register: readable, deduplicated, defanged PR comment; evidence register: canonical profile JSON/API via permalink, preserving raw IPs, ports, PIDs, hostnames, and multiplicity",
     "losslessProjection": "every captured destination identity appears in its owning job's block, and every rendered identity derives from captured evidence; nothing is subtracted",
@@ -41032,7 +41036,7 @@ const runtime_review_vocab_CONTRACT_VOCAB = {
   },
   "lineage": {
     "attributedTypography": "bold marks the process that acted — a process node with an observed action directly beneath it; italic marks annotations only — the (…) bracket context and the explainer's legend labels; every other tree character is plain, runner-infrastructure trees included; diff fences carry no markup (GitHub renders HTML literally inside fences — their green/red rows are the emphasis there); typography is decoration only — it never determines grouping, counting, layout, folding, marks, ordering, or comparison, and is never a fact's sole carrier",
-    "structure": "reliable facts determine structure: job scope, recorded kernel ancestry, observed actions; step attribution is unreliable metadata and only decorates — there is no workload/background partition; every recorded chain renders in its owning job's block",
+    "structure": "reliable facts determine structure: job scope, recorded kernel ancestry, observed actions; step attribution is unreliable metadata and only decorates — blocks carry no workload/background labels (delta counts partition by structural attribution, comment.deltaPartition); every recorded chain renders in its owning job's block",
     "forkTimeAncestry": "producers must record fork-time ancestry, never query-time ppid, so lineage-escape (daemonize/setsid reparenting to systemd) cannot detach a chain from its recorded root",
     "githubStep": "a real recorded step (never the 'NN. Runner Processes' sentinel) renders as a '(step: \"<recorded name>\")' bracket annotation on its process line — the recorded name in double quotes with any leading 'NN. ' ordinal stripped; a recorded name still containing an unexpanded '${{ … }}' expression renders no step annotation; a step annotation renders once per path, on the shallowest process line where that recorded step applies — descendants with the same recorded step render no step annotation (silent inheritance) and a descendant whose recorded step differs renders its own; escaped recorded metadata, additive context only; a tree rendered with and without step metadata has identical structure, counts, ordering, and comparison",
     "truncatedNameCompletion": "a recorded process name truncated by the kernel comm limit (exactly 15 bytes) renders completed only when the record itself carries the full string — the node's recorded executable basename extends the truncated name uniquely; the raw recorded name stays in the model, marker, and Step Summary; no completion ever comes from outside the profile (never guessed, never pattern-completed)",
@@ -41209,6 +41213,10 @@ const runtime_review_vocab_CONTRACT_VOCAB = {
       {
         "class": "meta-block weight — finding first, one quiet provenance line, one unit per set",
         "gate": "audit: meta-weight"
+      },
+      {
+        "class": "workload/background delta partition — headline counts workload only, background split quiet, every mark visible",
+        "gate": "audit: delta-partition"
       }
     ]
   },
@@ -41428,6 +41436,8 @@ const public_suffix_rules_PUBLIC_SUFFIX_RULES = new Map(
  *   removed: ReviewEdge[]
  *   addedCount: number
  *   removedCount: number
+ *   backgroundAddedCount: number
+ *   backgroundRemovedCount: number
  * }} EdgeDelta
  */
 
@@ -41501,6 +41511,8 @@ const VOCAB = {
   explainerLabel: runtime_review_vocab_CONTRACT_VOCAB.copy.explainerLabel,
   explainerReadingLine: runtime_review_vocab_CONTRACT_VOCAB.copy.explainerReadingLine,
   explainerComparisonLine: runtime_review_vocab_CONTRACT_VOCAB.copy.explainerComparisonLine,
+  explainerBackgroundSegment: runtime_review_vocab_CONTRACT_VOCAB.copy.explainerBackgroundSegment,
+  runnerBackground: runtime_review_vocab_CONTRACT_VOCAB.copy.runnerBackground,
   explainerLegendLine: runtime_review_vocab_CONTRACT_VOCAB.copy.explainerLegendLine,
   explainerCalloutPath: runtime_review_vocab_CONTRACT_VOCAB.copy.explainerCalloutPath,
   explainerCalloutActed: runtime_review_vocab_CONTRACT_VOCAB.copy.explainerCalloutActed,
@@ -42588,6 +42600,35 @@ function annotatedStepNames(node, inherited) {
 }
 
 /**
+ * A workload root descends through `Runner.Worker` or bears a recorded step
+ * anywhere in its subtree; every other recorded root (e.g. systemd) is
+ * runner infrastructure. Structural facts only — names of destinations or
+ * deeper processes never classify.
+ * @param {TreeNode} node
+ * @returns {boolean}
+ */
+function isWorkloadRoot(node) {
+  if (node.name === "Runner.Worker") return true
+  // Unrecorded lineage attributes to the workload: an unprovable line never
+  // quiets a count, so its root never carries the boundary label either.
+  if (node.name === VOCAB.unknownLineage) return true
+  if (recordedStepNames(node).length > 0) return true
+  return node.children.some(isWorkloadRoot)
+}
+
+/**
+ * Root order within a job block: workload roots render before
+ * infrastructure-rooted ones so the signal is never buried below runner
+ * plumbing — snapshot and comparison alike; canonical order holds within
+ * each group.
+ * @param {TreeNode[]} children
+ * @returns {TreeNode[]}
+ */
+function orderedJobRoots(children) {
+  return [...children.filter(isWorkloadRoot), ...children.filter((child) => !isWorkloadRoot(child))]
+}
+
+/**
  * @param {TreeNode} node
  * @param {Set<string>} inherited
  */
@@ -42697,7 +42738,7 @@ function renderJobTree(job, edges = job.edges, opts = {}) {
   // One block holds every recorded root; independent recorded ancestry
   // roots are separated by one blank line — whitespace means independent
   // recorded roots in the same job, never another category.
-  root.children.forEach((child, index) => {
+  orderedJobRoots(root.children).forEach((child, index) => {
     if (index > 0) lines.push("")
     lines.push(processNodeLine(child, { steps: true }))
     renderTreeChildren(child, "", lines, {
@@ -42746,14 +42787,64 @@ function compareJobEdges(headEdges, previousEdges) {
     const id = destinationIdentity(edge, names)
     if (removedIds.has(id) && !removedByID.has(id)) removedByID.set(id, edge)
   }
+  // Delta partition (contract comment.deltaPartition): each added/removed
+  // identity attributes to the workload or to the runner background by the
+  // structural root rule. The headline counts are workload-attributed only;
+  // background movement keeps its own quiet counts. Every identity stays in
+  // addedIds/removedIds, so every mark still renders — only count placement
+  // partitions, never visibility.
+  const headWorkload = workloadIdentitySet(headEdges, names)
+  const previousWorkload = workloadIdentitySet(previousEdges, names)
+  const workloadAdded = [...addedIds].filter((id) => headWorkload.has(id))
+  const workloadRemoved = [...removedIds].filter((id) => previousWorkload.has(id))
   return {
     addedIds,
     removedIds,
     added: addedIds,
     removed: [...removedByID.values()],
-    addedCount: addedIds.size,
-    removedCount: removedIds.size,
+    addedCount: workloadAdded.length,
+    removedCount: workloadRemoved.length,
+    backgroundAddedCount: addedIds.size - workloadAdded.length,
+    backgroundRemovedCount: removedIds.size - workloadRemoved.length,
   }
+}
+
+/**
+ * Workload attribution of destination identities on one side of a job
+ * comparison (contract comment.deltaPartition). Edges group by recorded
+ * root; a root attributes to the workload when any of its edges descends
+ * through `Runner.Worker` or bears a recorded step — the same structural
+ * rule as rootOrdering. Unrecorded lineage attributes to the workload: an
+ * unprovable line never quiets a count. An identity is workload-attributed
+ * when any of its edges is. Names of destinations, processes, hostnames, or
+ * domains never classify.
+ * @param {ReviewEdge[]} edges
+ * @param {Map<string, string>} names
+ * @returns {Set<string>}
+ */
+function workloadIdentitySet(edges, names) {
+  /** @type {Set<string>} */
+  const workloadRoots = new Set()
+  /** @type {[ReviewEdge, string][]} */
+  const roots = []
+  for (const edge of edges) {
+    const path = commentTreePath(edge)
+    const root = path[0] ?? ""
+    roots.push([edge, root])
+    if (
+      !edge.lineage_recorded ||
+      path.includes("Runner.Worker") ||
+      stepAnnotationName(edge.github_step) !== ""
+    ) {
+      workloadRoots.add(root)
+    }
+  }
+  /** @type {Set<string>} */
+  const ids = new Set()
+  for (const [edge, root] of roots) {
+    if (workloadRoots.has(root)) ids.add(destinationIdentity(edge, names))
+  }
+  return ids
 }
 
 /**
@@ -42940,11 +43031,57 @@ function renderJobDiffTree(job, delta, headSha, previousSha) {
     `@@ ${fenceText(previousSha.slice(0, 7) || "unknown")} (previous) vs ${fenceText(headSha.slice(0, 7) || "unknown")} (current) @@`,
   ]
   const root = treeForAssociations(unionEdges)
-  root.children.forEach((child, index) => {
+  // Findings first: workload roots render before infrastructure roots, and
+  // within each group roots carrying any marked (+/−) line render before
+  // all-context roots — a workload change is never buried below runner
+  // plumbing; canonical order holds within each tier.
+  /** @type {(node: TreeNode) => boolean} */
+  const subtreeHasMark = (node) =>
+    node.associations.some((edge) => (marks.get(edge) ?? " ") !== " ") ||
+    node.children.some(subtreeHasMark)
+  /** @type {(children: TreeNode[]) => TreeNode[]} */
+  const withMarks = (children) => [
+    ...children.filter(subtreeHasMark),
+    ...children.filter((child) => !subtreeHasMark(child)),
+  ]
+  const orderedRoots = [
+    ...withMarks(root.children.filter(isWorkloadRoot)),
+    ...withMarks(root.children.filter((child) => !isWorkloadRoot(child))),
+  ]
+  // Boundary label: a moved non-workload root announces its subtree's marks
+  // where the secondary evidence begins — '(runner background · +A −B)' in
+  // the fence's plain parenthetical context grammar. The count sits beside
+  // the marks it counts; workload roots and unmoved roots carry no label.
+  /** @type {(node: TreeNode) => { added: number, removed: number }} */
+  const subtreeMarkCounts = (node) => {
+    const counts = { added: 0, removed: 0 }
+    /** @type {(n: TreeNode) => void} */
+    const walk = (n) => {
+      for (const edge of n.associations) {
+        const mark = marks.get(edge) ?? " "
+        if (mark === "+") counts.added += 1
+        if (mark === "-") counts.removed += 1
+      }
+      n.children.forEach(walk)
+    }
+    walk(node)
+    return counts
+  }
+  /** @type {(child: TreeNode) => string} */
+  const boundaryLabel = (child) => {
+    if (isWorkloadRoot(child)) return ""
+    const { added, removed } = subtreeMarkCounts(child)
+    if (added + removed === 0) return ""
+    const sides = []
+    if (added > 0) sides.push(`+${added}`)
+    if (removed > 0) sides.push(`−${removed}`)
+    return ` (${VOCAB.runnerBackground} · ${sides.join(" ")})`
+  }
+  orderedRoots.forEach((child, index) => {
     // Independent recorded roots separate with one fence-safe " " line.
     if (index > 0) lines.push(" ")
     const mark = diffBranchMark(child, marks)
-    lines.push(`${mark} ${diffNodeLine(child)}`)
+    lines.push(`${mark} ${diffNodeLine(child)}${boundaryLabel(child)}`)
     renderDiffChildren(child, "", lines, marks, annotated, inheritSteps(child, new Set()))
   })
   return lines.join("\n")
@@ -42966,15 +43103,16 @@ function countPhrase(n, unit) {
  * inflects on the total moved identities.
  * @param {number} added
  * @param {number} removed
- * @param {{ bold?: boolean }} [options]
+ * @param {{ bold?: boolean, unit?: boolean }} [options]
  */
-function deltaPhrase(added, removed, { bold = true } = {}) {
+function deltaPhrase(added, removed, { bold = true, unit = true } = {}) {
   const sides = []
   if (added > 0) sides.push(`+${added}`)
   if (removed > 0) sides.push(`−${removed}`)
-  const unit = added + removed === 1 ? "destination" : "destinations"
   const numbers = sides.join("&nbsp;")
-  return `${bold ? `<b>${numbers}</b>` : numbers}&nbsp;${unit}`
+  const marked = bold ? `<b>${numbers}</b>` : numbers
+  if (!unit) return marked
+  return `${marked}&nbsp;${added + removed === 1 ? "destination" : "destinations"}`
 }
 
 /**
@@ -43006,9 +43144,9 @@ const truncationLine = (x, y) =>
 /**
  * Concise orientation fold with a lineage-exact mini tree. Open while
  * pending and on the first recorded result; collapsed on later updates.
- * @param {{ open?: boolean, comparison?: boolean }} [options]
+ * @param {{ open?: boolean, comparison?: boolean, background?: boolean }} [options]
  */
-function renderExplainer({ open = false, comparison = false } = {}) {
+function renderExplainer({ open = false, comparison = false, background = false } = {}) {
   // One mini tree of exactly the constructs the real renderer emits, with
   // ← arrow callouts aligned in one italic column at visible offset 23 —
   // every callout line fits ~44 monospace columns, so the tree teaches
@@ -43030,7 +43168,11 @@ function renderExplainer({ open = false, comparison = false } = {}) {
     `<sub><i>${VOCAB.explainerLegendLine}</i></sub>`,
   ]
   if (comparison) {
-    lines.push("", `<sub><i>${VOCAB.explainerComparisonLine}</i></sub>`)
+    // The legend teaches the boundary-label vocabulary only when a label
+    // actually renders above it.
+    const segments = [VOCAB.explainerComparisonLine]
+    if (background) segments.push(VOCAB.explainerBackgroundSegment)
+    lines.push("", `<sub><i>${segments.join(" · ")}</i></sub>`)
   }
   lines.push("", "</details>")
   return lines.join("\n")
@@ -43085,6 +43227,16 @@ function isSentinelStep(name) {
 }
 
 /**
+ * Total background-attributed movement in a job delta.
+ * @param {JobDelta | null | undefined} delta
+ * @returns {number}
+ */
+function backgroundDelta(delta) {
+  if (delta === null || delta === undefined) return 0
+  return delta.backgroundAddedCount + delta.backgroundRemovedCount
+}
+
+/**
  * Fold summary row — the row's facts are the identity and the destination
  * count; no step-name sentence, no chain counts. Changed rows lead with
  * the bold delta as their only destination fact; unchanged comparison rows
@@ -43103,12 +43255,19 @@ function jobSummaryLine(job, { delta = null, treeEdges = null } = {}) {
   // so what moved reads top-to-bottom without reading a single job name.
   // The comparison base commit renders once at run scope (metadata line) and
   // inside the diff's @@ header — the fold row carries only its own delta.
+  // The meta block's changed segment names the destination unit once for
+  // the whole comment; the fold row carries only its own bold split.
   const changed = delta !== null && delta.addedCount + delta.removedCount > 0
-  if (changed) parts.push(`${deltaPhrase(delta.addedCount, delta.removedCount)} ·`)
+  if (changed) {
+    parts.push(`${deltaPhrase(delta.addedCount, delta.removedCount, { unit: false })} ·`)
+  }
   parts.push(jobIdentity(job))
-  if (!changed) {
-    parts.push(`· ${countPhrase(treeCounts, "destination")}`)
-    if (delta !== null) parts.push(`· ${VOCAB.noChange}`)
+  if (!changed) parts.push(`· ${countPhrase(treeCounts, "destination")}`)
+  // The workload-scoped 'unchanged' claim only renders when the runner
+  // background held still too — a row never claims 'unchanged' beside a
+  // quiet background split.
+  if (delta !== null && !changed && backgroundDelta(delta) === 0) {
+    parts.push(`· ${VOCAB.noChange}`)
   }
   return parts.join(" ")
 }
@@ -43221,7 +43380,9 @@ function metaBlock(review, accounting) {
       accounting.changedJobs === 0 &&
       accounting.vanishedJobCount === 0 &&
       accounting.added === 0 &&
-      accounting.removed === 0
+      accounting.removed === 0 &&
+      accounting.backgroundAdded === 0 &&
+      accounting.backgroundRemoved === 0
     if (zeroDelta) {
       // Zero-delta comparison: the verdict is the finding.
       findings.push(`No changes ${VOCAB.sinceWord} ${previousCommitRef(comparisonReview)}`)
@@ -43382,18 +43543,26 @@ function changeAccounting(review) {
     noOutboundJobs: 0,
     added: 0,
     removed: 0,
+    backgroundAdded: 0,
+    backgroundRemoved: 0,
   }
   for (const job of review.jobs) {
     let tier
     const delta = deltas ? deltas.get(job.id) : null
-    // A destination delta outranks an empty head record: a job whose whole
-    // record left is a changed job, never "no outbound destinations".
+    if (delta !== null && delta !== undefined) {
+      totals.backgroundAdded += delta.backgroundAddedCount
+      totals.backgroundRemoved += delta.backgroundRemovedCount
+    }
+    // A workload destination delta outranks an empty head record: a job
+    // whose whole record left is a changed job, never "no outbound
+    // destinations". Background-only movement never makes a changed job —
+    // the fold row and fence carry it, the changed count does not.
     if (delta !== null && delta !== undefined && delta.addedCount + delta.removedCount > 0) {
       tier = 0
       totals.changedJobs += 1
       totals.added += delta.addedCount
       totals.removed += delta.removedCount
-    } else if (job.edges.length === 0) {
+    } else if (job.edges.length === 0 && backgroundDelta(delta ?? null) === 0) {
       tier = 2
       totals.noOutboundJobs += 1
     } else {
@@ -43434,6 +43603,8 @@ function machineSummaryMarker(review, accounting) {
     vanished: comparing ? accounting.vanishedJobCount : null,
     added: comparing ? accounting.added : null,
     removed: comparing ? accounting.removed : null,
+    backgroundAdded: comparing ? accounting.backgroundAdded : null,
+    backgroundRemoved: comparing ? accounting.backgroundRemoved : null,
     vanishedDestinations: comparing ? accounting.vanishedDestinations : null,
     chains,
     destinations,
@@ -43467,6 +43638,10 @@ function renderCommentBody(review, kept, { explainerOpen = false } = {}) {
     const delta = deltas ? deltas.get(job.id) : null
     const changed =
       delta !== null && delta !== undefined && delta.addedCount + delta.removedCount > 0
+    // Any movement — workload or runner background — renders the marked
+    // fence; only a workload delta makes a changed job (bold row, open
+    // fold, changed count).
+    const hasDelta = changed || backgroundDelta(delta ?? null) > 0
     const keptCount = kept.get(job.id) ?? job.edges.length
     const retained = new Set(retentionOrder(job.edges).slice(0, keptCount))
     const shownRaw = job.edges.filter((e) => retained.has(e))
@@ -43476,7 +43651,7 @@ function renderCommentBody(review, kept, { explainerOpen = false } = {}) {
     // An empty projection renders a plain row that keeps the job's
     // Execution Profile link when known — an empty egress projection never
     // implies Garnet observed nothing.
-    if (job.edges.length === 0 && !changed) {
+    if (job.edges.length === 0 && !hasDelta) {
       const link = profilePermalink(job, review.appUrl, "pr_comment")
       const profilePart =
         link !== ""
@@ -43494,7 +43669,7 @@ function renderCommentBody(review, kept, { explainerOpen = false } = {}) {
       `<details${open ? " open" : ""}><summary>${jobSummaryLine(job, { delta: delta ?? null, treeEdges: shown })}</summary>`,
     )
     lines.push("")
-    if (changed) {
+    if (hasDelta && delta !== null && delta !== undefined) {
       lines.push("```diff")
       lines.push(renderJobDiffTree({ ...job, edges: shown }, delta, review.sha, previousSha))
       lines.push("```")
@@ -43546,7 +43721,16 @@ function renderCommentBody(review, kept, { explainerOpen = false } = {}) {
   // first-profile comment.
   lines.push("---")
   lines.push("")
-  lines.push(renderExplainer({ open: explainerOpen, comparison: review.comparison !== null }))
+  // The legend teaches the boundary-label vocabulary only when a label
+  // actually renders above it.
+  const hasBackgroundLabel = lines.some((line) => line.includes(`(${VOCAB.runnerBackground} ·`))
+  lines.push(
+    renderExplainer({
+      open: explainerOpen,
+      comparison: review.comparison !== null,
+      background: hasBackgroundLabel,
+    }),
+  )
 
   while (lines.length > 0 && lines[lines.length - 1] === "") lines.pop()
   return lines.join("\n")

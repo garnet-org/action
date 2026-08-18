@@ -4,7 +4,7 @@
 
 | Field | Value |
 | --- | --- |
-| Profile UUID | 019f2c11-aaaa-7bbb-8ccc-0123456789ab |
+| Profile | [019f2c11-aaaa-7bbb-8ccc-0123456789ab](https://app.garnet.ai/public/runs/32000000002?profile=019f2c11-aaaa-7bbb-8ccc-0123456789ab&utm_source=github&utm_medium=step_summary) |
 | Workflow | ci |
 | Repository | garnet-org/runtime-review-testbed |
 | Commit | cc33dd44ee55ff6677889900aabbccddee112233 |
@@ -16,8 +16,20 @@ Keyed by execution chain; repeated destination names within a chain are collapse
 
 | Process Tree | Destinations |
 | --- | --- |
-| <code>systemd</code> → <code>hosted-compute-agent (pid 2002)</code> | <code>hosted-compute-watchdog-prod-iad-01.githubapp</code> |
-| <code>systemd</code> → <code>hosted-compute-agent</code> → <code>sudo</code> → <code>provjobd734003200 (pid 2001)</code> | <code>localhost</code> |
+| <code>systemd</code> → <code>hosted-compute-agent</code> <sub>pid&nbsp;2002</sub> | <code>hosted-compute-watchdog-prod-iad-01.githubapp</code> |
+| <code>systemd</code> → <code>hosted-compute-agent</code> → <code>sudo</code> → <code>provjobd734003200</code> <sub>pid&nbsp;2001</sub> | <code>localhost</code> |
+
+<details><summary><sub>Full recorded tree</sub></summary>
+
+<pre>
+systemd
+└─ <strong>hosted-compute-agent</strong>
+   ├─ sudo
+   │  └─ <strong>provjobd</strong>
+   │     └─ ○ localhost <em>(dns resolver)</em>
+   └─ ○ hosted-compute-watchdog-prod-iad-01.githubapp <em>(github infra)</em>
+</pre>
+</details>
 
 <details><summary><strong>Recorded context preview</strong></summary>
 

@@ -87,8 +87,10 @@ function assertPairSemantics(label, previous, head) {
   assert.deepEqual([...minus].sort(), expectedMinus, `${label}: removed identities`)
   assert.equal(new Set(plus).size, plus.length, `${label}: duplicate added identity`)
   assert.equal(new Set(minus).size, minus.length, `${label}: duplicate removed identity`)
-  assert.equal(delta.addedCount, expectedPlus.length)
-  assert.equal(delta.removedCount, expectedMinus.length)
+  // v6.10.0 delta partition: counts split workload/runner background, and
+  // the two registers together account for every rendered mark.
+  assert.equal(delta.addedCount + delta.backgroundAddedCount, expectedPlus.length)
+  assert.equal(delta.removedCount + delta.backgroundRemovedCount, expectedMinus.length)
 
   const pairNames = addressNameMap(headJob.edges, previousJob.edges)
   const expectedVisible = new Set(
@@ -248,7 +250,7 @@ function renderedHeadRows(markdown) {
   return rows
 }
 for (const [label, previousName, headName] of pairSpecs) {
-  const { markdown } = assertPairSemantics(
+  const { markdown, delta } = assertPairSemantics(
     label,
     load(join(churnDir, previousName)),
     load(join(churnDir, headName)),
@@ -256,25 +258,36 @@ for (const [label, previousName, headName] of pairSpecs) {
   const rows = renderedHeadRows(markdown)
   const metadataLine = markdown.split("\n").find((line) => line.startsWith("> *")) ?? ""
   if (metadataLine.includes("compared with")) {
-    // v6.9.8 finding-first meta: a comparison claims the delta, not a
-    // total — reconcile `+A −R` against the marked fence lines.
+    // v6.10.0 one human register: the meta line claims workload-attributed
+    // movement only — runner-background movement never inflates it, and
+    // background-only movement reads as unchanged, never `No changes`.
     const addedClaim = Number(metadataLine.match(/\+(\d+)/)?.[1] ?? 0)
     const removedClaim = Number(metadataLine.match(/−(\d+)/)?.[1] ?? 0)
     assert.ok(
-      addedClaim + removedClaim > 0 || metadataLine.includes("No changes"),
+      addedClaim + removedClaim > 0 ||
+        metadataLine.includes("unchanged") ||
+        metadataLine.includes("No changes"),
       `${label}: comparison meta carries the delta or a no-change finding`,
     )
+    if (delta.backgroundAddedCount + delta.backgroundRemovedCount > 0) {
+      assert.ok(
+        !metadataLine.includes("No changes"),
+        `${label}: background-only movement never reads as No changes`,
+      )
+    }
+    assert.equal(addedClaim, delta.addedCount, `${label}: metadata added vs workload delta`)
+    assert.equal(removedClaim, delta.removedCount, `${label}: metadata removed vs workload delta`)
     const fence = diffFence(markdown)
     const markedLines = fence.split("\n").filter((line) => /^[+-] .*○ /.test(line))
     assert.equal(
-      addedClaim,
+      delta.addedCount + delta.backgroundAddedCount,
       markedLines.filter((line) => line.startsWith("+")).length,
-      `${label}: metadata added vs marked lines`,
+      `${label}: partitioned added vs marked lines`,
     )
     assert.equal(
-      removedClaim,
+      delta.removedCount + delta.backgroundRemovedCount,
       markedLines.filter((line) => line.startsWith("-")).length,
-      `${label}: metadata removed vs marked lines`,
+      `${label}: partitioned removed vs marked lines`,
     )
   } else {
     const destinationsClaim = Number(metadataLine.match(/(\d+)&nbsp;destination/)?.[1] ?? 0)
@@ -289,9 +302,23 @@ for (const [label, previousName, headName] of pairSpecs) {
     !/\d+(?:&nbsp;| )(?:execution )?chains?\b/.test(humanSurface),
     `${label}: chain counts never render on the human surface`,
   )
+  // v6.10.0: the in-fence boundary label on a moved background root is the
+  // one permitted rendering of the term, and the explainer legend teaching
+  // it is the second — the two are co-present, and no other taxonomy
+  // language renders.
+  const boundaryLabels = humanSurface.match(/\(runner background · [+−\d ]+\)/g) ?? []
+  const legends = humanSurface.split(VOCAB.explainerBackgroundSegment).length - 1
+  assert.equal(
+    boundaryLabels.length > 0,
+    legends > 0,
+    `${label}: boundary label and legend must be co-present`,
+  )
+  const withoutBackgroundRegister = humanSurface
+    .replace(/\(runner background · [+−\d ]+\)/g, "")
+    .replaceAll(VOCAB.explainerBackgroundSegment, "")
   assert.ok(
-    !humanSurface.includes("runner background") && !humanSurface.includes("runner-background"),
-    `${label}: no background partition vocabulary`,
+    !/background/i.test(withoutBackgroundRegister),
+    `${label}: no background partition vocabulary beyond label and legend`,
   )
 }
 
@@ -454,6 +481,8 @@ for (const [label, previousName, headName] of pairSpecs) {
       "vanished",
       "added",
       "removed",
+      "backgroundAdded",
+      "backgroundRemoved",
       "vanishedDestinations",
       "chains",
       "destinations",
@@ -667,7 +696,9 @@ const reviewFor = (headProfile, previousProfile = null) => {
   const foldRow = markdown
     .split("\n")
     .find((line) => line.includes("<summary>") && line.includes("<code>app</code>")) || ""
-  assert.match(foldRow, /\+1<\/b>&nbsp;destination/, "the job fold row carries the delta")
+  // v6.10.0: the fold row carries the bold split alone — the destination
+  // unit is named once, in the meta block.
+  assert.match(foldRow, /<b>\+1<\/b> ·/, "the job fold row carries the delta")
 }
 
 // Rotation honesty: GitHub rotates the provisioning daemon's PID suffix and
@@ -891,9 +922,10 @@ const reviewFor = (headProfile, previousProfile = null) => {
 // ---------------------------------------------------------------------------
 
 const foldRowDelta = (markdown) => {
+  // v6.10.0 changed rows lead with the bold split and name no unit.
   const row = markdown
     .split("\n")
-    .find((line) => line.includes("<summary>") && line.includes("&nbsp;destination")) || ""
+    .find((line) => line.includes("<summary>") && /<b>[+−]/.test(line)) || ""
   const added = Number(row.match(/\+(\d+)/)?.[1] ?? 0)
   const removed = Number(row.match(/−(\d+)/)?.[1] ?? 0)
   return { added, removed }
@@ -1052,9 +1084,10 @@ const markedLineageLines = (fence, mark) =>
   )
 }
 
-// Whole-job honesty: an infrastructure-rooted destination change is a real
-// change — it flips the job's changed status, renders in the diff, counts
-// in the fold-row delta and the jobs line. No quiet layer exists.
+// v6.10.0 delta partition: an infrastructure-rooted destination change is
+// still fully visible — it renders in the job's one diff fence and carries
+// the boundary label on its root — but it never reads as workload movement:
+// the job stays unchanged and the fold row carries no delta.
 {
   const infraPeer = (address, name) => ({
     remote_address: address,
@@ -1075,16 +1108,26 @@ const markedLineageLines = (fence, mark) =>
     ],
   })
   const markdown = renderRunReview(reviewFor(head, previous))
-  const jobsLine = markdown
-    .split("\n")
-    .find((line) => line.startsWith("> *") && line.includes("job changed"))
-  assert.ok(jobsLine, "an infrastructure destination change renders a changed clause")
+  const metaLine = markdown.split("\n").find((line) => line.startsWith("> *")) ?? ""
+  assert.ok(
+    metaLine.includes("unchanged") && !metaLine.includes("job changed"),
+    "background-only movement reads as unchanged",
+  )
+  assert.ok(!metaLine.includes("No changes"), "background movement is never No changes")
   const delta = foldRowDelta(markdown)
-  assert.equal(delta.added, 1, "the fold-row delta counts the new destination")
+  assert.equal(delta.added, 0, "the fold row carries no workload delta")
   const fence = diffFence(markdown)
   assert.ok(
     markedLeafLines(fence, "+").some((line) => line.includes("new-infra.githubapp[.]com")),
     "the new destination renders as a + row in the job's one diff fence",
+  )
+  assert.ok(
+    fence.split("\n").some((line) => /systemd \(runner background · \+1\)/.test(line)),
+    "the moved background root carries the boundary label with zero sides dropped",
+  )
+  assert.ok(
+    markdown.includes(VOCAB.explainerBackgroundSegment),
+    "the legend renders beside the boundary label",
   )
 }
 

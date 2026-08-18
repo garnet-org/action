@@ -83,6 +83,12 @@ async function main() {
     const attributionCases = JSON.parse(
         await readFile(join(here, "synthetic", "attribution-cases.json"), "utf8"),
     )
+    const deltaPartitionPair = JSON.parse(
+        await readFile(join(here, "synthetic", "delta-partition-pair.json"), "utf8"),
+    )
+    const backgroundOnlyPair = JSON.parse(
+        await readFile(join(here, "synthetic", "background-only-pair.json"), "utf8"),
+    )
 
     /** @type {Record<string, { files?: string[], profiles?: unknown[], previous?: unknown[] }>} */
     const states = {
@@ -102,6 +108,20 @@ async function main() {
         "multi-job-comparison": {
             profiles: comparisonPair.head,
             previous: comparisonPair.previous,
+        },
+        // v6.10.0 delta partition: one workload addition headlines while
+        // background churn counts only in the boundary label on its moved
+        // root — every moved line stays marked.
+        "delta-partition": {
+            profiles: deltaPartitionPair.head,
+            previous: deltaPartitionPair.previous,
+        },
+        // v6.10.0 background-only movement: the workload held still, so the
+        // job reads 'unchanged' — never 'No changes' — with the boundary
+        // label on the moved background root.
+        "background-only": {
+            profiles: backgroundOnlyPair.head,
+            previous: backgroundOnlyPair.previous,
         },
     }
 
