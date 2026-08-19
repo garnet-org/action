@@ -29,52 +29,68 @@ jobs:
           COMMIT_SHA: ${{ github.sha }}
         run: |
           set -euo pipefail
-          if [[ ! "$TAG_NAME" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            echo "::error::Release tags must use v<major>.<minor>.<patch>; got $TAG_NAME"
-            exit 1
+
+          SEMVER_NUM='0|[1-9][0-9]*'
+          SEMVER_CORE="(${SEMVER_NUM})\.(${SEMVER_NUM})\.(${SEMVER_NUM})"
+          SEMVER_PRERELEASE_ID="(${SEMVER_NUM}|[0-9A-Za-z-]*[A-Za-z-][0-9A-Za-z-]*)"
+          SEMVER_PRERELEASE="${SEMVER_PRERELEASE_ID}(\.${SEMVER_PRERELEASE_ID})*"
+          SEMVER_BUILD_ID='[0-9A-Za-z-]+'
+          SEMVER_BUILD="${SEMVER_BUILD_ID}(\.${SEMVER_BUILD_ID})*"
+          STABLE_REGEX="^v${SEMVER_CORE}(\+${SEMVER_BUILD})?$"
+          PRERELEASE_REGEX="^v${SEMVER_CORE}-${SEMVER_PRERELEASE}(\+${SEMVER_BUILD})?$"
+
+          if [[ "$TAG_NAME" =~ $STABLE_REGEX ]]; then
+            MAJOR_TAG="${TAG_NAME%%.*}"
+            RELEASE_TITLE="Garnet Runtime Security Action ${MAJOR_TAG}"
+
+            git tag -f "$MAJOR_TAG" "$COMMIT_SHA"
+            git push --force origin "refs/tags/$MAJOR_TAG"
+
+            cat > release-body.md << EOF
+            # Garnet Runtime Security $MAJOR_TAG
+
+            This release provides the Garnet Runtime Security for GitHub Actions.
+
+            Current version: `$TAG_NAME`
+
+            ## Usage
+
+            \`\`\`yaml
+            - name: Run Garnet Runtime Security
+              uses: garnet-org/action@$MAJOR_TAG
+              with:
+                api_token: XXXXX
+            \`\`\`
+
+            To pin exactly to this published version, use \`garnet-org/action@$TAG_NAME\`.
+
+            The floating major tag \`$MAJOR_TAG\` is updated in place for each new \`$MAJOR_TAG.x.x\` release, so the GitHub Releases tab keeps a single up-to-date release entry for this major version.
+
+            To track the latest unreleased code from main instead of a published release tag, use \`garnet-org/action@main\`.
+
+            For more details, see the [Garnet Dashboard](https://dashboard.garnet.ai).
+
+            EOF
+            cat release-body.md
+
+            if gh release view "$MAJOR_TAG" >/dev/null 2>&1; then
+              gh release edit "$MAJOR_TAG" \
+                --title "$RELEASE_TITLE" \
+                --target "$COMMIT_SHA" \
+                --notes-file release-body.md
+            else
+              gh release create "$MAJOR_TAG" \
+                --title "$RELEASE_TITLE" \
+                --target "$COMMIT_SHA" \
+                --notes-file release-body.md
+            fi
+            exit 0
           fi
 
-          MAJOR_TAG="${TAG_NAME%%.*}"
-          RELEASE_TITLE="Garnet Runtime Security Action ${MAJOR_TAG}"
-
-          git tag -f "$MAJOR_TAG" "$COMMIT_SHA"
-          git push --force origin "refs/tags/$MAJOR_TAG"
-
-          cat > release-body.md << EOF
-          # Garnet Runtime Security $MAJOR_TAG
-
-          This release provides the Garnet Runtime Security for GitHub Actions.
-
-          Current version: `$TAG_NAME`
-
-          ## Usage
-
-          \`\`\`yaml
-          - name: Run Garnet Runtime Security
-            uses: garnet-org/action@$MAJOR_TAG
-            with:
-              api_token: XXXXX
-          \`\`\`
-
-          To pin exactly to this published version, use \`garnet-org/action@$TAG_NAME\`.
-
-          The floating major tag \`$MAJOR_TAG\` is updated in place for each new \`$MAJOR_TAG.x.x\` release, so the GitHub Releases tab keeps a single up-to-date release entry for this major version.
-
-          To track the latest unreleased code from main instead of a published release tag, use \`garnet-org/action@main\`.
-
-          For more details, see the [Garnet Dashboard](https://dashboard.garnet.ai).
-
-          EOF
-          cat release-body.md
-
-          if gh release view "$MAJOR_TAG" >/dev/null 2>&1; then
-            gh release edit "$MAJOR_TAG" \
-              --title "$RELEASE_TITLE" \
-              --target "$COMMIT_SHA" \
-              --notes-file release-body.md
-          else
-            gh release create "$MAJOR_TAG" \
-              --title "$RELEASE_TITLE" \
-              --target "$COMMIT_SHA" \
-              --notes-file release-body.md
+          if [[ "$TAG_NAME" =~ $PRERELEASE_REGEX ]]; then
+            echo "Detected prerelease tag $TAG_NAME; skipping floating major tag update."
+            exit 0
           fi
+
+          echo "::error::Release tags must follow semver (v<major>.<minor>.<patch> with optional prerelease/build metadata); got $TAG_NAME"
+          exit 1
