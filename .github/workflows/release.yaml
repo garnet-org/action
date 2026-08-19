@@ -46,31 +46,31 @@ jobs:
             git tag -f "$MAJOR_TAG" "$COMMIT_SHA"
             git push --force origin "refs/tags/$MAJOR_TAG"
 
-            cat > release-body.md << EOF
-            # Garnet Runtime Security $MAJOR_TAG
-
-            This release provides the Garnet Runtime Security for GitHub Actions.
-
-            Current version: `$TAG_NAME`
-
-            ## Usage
-
-            \`\`\`yaml
-            - name: Run Garnet Runtime Security
-              uses: garnet-org/action@$MAJOR_TAG
-              with:
-                api_token: XXXXX
-            \`\`\`
-
-            To pin exactly to this published version, use \`garnet-org/action@$TAG_NAME\`.
-
-            The floating major tag \`$MAJOR_TAG\` is updated in place for each new \`$MAJOR_TAG.x.x\` release, so the GitHub Releases tab keeps a single up-to-date release entry for this major version.
-
-            To track the latest unreleased code from main instead of a published release tag, use \`garnet-org/action@main\`.
-
-            For more details, see the [Garnet Dashboard](https://dashboard.garnet.ai).
-
-            EOF
+            printf '%s\n' \
+              "# Garnet Runtime Security $MAJOR_TAG" \
+              "" \
+              "This release provides the Garnet Runtime Security for GitHub Actions." \
+              "" \
+              "Current version: \`$TAG_NAME\`" \
+              "" \
+              "## Usage" \
+              "" \
+              "\`\`\`yaml" \
+              "- name: Run Garnet Runtime Security" \
+              "  uses: garnet-org/action@$MAJOR_TAG" \
+              "  with:" \
+              "    api_token: XXXXX" \
+              "\`\`\`" \
+              "" \
+              "To pin exactly to this published version, use \`garnet-org/action@$TAG_NAME\`." \
+              "" \
+              "The floating major tag \`$MAJOR_TAG\` is updated in place for each new \`$MAJOR_TAG.x.x\` release, so the GitHub Releases tab keeps a single up-to-date release entry for this major version." \
+              "" \
+              "To track the latest unreleased code from main instead of a published release tag, use \`garnet-org/action@main\`." \
+              "" \
+              "For more details, see the [Garnet Dashboard](https://dashboard.garnet.ai)." \
+              "" \
+              > release-body.md
             cat release-body.md
 
             if gh release view "$MAJOR_TAG" >/dev/null 2>&1; then
