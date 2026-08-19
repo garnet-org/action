@@ -46,6 +46,8 @@ Get your API token at [app.garnet.ai](https://app.garnet.ai). Start with the Act
   />
 </p>
 
+<p align="center"><sub>The action's own comment shape (renderer v6.9.5); the companion GitHub App comment adds true coverage and cross-run comparison.</sub></p>
+
 ## What Garnet sees
 
 The only secret Garnet uses is the API token you pass it. It never reads your other secrets, and never writes to your repo.
@@ -105,7 +107,7 @@ jobs:
 >     api_token: ${{ secrets.GARNET_API_TOKEN }}
 > ```
 >
-> The canonical SHA of the latest release is always at [garnet.ai/pins](https://garnet.ai/pins). Dependabot bumps SHA pins automatically. Exact tags such as `garnet-org/action@v2.3.0` remain available.
+> The canonical SHA of the latest release is always at [garnet.ai/pins](https://garnet.ai/pins). Dependabot bumps SHA pins automatically. Exact tags such as `garnet-org/action@v2.2.0` remain available.
 
 ### 3. Install the companion GitHub App
 
@@ -145,7 +147,7 @@ One comment per PR, one fold per job, updated in place as each job's profile lan
 - **Headline** — `Execution Profiles recorded for N job(s), triggered by <sha7>`, linking the commit.
 - **Metadata line** — an italic blockquote: `N destinations · recorded at the kernel by Garnet · <UTC timestamp>`, one fact per `·` segment.
 - **One fold per job** — headed `workflow / job ↗ · N destinations`, the job id linking to its Actions run. Inside: one block holding every recorded root of the job's tree; independent roots are separated by a blank line. Plain tree nodes are recorded process names; observed actions render as shaped terminals — `○ destination` for network, defanged at the final dot. A process with an action directly beneath it renders **bold**; `(…)` brackets carry factual context only — `(step: "Run tests")`, `(dns resolver)`, `(cloud metadata)`, `(github infra)`, `(garnet sensor)`, `(ran from /tmp/…)`. A job with no recorded egress stays a plain row keeping its Garnet profile link.
-- **Per-job permalink** — `View this job's Execution Profile in Garnet →`, opening the job's [public run report](https://app.garnet.ai/public/runs/30675075813?profile=019fbaad-dda5-71c3-a8e5-3a4cd96fea21) (`?profile=` selector required — a bare run URL returns 404).
+- **Per-job permalink** — `View this job's Execution Profile in Garnet →`, opening the job's [public run report](https://app.garnet.ai/public/runs/31257440827?profile=019fe15d-b34f-7803-820a-ecf58404a278) (`?profile=` selector required — a bare run URL returns 404).
 - **The explainer** — a `💡 How to read this` fold at the bottom teaches the tree with an annotated example:
 
 <pre>
@@ -177,7 +179,7 @@ The same full-detail record is appended to the GitHub Actions Job Summary as the
 | `api_token`         | Yes¹     | —                       | Your Garnet API token from app.garnet.ai       |
 | `github_token`      | No       | `${{ github.token }}`   | GitHub token used for pull request comments    |
 | `api_url`           | No       | `https://api.garnet.ai` | Garnet API base URL                            |
-| `jibril_version`    | No       | `""` (auto)             | Jibril version (for example `v2.15.0`, `v0.0`, or `latest`); empty resolves from the action tag |
+| `jibril_version`    | No       | `""` (auto)             | Jibril version (for example `v2.16.0`, `v0.0`, or `latest`); empty resolves to the pinned stable release for your action ref (daily builds on `@v0`) |
 | `debug`             | No       | `false`                 | Enable debug mode and upload logs as artifacts |
 | `preview`           | No       | `false`                 | Render the full-fidelity Step Summary record (assertions + evidence); preview shape is unstable and may change without a major version bump |
 

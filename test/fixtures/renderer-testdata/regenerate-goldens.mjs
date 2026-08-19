@@ -83,6 +83,21 @@ async function main() {
     const attributionCases = JSON.parse(
         await readFile(join(here, "synthetic", "attribution-cases.json"), "utf8"),
     )
+    const deltaPartitionPair = JSON.parse(
+        await readFile(join(here, "synthetic", "delta-partition-pair.json"), "utf8"),
+    )
+    const backgroundOnlyPair = JSON.parse(
+        await readFile(join(here, "synthetic", "background-only-pair.json"), "utf8"),
+    )
+    const rotationPair = JSON.parse(
+        await readFile(join(here, "synthetic", "rotation-pair.json"), "utf8"),
+    )
+    const branchMarking = JSON.parse(
+        await readFile(join(here, "synthetic", "branch-marking.json"), "utf8"),
+    )
+    const shaiHuludWormPair = JSON.parse(
+        await readFile(join(here, "synthetic", "shai-hulud-worm-pair.json"), "utf8"),
+    )
 
     /** @type {Record<string, { files?: string[], profiles?: unknown[], previous?: unknown[] }>} */
     const states = {
@@ -102,6 +117,38 @@ async function main() {
         "multi-job-comparison": {
             profiles: comparisonPair.head,
             previous: comparisonPair.previous,
+        },
+        // v6.10.0 delta partition: one workload addition headlines while
+        // background churn counts only in the boundary label on its moved
+        // root — every moved line stays marked.
+        "delta-partition": {
+            profiles: deltaPartitionPair.head,
+            previous: deltaPartitionPair.previous,
+        },
+        // v6.10.0 background-only movement: the workload held still, so the
+        // job reads 'unchanged' — never 'No changes' — with the boundary
+        // label on the moved background root.
+        "background-only": {
+            profiles: backgroundOnlyPair.head,
+            previous: backgroundOnlyPair.previous,
+        },
+        // Provable GitHub infrastructure rotation: the same owning process
+        // moves between addresses inside one published service block, so the
+        // pair joins into one annotated line instead of a −/+ pair.
+        "infra-rotation": {
+            profiles: rotationPair.head,
+            previous: rotationPair.previous,
+        },
+        // Marking across a branch: every moved line stays marked wherever it
+        // sits in the fence.
+        "branch-marking": {
+            profiles: branchMarking.head,
+            previous: branchMarking.previous,
+        },
+        // Worm-style workload egress appearing against a quiet previous run.
+        "shai-hulud-worm": {
+            profiles: shaiHuludWormPair.head,
+            previous: shaiHuludWormPair.previous,
         },
     }
 

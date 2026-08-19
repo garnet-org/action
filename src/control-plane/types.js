@@ -151,3 +151,29 @@ export const EXCHANGE_OIDC_RESPONSE_SCHEMA = z.object({
 export const API_ERROR_SCHEMA = z.object({
     error: z.string().min(1),
 })
+
+/**
+ * @typedef {object} ProfileEnvelope
+ * @property {string} id
+ * @property {string} runID
+ * @property {string} job
+ */
+
+/**
+ * @typedef {object} ProfileEnvelopePage
+ * @property {ProfileEnvelope[]} items
+ */
+
+export const PROFILE_ENVELOPE_SCHEMA = z
+    .object({
+        id: z.string().min(1),
+        runID: z.string().default(""),
+        job: z.string().default(""),
+    })
+    .passthrough()
+
+export const PROFILE_ENVELOPE_PAGE_SCHEMA = z
+    .object({
+        items: z.array(PROFILE_ENVELOPE_SCHEMA).default([]),
+    })
+    .passthrough()

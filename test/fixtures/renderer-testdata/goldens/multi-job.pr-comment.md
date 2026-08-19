@@ -1,10 +1,11 @@
 <!-- garnet-runtime-review -->
 <!-- garnet-run-profile -->
 <!-- garnet:commit 6e5d0d4cf00a92a9e1fe697efe0e41b3ae61533e -->
-<!-- garnet:summary {"contract":"6.9.5","commit":"6e5d0d4cf00a92a9e1fe697efe0e41b3ae61533e","previous":null,"jobs":5,"changed":null,"unchanged":null,"noOutbound":null,"vanished":null,"added":null,"removed":null,"vanishedDestinations":null,"chains":25,"destinations":19,"kinds":["network"]} -->
+<!-- garnet:summary {"contract":"6.10.0","githubMeta":"2026-08-08","commit":"6e5d0d4cf00a92a9e1fe697efe0e41b3ae61533e","previous":null,"jobs":5,"changed":null,"unchanged":null,"noOutbound":null,"vanished":null,"added":null,"removed":null,"backgroundAdded":null,"backgroundRemoved":null,"vanishedDestinations":null,"chains":25,"destinations":19,"recorded":"2026-07-13 23:54:31 UTC","kinds":["network"]} -->
 **Execution Profiles recorded for 5 jobs, triggered by [`6e5d0d4`](https://github.com/garnet-org/runtime-review-testbed/commit/6e5d0d4cf00a92a9e1fe697efe0e41b3ae61533e)**
 
-> *19&nbsp;destinations · recorded at the kernel by Garnet · 2026-07-13 23:54:31 UTC*
+> *19&nbsp;destinations across 5&nbsp;jobs*
+> <sub>recorded at the kernel by Garnet · 2026-07-13 23:54 UTC</sub>
 
 <details><summary><code>ci</code> / <a href="https://github.com/garnet-org/runtime-review-testbed/actions/runs/29294366437"><code>docs-build</code>&nbsp;↗</a> · 2&nbsp;destinations</summary>
 
@@ -23,18 +24,18 @@ Runner.Worker
 <details><summary><code>ci</code> / <a href="https://github.com/garnet-org/runtime-review-testbed/actions/runs/29294366437"><code>install-only</code>&nbsp;↗</a> · 4&nbsp;destinations</summary>
 
 <pre>
+Runner.Worker
+└─ bash
+   └─ <strong>node</strong> <em>(step: &quot;Run workload&quot;)</em>
+      ├─ ○ localhost <em>(dns resolver)</em>
+      └─ ○ registry.npmjs[.]org
+
 systemd
 └─ <strong>hosted-compute-agent</strong>
    ├─ sudo
    │  └─ <strong>provjobd</strong> <em>(ran from /tmp/…)</em>
    │     └─ ○ hosted-compute-watchdog-prod-iad-01[.]githubapp <em>(github infra)</em>
    └─ ○ 140.82.112.23
-
-Runner.Worker
-└─ bash
-   └─ <strong>node</strong> <em>(step: &quot;Run workload&quot;)</em>
-      ├─ ○ localhost <em>(dns resolver)</em>
-      └─ ○ registry.npmjs[.]org
 </pre>
 
 <p align="right"><sub><a href="https://app.garnet.ai/public/runs/29294366437?profile=019f5de7-571c-78d6-8a61-dd43f61c441c&amp;utm_source=github&amp;utm_medium=pr_comment">View this job's Execution Profile in Garnet →</a></sub></p>
@@ -76,13 +77,6 @@ systemd
 <details><summary><code>ci</code> / <a href="https://github.com/garnet-org/runtime-review-testbed/actions/runs/29294366437"><code>workload-egress</code>&nbsp;↗</a> · 7&nbsp;destinations</summary>
 
 <pre>
-systemd
-└─ <strong>hosted-compute-agent</strong>
-   ├─ sudo
-   │  └─ <strong>provjobd</strong> <em>(ran from /tmp/…)</em>
-   │     └─ ○ hosted-compute-watchdog-prod-iad-02[.]githubapp <em>(github infra)</em>
-   └─ ○ 140.82.113.23
-
 Runner.Worker
 └─ bash
    └─ <strong>node</strong> <em>(step: &quot;Run workload&quot;)</em>
@@ -95,6 +89,13 @@ Runner.Worker
       │     └─ ○ github[.]com
       ├─ ○ localhost <em>(dns resolver)</em>
       └─ ○ registry.npmjs[.]org
+
+systemd
+└─ <strong>hosted-compute-agent</strong>
+   ├─ sudo
+   │  └─ <strong>provjobd</strong> <em>(ran from /tmp/…)</em>
+   │     └─ ○ hosted-compute-watchdog-prod-iad-02[.]githubapp <em>(github infra)</em>
+   └─ ○ 140.82.113.23
 </pre>
 
 <p align="right"><sub><a href="https://app.garnet.ai/public/runs/29294366437?profile=019f5de7-5992-7409-89cf-6d88e0fb46ea&amp;utm_source=github&amp;utm_medium=pr_comment">View this job's Execution Profile in Garnet →</a></sub></p>

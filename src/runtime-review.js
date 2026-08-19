@@ -50,6 +50,7 @@ import { isIP } from "node:net"
 
 import { CONTRACT_VOCAB } from "./runtime-review-vocab.js"
 import { PUBLIC_SUFFIX_RULES } from "./public-suffix-rules.js"
+import { GITHUB_META_IP_RANGES } from "./github-meta-ip-ranges.js"
 
 export { CONTRACT_VOCAB }
 
@@ -130,6 +131,7 @@ export { CONTRACT_VOCAB }
  *   uuid: string
  *   timestamp: string
  *   ref: string
+ *   pr_url: string
  *   actor: string
  *   job_index: string
  *   flow_count: number
@@ -180,6 +182,9 @@ export { CONTRACT_VOCAB }
  *   removed: ReviewEdge[]
  *   addedCount: number
  *   removedCount: number
+ *   backgroundAddedCount: number
+ *   backgroundRemovedCount: number
+ *   rotations: Map<string, string>
  * }} EdgeDelta
  */
 
@@ -253,6 +258,8 @@ export const VOCAB = {
   explainerLabel: CONTRACT_VOCAB.copy.explainerLabel,
   explainerReadingLine: CONTRACT_VOCAB.copy.explainerReadingLine,
   explainerComparisonLine: CONTRACT_VOCAB.copy.explainerComparisonLine,
+  explainerBackgroundSegment: CONTRACT_VOCAB.copy.explainerBackgroundSegment,
+  runnerBackground: CONTRACT_VOCAB.copy.runnerBackground,
   explainerLegendLine: CONTRACT_VOCAB.copy.explainerLegendLine,
   explainerCalloutPath: CONTRACT_VOCAB.copy.explainerCalloutPath,
   explainerCalloutActed: CONTRACT_VOCAB.copy.explainerCalloutActed,
@@ -586,6 +593,20 @@ export function edgeComparator(a, b) {
 }
 
 /**
+ * The pull request a recorded run is associated with, derived from the
+ * recorded ref (`refs/pull/<N>/...`). Push and other non-PR runs return ""
+ * — fail-closed, nothing fabricated.
+ * @param {Record<string, any>} github
+ */
+export function pullRequestURL(github) {
+  const match = /^refs\/pull\/(\d+)\//.exec(String(github.ref || ""))
+  const repository = String(github.repository || "")
+  if (match === null || repository === "") return ""
+  const server = String(github.server_url || "https://github.com").replace(/\/+$/, "")
+  return `${server}/${repository}/pull/${match[1]}`
+}
+
+/**
  * Collapse one raw Jibril profile (format 0.2.0) into a job record with its
  * destination associations and mechanical counts.
  * @param {unknown} profile
@@ -641,6 +662,7 @@ export function summarizeProfile(profile) {
     uuid: String(p?.uuid || ""),
     timestamp: String(p?.timestamp || ""),
     ref: String(github.ref || ""),
+    pr_url: pullRequestURL(github),
     actor: String(github.triggering_actor || github.actor || ""),
     job_index:
       github.job_index !== undefined && github.job_index !== null
@@ -767,6 +789,7 @@ export function buildRunReview(input) {
       repository: String(j.repository || ""),
       sha: String(j.sha || ""),
       ref: String(j.ref || ""),
+      pr_url: String(j.pr_url || ""),
       actor: String(j.actor || ""),
       job_index: String(j.job_index || ""),
       flow_count: Number(j.flow_count || 0),
@@ -1324,6 +1347,35 @@ function annotatedStepNames(node, inherited) {
 }
 
 /**
+ * A workload root descends through `Runner.Worker` or bears a recorded step
+ * anywhere in its subtree; every other recorded root (e.g. systemd) is
+ * runner infrastructure. Structural facts only — names of destinations or
+ * deeper processes never classify.
+ * @param {TreeNode} node
+ * @returns {boolean}
+ */
+function isWorkloadRoot(node) {
+  if (node.name === "Runner.Worker") return true
+  // Unrecorded lineage attributes to the workload: an unprovable line never
+  // quiets a count, so its root never carries the boundary label either.
+  if (node.name === VOCAB.unknownLineage) return true
+  if (recordedStepNames(node).length > 0) return true
+  return node.children.some(isWorkloadRoot)
+}
+
+/**
+ * Root order within a job block: workload roots render before
+ * infrastructure-rooted ones so the signal is never buried below runner
+ * plumbing — snapshot and comparison alike; canonical order holds within
+ * each group.
+ * @param {TreeNode[]} children
+ * @returns {TreeNode[]}
+ */
+function orderedJobRoots(children) {
+  return [...children.filter(isWorkloadRoot), ...children.filter((child) => !isWorkloadRoot(child))]
+}
+
+/**
  * @param {TreeNode} node
  * @param {Set<string>} inherited
  */
@@ -1372,12 +1424,16 @@ export function ranFromNote(executables) {
 /**
  * @param {ReviewEdge} edge
  * @param {boolean} detections
+ * @param {boolean} [defang]
  */
-function destinationLeafLine(edge, detections) {
+function destinationLeafLine(edge, detections, defang = true) {
   // Observed actions render as shaped terminals — `○ <destination>` for
   // network; box-drawing characters carry structure, geometric terminals
   // carry evidence.
-  const parts = [VOCAB.terminalNetwork, commentDestinationDisplay(edge, escapeHtml)]
+  const display = defang
+    ? commentDestinationDisplay(edge, escapeHtml)
+    : escapeHtml(truncateMiddle(edgePrimaryDestination(edge)))
+  const parts = [VOCAB.terminalNetwork, display]
   for (const note of edgeNotes(edge, { detections })) parts.push(renderNote(note))
   return parts.join(" ")
 }
@@ -1386,9 +1442,9 @@ function destinationLeafLine(edge, detections) {
  * @param {TreeNode} node
  * @param {string} prefix
  * @param {string[]} lines
- * @param {{ destinations: boolean, steps?: boolean, detections?: boolean, inheritedSteps?: Set<string> }} options
+ * @param {{ destinations: boolean, steps?: boolean, detections?: boolean, defang?: boolean, inheritedSteps?: Set<string> }} options
  */
-function renderTreeChildren(node, prefix, lines, { destinations, steps = true, detections = false, inheritedSteps = new Set() }) {
+function renderTreeChildren(node, prefix, lines, { destinations, steps = true, detections = false, defang = true, inheritedSteps = new Set() }) {
   /** @type {({ kind: "process", child: TreeNode } | { kind: "destination", edge: ReviewEdge })[]} */
   const entries = [
     ...node.children.map((child) => ({ kind: /** @type {"process"} */ ("process"), child })),
@@ -1406,10 +1462,11 @@ function renderTreeChildren(node, prefix, lines, { destinations, steps = true, d
         destinations,
         steps,
         detections,
+        defang,
         inheritedSteps: inheritSteps(entry.child, inheritedSteps),
       })
     } else {
-      lines.push(`${prefix}${branch}${destinationLeafLine(entry.edge, detections)}`)
+      lines.push(`${prefix}${branch}${destinationLeafLine(entry.edge, detections, defang)}`)
     }
   })
 }
@@ -1419,20 +1476,22 @@ function renderTreeChildren(node, prefix, lines, { destinations, steps = true, d
  * attached to the terminal recorded process; no ×N grouping or trust labels.
  * @param {ReviewJob} job
  * @param {ReviewEdge[]} [edges]
+ * @param {{ defang?: boolean }} [opts]
  */
-export function renderJobTree(job, edges = job.edges) {
+export function renderJobTree(job, edges = job.edges, opts = {}) {
   /** @type {string[]} */
   const lines = []
   const root = treeForAssociations(edges)
   // One block holds every recorded root; independent recorded ancestry
   // roots are separated by one blank line — whitespace means independent
   // recorded roots in the same job, never another category.
-  root.children.forEach((child, index) => {
+  orderedJobRoots(root.children).forEach((child, index) => {
     if (index > 0) lines.push("")
     lines.push(processNodeLine(child, { steps: true }))
     renderTreeChildren(child, "", lines, {
       destinations: true,
       steps: true,
+      defang: opts.defang !== false,
       inheritedSteps: inheritSteps(child, new Set()),
     })
   })
@@ -1469,20 +1528,133 @@ export function compareJobEdges(headEdges, previousEdges) {
   const prevIds = new Set(previousEdges.map((edge) => destinationIdentity(edge, names)))
   const addedIds = new Set([...headIds].filter((id) => !prevIds.has(id)))
   const removedIds = new Set([...prevIds].filter((id) => !headIds.has(id)))
+  // Provable-rotation join (contract comment.rotationJoin): a −/+ pair is one
+  // rotating GitHub infrastructure identity when the owning recorded process
+  // is the same and both recorded addresses sit in the same published GitHub
+  // service block — either two bare-address identities (a lease rotation) or
+  // two named identities sharing one registrable domain (a pool
+  // reassignment). A joined pair is unmarked and uncounted, and the current
+  // line carries the identity it replaced. Data, not heuristics: the ranges
+  // and the public-suffix rules are vendored contract bytes, and anything
+  // unprovable stays an honest −/+.
+  /** @type {Map<string, string>} */
+  const rotations = new Map()
+  /**
+   * Join candidates on one side, grouped by [owning process, block, domain].
+   * @param {ReviewEdge[]} edges
+   * @param {Set<string>} ids
+   * @returns {Map<string, Map<string, ReviewEdge>>}
+   */
+  function rotationCandidates(edges, ids) {
+    /** @type {Map<string, Map<string, ReviewEdge>>} */
+    const byGroup = new Map()
+    for (const edge of [...edges].sort(edgeComparator)) {
+      const id = destinationIdentity(edge, names)
+      if (!ids.has(id)) continue
+      // An address-like identity is bare even when the record aliases the
+      // address to itself in remote_names — live captures do exactly that.
+      const bare = isAddressLike(id)
+      const domain = bare ? "" : registrableDomain(id)
+      if (!bare && domain === "") continue
+      const block = githubInfraBlock(edge.remote_address)
+      if (block === "") continue
+      const path = commentTreePath(edge)
+      const owner = path[path.length - 1] ?? ""
+      const key = JSON.stringify([owner, block, domain])
+      let group = byGroup.get(key)
+      if (group === undefined) {
+        group = new Map()
+        byGroup.set(key, group)
+      }
+      if (!group.has(id)) group.set(id, edge)
+    }
+    return byGroup
+  }
+  const removedGroups = rotationCandidates(previousEdges, removedIds)
+  const addedGroups = rotationCandidates(headEdges, addedIds)
+  // Deterministic pairing: groups in sorted key order, identities in sorted
+  // order, and every identity joins at most once.
+  for (const key of [...removedGroups.keys()].sort()) {
+    const addedGroup = addedGroups.get(key)
+    if (addedGroup === undefined) continue
+    const removedGroup = removedGroups.get(key)
+    if (removedGroup === undefined) continue
+    const removedList = [...removedGroup.keys()].filter((id) => removedIds.has(id)).sort()
+    const addedList = [...addedGroup.keys()].filter((id) => addedIds.has(id)).sort()
+    const pairs = Math.min(removedList.length, addedList.length)
+    for (let index = 0; index < pairs; index += 1) {
+      const addedID = addedList[index] ?? ""
+      const removedID = removedList[index] ?? ""
+      rotations.set(addedID, removedID)
+      addedIds.delete(addedID)
+      removedIds.delete(removedID)
+    }
+  }
   /** @type {Map<string, ReviewEdge>} */
   const removedByID = new Map()
   for (const edge of [...previousEdges].sort(edgeComparator)) {
     const id = destinationIdentity(edge, names)
     if (removedIds.has(id) && !removedByID.has(id)) removedByID.set(id, edge)
   }
+  // Delta partition (contract comment.deltaPartition): each added/removed
+  // identity attributes to the workload or to the runner background by the
+  // structural root rule. The headline counts are workload-attributed only;
+  // background movement keeps its own quiet counts. Every identity stays in
+  // addedIds/removedIds, so every mark still renders — only count placement
+  // partitions, never visibility.
+  const headWorkload = workloadIdentitySet(headEdges, names)
+  const previousWorkload = workloadIdentitySet(previousEdges, names)
+  const workloadAdded = [...addedIds].filter((id) => headWorkload.has(id))
+  const workloadRemoved = [...removedIds].filter((id) => previousWorkload.has(id))
   return {
     addedIds,
     removedIds,
     added: addedIds,
     removed: [...removedByID.values()],
-    addedCount: addedIds.size,
-    removedCount: removedIds.size,
+    addedCount: workloadAdded.length,
+    removedCount: workloadRemoved.length,
+    backgroundAddedCount: addedIds.size - workloadAdded.length,
+    backgroundRemovedCount: removedIds.size - workloadRemoved.length,
+    rotations,
   }
+}
+
+/**
+ * Workload attribution of destination identities on one side of a job
+ * comparison (contract comment.deltaPartition). Edges group by recorded
+ * root; a root attributes to the workload when any of its edges descends
+ * through `Runner.Worker` or bears a recorded step — the same structural
+ * rule as rootOrdering. Unrecorded lineage attributes to the workload: an
+ * unprovable line never quiets a count. An identity is workload-attributed
+ * when any of its edges is. Names of destinations, processes, hostnames, or
+ * domains never classify.
+ * @param {ReviewEdge[]} edges
+ * @param {Map<string, string>} names
+ * @returns {Set<string>}
+ */
+function workloadIdentitySet(edges, names) {
+  /** @type {Set<string>} */
+  const workloadRoots = new Set()
+  /** @type {[ReviewEdge, string][]} */
+  const roots = []
+  for (const edge of edges) {
+    const path = commentTreePath(edge)
+    const root = path[0] ?? ""
+    roots.push([edge, root])
+    if (
+      !edge.lineage_recorded ||
+      path.includes("Runner.Worker") ||
+      stepAnnotationName(edge.github_step) !== ""
+    ) {
+      workloadRoots.add(root)
+    }
+  }
+  /** @type {Set<string>} */
+  const ids = new Set()
+  for (const [edge, root] of roots) {
+    if (workloadRoots.has(root)) ids.add(destinationIdentity(edge, names))
+  }
+  return ids
 }
 
 /**
@@ -1514,6 +1686,85 @@ export function registrableDomain(name) {
   if (labels.length <= suffixLen) return ""
   return labels.slice(labels.length - suffixLen - 1).join(".")
 }
+/**
+ * The retrieval date of the vendored published GitHub meta ranges, carried in
+ * the garnet:summary marker so a stale range list is diagnosable from any
+ * live comment.
+ */
+export const GITHUB_META_RETRIEVED = GITHUB_META_IP_RANGES.retrieved
+
+// Service blocks only (web/api): the `actions` block is runner address space,
+// where an attacker-controlled endpoint in another org can sit, so a
+// same-process substitution there is weaker proof and never joins.
+const GITHUB_META_BLOCKS = [...new Set([...GITHUB_META_IP_RANGES.web, ...GITHUB_META_IP_RANGES.api])]
+
+/**
+ * The numeric value of an IPv4/IPv6 literal, or null when the text is not one.
+ * @param {string} address
+ * @returns {bigint | null}
+ */
+function ipToBigInt(address) {
+  if (address.includes(":")) {
+    // IPv6 (no embedded-IPv4 forms in the vendored data).
+    const [head, tail] = address.split("::")
+    const headParts = head === undefined || head === "" ? [] : head.split(":")
+    const tailParts = tail === undefined || tail === "" ? [] : tail.split(":")
+    if (tail === undefined && headParts.length !== 8) return null
+    const parts = [
+      ...headParts,
+      ...Array(8 - headParts.length - tailParts.length).fill("0"),
+      ...tailParts,
+    ]
+    if (parts.length !== 8 || parts.some((part) => !/^[0-9a-fA-F]{1,4}$/.test(part))) return null
+    return parts.reduce((acc, part) => (acc << 16n) | BigInt(parseInt(part, 16)), 0n)
+  }
+  const octets = address.split(".")
+  if (octets.length !== 4 || octets.some((o) => !/^\d{1,3}$/.test(o) || Number(o) > 255)) {
+    return null
+  }
+  return octets.reduce((acc, o) => (acc << 8n) | BigInt(Number(o)), 0n)
+}
+
+/**
+ * One parsed published block: its text, family, and the shift/value pair the
+ * prefix match compares.
+ * @typedef {{ cidr: string, v6: boolean, shift: bigint, value: bigint }} MetaBlock
+ */
+
+/** @type {MetaBlock[]} */
+const GITHUB_META_PARSED = GITHUB_META_BLOCKS.map((cidr) => {
+  const [networkText, prefixText] = cidr.split("/")
+  const network = networkText ?? ""
+  const v6 = network.includes(":")
+  const bits = v6 ? 128n : 32n
+  const prefix = BigInt(prefixText ?? "0")
+  const value = ipToBigInt(network) ?? 0n
+  return { cidr, v6, shift: bits - prefix, value: value >> (bits - prefix) }
+})
+
+/**
+ * The published GitHub infrastructure block containing an address, else "".
+ * Longest (most specific) matching prefix wins so the join key is stable.
+ * @param {string} address
+ * @returns {string}
+ */
+export function githubInfraBlock(address) {
+  const text = String(address ?? "")
+  const value = ipToBigInt(text)
+  if (value === null) return ""
+  const v6 = text.includes(":")
+  /** @type {MetaBlock | null} */
+  let best = null
+  for (const block of GITHUB_META_PARSED) {
+    if (block.v6 !== v6) continue
+    if (value >> block.shift === block.value) {
+      if (best === null || block.shift < best.shift) best = block
+    }
+  }
+  return best === null ? "" : best.cidr
+}
+
+
 
 /**
  * @param {TreeNode} node
@@ -1533,8 +1784,9 @@ function diffNodeLine(node, { steps = true, inheritedSteps = new Set() } = {}) {
 /**
  * @param {ReviewEdge} edge
  * @param {boolean} [annotateAddress]
+ * @param {string} [rotatedFrom]
  */
-function diffLeafLine(edge, annotateAddress = false) {
+function diffLeafLine(edge, annotateAddress = false, rotatedFrom = "") {
   const identity = edgePrimaryDestination(edge)
   const parts = [VOCAB.terminalNetwork, fenceText(defangHostname(truncateMiddle(identity)))]
   // A marked (+/−) leaf carries the recorded address as one trailing bracket
@@ -1544,7 +1796,20 @@ function diffLeafLine(edge, annotateAddress = false) {
   if (annotateAddress && edge.remote_address !== "" && edge.remote_address !== identity) {
     parts.push(`(${fenceText(edge.remote_address)})`)
   }
-  for (const note of edgeNotes(edge, { detections: false })) parts.push(`(${fenceText(note)})`)
+  // A joined rotation carries the trust cue and the identity it replaced in
+  // one bracket, so the line reads as context with its provenance attached.
+  if (rotatedFrom !== "") {
+    parts.push(
+      `(${fenceText(
+        `${CONTRACT_VOCAB.notes.githubInfrastructure.text} · rotated from ${defangHostname(rotatedFrom)}`,
+      )})`,
+    )
+  }
+  for (const note of edgeNotes(edge, { detections: false })) {
+    // One bracket per fact: the rotation bracket already names GitHub infra.
+    if (rotatedFrom !== "" && note === CONTRACT_VOCAB.notes.githubInfrastructure.text) continue
+    parts.push(`(${fenceText(note)})`)
+  }
   return parts.join(" ")
 }
 
@@ -1582,8 +1847,17 @@ function diffBranchMark(node, marks) {
  * @param {Map<ReviewEdge, string>} marks
  * @param {Set<ReviewEdge>} annotated
  * @param {Set<string>} [inheritedSteps]
+ * @param {Map<ReviewEdge, string>} [rotatedByEdge]
  */
-function renderDiffChildren(node, prefix, lines, marks, annotated, inheritedSteps = new Set()) {
+function renderDiffChildren(
+  node,
+  prefix,
+  lines,
+  marks,
+  annotated,
+  inheritedSteps = new Set(),
+  rotatedByEdge = new Map(),
+) {
   /** @type {({ kind: "process", child: TreeNode } | { kind: "destination", edge: ReviewEdge })[]} */
   const entries = [
     ...node.children.map((child) => ({ kind: /** @type {"process"} */ ("process"), child })),
@@ -1603,11 +1877,16 @@ function renderDiffChildren(node, prefix, lines, marks, annotated, inheritedStep
         marks,
         annotated,
         inheritSteps(entry.child, inheritedSteps),
+        rotatedByEdge,
       )
     } else {
       const mark = marks.get(entry.edge) ?? " "
       lines.push(
-        `${mark} ${prefix}${branch}${diffLeafLine(entry.edge, annotated.has(entry.edge))}`,
+        `${mark} ${prefix}${branch}${diffLeafLine(
+          entry.edge,
+          annotated.has(entry.edge),
+          rotatedByEdge.get(entry.edge) ?? "",
+        )}`,
       )
     }
   })
@@ -1635,10 +1914,19 @@ export function renderJobDiffTree(job, delta, headSha, previousSha) {
     const currentNamed = current?.remote_names.some((name) => name !== "")
     if (!current || (named && !currentNamed)) representatives.set(id, edge)
   }
+  // Provable-rotation join: the joined identity renders unmarked, carrying
+  // the identity it replaced. More than one rotation in a fence would turn
+  // every line into an annotation, so the fence summarizes them instead
+  // (contract comment.rotationJoin).
+  /** @type {Map<ReviewEdge, string>} */
+  const rotatedByEdge = new Map()
   const unionEdges = [...representatives.entries()].map(([id, edge]) => {
     marks.set(edge, delta.addedIds.has(id) ? "+" : delta.removedIds.has(id) ? "-" : " ")
+    const rotatedFrom = delta.rotations.get(id)
+    if (rotatedFrom !== undefined) rotatedByEdge.set(edge, rotatedFrom)
     return edge
   })
+  if (rotatedByEdge.size > 1) rotatedByEdge.clear()
   unionEdges.sort((a, b) => {
     const ka = destinationIdentity(a, names)
     const kb = destinationIdentity(b, names)
@@ -1669,12 +1957,66 @@ export function renderJobDiffTree(job, delta, headSha, previousSha) {
     `@@ ${fenceText(previousSha.slice(0, 7) || "unknown")} (previous) vs ${fenceText(headSha.slice(0, 7) || "unknown")} (current) @@`,
   ]
   const root = treeForAssociations(unionEdges)
-  root.children.forEach((child, index) => {
+  // Findings first: workload roots render before infrastructure roots, and
+  // within each group roots carrying any marked (+/−) line render before
+  // all-context roots — a workload change is never buried below runner
+  // plumbing; canonical order holds within each tier.
+  /** @type {(node: TreeNode) => boolean} */
+  const subtreeHasMark = (node) =>
+    node.associations.some((edge) => (marks.get(edge) ?? " ") !== " ") ||
+    node.children.some(subtreeHasMark)
+  /** @type {(children: TreeNode[]) => TreeNode[]} */
+  const withMarks = (children) => [
+    ...children.filter(subtreeHasMark),
+    ...children.filter((child) => !subtreeHasMark(child)),
+  ]
+  const orderedRoots = [
+    ...withMarks(root.children.filter(isWorkloadRoot)),
+    ...withMarks(root.children.filter((child) => !isWorkloadRoot(child))),
+  ]
+  // Boundary label: a moved non-workload root announces its subtree's marks
+  // where the secondary evidence begins — '(runner background · +A −B)' in
+  // the fence's plain parenthetical context grammar. The count sits beside
+  // the marks it counts; workload roots and unmoved roots carry no label.
+  /** @type {(node: TreeNode) => { added: number, removed: number }} */
+  const subtreeMarkCounts = (node) => {
+    const counts = { added: 0, removed: 0 }
+    /** @type {(n: TreeNode) => void} */
+    const walk = (n) => {
+      for (const edge of n.associations) {
+        const mark = marks.get(edge) ?? " "
+        if (mark === "+") counts.added += 1
+        if (mark === "-") counts.removed += 1
+      }
+      n.children.forEach(walk)
+    }
+    walk(node)
+    return counts
+  }
+  /** @type {(child: TreeNode) => string} */
+  const boundaryLabel = (child) => {
+    if (isWorkloadRoot(child)) return ""
+    const { added, removed } = subtreeMarkCounts(child)
+    if (added + removed === 0) return ""
+    const sides = []
+    if (added > 0) sides.push(`+${added}`)
+    if (removed > 0) sides.push(`−${removed}`)
+    return ` (${VOCAB.runnerBackground} · ${sides.join(" ")})`
+  }
+  orderedRoots.forEach((child, index) => {
     // Independent recorded roots separate with one fence-safe " " line.
     if (index > 0) lines.push(" ")
     const mark = diffBranchMark(child, marks)
-    lines.push(`${mark} ${diffNodeLine(child)}`)
-    renderDiffChildren(child, "", lines, marks, annotated, inheritSteps(child, new Set()))
+    lines.push(`${mark} ${diffNodeLine(child)}${boundaryLabel(child)}`)
+    renderDiffChildren(
+      child,
+      "",
+      lines,
+      marks,
+      annotated,
+      inheritSteps(child, new Set()),
+      rotatedByEdge,
+    )
   })
   return lines.join("\n")
 }
@@ -1695,15 +2037,16 @@ function countPhrase(n, unit) {
  * inflects on the total moved identities.
  * @param {number} added
  * @param {number} removed
- * @param {{ bold?: boolean }} [options]
+ * @param {{ bold?: boolean, unit?: boolean }} [options]
  */
-function deltaPhrase(added, removed, { bold = true } = {}) {
+function deltaPhrase(added, removed, { bold = true, unit = true } = {}) {
   const sides = []
   if (added > 0) sides.push(`+${added}`)
   if (removed > 0) sides.push(`−${removed}`)
-  const unit = added + removed === 1 ? "destination" : "destinations"
   const numbers = sides.join("&nbsp;")
-  return `${bold ? `<b>${numbers}</b>` : numbers}&nbsp;${unit}`
+  const marked = bold ? `<b>${numbers}</b>` : numbers
+  if (!unit) return marked
+  return `${marked}&nbsp;${added + removed === 1 ? "destination" : "destinations"}`
 }
 
 /**
@@ -1735,9 +2078,9 @@ const truncationLine = (x, y) =>
 /**
  * Concise orientation fold with a lineage-exact mini tree. Open while
  * pending and on the first recorded result; collapsed on later updates.
- * @param {{ open?: boolean, comparison?: boolean }} [options]
+ * @param {{ open?: boolean, comparison?: boolean, background?: boolean }} [options]
  */
-export function renderExplainer({ open = false, comparison = false } = {}) {
+export function renderExplainer({ open = false, comparison = false, background = false } = {}) {
   // One mini tree of exactly the constructs the real renderer emits, with
   // ← arrow callouts aligned in one italic column at visible offset 23 —
   // every callout line fits ~44 monospace columns, so the tree teaches
@@ -1759,7 +2102,11 @@ export function renderExplainer({ open = false, comparison = false } = {}) {
     `<sub><i>${VOCAB.explainerLegendLine}</i></sub>`,
   ]
   if (comparison) {
-    lines.push("", `<sub><i>${VOCAB.explainerComparisonLine}</i></sub>`)
+    // The legend teaches the boundary-label vocabulary only when a label
+    // actually renders above it.
+    const segments = [VOCAB.explainerComparisonLine]
+    if (background) segments.push(VOCAB.explainerBackgroundSegment)
+    lines.push("", `<sub><i>${segments.join(" · ")}</i></sub>`)
   }
   lines.push("", "</details>")
   return lines.join("\n")
@@ -1814,6 +2161,16 @@ export function isSentinelStep(name) {
 }
 
 /**
+ * Total background-attributed movement in a job delta.
+ * @param {JobDelta | null | undefined} delta
+ * @returns {number}
+ */
+function backgroundDelta(delta) {
+  if (delta === null || delta === undefined) return 0
+  return delta.backgroundAddedCount + delta.backgroundRemovedCount
+}
+
+/**
  * Fold summary row — the row's facts are the identity and the destination
  * count; no step-name sentence, no chain counts. Changed rows lead with
  * the bold delta as their only destination fact; unchanged comparison rows
@@ -1832,12 +2189,19 @@ function jobSummaryLine(job, { delta = null, treeEdges = null } = {}) {
   // so what moved reads top-to-bottom without reading a single job name.
   // The comparison base commit renders once at run scope (metadata line) and
   // inside the diff's @@ header — the fold row carries only its own delta.
+  // The meta block's changed segment names the destination unit once for
+  // the whole comment; the fold row carries only its own bold split.
   const changed = delta !== null && delta.addedCount + delta.removedCount > 0
-  if (changed) parts.push(`${deltaPhrase(delta.addedCount, delta.removedCount)} ·`)
+  if (changed) {
+    parts.push(`${deltaPhrase(delta.addedCount, delta.removedCount, { unit: false })} ·`)
+  }
   parts.push(jobIdentity(job))
-  if (!changed) {
-    parts.push(`· ${countPhrase(treeCounts, "destination")}`)
-    if (delta !== null) parts.push(`· ${VOCAB.noChange}`)
+  if (!changed) parts.push(`· ${countPhrase(treeCounts, "destination")}`)
+  // The workload-scoped 'unchanged' claim only renders when the runner
+  // background held still too — a row never claims 'unchanged' beside a
+  // quiet background split.
+  if (delta !== null && !changed && backgroundDelta(delta) === 0) {
+    parts.push(`· ${VOCAB.noChange}`)
   }
   return parts.join(" ")
 }
@@ -1919,28 +2283,73 @@ function commentRegisterCounts(jobs) {
 }
 
 /**
- * Metadata blockquote — noun facts only, each `·` segment one fact: the
- * destination count (chain counts never render on the human surface), the
- * comparison base (`compared with` names the comparison without claiming
- * what changed — the jobs line and fold rows do), kernel/eBPF provenance,
- * and the record's timestamp.
- * @param {RunReview} review
+ * The human-line timestamp at minute precision; the machine marker keeps
+ * the record's full-precision stamp.
+ * @param {string} stamp
  */
-function metadataLine(review) {
-  const { destinations } = commentRegisterCounts(review.jobs)
+function minuteStamp(stamp) {
+  return stamp.replace(/(\d{2}:\d{2}):\d{2}/, "$1")
+}
+
+/**
+ * Meta block — two blockquote lines in every state. The first line is the
+ * finding: on a zero-delta comparison the verdict (`No changes since
+ * <prev7>`); on comparison comments with movement the job segments (changed
+ * with its +A −R delta, unchanged, no-outbound, no-longer-recorded — each
+ * counting the folds/entries rendered beneath it) plus the comparison
+ * pointer; on snapshot comments the destination total across the job folds.
+ * The second line is one quiet `<sub>` provenance line: kernel provenance
+ * and the record's timestamp at minute precision. Chain counts never render
+ * here.
+ * @param {RunReview} review
+ * @param {ReturnType<typeof changeAccounting>} accounting
+ */
+function metaBlock(review, accounting) {
   /** @type {string[]} */
-  const parts = []
-  parts.push(`${destinations}&nbsp;destination${destinations === 1 ? "" : "s"}`)
+  const findings = []
   if (review.comparison !== null) {
-    parts.push(
-      `compared with ${previousCommitRef(/** @type {RunReview & { comparison: ReviewComparison }} */ (review))}`,
-    )
+    const comparisonReview =
+      /** @type {RunReview & { comparison: ReviewComparison }} */ (review)
+    const zeroDelta =
+      accounting.changedJobs === 0 &&
+      accounting.vanishedJobCount === 0 &&
+      accounting.added === 0 &&
+      accounting.removed === 0 &&
+      accounting.backgroundAdded === 0 &&
+      accounting.backgroundRemoved === 0
+    if (zeroDelta) {
+      // Zero-delta comparison: the verdict is the finding.
+      findings.push(`No changes ${VOCAB.sinceWord} ${previousCommitRef(comparisonReview)}`)
+    } else {
+      if (accounting.changedJobs > 0) {
+        findings.push(
+          `${countPhrase(accounting.changedJobs, "job")} ${VOCAB.jobsLineChanged} ${deltaPhrase(accounting.added, accounting.removed, { bold: false })}`,
+        )
+      }
+      if (accounting.unchangedJobs > 0) {
+        findings.push(`${countPhrase(accounting.unchangedJobs, "job")} ${VOCAB.jobsLineUnchanged}`)
+      }
+      if (accounting.noOutboundJobs > 0) {
+        findings.push(`${countPhrase(accounting.noOutboundJobs, "job")} ${VOCAB.jobsLineNoOutbound}`)
+      }
+      if (accounting.vanishedJobCount > 0) {
+        findings.push(`${countPhrase(accounting.vanishedJobCount, "job")} ${VOCAB.jobsLineVanished}`)
+      }
+      findings.push(`compared with ${previousCommitRef(comparisonReview)}`)
+    }
+  } else {
+    // Snapshot: the destination total is the finding — the visible sum of
+    // the fold rows beneath it (dns-resolver leaves included, every root).
+    const { destinations } = commentRegisterCounts(review.jobs)
+    let total = countPhrase(destinations, "destination")
+    if (review.jobs.length > 1) {
+      total += ` across ${countPhrase(review.jobs.length, "job")}`
+    }
+    findings.push(total)
   }
-  parts.push(CONTRACT_VOCAB.copy.kernelProvenance)
-  if (review.recordedThrough !== "") parts.push(review.recordedThrough)
-  // Italic blockquote only — never <sub>: GitHub mobile collapses <sub>
-  // line-height, so a wrapped metadata line overprints itself on phones.
-  return `> *${parts.join(" · ")}*`
+  const provenance = [CONTRACT_VOCAB.copy.kernelProvenance]
+  if (review.recordedThrough !== "") provenance.push(minuteStamp(review.recordedThrough))
+  return [`> *${findings.join(" · ")}*`, `> <sub>${provenance.join(" · ")}</sub>`]
 }
 
 /**
@@ -2068,18 +2477,26 @@ function changeAccounting(review) {
     noOutboundJobs: 0,
     added: 0,
     removed: 0,
+    backgroundAdded: 0,
+    backgroundRemoved: 0,
   }
   for (const job of review.jobs) {
     let tier
     const delta = deltas ? deltas.get(job.id) : null
-    // A destination delta outranks an empty head record: a job whose whole
-    // record left is a changed job, never "no outbound destinations".
+    if (delta !== null && delta !== undefined) {
+      totals.backgroundAdded += delta.backgroundAddedCount
+      totals.backgroundRemoved += delta.backgroundRemovedCount
+    }
+    // A workload destination delta outranks an empty head record: a job
+    // whose whole record left is a changed job, never "no outbound
+    // destinations". Background-only movement never makes a changed job —
+    // the fold row and fence carry it, the changed count does not.
     if (delta !== null && delta !== undefined && delta.addedCount + delta.removedCount > 0) {
       tier = 0
       totals.changedJobs += 1
       totals.added += delta.addedCount
       totals.removed += delta.removedCount
-    } else if (job.edges.length === 0) {
+    } else if (job.edges.length === 0 && backgroundDelta(delta ?? null) === 0) {
       tier = 2
       totals.noOutboundJobs += 1
     } else {
@@ -2111,6 +2528,7 @@ function machineSummaryMarker(review, accounting) {
   const comparing = review.comparison !== null
   const summary = {
     contract: CONTRACT_VOCAB.version,
+    githubMeta: GITHUB_META_RETRIEVED,
     commit: review.sha,
     previous: review.comparison !== null ? review.comparison.previousSha : null,
     jobs: review.jobs.length,
@@ -2120,43 +2538,18 @@ function machineSummaryMarker(review, accounting) {
     vanished: comparing ? accounting.vanishedJobCount : null,
     added: comparing ? accounting.added : null,
     removed: comparing ? accounting.removed : null,
+    backgroundAdded: comparing ? accounting.backgroundAdded : null,
+    backgroundRemoved: comparing ? accounting.backgroundRemoved : null,
     vanishedDestinations: comparing ? accounting.vanishedDestinations : null,
     chains,
     destinations,
+    recorded: review.recordedThrough !== "" ? review.recordedThrough : null,
     kinds: ["network"],
   }
   // `--` is escaped inside JSON strings so a hostile record-sourced value
   // can never terminate the HTML comment; JSON.parse restores the bytes.
   const json = JSON.stringify(summary).replace(/--/g, "-\\u002d")
   return `<!-- ${VOCAB.machineSummaryMarker} ${json} -->`
-}
-
-/**
- * The jobs line: one italic blockquote paragraph under the metadata line
- * stating how many job folds changed, held, recorded no outbound
- * destinations, or left the record — comparison comments only, and only
- * when a workload change or vanished job exists. Segments count the folds
- * and entries rendered beneath them.
- * @param {ReturnType<typeof changeAccounting>} accounting
- */
-function jobsLine(accounting) {
-  /** @type {string[]} */
-  const segments = []
-  if (accounting.changedJobs > 0) {
-    segments.push(
-      `${countPhrase(accounting.changedJobs, "job")} ${VOCAB.jobsLineChanged} ${deltaPhrase(accounting.added, accounting.removed, { bold: false })}`,
-    )
-  }
-  if (accounting.unchangedJobs > 0) {
-    segments.push(`${countPhrase(accounting.unchangedJobs, "job")} ${VOCAB.jobsLineUnchanged}`)
-  }
-  if (accounting.noOutboundJobs > 0) {
-    segments.push(`${countPhrase(accounting.noOutboundJobs, "job")} ${VOCAB.jobsLineNoOutbound}`)
-  }
-  if (accounting.vanishedJobCount > 0) {
-    segments.push(`${countPhrase(accounting.vanishedJobCount, "job")} ${VOCAB.jobsLineVanished}`)
-  }
-  return `> *${segments.join(" · ")}*`
 }
 
 /**
@@ -2172,14 +2565,7 @@ function renderCommentBody(review, kept, { explainerOpen = false } = {}) {
   lines.push(machineSummaryMarker(review, accounting))
   lines.push(headlineSentence(review))
   lines.push("")
-  lines.push(metadataLine(review))
-  if (
-    review.comparison !== null &&
-    (accounting.changedJobs > 0 || accounting.vanishedJobCount > 0)
-  ) {
-    lines.push(">")
-    lines.push(jobsLine(accounting))
-  }
+  lines.push(...metaBlock(review, accounting))
   lines.push("")
 
   const previousSha = review.comparison ? review.comparison.previousSha : ""
@@ -2188,6 +2574,10 @@ function renderCommentBody(review, kept, { explainerOpen = false } = {}) {
     const delta = deltas ? deltas.get(job.id) : null
     const changed =
       delta !== null && delta !== undefined && delta.addedCount + delta.removedCount > 0
+    // Any movement — workload or runner background — renders the marked
+    // fence; only a workload delta makes a changed job (bold row, open
+    // fold, changed count).
+    const hasDelta = changed || backgroundDelta(delta ?? null) > 0
     const keptCount = kept.get(job.id) ?? job.edges.length
     const retained = new Set(retentionOrder(job.edges).slice(0, keptCount))
     const shownRaw = job.edges.filter((e) => retained.has(e))
@@ -2197,7 +2587,7 @@ function renderCommentBody(review, kept, { explainerOpen = false } = {}) {
     // An empty projection renders a plain row that keeps the job's
     // Execution Profile link when known — an empty egress projection never
     // implies Garnet observed nothing.
-    if (job.edges.length === 0 && !changed) {
+    if (job.edges.length === 0 && !hasDelta) {
       const link = profilePermalink(job, review.appUrl, "pr_comment")
       const profilePart =
         link !== ""
@@ -2215,11 +2605,20 @@ function renderCommentBody(review, kept, { explainerOpen = false } = {}) {
       `<details${open ? " open" : ""}><summary>${jobSummaryLine(job, { delta: delta ?? null, treeEdges: shown })}</summary>`,
     )
     lines.push("")
-    if (changed) {
+    /** @type {string[]} */
+    const fenceNotes = []
+    if (hasDelta && delta !== null && delta !== undefined) {
       lines.push("```diff")
       lines.push(renderJobDiffTree({ ...job, edges: shown }, delta, review.sha, previousSha))
       lines.push("```")
       lines.push("")
+      // Several provable rotations in one fence read as one quiet summary
+      // instead of an annotation on every line (contract comment.rotationJoin).
+      if (delta.rotations.size > 1) {
+        fenceNotes.push(
+          `<i>${delta.rotations.size} addresses rotated (${CONTRACT_VOCAB.notes.githubInfrastructure.text})</i>`,
+        )
+      }
     } else if (shown.length > 0) {
       lines.push("<pre>")
       lines.push(renderJobTree(job, shown))
@@ -2227,7 +2626,11 @@ function renderCommentBody(review, kept, { explainerOpen = false } = {}) {
       lines.push("")
     }
     if (shownRaw.length < job.edges.length) {
-      lines.push(`<sub>${truncationLine(shownRaw.length, job.edges.length)}</sub>`)
+      fenceNotes.push(truncationLine(shownRaw.length, job.edges.length))
+    }
+    // Quiet notes under a fence merge into one line — never stacked.
+    if (fenceNotes.length > 0) {
+      lines.push(`<sub>${fenceNotes.join(" · ")}</sub>`)
       lines.push("")
     }
     const link = profilePermalink(job, review.appUrl, "pr_comment")
@@ -2267,7 +2670,16 @@ function renderCommentBody(review, kept, { explainerOpen = false } = {}) {
   // first-profile comment.
   lines.push("---")
   lines.push("")
-  lines.push(renderExplainer({ open: explainerOpen, comparison: review.comparison !== null }))
+  // The legend teaches the boundary-label vocabulary only when a label
+  // actually renders above it.
+  const hasBackgroundLabel = lines.some((line) => line.includes(`(${VOCAB.runnerBackground} ·`))
+  lines.push(
+    renderExplainer({
+      open: explainerOpen,
+      comparison: review.comparison !== null,
+      background: hasBackgroundLabel,
+    }),
+  )
 
   while (lines.length > 0 && lines[lines.length - 1] === "") lines.pop()
   return lines.join("\n")
@@ -2492,20 +2904,28 @@ function compactStepSummaryAncestry(edge) {
 }
 
 /**
+ * Renders one recorded chain as a `→`-joined run of code spans. With
+ * `pidAsFootnote`, the leaf's PID renders as a small `<sub>` note in the
+ * same cell instead of an inline `(pid …)` suffix; every recorded PID
+ * stays visible in its own row.
  * @param {ReviewEdge} edge
+ * @param {boolean} [pidAsFootnote]
  */
-function processTreeCell(edge) {
+function processTreeCell(edge, pidAsFootnote) {
   const names = compactStepSummaryAncestry(edge)
-  return names
+  const chain = names
     .map((name, index) => {
       const leaf = index === names.length - 1
-      const value =
-        leaf && edge.pid !== ""
-          ? `${truncateMiddle(name)} (pid ${edge.pid})`
-          : truncateMiddle(name)
-      return `<code>${escapeHtmlCell(value)}</code>`
+      if (leaf && edge.pid !== "" && pidAsFootnote !== true) {
+        return `<code>${escapeHtmlCell(`${truncateMiddle(name)} (pid ${edge.pid})`)}</code>`
+      }
+      return `<code>${escapeHtmlCell(truncateMiddle(name))}</code>`
     })
     .join(" → ")
+  if (pidAsFootnote === true && edge.pid !== "") {
+    return `${chain} <sub>pid&nbsp;${escapeHtmlCell(edge.pid)}</sub>`
+  }
+  return chain
 }
 
 /**
@@ -2575,13 +2995,15 @@ function lineageDestinationsCell(row) {
 
 /**
  * GitHub-native lineage-first table: one recorded process lineage per row with
- * its deduped destinations nested.
+ * its deduped destinations nested. The row's PID renders as a small footnote
+ * in the same cell, so the tree reads names-only while every recorded PID
+ * stays visible next to its own chain.
  * @param {LineageRow[]} rows
  */
 function renderLineageTable(rows) {
   const lines = ["| Process Tree | Destinations |", "| --- | --- |"]
   for (const row of rows) {
-    lines.push(`| ${processTreeCell(row.edge)} | ${lineageDestinationsCell(row)} |`)
+    lines.push(`| ${processTreeCell(row.edge, true)} | ${lineageDestinationsCell(row)} |`)
   }
   return lines.join("\n")
 }
@@ -2768,20 +3190,31 @@ function renderProfileSummary(job, appUrl, keptDestinations, previewAssertions) 
   lines.push("### Workload Summary", "")
   /** @type {[string, string][]} */
   const rows = []
-  if (job.profile_id !== "") rows.push(["Profile UUID", job.profile_id])
-  if (job.workflow !== "") rows.push(["Workflow", job.workflow])
-  if (job.repository !== "") rows.push(["Repository", job.repository])
-  if (job.ref !== "") rows.push(["Branch", job.ref])
-  if (job.sha !== "") rows.push(["Commit", job.sha])
-  if (job.actor !== "") rows.push(["Triggered by", job.actor])
-  if (job.run_id !== "" || job.name !== "") {
-    rows.push(["Run ID / Job", [job.run_id, job.name].filter(Boolean).join(" / ")])
+  if (job.profile_id !== "") {
+    const profileLink = profilePermalink(job, appUrl, "step_summary")
+    const profileCell =
+      profileLink === ""
+        ? escapeMarkdownCell(job.profile_id)
+        : `[${escapeMarkdownCell(job.profile_id)}](${profileLink})`
+    rows.push(["Profile", profileCell])
   }
-  if (job.job_index !== "") rows.push(["Matrix job index", job.job_index])
+  if (job.workflow !== "") rows.push(["Workflow", escapeMarkdownCell(job.workflow)])
+  if (job.repository !== "") rows.push(["Repository", escapeMarkdownCell(job.repository)])
+  if (job.ref !== "") rows.push(["Branch", escapeMarkdownCell(job.ref)])
+  if (job.pr_url !== "") {
+    const prNumber = job.pr_url.split("/").pop()
+    rows.push(["Pull request", `[#${escapeMarkdownCell(prNumber ?? "")}](${job.pr_url})`])
+  }
+  if (job.sha !== "") rows.push(["Commit", escapeMarkdownCell(job.sha)])
+  if (job.actor !== "") rows.push(["Triggered by", escapeMarkdownCell(job.actor)])
+  if (job.run_id !== "" || job.name !== "") {
+    rows.push(["Run ID / Job", escapeMarkdownCell([job.run_id, job.name].filter(Boolean).join(" / "))])
+  }
+  if (job.job_index !== "") rows.push(["Matrix job index", escapeMarkdownCell(job.job_index)])
   lines.push("| Field | Value |")
   lines.push("| --- | --- |")
   for (const [key, value] of rows) {
-    lines.push(`| ${escapeMarkdownCell(key)} | ${escapeMarkdownCell(value)} |`)
+    lines.push(`| ${escapeMarkdownCell(key)} | ${value} |`)
   }
   lines.push("")
 
@@ -2803,6 +3236,17 @@ function renderProfileSummary(job, appUrl, keptDestinations, previewAssertions) 
       )
       lines.push("")
     }
+  }
+
+  // Absolute recorded tree in the PR-comment grammar; no comparison material.
+  if (job.edges.length > 0) {
+    lines.push("<details><summary><sub>Full recorded tree</sub></summary>")
+    lines.push("")
+    lines.push("<pre>")
+    lines.push(renderJobTree(job, job.edges, { defang: false }))
+    lines.push("</pre>")
+    lines.push("</details>")
+    lines.push("")
   }
 
   const telemetry = renderTelemetry(job)
@@ -2927,7 +3371,10 @@ export function lintRenderedSurface(surface, kind) {
         ["telemetry unique-domain count", /\bunique domain/gi],
         ["telemetry connection count", /\d+ connections?\b/gi],
         ["Powered by Garnet footer", /Powered by Garnet/gi],
-        ["profile permalink", /\?profile=/gi],
+        // The exact profile selector renders in exactly two designated
+        // places: the Workload table's Profile row and the footer CTA.
+        ["profile permalink (Profile row)", /\| Profile \| \[/g],
+        ["profile permalink (footer CTA)", new RegExp(`>${VOCAB.permalinkLabel.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}<`, "g")],
       ]
       for (const [name, re] of families) {
         const n = count(section, re)

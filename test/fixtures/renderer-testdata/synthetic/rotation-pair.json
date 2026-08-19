@@ -1,0 +1,229 @@
+{
+  "$comment": "Live-record regression fixture mirroring the posthog#67 comment shape (v6.9.6): a runner-infrastructure lease rotation — systemd → hosted-compute- → sudo → provjobd reaching bare GitHub infra addresses that flapped between commits (140.82.113.23/.24 → 140.82.114.23/.24, all inside the published 140.82.112.0/20 block) — plus one real workload delta (+ storage.googleapis.com under Runner.Worker). The fixed render headlines the +1 workload destination and joins the rotation into unmarked '(github infra · rotated from …)' context lines. 'rerun' is a second recorded run of the SAME head commit with the leases flapped again (→ 140.82.115.23/.24): comparing head against rerun must produce zero deltas (the idempotence/stability gate).",
+  "head": [
+    {
+      "uuid": "7a1e9c2b-4f6d-4a8e-9b3c-5d7e8f9a0b11",
+      "timestamp": "2026-08-07T18:30:00.000000000Z",
+      "metadata": {
+        "version": "0.2.0"
+      },
+      "scenarios": {
+        "github": {
+          "scenario_type": "github",
+          "workflow": "ci",
+          "job": "build",
+          "repository": "garnet-labs/posthog",
+          "run_id": "32100000002",
+          "sha": "aa11bb22cc33dd44ee55ff667788990011223344",
+          "server_url": "https://github.com"
+        }
+      },
+      "network": {
+        "egress": {
+          "peers": [
+            {
+              "remote_address": "104.16.24.34",
+              "remote_names": ["registry.npmjs.org"],
+              "remote_ports": ["443"],
+              "protocol": "tcp",
+              "proc_trees": [
+                {
+                  "pid": 5001,
+                  "process": "node",
+                  "github_step": "3. Build",
+                  "ancestry": ["systemd", "Runner.Worker", "bash", "node"]
+                }
+              ]
+            },
+            {
+              "remote_address": "142.250.99.128",
+              "remote_names": ["storage.googleapis.com"],
+              "remote_ports": ["443"],
+              "protocol": "tcp",
+              "proc_trees": [
+                {
+                  "pid": 5002,
+                  "process": "node",
+                  "github_step": "3. Build",
+                  "ancestry": ["systemd", "Runner.Worker", "bash", "node"]
+                }
+              ]
+            },
+            {
+              "remote_address": "140.82.114.23",
+              "remote_names": [],
+              "remote_ports": ["443"],
+              "protocol": "tcp",
+              "proc_trees": [
+                {
+                  "pid": 5003,
+                  "process": "provjobd",
+                  "ancestry": ["systemd", "hosted-compute-", "sudo", "provjobd"]
+                }
+              ]
+            },
+            {
+              "remote_address": "140.82.114.24",
+              "remote_names": [],
+              "remote_ports": ["443"],
+              "protocol": "tcp",
+              "proc_trees": [
+                {
+                  "pid": 5003,
+                  "process": "provjobd",
+                  "ancestry": ["systemd", "hosted-compute-", "sudo", "provjobd"]
+                }
+              ]
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "previous": [
+    {
+      "uuid": "7a1e9c2b-4f6d-4a8e-9b3c-5d7e8f9a0b10",
+      "timestamp": "2026-08-07T17:00:00.000000000Z",
+      "metadata": {
+        "version": "0.2.0"
+      },
+      "scenarios": {
+        "github": {
+          "scenario_type": "github",
+          "workflow": "ci",
+          "job": "build",
+          "repository": "garnet-labs/posthog",
+          "run_id": "32100000001",
+          "sha": "99887766554433221100ffeeddccbbaa99887766",
+          "server_url": "https://github.com"
+        }
+      },
+      "network": {
+        "egress": {
+          "peers": [
+            {
+              "remote_address": "104.16.24.34",
+              "remote_names": ["registry.npmjs.org"],
+              "remote_ports": ["443"],
+              "protocol": "tcp",
+              "proc_trees": [
+                {
+                  "pid": 4001,
+                  "process": "node",
+                  "github_step": "3. Build",
+                  "ancestry": ["systemd", "Runner.Worker", "bash", "node"]
+                }
+              ]
+            },
+            {
+              "remote_address": "140.82.113.23",
+              "remote_names": [],
+              "remote_ports": ["443"],
+              "protocol": "tcp",
+              "proc_trees": [
+                {
+                  "pid": 4003,
+                  "process": "provjobd",
+                  "ancestry": ["systemd", "hosted-compute-", "sudo", "provjobd"]
+                }
+              ]
+            },
+            {
+              "remote_address": "140.82.113.24",
+              "remote_names": [],
+              "remote_ports": ["443"],
+              "protocol": "tcp",
+              "proc_trees": [
+                {
+                  "pid": 4003,
+                  "process": "provjobd",
+                  "ancestry": ["systemd", "hosted-compute-", "sudo", "provjobd"]
+                }
+              ]
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "rerun": [
+    {
+      "uuid": "7a1e9c2b-4f6d-4a8e-9b3c-5d7e8f9a0b12",
+      "timestamp": "2026-08-07T19:15:00.000000000Z",
+      "metadata": {
+        "version": "0.2.0"
+      },
+      "scenarios": {
+        "github": {
+          "scenario_type": "github",
+          "workflow": "ci",
+          "job": "build",
+          "repository": "garnet-labs/posthog",
+          "run_id": "32100000003",
+          "sha": "aa11bb22cc33dd44ee55ff667788990011223344",
+          "server_url": "https://github.com"
+        }
+      },
+      "network": {
+        "egress": {
+          "peers": [
+            {
+              "remote_address": "104.16.24.34",
+              "remote_names": ["registry.npmjs.org"],
+              "remote_ports": ["443"],
+              "protocol": "tcp",
+              "proc_trees": [
+                {
+                  "pid": 6001,
+                  "process": "node",
+                  "github_step": "3. Build",
+                  "ancestry": ["systemd", "Runner.Worker", "bash", "node"]
+                }
+              ]
+            },
+            {
+              "remote_address": "142.250.99.129",
+              "remote_names": ["storage.googleapis.com"],
+              "remote_ports": ["443"],
+              "protocol": "tcp",
+              "proc_trees": [
+                {
+                  "pid": 6002,
+                  "process": "node",
+                  "github_step": "3. Build",
+                  "ancestry": ["systemd", "Runner.Worker", "bash", "node"]
+                }
+              ]
+            },
+            {
+              "remote_address": "140.82.115.23",
+              "remote_names": [],
+              "remote_ports": ["443"],
+              "protocol": "tcp",
+              "proc_trees": [
+                {
+                  "pid": 6003,
+                  "process": "provjobd",
+                  "ancestry": ["systemd", "hosted-compute-", "sudo", "provjobd"]
+                }
+              ]
+            },
+            {
+              "remote_address": "140.82.115.24",
+              "remote_names": [],
+              "remote_ports": ["443"],
+              "protocol": "tcp",
+              "proc_trees": [
+                {
+                  "pid": 6003,
+                  "process": "provjobd",
+                  "ancestry": ["systemd", "hosted-compute-", "sudo", "provjobd"]
+                }
+              ]
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

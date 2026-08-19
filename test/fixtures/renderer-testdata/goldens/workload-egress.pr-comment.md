@@ -1,10 +1,11 @@
 <!-- garnet-runtime-review -->
 <!-- garnet-run-profile -->
 <!-- garnet:commit ef01a52517e7532ab34aadea58b952c9f1e79ece -->
-<!-- garnet:summary {"contract":"6.9.5","commit":"ef01a52517e7532ab34aadea58b952c9f1e79ece","previous":null,"jobs":1,"changed":null,"unchanged":null,"noOutbound":null,"vanished":null,"added":null,"removed":null,"vanishedDestinations":null,"chains":5,"destinations":4,"kinds":["network"]} -->
+<!-- garnet:summary {"contract":"6.10.0","githubMeta":"2026-08-08","commit":"ef01a52517e7532ab34aadea58b952c9f1e79ece","previous":null,"jobs":1,"changed":null,"unchanged":null,"noOutbound":null,"vanished":null,"added":null,"removed":null,"backgroundAdded":null,"backgroundRemoved":null,"vanishedDestinations":null,"chains":5,"destinations":4,"recorded":null,"kinds":["network"]} -->
 **Execution Profiles recorded for 1 job, triggered by [`ef01a52`](https://github.com/garnet-org/runtime-review-testbed/commit/ef01a52517e7532ab34aadea58b952c9f1e79ece)**
 
-> *4&nbsp;destinations · recorded at the kernel by Garnet*
+> *4&nbsp;destinations*
+> <sub>recorded at the kernel by Garnet</sub>
 
 <details><summary><code>Garnet Runtime Review</code> / <a href="https://github.com/garnet-labs/runtime-review-testbed/actions/runs/28492112239"><code>runtime-review</code>&nbsp;↗</a> · 4&nbsp;destinations</summary>
 

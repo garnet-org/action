@@ -21,6 +21,7 @@ import {
   SIZE_BUDGET,
   STEP_SUMMARY_BUDGET,
   summarizeProfile,
+  renderJobTree,
   isSentinelStep,
   compareJobEdges,
   buildRunReview,
@@ -129,8 +130,13 @@ const EDGE_MODEL = exportReviewModel(EDGE_REVIEW)
 // Contract lock
 // ---------------------------------------------------------------------------
 
-await test("contract: vocab.json is the v6.9.5 machine-readable lock", () => {
-  assert.equal(CONTRACT_VOCAB.version, "6.9.5")
+await test("contract: vocab.json is the v6.10.0 machine-readable lock", () => {
+  assert.equal(CONTRACT_VOCAB.version, "6.10.0")
+  assert.equal(CONTRACT_VOCAB.copy.runnerBackground, "runner background")
+  assert.equal(
+    CONTRACT_VOCAB.copy.explainerBackgroundSegment,
+    "runner background = the runner's infrastructure, not your workflow",
+  )
   assert.equal(VOCAB.terminalNetwork, "○")
   assert.equal(CONTRACT_VOCAB.copy.terminalFile, "□")
   assert.equal(CONTRACT_VOCAB.copy.terminalExecution, "▷")
@@ -350,8 +356,8 @@ await test("gate 4: one meaning per style — bold marks the process that acted"
 })
 
 await test("gate 5: evidence keeps PID-distinct edges while comment rows dedupe destinations", () => {
-  assert.ok(EDGE_SUMMARY.includes("node (pid 4104)"))
-  assert.ok(EDGE_SUMMARY.includes("node (pid 4105)"))
+  assert.ok(EDGE_SUMMARY.includes("<sub>pid&nbsp;4104</sub>"))
+  assert.ok(EDGE_SUMMARY.includes("<sub>pid&nbsp;4105</sub>"))
   assert.ok(!EDGE_MD.includes("[4104"))
   assert.ok(!EDGE_MD.includes("[4105"))
   assert.ok(!/×\d/.test(EDGE_MD) && !/×\d/.test(EDGE_SUMMARY))
@@ -457,7 +463,7 @@ await test("gate 7: exact IMDS addresses get the instance-metadata note with ful
   const line = EDGE_MD.split("\n").find((l) => l.includes("169.254.169.254"))
   assert.ok(line.includes("(cloud metadata)"))
   assert.ok(EDGE_MD.includes("<strong>python3</strong>"))
-  assert.ok(EDGE_SUMMARY.includes("python3 (pid 4106)"))
+  assert.ok(EDGE_SUMMARY.includes("<sub>pid&nbsp;4106</sub>"))
   assert.deepEqual(
     edgeNotes({ remote_address: "169.254.169.254", remote_ports: [] }),
     ["cloud metadata"],
@@ -501,7 +507,10 @@ await test("gate 8: loopback:53 (including '53 (dns)') gets the resolver note an
   // the `(dns resolver)` note; the Step Summary keeps the destination.
   assert.ok(EDGE_MD.includes("○ localhost <em>(dns resolver)</em>"))
   assert.ok(EDGE_SUMMARY.includes("<code>localhost</code>"))
-  assert.ok(!EDGE_SUMMARY.includes("(dns resolver)"))
+  // The resolver note appears only inside the full-tree fold (PR-comment
+  // grammar) — never in the lineage table above it.
+  const summaryFoldStart = EDGE_SUMMARY.indexOf("<details><summary><sub>Full recorded tree")
+  assert.ok(!EDGE_SUMMARY.slice(0, summaryFoldStart).includes("(dns resolver)"))
   const previewLine = EDGE_SUMMARY_PREVIEW.split("\n").find((l) =>
     l.includes("127.0.0.53"),
   )
@@ -576,7 +585,7 @@ await test("gate 9f: every fold-row destination count equals the distinct ○ id
 await test("gate 9d: metadata counts inflect — destinations only, no chain counts", () => {
   const singular = renderRunReview(reviewFor([load("real", "normal-run.json")]))
   const metadata = singular.split("\n").find((l) => l.startsWith("> *"))
-  assert.ok(metadata.includes("1&nbsp;destination ·"))
+  assert.ok(metadata.includes("1&nbsp;destination*"))
   assert.ok(!metadata.includes("execution chain"), "chain counts never render on the human surface")
   assert.ok(!metadata.includes("runner-background"))
   assert.ok(!/1&nbsp;destinations/.test(singular))
@@ -657,18 +666,21 @@ await test("gate 12: deterministic sensor timestamp — profile.timestamp only, 
   assert.equal(formatTimestamp("2026-07-08T05:35:56.123456789Z"), "2026-07-08 05:35:56 UTC")
   assert.equal(formatTimestamp(""), "")
   assert.equal(formatTimestamp("not-a-date"), "")
-  assert.ok(EDGE_MD.includes("· 2026-07-08 05:35:56 UTC"))
+  // The comment's provenance line carries the stamp at minute precision;
+  // the Step Summary keeps the record's full-precision stamp.
+  assert.ok(EDGE_MD.includes("· 2026-07-08 05:35 UTC"))
   assert.ok(EDGE_SUMMARY.includes("2026-07-08 05:35:56 UTC"))
   // worth-a-look has no profile.timestamp: no recorded-through, no clock fallback.
   const md = renderRunReview(reviewFor([worth]))
-  assert.ok(!/\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2} UTC/.test(md.split("\n").find((l) => l.startsWith("> *")) || ""))
-  // Multi-profile: the maximum valid profile timestamp on the metadata line.
+  assert.ok(!/\d{4}-\d{2}-\d{2} \d{2}:\d{2}(:\d{2})? UTC/.test(md.split("\n").find((l) => l.startsWith("> <sub>")) || ""))
+  // Multi-profile: the maximum valid profile timestamp on the provenance line.
   const multi = renderRunReview(reviewFor(recordSet))
   const stamps = recordSet.map((p) => formatTimestamp(rawProfile(p).timestamp)).filter(Boolean).sort()
-  const metadata = multi.split("\n").find((l) => l.startsWith("> *"))
-  assert.ok(metadata.includes(`recorded at the kernel by Garnet · ${stamps[stamps.length - 1]}`))
-  // "recorded" appears exactly once on the metadata line.
-  assert.equal(metadata.split("recorded").length - 1, 1)
+  const provenance = multi.split("\n").find((l) => l.startsWith("> <sub>"))
+  const minutePrecision = stamps[stamps.length - 1].replace(/(\d{2}:\d{2}):\d{2}/, "$1")
+  assert.ok(provenance.includes(`recorded at the kernel by Garnet · ${minutePrecision}`))
+  // "recorded" appears exactly once on the provenance line.
+  assert.equal(provenance.split("recorded").length - 1, 1)
 })
 
 await test("gate 13: pending state opens explainer and status without timestamp/count/link", () => {
@@ -1022,7 +1034,15 @@ await test("gate 19: HTML/Markdown injection payloads render inert on all render
   const outsideCodeSpans = summary
     .replace(/`[^`\n]*`/g, "`code`")
     .replace(/<code>[^<]*<\/code>/g, "<code>code</code>")
+    .replace(/<pre>[\s\S]*?<\/pre>/g, "<pre>pre</pre>")
   assert.ok(!outsideCodeSpans.includes("!["), "markdown image outside code span")
+  // <pre> content is an HTML block on GitHub — Markdown stays unprocessed —
+  // but raw HTML must still arrive escaped there.
+  const preBlocks = summary.match(/<pre>[\s\S]*?<\/pre>/g) ?? []
+  for (const block of preBlocks) {
+    assert.ok(!block.includes("<script"), "raw <script> inside pre")
+    assert.ok(!block.includes("<img"), "raw <img> inside pre")
+  }
   assert.ok(summary.includes("![exfil](//evil.example/x.png)"), "payload dropped instead of contained")
   // JSON surface: structured, embargo respected, no pre-rendered HTML fields.
   const json = exportReviewModel(review)
@@ -1070,14 +1090,73 @@ await test("gate 20d: raw profile shape — data.uuid is never a Profile UUID or
   assert.ok(!md.includes("/public/runs/"), "raw profile fabricated a public CTA")
 })
 
-await test("gate 20e: enveloped profile shape — envelope Profile.ID is 'Profile UUID' and drives the selector", () => {
+await test("gate 20e: enveloped profile shape — envelope Profile.ID is the Profile row and drives the selector", () => {
   const job = summarizeProfile(edgeCaseEnvelope)
   assert.equal(job.profile_id, edgeCaseEnvelope.id)
   assert.equal(job.uuid, edgeCases.uuid)
-  assert.ok(EDGE_SUMMARY.includes(`| Profile UUID | ${edgeCaseEnvelope.id} |`))
+  const link = profilePermalink(job, APP_URL, "step_summary")
+  assert.ok(link !== "")
+  assert.ok(EDGE_SUMMARY.includes(`| Profile | [${edgeCaseEnvelope.id}](${link}) |`))
   assert.ok(!EDGE_SUMMARY.includes("Record UUID"))
   assert.ok(EDGE_MD.includes(`?profile=${edgeCaseEnvelope.id}`.replaceAll("&", "&amp;")))
   assert.ok(!EDGE_MD.includes(`?profile=${edgeCases.uuid}`))
+})
+
+await test("gate: step summary PR link — pull_request refs link the PR row; other refs omit it", () => {
+  const prJob = summarizeProfile(workload)
+  assert.equal(
+    prJob.pr_url,
+    "https://github.com/garnet-org/runtime-review-testbed/pull/76",
+  )
+  assert.ok(REAL_SUMMARY.includes("| Pull request | [#76](https://github.com/garnet-org/runtime-review-testbed/pull/76) |"))
+
+  const nonPRJob = summarizeProfile(edgeCaseEnvelope)
+  assert.equal(nonPRJob.pr_url, "")
+  assert.ok(!EDGE_SUMMARY.includes("| Pull request |"))
+
+  // Malformed / missing PR metadata fails closed.
+  const malformed = structuredClone(edgeCases)
+  malformed.scenarios.github.ref = "refs/pull//merge"
+  assert.equal(summarizeProfile(malformed).pr_url, "")
+  const noRepo = structuredClone(workload)
+  const noRepoData = noRepo.data ?? noRepo
+  noRepoData.scenarios.github.repository = ""
+  assert.equal(summarizeProfile(noRepo).pr_url, "")
+})
+
+await test("gate: step summary full-tree fold — collapsed by default, absolute grammar, no diff markers", () => {
+  assert.ok(EDGE_SUMMARY.includes("<details><summary><sub>Full recorded tree</sub></summary>"))
+  assert.ok(!EDGE_SUMMARY.includes("<details open"))
+  const job = summarizeProfile(edgeCaseEnvelope)
+  const tree = renderJobTree(job, job.edges, { defang: false })
+  assert.ok(EDGE_SUMMARY.includes(tree))
+  // Step Summary stays canonical — no defanged hostnames in the fold.
+  assert.ok(!tree.includes("[.]"))
+  // Absolute view only — no comparison material inside the fold.
+  const foldStart = EDGE_SUMMARY.indexOf("<details><summary><sub>Full recorded tree")
+  const foldEnd = EDGE_SUMMARY.indexOf("</details>", foldStart)
+  const fold = EDGE_SUMMARY.slice(foldStart, foldEnd)
+  assert.ok(!/^[+−-] /m.test(fold.replace(/<[^>]+>/g, "")))
+  assert.ok(!fold.includes("no longer recorded"))
+})
+
+await test("gate: preview material is contained — default bytes carry none of it on any surface", () => {
+  const previewMarkers = [
+    "Recorded context preview",
+    "<details><summary><strong>Assertions</strong>",
+    "| Assertion |",
+    "detection:",
+    "⚠ attention",
+  ]
+  const inputs = [recordSet, [edgeCaseEnvelope], [edgeCases], [worth], [injection]]
+  for (const profiles of inputs) {
+    const defaultSummary = renderStepSummary(profiles, { appUrl: APP_URL })
+    const prComment = renderRunReview(reviewFor(profiles))
+    for (const marker of previewMarkers) {
+      assert.ok(!defaultSummary.includes(marker), `default step summary leaked ${JSON.stringify(marker)}`)
+      assert.ok(!prComment.includes(marker), `PR comment leaked ${JSON.stringify(marker)}`)
+    }
+  }
 })
 
 await test("gate 20b: publication policy is fail-closed with one non-oracular 404", () => {
@@ -1235,8 +1314,8 @@ await test("shape: edges sort into an independently specified exact order (linea
   ]
   assert.deepEqual(got, expected)
   assert.ok(
-    EDGE_SUMMARY.indexOf("node (pid 4104)") <
-      EDGE_SUMMARY.indexOf("node (pid 4105)"),
+    EDGE_SUMMARY.indexOf("pid&nbsp;4104") <
+      EDGE_SUMMARY.indexOf("pid&nbsp;4105"),
   )
 })
 
@@ -1291,14 +1370,16 @@ await test("shape: Step Summary is lineage-keyed (deduped) with preview-only con
     ),
   )
   assert.ok(!EDGE_SUMMARY.includes("in the profile's own order"))
-  const uuidRow = EDGE_SUMMARY.indexOf("Profile UUID")
+  const uuidRow = EDGE_SUMMARY.indexOf("| Profile |")
   assert.ok(uuidRow !== -1 && uuidRow < EDGE_SUMMARY.indexOf("| Repository"))
-  assert.ok(EDGE_SUMMARY.includes(`| Profile UUID | ${edgeCaseEnvelope.id} |`))
+  assert.ok(EDGE_SUMMARY.includes(`| Profile | [${edgeCaseEnvelope.id}](`))
   assert.ok(!EDGE_SUMMARY.includes("| Record UUID |"))
   assert.ok(REAL_SUMMARY.includes("| Branch |"))
   assert.ok(REAL_SUMMARY.includes("| Triggered by |"))
   assert.ok(EDGE_SUMMARY.includes("| Run ID / Job |"))
-  assert.ok(EDGE_SUMMARY.includes("<code>node (pid 4104)</code>"))
+  assert.ok(EDGE_SUMMARY.includes("</code> <sub>pid&nbsp;4104</sub>"))
+  // The preview recorded-context table keeps its inline PID form.
+  assert.ok(EDGE_SUMMARY_PREVIEW.includes("<code>node (pid 4104)</code>"))
   assert.ok(REAL_SUMMARY.includes("<code>systemd</code> → <code>…</code>"))
   assert.ok(!EDGE_SUMMARY.includes("step: 3. Install dependencies"))
   assert.ok(!EDGE_SUMMARY.includes("detection:"))
@@ -1482,13 +1563,14 @@ await test("6.5: unchanged comparable jobs collapse with 'unchanged'; metadata s
   const previous = jobs.map((j) => ({ name: j.name, workflow: j.workflow, edges: j.edges }))
   const review = comparisonReviewFor(recordSet, previous, PREV_SHA)
   const md = renderRunReview(review)
-  assert.ok(md.includes("compared with [`d84f4dc`]("))
+  // Zero-delta comparison: the verdict is the finding.
+  assert.ok(md.includes("No changes since [`d84f4dc`]("))
   assert.ok(!md.includes("changed since"), "retired comparison copy")
   assert.ok(!md.includes("<details open><summary><code>"))
   assert.ok(md.includes("· unchanged"))
   assert.ok(!md.includes("```diff"))
   assert.ok(md.includes("<pre>"))
-  // Nothing changed and nothing vanished: no jobs line renders.
+  // Nothing changed and nothing vanished: no job segments render.
   assert.ok(!md.includes("job changed") && !md.includes("jobs changed"))
 })
 
@@ -1514,7 +1596,9 @@ await test("6.5: changed jobs open with an in-fold diff fence and one exact @@ h
   assert.ok(md.includes("<details open><summary><b>+"), "changed fold must open and lead with its bold delta")
   // The fold row carries only its own delta — the comparison base commit
   // renders once at run scope (metadata) and inside the @@ header.
-  assert.match(md, /<b>\+\d+(&nbsp;−\d+)?<\/b>&nbsp;destinations?/)
+  // v6.10.0: the row carries the bold split alone; the destination unit is
+  // named once in the meta block.
+  assert.match(md, /<b>\+\d+(&nbsp;−\d+)?<\/b> ·/)
   assert.ok(!/<\/b> since&nbsp;/.test(md), "fold delta repeats the run-scoped comparison sha")
   assert.ok(md.includes("```diff"))
   const headers = md.split("\n").filter((l) => l.startsWith("@@"))
@@ -1583,7 +1667,7 @@ await test("6.5: matrix cells diff against their own previous cell, never each o
   })
   const md = renderRunReview(review)
   // Each cell matches its own index: identical records, so nothing changed.
-  assert.ok(md.includes("compared with \`d84f4dc\`"))
+  assert.ok(md.includes("No changes since \`d84f4dc\`"))
   assert.ok(md.includes("· unchanged"))
   assert.ok(!md.includes("```diff"))
   // Cross-matched cells would diff cell 1's single chain against cell 0's tree.
@@ -1708,10 +1792,46 @@ await test("lint: linter actually flags a duplicated telemetry footer", () => {
 
 await test("goldens: every golden byte-matches a fresh render", () => {
   const goldenDir = join(here, "fixtures", "renderer-testdata", "goldens")
+  const comparisonPair = load("synthetic", "comparison-pair.json")
+  const deltaPartitionPair = load("synthetic", "delta-partition-pair.json")
+  const backgroundOnlyPair = load("synthetic", "background-only-pair.json")
+  const rotationPair = load("synthetic", "rotation-pair.json")
+  const branchMarking = load("synthetic", "branch-marking.json")
+  const shaiHuludWormPair = load("synthetic", "shai-hulud-worm-pair.json")
+  // Every generated golden is locked, comparison states included — an
+  // unlocked golden silently drifts from the renderer that writes it.
   const states = {
     "registry-only": { profiles: [load("real", "normal-run.json")] },
     "workload-egress": { profiles: [worth] },
     "multi-job": { profiles: recordSet },
+    "runner-infrastructure-only": {
+      profiles: [load("synthetic", "runner-infrastructure-only.json")],
+    },
+    attribution: { profiles: load("synthetic", "attribution-cases.json") },
+    "multi-job-comparison": {
+      profiles: comparisonPair.head,
+      previous: comparisonPair.previous,
+    },
+    "delta-partition": {
+      profiles: deltaPartitionPair.head,
+      previous: deltaPartitionPair.previous,
+    },
+    "background-only": {
+      profiles: backgroundOnlyPair.head,
+      previous: backgroundOnlyPair.previous,
+    },
+    "infra-rotation": {
+      profiles: rotationPair.head,
+      previous: rotationPair.previous,
+    },
+    "branch-marking": {
+      profiles: branchMarking.head,
+      previous: branchMarking.previous,
+    },
+    "shai-hulud-worm": {
+      profiles: shaiHuludWormPair.head,
+      previous: shaiHuludWormPair.previous,
+    },
   }
   const noRecord = readFileSync(join(goldenDir, "no-record.pr-comment.md"), "utf8")
   assert.equal(
@@ -1721,8 +1841,13 @@ await test("goldens: every golden byte-matches a fresh render", () => {
       commitUrl: `https://github.com/${REPO}/commit/ef01a52517e7532ab34aadea58b952c9f1e79ece`,
     })}\n`,
   )
-  for (const [name, { profiles }] of Object.entries(states)) {
-    const review = reviewFor(profiles)
+  for (const [name, { profiles, previous }] of Object.entries(states)) {
+    const previousJobs =
+      previous === undefined ? null : previous.map(summarizeProfile).filter(Boolean)
+    const review =
+      previousJobs === null
+        ? reviewFor(profiles)
+        : comparisonReviewFor(profiles, previousJobs, previousJobs[0]?.sha ?? "")
     assert.equal(
       readFileSync(join(goldenDir, `${name}.pr-comment.md`), "utf8"),
       `${renderRunReview(review)}\n`,

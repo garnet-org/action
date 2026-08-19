@@ -1,0 +1,169 @@
+{
+  "contractVersion": "6.10.0",
+  "repo": "garnet-org/runtime-review-testbed",
+  "sha": "7777777777777777777777777777777777777777",
+  "commitUrl": "https://github.com/garnet-org/runtime-review-testbed/commit/7777777777777777777777777777777777777777",
+  "appUrl": "https://app.garnet.ai",
+  "appMode": true,
+  "recordedThrough": "2026-08-07 18:30:00 UTC",
+  "counts": {
+    "jobs": 1,
+    "associations": 5,
+    "destinations": 5
+  },
+  "jobs": [
+    {
+      "name": "install",
+      "workflow": "ci",
+      "run_id": "32100000007",
+      "run_url": "https://github.com/garnet-labs/posthog/actions/runs/32100000007",
+      "job_url": "",
+      "profile_id": "",
+      "uuid": "1c2d3e4f-aaaa-4bbb-8ccc-d1e2f3a4b5c6",
+      "timestamp": "2026-08-07T18:30:00.000000000Z",
+      "repository": "garnet-labs/posthog",
+      "sha": "7777777777777777777777777777777777777777",
+      "ref": "",
+      "actor": "",
+      "job_index": "",
+      "flow_count": 5,
+      "telemetry": {
+        "total_domains": null,
+        "total_connections": null
+      },
+      "telemetryDiscrepancies": [],
+      "assertions": [],
+      "counts": {
+        "associations": 5,
+        "processes": 3,
+        "destinations": 5,
+        "primary_names": 4,
+        "domains": 4,
+        "flows": 5
+      },
+      "edges": [
+        {
+          "remote_address": "104.16.30.34",
+          "remote_names": [
+            "registry.npmjs.org"
+          ],
+          "remote_ports": [
+            "443"
+          ],
+          "protocol": "tcp",
+          "result": "",
+          "detections": [],
+          "lineage_recorded": true,
+          "pid": "9001",
+          "process": "node",
+          "ancestry": [
+            "systemd",
+            "Runner.Worker",
+            "npm",
+            "node"
+          ],
+          "github_step": "3. Install",
+          "notes": []
+        },
+        {
+          "remote_address": "140.82.112.6",
+          "remote_names": [
+            "api.github.com"
+          ],
+          "remote_ports": [
+            "443"
+          ],
+          "protocol": "tcp",
+          "result": "",
+          "detections": [],
+          "lineage_recorded": true,
+          "pid": "9107",
+          "process": "bun",
+          "ancestry": [
+            "systemd",
+            "Runner.Worker",
+            "npm",
+            "node",
+            "sh",
+            "bun"
+          ],
+          "github_step": "3. Install",
+          "notes": []
+        },
+        {
+          "remote_address": "169.254.169.254",
+          "remote_names": [],
+          "remote_ports": [
+            "443"
+          ],
+          "protocol": "tcp",
+          "result": "",
+          "detections": [],
+          "lineage_recorded": true,
+          "pid": "9107",
+          "process": "bun",
+          "ancestry": [
+            "systemd",
+            "Runner.Worker",
+            "npm",
+            "node",
+            "sh",
+            "bun"
+          ],
+          "github_step": "3. Install",
+          "notes": [
+            "cloud metadata"
+          ]
+        },
+        {
+          "remote_address": "185.199.108.133",
+          "remote_names": [
+            "release-assets.githubusercontent.com"
+          ],
+          "remote_ports": [
+            "443"
+          ],
+          "protocol": "tcp",
+          "result": "",
+          "detections": [],
+          "lineage_recorded": true,
+          "pid": "9107",
+          "process": "bun",
+          "ancestry": [
+            "systemd",
+            "Runner.Worker",
+            "npm",
+            "node",
+            "sh",
+            "bun"
+          ],
+          "github_step": "3. Install",
+          "notes": []
+        },
+        {
+          "remote_address": "20.60.153.129",
+          "remote_names": [
+            "resultsstorageeus2.blob.core.windows.net"
+          ],
+          "remote_ports": [
+            "443"
+          ],
+          "protocol": "tcp",
+          "result": "",
+          "detections": [],
+          "lineage_recorded": true,
+          "pid": "412",
+          "process": "provjobd",
+          "ancestry": [
+            "systemd",
+            "hosted-compute-agent",
+            "sudo",
+            "provjobd"
+          ],
+          "github_step": "",
+          "notes": []
+        }
+      ]
+    }
+  ]
+}

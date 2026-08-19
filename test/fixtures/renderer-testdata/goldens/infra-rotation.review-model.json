@@ -1,0 +1,136 @@
+{
+  "contractVersion": "6.10.0",
+  "repo": "garnet-org/runtime-review-testbed",
+  "sha": "aa11bb22cc33dd44ee55ff667788990011223344",
+  "commitUrl": "https://github.com/garnet-org/runtime-review-testbed/commit/aa11bb22cc33dd44ee55ff667788990011223344",
+  "appUrl": "https://app.garnet.ai",
+  "appMode": true,
+  "recordedThrough": "2026-08-07 18:30:00 UTC",
+  "counts": {
+    "jobs": 1,
+    "associations": 4,
+    "destinations": 4
+  },
+  "jobs": [
+    {
+      "name": "build",
+      "workflow": "ci",
+      "run_id": "32100000002",
+      "run_url": "https://github.com/garnet-labs/posthog/actions/runs/32100000002",
+      "job_url": "",
+      "profile_id": "",
+      "uuid": "7a1e9c2b-4f6d-4a8e-9b3c-5d7e8f9a0b11",
+      "timestamp": "2026-08-07T18:30:00.000000000Z",
+      "repository": "garnet-labs/posthog",
+      "sha": "aa11bb22cc33dd44ee55ff667788990011223344",
+      "ref": "",
+      "actor": "",
+      "job_index": "",
+      "flow_count": 4,
+      "telemetry": {
+        "total_domains": null,
+        "total_connections": null
+      },
+      "telemetryDiscrepancies": [],
+      "assertions": [],
+      "counts": {
+        "associations": 4,
+        "processes": 3,
+        "destinations": 4,
+        "primary_names": 2,
+        "domains": 2,
+        "flows": 4
+      },
+      "edges": [
+        {
+          "remote_address": "104.16.24.34",
+          "remote_names": [
+            "registry.npmjs.org"
+          ],
+          "remote_ports": [
+            "443"
+          ],
+          "protocol": "tcp",
+          "result": "",
+          "detections": [],
+          "lineage_recorded": true,
+          "pid": "5001",
+          "process": "node",
+          "ancestry": [
+            "systemd",
+            "Runner.Worker",
+            "bash",
+            "node"
+          ],
+          "github_step": "3. Build",
+          "notes": []
+        },
+        {
+          "remote_address": "142.250.99.128",
+          "remote_names": [
+            "storage.googleapis.com"
+          ],
+          "remote_ports": [
+            "443"
+          ],
+          "protocol": "tcp",
+          "result": "",
+          "detections": [],
+          "lineage_recorded": true,
+          "pid": "5002",
+          "process": "node",
+          "ancestry": [
+            "systemd",
+            "Runner.Worker",
+            "bash",
+            "node"
+          ],
+          "github_step": "3. Build",
+          "notes": []
+        },
+        {
+          "remote_address": "140.82.114.23",
+          "remote_names": [],
+          "remote_ports": [
+            "443"
+          ],
+          "protocol": "tcp",
+          "result": "",
+          "detections": [],
+          "lineage_recorded": true,
+          "pid": "5003",
+          "process": "provjobd",
+          "ancestry": [
+            "systemd",
+            "hosted-compute-",
+            "sudo",
+            "provjobd"
+          ],
+          "github_step": "",
+          "notes": []
+        },
+        {
+          "remote_address": "140.82.114.24",
+          "remote_names": [],
+          "remote_ports": [
+            "443"
+          ],
+          "protocol": "tcp",
+          "result": "",
+          "detections": [],
+          "lineage_recorded": true,
+          "pid": "5003",
+          "process": "provjobd",
+          "ancestry": [
+            "systemd",
+            "hosted-compute-",
+            "sudo",
+            "provjobd"
+          ],
+          "github_step": "",
+          "notes": []
+        }
+      ]
+    }
+  ]
+}

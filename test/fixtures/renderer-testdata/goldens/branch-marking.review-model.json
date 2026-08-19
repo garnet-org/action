@@ -1,0 +1,118 @@
+{
+  "contractVersion": "6.10.0",
+  "repo": "garnet-org/runtime-review-testbed",
+  "sha": "bb22cc33dd44ee55ff6677889900aabbccddee11",
+  "commitUrl": "https://github.com/garnet-org/runtime-review-testbed/commit/bb22cc33dd44ee55ff6677889900aabbccddee11",
+  "appUrl": "https://app.garnet.ai",
+  "appMode": true,
+  "recordedThrough": "2026-08-07 16:00:00 UTC",
+  "counts": {
+    "jobs": 1,
+    "associations": 3,
+    "destinations": 3
+  },
+  "jobs": [
+    {
+      "name": "branches",
+      "workflow": "ci",
+      "run_id": "32000000020",
+      "run_url": "https://github.com/garnet-org/runtime-review-testbed/actions/runs/32000000020",
+      "job_url": "",
+      "profile_id": "",
+      "uuid": "2a6c3b2d-0e5f-4c8b-9d4e-3f2a7b8c9d02",
+      "timestamp": "2026-08-07T16:00:00.000000000Z",
+      "repository": "garnet-org/runtime-review-testbed",
+      "sha": "bb22cc33dd44ee55ff6677889900aabbccddee11",
+      "ref": "",
+      "actor": "",
+      "job_index": "",
+      "flow_count": 3,
+      "telemetry": {
+        "total_domains": null,
+        "total_connections": null
+      },
+      "telemetryDiscrepancies": [],
+      "assertions": [],
+      "counts": {
+        "associations": 3,
+        "processes": 2,
+        "destinations": 3,
+        "primary_names": 3,
+        "domains": 3,
+        "flows": 3
+      },
+      "edges": [
+        {
+          "remote_address": "198.51.100.7",
+          "remote_names": [
+            "kept.example.com"
+          ],
+          "remote_ports": [
+            "443"
+          ],
+          "protocol": "tcp",
+          "result": "",
+          "detections": [],
+          "lineage_recorded": true,
+          "pid": "5001",
+          "process": "node",
+          "ancestry": [
+            "systemd",
+            "Runner.Worker",
+            "bash",
+            "node"
+          ],
+          "github_step": "2. Run tests",
+          "notes": []
+        },
+        {
+          "remote_address": "198.51.100.8",
+          "remote_names": [
+            "fresh.example.net"
+          ],
+          "remote_ports": [
+            "443"
+          ],
+          "protocol": "tcp",
+          "result": "",
+          "detections": [],
+          "lineage_recorded": true,
+          "pid": "5001",
+          "process": "node",
+          "ancestry": [
+            "systemd",
+            "Runner.Worker",
+            "bash",
+            "node"
+          ],
+          "github_step": "2. Run tests",
+          "notes": []
+        },
+        {
+          "remote_address": "198.51.100.9",
+          "remote_names": [
+            "pypi.example.org"
+          ],
+          "remote_ports": [
+            "443"
+          ],
+          "protocol": "tcp",
+          "result": "",
+          "detections": [],
+          "lineage_recorded": true,
+          "pid": "5002",
+          "process": "pip",
+          "ancestry": [
+            "systemd",
+            "Runner.Worker",
+            "bash",
+            "python3",
+            "pip"
+          ],
+          "github_step": "3. Install tools",
+          "notes": []
+        }
+      ]
+    }
+  ]
+}

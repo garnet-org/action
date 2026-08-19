@@ -13,6 +13,7 @@ import { createGitHubContext, getProfileJobName, getWorkflowFilePath } from "./g
 import { resolveForkSkip } from "./fork-run.js"
 import { ControlPlaneClient } from "./control-plane/client.js"
 import { getEnv, getErrorMessage, isSupportedArch, isSupportedPlatform, pathExists, waitForDelay } from "./shared.js"
+import { OIDC_AUTH_FEATURE_FLAG, getGitHubIDToken, isMissingOIDCPermissionError, resolveOIDCAudience } from "./oidc.js"
 
 /**
  * @typedef {import("@actions/exec").ExecOptions} ExecOptions
@@ -23,10 +24,17 @@ import { getEnv, getErrorMessage, isSupportedArch, isSupportedPlatform, pathExis
  */
 
 const INSTPATH = "/usr/local/bin"
-const OIDC_AUTH_FEATURE_FLAG = "GARNET_ACTION_ENABLE_OIDC_AUTH"
-const GITHUB_APP_ID_PROD = "Iv23lihCfwCfqCxQNpvv"
-const GITHUB_APP_ID_STAGING = "Iv23liUXLYx9mgGKHgZk"
-const GITHUB_APP_ID_DEV = "Iv23li88DidEyxVnAR1p"
+// Default Jibril sensor version: the same stable pin as the floating v2 tag,
+// so the sensor never floats under an unchanged action ref.
+const JIBRIL_STABLE_VERSION = "v2.16.0"
+// Stop ceiling for the jibril unit. On stop the daemon flushes its whole
+// event backlog and writes the JSON profile only when the flush completes;
+// the binary's stock TimeoutStopSec=600 has been observed SIGKILLing the
+// flush mid-way on ~60-minute jobs, losing the profile. The drop-in raises
+// the ceiling so heavy flushes complete; the post step reads the effective
+// value live and bounds its own wait to it.
+const JIBRIL_STOP_TIMEOUT_ENV = "GARNET_JIBRIL_STOP_TIMEOUT_SECONDS"
+const DEFAULT_JIBRIL_STOP_TIMEOUT_SECONDS = 1800
 
 // This function is the main entry point for the script.
 // Returns true when Jibril started successfully, false otherwise.
@@ -48,7 +56,7 @@ export async function run() {
                 repository: getEnv("GITHUB_REPOSITORY"),
             })
             if (forkSkip.skip) {
-                core.notice(forkSkip.reason)
+                core.info(forkSkip.reason)
                 return false
             }
         }
@@ -196,6 +204,9 @@ export async function run() {
 
         core.info(`Created agent with ID: ${AGENT_ID}`)
 
+        // The post step resolves the run's profile envelope ID from this agent.
+        core.saveState("agentID", AGENT_ID)
+
         // Get network policy
         core.info("Getting network policy")
 
@@ -317,6 +328,17 @@ StandardOutput=append:/var/log/jibril.log
         const loggingConfPath = path.join(tmpDir, "logging.conf")
         await fs.writeFile(loggingConfPath, loggingConf)
         await execSudo(["cp", loggingConfPath, "/etc/systemd/system/jibril.service.d/logging.conf"])
+
+        // Raise the unit's stop ceiling so the shutdown event flush can
+        // complete and the JSON profile gets written on heavy jobs.
+        const stopTimeoutSeconds = resolveStopTimeoutSeconds(getEnv(JIBRIL_STOP_TIMEOUT_ENV, ""))
+        core.info(`Configuring Jibril stop timeout (${stopTimeoutSeconds}s)`)
+        const stopTimeoutConf = `[Service]
+TimeoutStopSec=${stopTimeoutSeconds}
+`
+        const stopTimeoutConfPath = path.join(tmpDir, "stop-timeout.conf")
+        await fs.writeFile(stopTimeoutConfPath, stopTimeoutConf)
+        await execSudo(["cp", stopTimeoutConfPath, "/etc/systemd/system/jibril.service.d/stop-timeout.conf"])
 
         // Verify installed files.
         if (DEBUG === "true") {
@@ -455,7 +477,7 @@ StandardOutput=append:/var/log/jibril.log
  * @param {ResolveControlPlaneAuthInput} input
  * @returns {Promise<ControlPlaneAuth>}
  */
-async function resolveControlPlaneAuth(input) {
+export async function resolveControlPlaneAuth(input) {
     if (input.useOIDCAuth !== true) {
         return {
             projectToken: requireApiToken(input.apiToken),
@@ -533,54 +555,6 @@ async function resolveControlPlaneAuth(input) {
 }
 
 /**
- * @param {string} audience
- * @returns {Promise<string>}
- */
-async function getGitHubIDToken(audience) {
-    let idToken = ""
-
-    try {
-        idToken = await core.getIDToken(audience)
-    } catch (error) {
-        const errorMessage = getErrorMessage(error)
-        if (isMissingOIDCPermissionError(errorMessage)) {
-            throw new Error("OIDC token request failed because this workflow is missing 'id-token: write' permission")
-        }
-
-        throw new Error(`OIDC token request failed: ${errorMessage}`)
-    }
-
-    if (idToken.trim() === "") {
-        throw new Error("OIDC token request returned an empty token")
-    }
-
-    return idToken
-}
-
-/**
- * @param {string} apiURL
- * @returns {string}
- */
-function resolveOIDCAudience(apiURL) {
-    try {
-        const url = new URL(apiURL)
-        if (url.host === "api.garnet.ai") {
-            return GITHUB_APP_ID_PROD
-        }
-        if (url.host === "staging-api.garnet.ai") {
-            return GITHUB_APP_ID_STAGING
-        }
-        if (url.host === "dev-api.garnet.ai") {
-            return GITHUB_APP_ID_DEV
-        }
-
-        return GITHUB_APP_ID_DEV
-    } catch {
-        return GITHUB_APP_ID_DEV
-    }
-}
-
-/**
  * @param {string} value
  * @returns {boolean}
  */
@@ -612,25 +586,10 @@ function requireApiToken(token) {
 }
 
 /**
- * @param {string} errorMessage
- * @returns {boolean}
- */
-function isMissingOIDCPermissionError(errorMessage) {
-    const normalized = errorMessage.toLowerCase()
-    if (normalized.includes("actions_id_token_request_url")) {
-        return true
-    }
-    if (normalized.includes("id-token") && normalized.includes("permission")) {
-        return true
-    }
-    return false
-}
-
-/**
  * @param {string} inputVersion
  * @param {string} actionRef
  */
-function resolveJibrilVersion(inputVersion, actionRef) {
+export function resolveJibrilVersion(inputVersion, actionRef) {
     const v = String(inputVersion || "").trim()
     if (v) return v
 
@@ -643,10 +602,28 @@ function resolveJibrilVersion(inputVersion, actionRef) {
     // - action@v1 stays pinned (do not change)
     if (ref === "v0") return "v0.0"
     if (ref === "v1") return "v2.10.4"
-    if (ref === "v2") return "v2.15.0"
+    if (ref === "v2") return JIBRIL_STABLE_VERSION
 
-    // Default for other refs (branch/SHA/etc).
-    return "latest"
+    // Every other ref (branch/SHA/exact tag) gets the same stable pin as v2:
+    // a root eBPF binary must not change under an unchanged action ref.
+    return JIBRIL_STABLE_VERSION
+}
+
+/**
+ * Resolves the stop ceiling written into the unit's drop-in. An explicit
+ * positive-integer environment override wins; otherwise the default is used.
+ * @param {string} overrideValue
+ * @returns {number}
+ */
+export function resolveStopTimeoutSeconds(overrideValue) {
+    const text = String(overrideValue === undefined || overrideValue === null ? "" : overrideValue).trim()
+    if (text !== "" && /^\d+$/.test(text)) {
+        const parsed = Number.parseInt(text, 10)
+        if (Number.isSafeInteger(parsed) && parsed > 0) {
+            return parsed
+        }
+    }
+    return DEFAULT_JIBRIL_STOP_TIMEOUT_SECONDS
 }
 
 /**
