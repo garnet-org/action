@@ -46,7 +46,7 @@ Get your API token at [app.garnet.ai](https://app.garnet.ai). Start with the Act
   />
 </p>
 
-<p align="center"><sub>The action's own comment shape (renderer v6.9.5); the companion GitHub App comment adds true coverage and cross-run comparison.</sub></p>
+<p align="center"><sub>The action's own comment shape. The renderer emits contract v6.10.0; this capture is from v6.9.5, before the meta block split into a finding line and a quiet provenance line. The companion GitHub App comment adds true coverage and cross-run comparison.</sub></p>
 
 ## What Garnet sees
 
@@ -145,7 +145,7 @@ Full installation guides for every path are in the [Garnet docs](https://docs.ga
 One comment per PR, one fold per job, updated in place as each job's profile lands:
 
 - **Headline** — `Execution Profiles recorded for N job(s), triggered by <sha7>`, linking the commit.
-- **Metadata line** — an italic blockquote: `N destinations · recorded at the kernel by Garnet · <UTC timestamp>`, one fact per `·` segment.
+- **Meta block** — two blockquote lines. The italic finding line first: `N destinations` on a first record, the job segments and `compared with <sha7>` on a comparison, `No changes since <sha7>` when nothing moved. Then one quiet line: `recorded at the kernel by Garnet · <UTC timestamp>`, at minute precision. One fact per `·` segment.
 - **One fold per job** — headed `workflow / job ↗ · N destinations`, the job id linking to its Actions run. Inside: one block holding every recorded root of the job's tree; independent roots are separated by a blank line. Plain tree nodes are recorded process names; observed actions render as shaped terminals — `○ destination` for network, defanged at the final dot. A process with an action directly beneath it renders **bold**; `(…)` brackets carry factual context only — `(step: "Run tests")`, `(dns resolver)`, `(cloud metadata)`, `(github infra)`, `(garnet sensor)`, `(ran from /tmp/…)`. A job with no recorded egress stays a plain row keeping its Garnet profile link.
 - **Per-job permalink** — `View this job's Execution Profile in Garnet →`, opening the job's [public run report](https://app.garnet.ai/public/runs/31257440827?profile=019fe15d-b34f-7803-820a-ecf58404a278) (`?profile=` selector required — a bare run URL returns 404).
 - **The explainer** — a `💡 How to read this` fold at the bottom teaches the tree with an annotated example:
@@ -162,6 +162,8 @@ follow a path downward to see what ran and what it did — each path to an obser
 names on the path = processes · ○ = observed action · (…) = context
 
 Once a pull request has two recorded commits, the comment compares against the previous profiled commit: the metadata line carries `compared with <sha7>`, changed job rows lead with the bold delta (`+1 −2 destinations`), unchanged rows read `· N destinations · unchanged`, and a changed job's tree renders as a diff headed `@@ <previous sha7> (previous) vs <sha7> (current) @@`. `+` marks a destination only in the current record, `−` one only in the previous record; the marks and the row's delta always reconcile exactly. Jobs recorded previously but not on this commit sit in one collapsed `jobs no longer recorded` fold with their destination counts.
+
+The deltas on the meta line and on the fold rows count your workflow's destinations. Movement in the runner's own background is counted where it happened: the root line above those marks carries `(runner background · +A −B)`, so every mark stays visible and every number counts what sits beneath it.
 
 The same full-detail record is appended to the GitHub Actions Job Summary as the **Garnet Execution Summary** (see this [example run](https://github.com/garnet-org/action/actions/runs/23175135499)).
 
@@ -182,6 +184,12 @@ The same full-detail record is appended to the GitHub Actions Job Summary as the
 | `jibril_version`    | No       | `""` (auto)             | Jibril version (for example `v2.16.0`, `v0.0`, or `latest`); empty resolves to the pinned stable release for your action ref (daily builds on `@v0`) |
 | `debug`             | No       | `false`                 | Enable debug mode and upload logs as artifacts |
 | `preview`           | No       | `false`                 | Render the full-fidelity Step Summary record (assertions + evidence); preview shape is unstable and may change without a major version bump |
+
+### Environment variables
+
+| Variable                              | Default | Description                                                                                        |
+| ------------------------------------- | ------- | -------------------------------------------------------------------------------------------------- |
+| `GARNET_JIBRIL_STOP_TIMEOUT_SECONDS`  | `1800`  | Seconds the Jibril systemd unit gets to flush its events on stop. The main step writes it as a `TimeoutStopSec` drop-in; the post step reads the unit's effective value and bounds its own wait to it. Raise it for long jobs whose profile goes missing after a stop. |
 
 ¹ Required at runtime, with one exception: on `pull_request` runs from forked repositories, GitHub exposes no secrets, so the action emits a notice, skips recording, and the job continues. An OIDC alternative is landing behind the `GARNET_ACTION_ENABLE_OIDC_AUTH` flag; until that flag is on, the token is the auth path.
 
