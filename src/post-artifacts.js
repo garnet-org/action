@@ -16,8 +16,19 @@ const JIBRIL_LOG_FILES = [
 ]
 
 export async function uploadJibrilArtifacts() {
-  const artifactDir = path.join(os.tmpdir(), "garnet-jibril-artifacts")
-  await fs.mkdir(artifactDir, { recursive: true })
+  // A predictable staging path is a symlink-overwrite target for the
+  // root-privileged copy below; mkdtemp gives an unpredictable, freshly
+  // created directory owned by this process.
+  /** @type {string} */
+  let artifactDir
+  try {
+    artifactDir = await fs.mkdtemp(path.join(os.tmpdir(), "garnet-"))
+  } catch (err) {
+    core.warning(
+      `Failed to create a staging directory for jibril artifacts: ${getErrorMessage(err)}`,
+    )
+    return
+  }
 
   try {
     const uploaded = await copyReadableLogFiles(artifactDir)
