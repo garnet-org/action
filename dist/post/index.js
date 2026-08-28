@@ -151172,6 +151172,15 @@ const COMMENT_STATE_MARKER_PREFIX = "garnet-action-comment-state:"
 // (rendered review plus the hidden state marker) must stay under it.
 const COMMENT_HARD_LIMIT = 65536
 
+// Comment state is attacker-reachable input: anyone who can comment on a PR
+// can write a marker with an arbitrary payload. Decoding is bounded so a
+// crafted payload cannot be used to inflate work or memory before the
+// schema rejects it.
+const MAX_ENCODED_STATE_LENGTH = COMMENT_HARD_LIMIT
+const MAX_STATE_PROFILES = 128
+const MAX_STATE_WORKFLOW_RUNS = 128
+const BASE64URL_PATTERN = /^[A-Za-z0-9_-]+$/
+
 /**
  * @typedef {"pass" | "attention" | "fail" | "unknown"} ProfileResult
  */
@@ -151609,6 +151618,9 @@ function getCommentRepository(profiles) {
 }
 
 /**
+ * Decodes the sticky-comment state carried by an existing comment body.
+ * The body is untrusted: any decoding, schema, or size anomaly yields null
+ * so the caller ignores the state and publishes fresh.
  * @param {string} body
  * @returns {CommentState | null}
  */
@@ -151620,38 +151632,94 @@ function parseCommentState(body) {
         return null
     }
 
-    try {
-        const json = Buffer.from(encoded, "base64url").toString("utf8")
-        const parsed = JSON.parse(json)
-        const result = COMMENT_STATE_SCHEMA.safeParse(parsed)
-        if (result.success) {
-            return result.data
-        }
-
-        const legacyV2 = LEGACY_V2_STATE_SCHEMA.safeParse(parsed)
-        if (legacyV2.success) {
-            return {
-                version: 3,
-                workflow_runs: legacyV2.data.workflow_runs,
-                profiles: legacyV2.data.profiles.map(upgradeLegacyProfile).sort(compareProfiles),
-            }
-        }
-
-        const legacyV1 = LEGACY_V1_STATE_SCHEMA.safeParse(parsed)
-        if (legacyV1.success) {
-            const profiles = legacyV1.data.profiles.map(upgradeLegacyProfile).sort(compareProfiles)
-            /** @type {Record<string, WorkflowRun>} */
-            const workflowRuns = {}
-            for (const profile of profiles) {
-                workflowRuns[getWorkflowKey(profile)] = legacyV1.data.latest_run
-            }
-            return { version: 3, workflow_runs: workflowRuns, profiles }
-        }
-
+    const json = decodeStatePayload(encoded)
+    if (json === null) {
         return null
+    }
+
+    /** @type {unknown} */
+    let parsed
+    try {
+        parsed = JSON.parse(json)
     } catch {
         return null
     }
+
+    const state = parseStateShape(parsed)
+    if (state === null || !isWithinStateLimits(state)) {
+        return null
+    }
+
+    return state
+}
+
+/**
+ * @param {unknown} parsed
+ * @returns {CommentState | null}
+ */
+function parseStateShape(parsed) {
+    const result = COMMENT_STATE_SCHEMA.safeParse(parsed)
+    if (result.success) {
+        return result.data
+    }
+
+    const legacyV2 = LEGACY_V2_STATE_SCHEMA.safeParse(parsed)
+    if (legacyV2.success) {
+        return {
+            version: 3,
+            workflow_runs: legacyV2.data.workflow_runs,
+            profiles: legacyV2.data.profiles.map(upgradeLegacyProfile).sort(compareProfiles),
+        }
+    }
+
+    const legacyV1 = LEGACY_V1_STATE_SCHEMA.safeParse(parsed)
+    if (legacyV1.success) {
+        const profiles = legacyV1.data.profiles.map(upgradeLegacyProfile).sort(compareProfiles)
+        /** @type {Record<string, WorkflowRun>} */
+        const workflowRuns = {}
+        for (const profile of profiles) {
+            workflowRuns[getWorkflowKey(profile)] = legacyV1.data.latest_run
+        }
+        return { version: 3, workflow_runs: workflowRuns, profiles }
+    }
+
+    return null
+}
+
+/**
+ * Base64url-decodes a state payload, rejecting oversized payloads and any
+ * text that is not canonical base64url (Node's decoder silently drops
+ * characters outside the alphabet, so the encoding is checked first).
+ * @param {string} encoded
+ * @returns {string | null}
+ */
+function decodeStatePayload(encoded) {
+    if (encoded.length === 0 || encoded.length > MAX_ENCODED_STATE_LENGTH) {
+        return null
+    }
+
+    if (!BASE64URL_PATTERN.test(encoded)) {
+        return null
+    }
+
+    const decoded = Buffer.from(encoded, "base64url")
+    if (decoded.toString("base64url") !== encoded) {
+        return null
+    }
+
+    return decoded.toString("utf8")
+}
+
+/**
+ * @param {CommentState} state
+ * @returns {boolean}
+ */
+function isWithinStateLimits(state) {
+    if (state.profiles.length > MAX_STATE_PROFILES) {
+        return false
+    }
+
+    return Object.keys(state.workflow_runs).length <= MAX_STATE_WORKFLOW_RUNS
 }
 
 /**
@@ -151997,7 +152065,15 @@ function getString(value) {
 
 
 /**
- * @typedef {{ id: number, body: string }} PullRequestComment
+ * A PR comment as the planner sees it. `author` is the commenter's login
+ * and `authorType` the GitHub account type (`Bot`, `User`, ...); both are
+ * empty when the API omits them, which the planner treats as untrusted.
+ * @typedef {{
+ *   id: number
+ *   body: string
+ *   author: string
+ *   authorType: string
+ * }} PullRequestComment
  */
 
 class GitHubIssueCommentClient {
@@ -152105,9 +152181,15 @@ function normalizeComment(value) {
     return null
   }
 
-  return typeof value.id === "number" && typeof value.body === "string"
-    ? { id: value.id, body: value.body }
-    : null
+  if (typeof value.id !== "number" || typeof value.body !== "string") {
+    return null
+  }
+
+  const user = isRecord(value.user) ? value.user : null
+  const author = user !== null && typeof user.login === "string" ? user.login : ""
+  const authorType = user !== null && typeof user.type === "string" ? user.type : ""
+
+  return { id: value.id, body: value.body, author, authorType }
 }
 
 /**
@@ -152128,8 +152210,33 @@ function isPresent(value) {
  */
 
 /**
- * @typedef {{ id: number, body: string }} PullRequestComment
+ * @typedef {import("./github-issue-comment-client.js").PullRequestComment} PullRequestComment
  */
+
+// Anyone who can comment on a pull request can copy this action's markers
+// and state payload. Markers are honored only on comments written by the
+// identities that legitimately own them: the workflow token's own bot and
+// the Garnet Runtime Review App.
+const GITHUB_ACTIONS_AUTHOR = "github-actions[bot]"
+const GARNET_APP_AUTHOR_PATTERN = /^garnet-runtime-review(-[A-Za-z0-9-]+)?\[bot\]$/
+const BOT_AUTHOR_TYPE = "Bot"
+
+/**
+ * Whether marker and state found in this comment may be acted on.
+ * @param {PullRequestComment} comment
+ * @returns {boolean}
+ */
+function isTrustedCommentAuthor(comment) {
+    if (comment.authorType !== BOT_AUTHOR_TYPE) {
+        return false
+    }
+
+    if (comment.author === GITHUB_ACTIONS_AUTHOR) {
+        return true
+    }
+
+    return GARNET_APP_AUTHOR_PATTERN.test(comment.author)
+}
 
 /**
  * @typedef {{
@@ -152153,13 +152260,18 @@ function isPresent(value) {
  */
 
 /**
- * @param {PullRequestComment[]} comments
+ * Existing comments are untrusted input: only comments authored by the
+ * expected bot identities take part in the plan, so a third-party comment
+ * can neither suppress, stale-mark, nor hijack the Runtime Review comment.
+ * @param {PullRequestComment[]} allComments
  * @param {NormalizedProfile} profile
  * @param {number} runAttempt
  * @param {RenderOptions} [renderOptions]
  * @returns {PublishCommentPlan}
  */
-function planPullRequestComment(comments, profile, runAttempt, renderOptions = {}) {
+function planPullRequestComment(allComments, profile, runAttempt, renderOptions = {}) {
+    const comments = allComments.filter(isTrustedCommentAuthor)
+
     if (containsControlPlaneComment(comments)) {
         return {
             kind: "blocked-by-control-plane",

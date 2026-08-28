@@ -24,6 +24,15 @@ const COMMENT_STATE_MARKER_PREFIX = "garnet-action-comment-state:"
 // (rendered review plus the hidden state marker) must stay under it.
 const COMMENT_HARD_LIMIT = 65536
 
+// Comment state is attacker-reachable input: anyone who can comment on a PR
+// can write a marker with an arbitrary payload. Decoding is bounded so a
+// crafted payload cannot be used to inflate work or memory before the
+// schema rejects it.
+const MAX_ENCODED_STATE_LENGTH = COMMENT_HARD_LIMIT
+const MAX_STATE_PROFILES = 128
+const MAX_STATE_WORKFLOW_RUNS = 128
+const BASE64URL_PATTERN = /^[A-Za-z0-9_-]+$/
+
 /**
  * @typedef {"pass" | "attention" | "fail" | "unknown"} ProfileResult
  */
@@ -461,6 +470,9 @@ function getCommentRepository(profiles) {
 }
 
 /**
+ * Decodes the sticky-comment state carried by an existing comment body.
+ * The body is untrusted: any decoding, schema, or size anomaly yields null
+ * so the caller ignores the state and publishes fresh.
  * @param {string} body
  * @returns {CommentState | null}
  */
@@ -472,38 +484,94 @@ export function parseCommentState(body) {
         return null
     }
 
-    try {
-        const json = Buffer.from(encoded, "base64url").toString("utf8")
-        const parsed = JSON.parse(json)
-        const result = COMMENT_STATE_SCHEMA.safeParse(parsed)
-        if (result.success) {
-            return result.data
-        }
-
-        const legacyV2 = LEGACY_V2_STATE_SCHEMA.safeParse(parsed)
-        if (legacyV2.success) {
-            return {
-                version: 3,
-                workflow_runs: legacyV2.data.workflow_runs,
-                profiles: legacyV2.data.profiles.map(upgradeLegacyProfile).sort(compareProfiles),
-            }
-        }
-
-        const legacyV1 = LEGACY_V1_STATE_SCHEMA.safeParse(parsed)
-        if (legacyV1.success) {
-            const profiles = legacyV1.data.profiles.map(upgradeLegacyProfile).sort(compareProfiles)
-            /** @type {Record<string, WorkflowRun>} */
-            const workflowRuns = {}
-            for (const profile of profiles) {
-                workflowRuns[getWorkflowKey(profile)] = legacyV1.data.latest_run
-            }
-            return { version: 3, workflow_runs: workflowRuns, profiles }
-        }
-
+    const json = decodeStatePayload(encoded)
+    if (json === null) {
         return null
+    }
+
+    /** @type {unknown} */
+    let parsed
+    try {
+        parsed = JSON.parse(json)
     } catch {
         return null
     }
+
+    const state = parseStateShape(parsed)
+    if (state === null || !isWithinStateLimits(state)) {
+        return null
+    }
+
+    return state
+}
+
+/**
+ * @param {unknown} parsed
+ * @returns {CommentState | null}
+ */
+function parseStateShape(parsed) {
+    const result = COMMENT_STATE_SCHEMA.safeParse(parsed)
+    if (result.success) {
+        return result.data
+    }
+
+    const legacyV2 = LEGACY_V2_STATE_SCHEMA.safeParse(parsed)
+    if (legacyV2.success) {
+        return {
+            version: 3,
+            workflow_runs: legacyV2.data.workflow_runs,
+            profiles: legacyV2.data.profiles.map(upgradeLegacyProfile).sort(compareProfiles),
+        }
+    }
+
+    const legacyV1 = LEGACY_V1_STATE_SCHEMA.safeParse(parsed)
+    if (legacyV1.success) {
+        const profiles = legacyV1.data.profiles.map(upgradeLegacyProfile).sort(compareProfiles)
+        /** @type {Record<string, WorkflowRun>} */
+        const workflowRuns = {}
+        for (const profile of profiles) {
+            workflowRuns[getWorkflowKey(profile)] = legacyV1.data.latest_run
+        }
+        return { version: 3, workflow_runs: workflowRuns, profiles }
+    }
+
+    return null
+}
+
+/**
+ * Base64url-decodes a state payload, rejecting oversized payloads and any
+ * text that is not canonical base64url (Node's decoder silently drops
+ * characters outside the alphabet, so the encoding is checked first).
+ * @param {string} encoded
+ * @returns {string | null}
+ */
+function decodeStatePayload(encoded) {
+    if (encoded.length === 0 || encoded.length > MAX_ENCODED_STATE_LENGTH) {
+        return null
+    }
+
+    if (!BASE64URL_PATTERN.test(encoded)) {
+        return null
+    }
+
+    const decoded = Buffer.from(encoded, "base64url")
+    if (decoded.toString("base64url") !== encoded) {
+        return null
+    }
+
+    return decoded.toString("utf8")
+}
+
+/**
+ * @param {CommentState} state
+ * @returns {boolean}
+ */
+function isWithinStateLimits(state) {
+    if (state.profiles.length > MAX_STATE_PROFILES) {
+        return false
+    }
+
+    return Object.keys(state.workflow_runs).length <= MAX_STATE_WORKFLOW_RUNS
 }
 
 /**

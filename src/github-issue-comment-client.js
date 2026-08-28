@@ -2,7 +2,15 @@ import * as github from "@actions/github"
 import { isRecord } from "./shared.js"
 
 /**
- * @typedef {{ id: number, body: string }} PullRequestComment
+ * A PR comment as the planner sees it. `author` is the commenter's login
+ * and `authorType` the GitHub account type (`Bot`, `User`, ...); both are
+ * empty when the API omits them, which the planner treats as untrusted.
+ * @typedef {{
+ *   id: number
+ *   body: string
+ *   author: string
+ *   authorType: string
+ * }} PullRequestComment
  */
 
 export class GitHubIssueCommentClient {
@@ -110,9 +118,15 @@ function normalizeComment(value) {
     return null
   }
 
-  return typeof value.id === "number" && typeof value.body === "string"
-    ? { id: value.id, body: value.body }
-    : null
+  if (typeof value.id !== "number" || typeof value.body !== "string") {
+    return null
+  }
+
+  const user = isRecord(value.user) ? value.user : null
+  const author = user !== null && typeof user.login === "string" ? user.login : ""
+  const authorType = user !== null && typeof user.type === "string" ? user.type : ""
+
+  return { id: value.id, body: value.body, author, authorType }
 }
 
 /**
