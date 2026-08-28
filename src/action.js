@@ -36,6 +36,15 @@ const JIBRIL_STABLE_VERSION = "v2.16.0"
 const JIBRIL_STOP_TIMEOUT_ENV = "GARNET_JIBRIL_STOP_TIMEOUT_SECONDS"
 const DEFAULT_JIBRIL_STOP_TIMEOUT_SECONDS = 1800
 
+// The sensor version becomes a path segment of the release download URL, so
+// it is accepted only as `latest` or a semantic release tag. Anything else
+// (path separators, `..`, query strings, shell metacharacters) is rejected
+// before a URL is built.
+const JIBRIL_VERSION_PATTERN = /^v?\d+\.\d+\.\d+(-[A-Za-z0-9.]+)?$/
+// Release tags this action pins itself, kept accepted because they predate
+// the three-component tag scheme (`v0.0` is the daily-build channel).
+const JIBRIL_INTERNAL_VERSION_PINS = ["v0.0", "v2.10.4", JIBRIL_STABLE_VERSION]
+
 // This function is the main entry point for the script.
 // Returns true when Jibril started successfully, false otherwise.
 export async function run() {
@@ -110,6 +119,8 @@ export async function run() {
         if (JIBRILVER !== "latest" && !JIBRILVER.startsWith("v")) {
             JIBRILVER = `v${JIBRILVER}`
         }
+
+        assertDownloadableJibrilVersion(JIBRILVER)
 
         core.info(`API server: ${API}`)
         core.info(`Jibril Version: ${JIBRILVER}`)
@@ -591,7 +602,10 @@ function requireApiToken(token) {
  */
 export function resolveJibrilVersion(inputVersion, actionRef) {
     const v = String(inputVersion || "").trim()
-    if (v) return v
+    if (v !== "") {
+        assertValidJibrilVersionInput(v)
+        return v
+    }
 
     const ref = String(actionRef || "")
         .trim()
@@ -607,6 +621,50 @@ export function resolveJibrilVersion(inputVersion, actionRef) {
     // Every other ref (branch/SHA/exact tag) gets the same stable pin as v2:
     // a root eBPF binary must not change under an unchanged action ref.
     return JIBRIL_STABLE_VERSION
+}
+
+/**
+ * The sensor version reaches the network as a release-tag path segment of
+ * the jibril download URL. Only `latest` and semantic release tags are
+ * accepted; everything else fails the run before a URL exists.
+ * @param {string} version
+ * @returns {boolean}
+ */
+export function isValidJibrilVersion(version) {
+    if (version === "latest") {
+        return true
+    }
+
+    return JIBRIL_VERSION_PATTERN.test(version)
+}
+
+/**
+ * Validates the user-supplied `jibril_version` input.
+ * @param {string} version
+ * @returns {void}
+ */
+export function assertValidJibrilVersionInput(version) {
+    if (isValidJibrilVersion(version)) {
+        return
+    }
+
+    throw new Error(
+        `Invalid 'jibril_version' input: ${JSON.stringify(version)}. Use 'latest' or a release tag such as 'v2.16.0'.`,
+    )
+}
+
+/**
+ * Last check before the download URL is built: the resolved version is
+ * either a valid release tag or one of this action's own legacy pins.
+ * @param {string} version
+ * @returns {void}
+ */
+export function assertDownloadableJibrilVersion(version) {
+    if (isValidJibrilVersion(version) || JIBRIL_INTERNAL_VERSION_PINS.includes(version)) {
+        return
+    }
+
+    throw new Error(`Refusing to download jibril for an invalid version: ${JSON.stringify(version)}`)
 }
 
 /**
