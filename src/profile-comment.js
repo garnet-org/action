@@ -5,6 +5,7 @@ import {
     renderRunReview,
     summarizeProfile,
     pullRequestURL,
+    isSafeRepository,
     COMMENT_MARKER,
     RUNTIME_REVIEW_MARKER,
     SIZE_BUDGET,
@@ -443,7 +444,10 @@ export function renderCommentBody(state, options = {}) {
 export function buildProfileRunReview(profiles) {
     const sha = getCommentCommitSha(profiles)
     const repository = getCommentRepository(profiles)
-    const commitUrl = repository !== "" && sha !== "" ? `https://github.com/${repository}/commit/${sha}` : ""
+    const commitUrl =
+        isSafeRepository(repository) && /^[0-9a-fA-F]{7,40}$/.test(sha)
+            ? `https://github.com/${repository}/commit/${sha}`
+            : ""
     const appUrl = resolveAppBaseURL()
 
     return buildRunReview({

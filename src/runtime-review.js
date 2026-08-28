@@ -214,6 +214,14 @@ export { CONTRACT_VOCAB }
  * @typedef {{ edge: ReviewEdge, associations: ReviewEdge[] }} LineageRow
  */
 
+// Link targets are built from recorded profile fields, which a workload
+// can influence. A repository is accepted only in `owner/name` shape, and
+// a target only as an absolute https URL free of characters that would
+// break out of Markdown link or HTML attribute syntax.
+const REPOSITORY_PATTERN = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/
+const UNSAFE_URL_CHARACTERS = /[\s<>"'`()\\]/
+const DEFAULT_SERVER_URL = "https://github.com"
+
 /** Canonical sticky marker. */
 export const RUNTIME_REVIEW_MARKER = "<!-- garnet-runtime-review -->"
 
@@ -601,9 +609,74 @@ export function edgeComparator(a, b) {
 export function pullRequestURL(github) {
   const match = /^refs\/pull\/(\d+)\//.exec(String(github.ref || ""))
   const repository = String(github.repository || "")
-  if (match === null || repository === "") return ""
-  const server = String(github.server_url || "https://github.com").replace(/\/+$/, "")
+  if (match === null || !isSafeRepository(repository)) return ""
+  const server = safeServerURL(github.server_url)
+  if (server === "") return ""
   return `${server}/${repository}/pull/${match[1]}`
+}
+
+/**
+ * Record-derived values reach Markdown link targets and `href` attributes,
+ * so a repository slug is accepted only in `owner/name` shape.
+ * @param {string} repository
+ * @returns {boolean}
+ */
+export function isSafeRepository(repository) {
+  return REPOSITORY_PATTERN.test(repository)
+}
+
+/**
+ * The recorded GitHub server as a link origin: `https:` with a hostname,
+ * trailing slashes removed. Anything else (and an empty value on the
+ * hosted default) yields github.com or "" for an unusable value.
+ * @param {unknown} serverURL
+ * @returns {string}
+ */
+export function safeServerURL(serverURL) {
+  const raw = String(serverURL ?? "")
+  if (raw === "") return DEFAULT_SERVER_URL
+  return safeLinkTarget(raw.replace(/\/+$/, ""))
+}
+
+/**
+ * A URL that is safe to place in a Markdown link target or an `href`:
+ * absolute `https:` with a hostname and no character that could break out
+ * of the surrounding syntax. Unsafe values render as plain text.
+ * @param {unknown} url
+ * @returns {string}
+ */
+export function safeLinkTarget(url) {
+  const raw = String(url ?? "")
+  if (raw === "" || UNSAFE_URL_CHARACTERS.test(raw)) return ""
+
+  /** @type {URL} */
+  let parsed
+  try {
+    parsed = new URL(raw)
+  } catch {
+    return ""
+  }
+
+  if (parsed.protocol !== "https:" || parsed.hostname === "") return ""
+
+  return raw
+}
+
+/**
+ * The Actions run URL for a recorded run, built only from values that are
+ * safe in a link target.
+ * @param {Record<string, any>} github
+ * @returns {string}
+ */
+function runURL(github) {
+  const repository = String(github.repository || "")
+  const runID = String(github.run_id || "")
+  if (runID === "" || !/^[0-9]+$/.test(runID) || !isSafeRepository(repository)) return ""
+
+  const server = safeServerURL(github.server_url)
+  if (server === "") return ""
+
+  return `${server}/${repository}/actions/runs/${runID}`
 }
 
 /**
@@ -654,10 +727,7 @@ export function summarizeProfile(profile) {
     repository: String(github.repository || ""),
     sha: String(github.sha || ""),
     run_id: String(github.run_id || ""),
-    run_url:
-      github.run_id && github.repository
-        ? `${github.server_url || "https://github.com"}/${github.repository}/actions/runs/${github.run_id}`
-        : "",
+    run_url: runURL(github),
     profile_id: String(envelope.id || envelope.profile_id || ""),
     uuid: String(p?.uuid || ""),
     timestamp: String(p?.timestamp || ""),
@@ -2058,10 +2128,11 @@ function deltaPhrase(added, removed, { bold = true, unit = true } = {}) {
  */
 function jobIdentity(job) {
   const wf = `<code>${escapeHtml(job.workflow)}</code>`
-  const url = job.job_url || job.run_url
-  const name = url
-    ? `<a href="${escapeHtmlAttr(url)}"><code>${escapeHtml(job.name)}</code>&nbsp;↗</a>`
-    : `<code>${escapeHtml(job.name)}</code>`
+  const url = safeLinkTarget(job.job_url || job.run_url)
+  const name =
+    url !== ""
+      ? `<a href="${escapeHtmlAttr(url)}"><code>${escapeHtml(job.name)}</code>&nbsp;↗</a>`
+      : `<code>${escapeHtml(job.name)}</code>`
   return job.workflow !== "" ? `${wf} / ${name}` : name
 }
 
@@ -2231,7 +2302,8 @@ function retentionOrder(edges) {
  */
 function commitRef(sha, commitUrl) {
   const sha7 = escapeCode(sha.slice(0, 7) || "unknown")
-  return commitUrl ? `[\`${sha7}\`](${commitUrl})` : `\`${sha7}\``
+  const target = safeLinkTarget(commitUrl)
+  return target === "" ? `\`${sha7}\`` : `[\`${sha7}\`](${target})`
 }
 
 /**
@@ -2588,7 +2660,7 @@ function renderCommentBody(review, kept, { explainerOpen = false } = {}) {
     // Execution Profile link when known — an empty egress projection never
     // implies Garnet observed nothing.
     if (job.edges.length === 0 && !hasDelta) {
-      const link = profilePermalink(job, review.appUrl, "pr_comment")
+      const link = safeLinkTarget(profilePermalink(job, review.appUrl, "pr_comment"))
       const profilePart =
         link !== ""
           ? ` · <a href="${escapeHtmlAttr(link)}">${VOCAB.artifact}</a>`
@@ -2633,7 +2705,7 @@ function renderCommentBody(review, kept, { explainerOpen = false } = {}) {
       lines.push(`<sub>${fenceNotes.join(" · ")}</sub>`)
       lines.push("")
     }
-    const link = profilePermalink(job, review.appUrl, "pr_comment")
+    const link = safeLinkTarget(profilePermalink(job, review.appUrl, "pr_comment"))
     if (link !== "") {
       lines.push(
         `<p align="right"><sub><a href="${escapeHtmlAttr(link)}">${VOCAB.permalinkLabel}</a></sub></p>`,
@@ -3161,16 +3233,17 @@ function renderStepSummaryFooter(job, appUrl) {
   const stamp = formatTimestamp(job.timestamp)
   const lines = ['<div align="right">']
   if (stamp !== "") lines.push(`<sub>${stamp}</sub><br>`)
-  const link = profilePermalink(job, appUrl, "step_summary")
+  const link = safeLinkTarget(profilePermalink(job, appUrl, "step_summary"))
   const cta =
     link === ""
       ? "<strong>Powered by Garnet</strong>"
       : `<a href="${escapeHtmlAttr(link)}">${VOCAB.permalinkLabel}</a>`
   lines.push(cta, "</div>")
-  if (job.run_url !== "") {
+  const runLink = safeLinkTarget(job.run_url)
+  if (runLink !== "") {
     lines.push(
       "",
-      `<sub><a href="${escapeHtmlAttr(job.run_url)}">Job summary generated at run-time</a></sub>`,
+      `<sub><a href="${escapeHtmlAttr(runLink)}">Job summary generated at run-time</a></sub>`,
     )
   } else {
     lines.push("", "<sub>Job summary generated at run-time</sub>")
@@ -3191,7 +3264,7 @@ function renderProfileSummary(job, appUrl, keptDestinations, previewAssertions) 
   /** @type {[string, string][]} */
   const rows = []
   if (job.profile_id !== "") {
-    const profileLink = profilePermalink(job, appUrl, "step_summary")
+    const profileLink = safeLinkTarget(profilePermalink(job, appUrl, "step_summary"))
     const profileCell =
       profileLink === ""
         ? escapeMarkdownCell(job.profile_id)
@@ -3201,9 +3274,10 @@ function renderProfileSummary(job, appUrl, keptDestinations, previewAssertions) 
   if (job.workflow !== "") rows.push(["Workflow", escapeMarkdownCell(job.workflow)])
   if (job.repository !== "") rows.push(["Repository", escapeMarkdownCell(job.repository)])
   if (job.ref !== "") rows.push(["Branch", escapeMarkdownCell(job.ref)])
-  if (job.pr_url !== "") {
-    const prNumber = job.pr_url.split("/").pop()
-    rows.push(["Pull request", `[#${escapeMarkdownCell(prNumber ?? "")}](${job.pr_url})`])
+  const prLink = safeLinkTarget(job.pr_url)
+  if (prLink !== "") {
+    const prNumber = prLink.split("/").pop()
+    rows.push(["Pull request", `[#${escapeMarkdownCell(prNumber ?? "")}](${prLink})`])
   }
   if (job.sha !== "") rows.push(["Commit", escapeMarkdownCell(job.sha)])
   if (job.actor !== "") rows.push(["Triggered by", escapeMarkdownCell(job.actor)])
