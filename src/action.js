@@ -4,7 +4,8 @@
 import * as core from "@actions/core"
 import * as exec from "@actions/exec"
 import { HttpClient } from "@actions/http-client"
-import { createWriteStream } from "node:fs"
+import { createHash } from "node:crypto"
+import { createReadStream, createWriteStream } from "node:fs"
 import * as fs from "node:fs/promises"
 import * as os from "node:os"
 import * as path from "node:path"
@@ -44,6 +45,10 @@ const JIBRIL_VERSION_PATTERN = /^v?\d+\.\d+\.\d+(-[A-Za-z0-9.]+)?$/
 // Release tags this action pins itself, kept accepted because they predate
 // the three-component tag scheme (`v0.0` is the daily-build channel).
 const JIBRIL_INTERNAL_VERSION_PINS = ["v0.0", "v2.10.4", JIBRIL_STABLE_VERSION]
+
+const JIBRIL_RELEASES_REPOSITORY = "garnet-org/jibril-releases"
+const JIBRIL_CHECKSUMS_FILE = "checksums.txt"
+const SKIP_SIGNATURE_VERIFICATION_ENV = "GARNET_SKIP_SIGNATURE_VERIFICATION"
 
 // This function is the main entry point for the script.
 // Returns true when Jibril started successfully, false otherwise.
@@ -129,11 +134,10 @@ export async function run() {
         tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "garnet-"))
 
         // Download jibril
-        const jibrilPrefix = "https://github.com/garnet-org/jibril-releases/releases"
-        let jibrilURL =
-            JIBRILVER === "latest"
-                ? `${jibrilPrefix}/latest/download/jibril`
-                : `${jibrilPrefix}/download/${JIBRILVER}/jibril`
+        const jibrilPrefix = `https://github.com/${JIBRIL_RELEASES_REPOSITORY}/releases`
+        const releasePrefix =
+            JIBRILVER === "latest" ? `${jibrilPrefix}/latest/download` : `${jibrilPrefix}/download/${JIBRILVER}`
+        const jibrilURL = `${releasePrefix}/jibril`
 
         core.info(`Downloading jibril: ${jibrilURL}`)
 
@@ -142,6 +146,15 @@ export async function run() {
         if (!(await pathExists(jibrilDest))) {
             throw new Error("Failed to download jibril binary")
         }
+
+        // The binary is about to run as root: verify it before it is
+        // installed, made executable, or started.
+        await verifyJibrilBinary({
+            binaryPath: jibrilDest,
+            checksumsURL: `${releasePrefix}/${JIBRIL_CHECKSUMS_FILE}`,
+            skipVerification: getEnv(SKIP_SIGNATURE_VERIFICATION_ENV, "false") === "true",
+        })
+
         await execSudo(["mv", jibrilDest, `${INSTPATH}/jibril`])
         await execSudo(["chmod", "+x", `${INSTPATH}/jibril`])
 
@@ -724,6 +737,190 @@ async function execSudo(args, options = {}) {
         core.debug(`$ sudo -E ${args.join(" ")}`)
     }
     return exec.exec("sudo", ["-E", ...args], options)
+}
+
+/**
+ * @typedef {{
+ *   binaryPath: string
+ *   checksumsURL: string
+ *   skipVerification: boolean
+ * }} VerifyJibrilBinaryInput
+ */
+
+/**
+ * Verifies the downloaded sensor before it is installed and run as root:
+ * its sha256 must match the release's `checksums.txt` entry, and the
+ * release artifact must carry a valid build attestation. Releases that
+ * predate signed distribution publish no `checksums.txt`; those are logged
+ * and installed unverified, which is the pre-existing behaviour.
+ * @param {VerifyJibrilBinaryInput} input
+ * @returns {Promise<void>}
+ */
+async function verifyJibrilBinary(input) {
+    if (input.skipVerification) {
+        core.warning(
+            "jibril signature verification is DISABLED ('skip_signature_verification: true'). The sensor binary will be installed and run as root without checksum or attestation verification.",
+        )
+        return
+    }
+
+    const checksums = await fetchOptionalText(input.checksumsURL)
+    if (checksums === null) {
+        core.info("jibril: release predates signed distribution; checksum verification unavailable")
+        return
+    }
+
+    const digest = await verifyChecksum(input.binaryPath, checksums, "jibril")
+    core.info(`jibril: sha256 verified against ${JIBRIL_CHECKSUMS_FILE} (${digest})`)
+
+    await verifyJibrilAttestation(input.binaryPath)
+}
+
+/**
+ * Runs `gh attestation verify` against the release repository. `gh` ships
+ * on GitHub-hosted runners; where it is absent the attestation check is
+ * skipped with a warning, and a failed verification fails the run.
+ * @param {string} binaryPath
+ * @returns {Promise<void>}
+ */
+async function verifyJibrilAttestation(binaryPath) {
+    if (!(await isCommandAvailable("gh"))) {
+        core.warning(
+            "jibril: 'gh' is not available on this runner, so the build attestation could not be verified. The sha256 checksum was verified.",
+        )
+        return
+    }
+
+    /** @type {ExecOptions} */
+    const options = {
+        ignoreReturnCode: true,
+        silent: true,
+    }
+
+    const githubToken = getEnv("GH_TOKEN", getEnv("GITHUB_TOKEN", ""))
+    if (githubToken !== "") {
+        options.env = { ...process.env, GH_TOKEN: githubToken }
+    }
+
+    const verify = await exec.getExecOutput(
+        "gh",
+        ["attestation", "verify", binaryPath, "--repo", JIBRIL_RELEASES_REPOSITORY],
+        options,
+    )
+
+    if (verify.exitCode !== 0) {
+        throw new Error(
+            `jibril: build attestation verification failed (gh exit ${verify.exitCode}): ${verify.stderr.trim() || verify.stdout.trim()}`,
+        )
+    }
+
+    core.info(`jibril: build attestation verified against ${JIBRIL_RELEASES_REPOSITORY}`)
+}
+
+/**
+ * Hashes the downloaded file and compares it with the release checksum
+ * list. Returns the verified digest; a missing entry or a mismatch throws.
+ * @param {string} filePath
+ * @param {string} checksums
+ * @param {string} fileName
+ * @returns {Promise<string>}
+ */
+export async function verifyChecksum(filePath, checksums, fileName) {
+    const expectedDigest = findChecksum(checksums, fileName)
+    if (expectedDigest === null) {
+        throw new Error(`${fileName}: ${JIBRIL_CHECKSUMS_FILE} has no entry for this artifact`)
+    }
+
+    const actualDigest = await sha256File(filePath)
+    if (actualDigest !== expectedDigest) {
+        throw new Error(
+            `${fileName}: checksum mismatch (expected ${expectedDigest}, got ${actualDigest}). Refusing to install the sensor.`,
+        )
+    }
+
+    return actualDigest
+}
+
+/**
+ * The sha256 digest recorded for a file name in a `checksums.txt` body
+ * (`<digest>  <name>` lines), or null when the name is absent.
+ * @param {string} checksums
+ * @param {string} fileName
+ * @returns {string | null}
+ */
+export function findChecksum(checksums, fileName) {
+    for (const line of checksums.split("\n")) {
+        const match = /^([a-fA-F0-9]{64})\s+\*?(\S+)$/.exec(line.trim())
+        if (match === null) {
+            continue
+        }
+
+        const [, digest, name] = match
+        if (name !== undefined && path.basename(name) === fileName) {
+            return digest === undefined ? null : digest.toLowerCase()
+        }
+    }
+
+    return null
+}
+
+/**
+ * @param {string} filePath
+ * @returns {Promise<string>}
+ */
+async function sha256File(filePath) {
+    const hash = createHash("sha256")
+    await pipeline(createReadStream(filePath), hash)
+    return hash.digest("hex")
+}
+
+/**
+ * @param {string} command
+ * @returns {Promise<boolean>}
+ */
+async function isCommandAvailable(command) {
+    try {
+        const result = await exec.getExecOutput(command, ["--version"], {
+            ignoreReturnCode: true,
+            silent: true,
+        })
+        return result.exitCode === 0
+    } catch (_) {
+        return false
+    }
+}
+
+/**
+ * Fetches a release asset as text. A 404 means the asset does not exist
+ * for this release and yields null; every other failure throws.
+ * @param {string} url
+ * @returns {Promise<string | null>}
+ */
+async function fetchOptionalText(url) {
+    if (!url.startsWith("https://")) {
+        throw new Error(`Refusing to download over non-HTTPS: ${url}`)
+    }
+
+    const client = new HttpClient("garnet-action", undefined, {
+        allowRedirects: true,
+        maxRedirects: 10,
+        socketTimeout: 60_000,
+    })
+
+    const response = await client.get(url)
+    const statusCode = response.message.statusCode ?? 0
+
+    if (statusCode === 404) {
+        response.message.resume()
+        return null
+    }
+
+    const body = await response.readBody()
+    if (statusCode !== 200) {
+        throw new Error(`Failed to download ${url}: HTTP ${statusCode}`)
+    }
+
+    return body
 }
 
 /**

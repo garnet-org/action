@@ -20,6 +20,10 @@ inputs:
         description: "Jibril version (for example v2.16.0, v0.0, or 'latest'); empty resolves from the action tag"
         required: false
         default: ""
+    skip_signature_verification:
+        description: "Install the Jibril sensor without verifying its checksum and build attestation (not recommended)"
+        required: false
+        default: "false"
     debug:
         description: "Enable debug mode"
         required: false
