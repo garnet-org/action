@@ -13,6 +13,7 @@ import { pipeline } from "node:stream/promises"
 import { createGitHubContext, getProfileJobName, getWorkflowFilePath } from "./github-context.js"
 import { resolveForkSkip } from "./fork-run.js"
 import { ControlPlaneClient } from "./control-plane/client.js"
+import { assertValidNetworkPolicyYAML } from "./netpolicy.js"
 import {
     assertSecureApiURL,
     getEnv,
@@ -260,6 +261,7 @@ export async function run() {
                 workflow_name: WORKFLOW,
             })
 
+            assertValidNetworkPolicyYAML(networkPolicyYaml)
             await fs.writeFile(NETPOLICY_PATH, networkPolicyYaml)
         } catch (error) {
             throw new Error(`Failed to fetch network policy: ${getErrorMessage(error)}`)
