@@ -3,6 +3,7 @@ import * as exec from "@actions/exec"
 import * as fs from "node:fs/promises"
 import * as os from "node:os"
 import {
+    assertSecureApiURL,
     firstNonEmptyString,
     getEnv,
     getErrorMessage,
@@ -209,6 +210,13 @@ async function resolveProfileEnvelopeID() {
     }
 
     const baseURL = firstNonEmptyString(getEnv("GARNET_API_URL"), core.getInput("api_url"), "https://api.garnet.ai")
+    try {
+        assertSecureApiURL(baseURL)
+    } catch (error) {
+        core.warning(getErrorMessage(error))
+        return ""
+    }
+
     const projectToken = firstNonEmptyString(core.getInput("api_token"), getEnv("GARNET_API_TOKEN"))
     const workflowToken = projectToken === "" ? await resolvePostWorkflowToken(baseURL) : ""
     if (projectToken === "" && workflowToken === "") {

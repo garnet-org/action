@@ -13,7 +13,15 @@ import { pipeline } from "node:stream/promises"
 import { createGitHubContext, getProfileJobName, getWorkflowFilePath } from "./github-context.js"
 import { resolveForkSkip } from "./fork-run.js"
 import { ControlPlaneClient } from "./control-plane/client.js"
-import { getEnv, getErrorMessage, isSupportedArch, isSupportedPlatform, pathExists, waitForDelay } from "./shared.js"
+import {
+    assertSecureApiURL,
+    getEnv,
+    getErrorMessage,
+    isSupportedArch,
+    isSupportedPlatform,
+    pathExists,
+    waitForDelay,
+} from "./shared.js"
 import { OIDC_AUTH_FEATURE_FLAG, getGitHubIDToken, isMissingOIDCPermissionError, resolveOIDCAudience } from "./oidc.js"
 
 /**
@@ -58,6 +66,9 @@ export async function run() {
         // Get the variables from the environment.
         const TOKEN = getEnv("GARNET_API_TOKEN")
         const API = getEnv("GARNET_API_URL", "https://api.garnet.ai")
+        // The API token travels to this origin, so the destination is
+        // checked before anything is sent to it.
+        assertSecureApiURL(API)
         let JIBRILVER = resolveJibrilVersion(getEnv("JIBRIL_VERSION", ""), getEnv("GITHUB_ACTION_REF", ""))
         const DEBUG = getEnv("DEBUG", "false")
 

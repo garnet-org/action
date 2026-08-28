@@ -1,5 +1,8 @@
 import * as fs from "node:fs/promises"
 
+// Hostnames a plaintext control plane may run on during local development.
+const LOCAL_API_HOSTNAMES = ["localhost", "127.0.0.1", "[::1]"]
+
 /**
  * @param {string} name
  * @param {string=} def
@@ -106,4 +109,34 @@ export function isSupportedPlatform(platform) {
  */
 export function isSupportedArch(arch) {
   return arch === "x64" || arch === "x86_64"
+}
+
+/**
+ * The control-plane origin carries the project token and the OIDC exchange,
+ * so it must be an `https:` URL. Plain `http:` is tolerated only for a local
+ * control plane, where nothing leaves the machine.
+ * @param {string} apiURL
+ * @returns {void}
+ */
+export function assertSecureApiURL(apiURL) {
+  /** @type {URL} */
+  let parsed
+  try {
+    parsed = new URL(apiURL)
+  } catch {
+    throw new Error(`Invalid 'api_url' input: ${JSON.stringify(apiURL)} is not a URL.`)
+  }
+
+  if (parsed.protocol === "https:") {
+    return
+  }
+
+  if (parsed.protocol === "http:" && LOCAL_API_HOSTNAMES.includes(parsed.hostname)) {
+    return
+  }
+
+  throw new Error(
+    `Refusing to send credentials to ${JSON.stringify(apiURL)}: 'api_url' must use https ` +
+      `(http is allowed only for ${LOCAL_API_HOSTNAMES.join(", ")}).`,
+  )
 }

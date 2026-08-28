@@ -81467,6 +81467,9 @@ const external_node_os_namespaceObject = __WEBPACK_EXTERNAL_createRequire(import
 ;// CONCATENATED MODULE: ./src/shared.js
 
 
+// Hostnames a plaintext control plane may run on during local development.
+const LOCAL_API_HOSTNAMES = ["localhost", "127.0.0.1", "[::1]"]
+
 /**
  * @param {string} name
  * @param {string=} def
@@ -81573,6 +81576,36 @@ function isSupportedPlatform(platform) {
  */
 function isSupportedArch(arch) {
   return arch === "x64" || arch === "x86_64"
+}
+
+/**
+ * The control-plane origin carries the project token and the OIDC exchange,
+ * so it must be an `https:` URL. Plain `http:` is tolerated only for a local
+ * control plane, where nothing leaves the machine.
+ * @param {string} apiURL
+ * @returns {void}
+ */
+function assertSecureApiURL(apiURL) {
+  /** @type {URL} */
+  let parsed
+  try {
+    parsed = new URL(apiURL)
+  } catch {
+    throw new Error(`Invalid 'api_url' input: ${JSON.stringify(apiURL)} is not a URL.`)
+  }
+
+  if (parsed.protocol === "https:") {
+    return
+  }
+
+  if (parsed.protocol === "http:" && LOCAL_API_HOSTNAMES.includes(parsed.hostname)) {
+    return
+  }
+
+  throw new Error(
+    `Refusing to send credentials to ${JSON.stringify(apiURL)}: 'api_url' must use https ` +
+      `(http is allowed only for ${LOCAL_API_HOSTNAMES.join(", ")}).`,
+  )
 }
 
 ;// CONCATENATED MODULE: ./src/github-event.js
@@ -153060,6 +153093,13 @@ async function resolveProfileEnvelopeID() {
     }
 
     const baseURL = firstNonEmptyString(getEnv("GARNET_API_URL"), getInput("api_url"), "https://api.garnet.ai")
+    try {
+        assertSecureApiURL(baseURL)
+    } catch (error) {
+        warning(getErrorMessage(error))
+        return ""
+    }
+
     const projectToken = firstNonEmptyString(getInput("api_token"), getEnv("GARNET_API_TOKEN"))
     const workflowToken = projectToken === "" ? await resolvePostWorkflowToken(baseURL) : ""
     if (projectToken === "" && workflowToken === "") {
