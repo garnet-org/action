@@ -1,6 +1,6 @@
 name: "Garnet Runtime Review"
 author: "Garnet Labs Inc."
-description: "Execution evidence for code review: what each CI job ran and reached, recorded at the kernel, posted on your PRs."
+description: "Execution evidence for code review: what each CI job ran and reached, recorded at the kernel."
 branding:
     icon: "activity"
     color: "purple"
@@ -10,12 +10,12 @@ inputs:
             Garnet API token from app.garnet.ai. Optional when the job has `id-token: write`
             (GitHub OIDC is the preferred authentication method). Without OIDC, providing this
             token authenticates with the Garnet control plane for the best review quality.
-            If neither OIDC nor api_token is available, the action still runs and posts a
-            best-effort local review to the PR, but execution evidence is not sent to the
-            control plane.
+            If neither OIDC nor api_token is available, the action still runs and writes a
+            best-effort local Execution Summary to the job's Step Summary, but execution
+            evidence is not sent to the control plane.
         required: false
     github_token:
-        description: "GitHub token used to post pull request comments. Defaults to the built-in GITHUB_TOKEN."
+        description: "GitHub token used by `gh attestation verify` when verifying the Jibril binary. Defaults to the built-in GITHUB_TOKEN."
         required: false
         default: ${{ github.token }}
     api_url:
