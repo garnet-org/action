@@ -50,7 +50,7 @@ Get your API token at [app.garnet.ai](https://app.garnet.ai). Start with the Act
 
 ## What Garnet sees
 
-The only secret Garnet uses is the API token you pass it. It never reads your other secrets, and never writes to your repo.
+Garnet authenticates with the control plane via GitHub OIDC (preferred) or the API token you pass it — it never reads your other secrets and never writes to your repo.
 
 - **Metadata, not contents** — an Execution Profile carries execution chains and outbound domains, IPs, ports, and protocols, not your source or your secrets.
 - **Observe-only** — Jibril reads syscall-level events. Every eBPF program is checked by the kernel verifier before it loads and runs sandboxed.
@@ -62,15 +62,14 @@ The only secret Garnet uses is the API token you pass it. It never reads your ot
 | Permission | Required | Why |
 | :--- | :--- | :--- |
 | `contents: read` | Yes | Access workflow context and repository metadata |
+| `id-token: write` | Recommended | Authenticate with the Garnet control plane via GitHub OIDC (preferred over `api_token`) |
 | `pull-requests: write` | Recommended | Post the Runtime Review comment (standalone Action mode; unused once the companion GitHub App owns the comment) |
 
 ## Quickstart
 
-### 1. Create a token
+### 1. Add the action to your workflow
 
-Create an API token in the Garnet app at <https://app.garnet.ai>, then add it as a repo secret named `GARNET_API_TOKEN`.
-
-### 2. Add the action to your workflow
+The preferred authentication method is GitHub OIDC — no secret to manage. Add `id-token: write` to your job permissions and omit `api_token`:
 
 ```yaml
 on:
@@ -84,6 +83,7 @@ jobs:
 
     permissions:
       contents: read
+      id-token: write
       pull-requests: write
 
     steps:
@@ -91,25 +91,36 @@ jobs:
         uses: actions/checkout@v6
 
       - uses: garnet-org/action@v2
-        with:
-          api_token: ${{ secrets.GARNET_API_TOKEN }}
 
       - name: Your existing steps
         run: npm test
 ```
+
+**API token fallback:** If your environment does not support OIDC, create an API token at <https://app.garnet.ai>, store it as a repo secret named `GARNET_API_TOKEN`, and pass it explicitly:
+
+```yaml
+    permissions:
+      contents: read
+      pull-requests: write
+
+    steps:
+      - uses: garnet-org/action@v2
+        with:
+          api_token: ${{ secrets.GARNET_API_TOKEN }}
+```
+
+If neither OIDC nor `api_token` is available, the action still runs and posts a best-effort local review to the PR; execution evidence is not sent to the control plane.
 
 > **Tip:** Major tags such as `@v2` track the latest `v2.x.x` release automatically. For maximum supply-chain safety, pin to a full commit SHA (Dependabot keeps SHA pins up to date):
 >
 > ```yaml
 > # Pinned to v2.2.0
 > - uses: garnet-org/action@3d47f4a9004f7356c980a0e8d420ef5984750e3c
->   with:
->     api_token: ${{ secrets.GARNET_API_TOKEN }}
 > ```
 >
 > The canonical SHA of the latest release is always at [garnet.ai/pins](https://garnet.ai/pins). Dependabot bumps SHA pins automatically. Exact tags such as `garnet-org/action@v2.2.0` remain available.
 
-### 3. Install the companion GitHub App
+### 2. Install the companion GitHub App
 
 [Install Garnet Runtime Review](https://github.com/apps/garnet-runtime-review/installations/select_target) on the repos you want recorded, or from Settings → GitHub in [app.garnet.ai](https://app.garnet.ai).
 
@@ -167,7 +178,7 @@ The same full-detail record is appended to the GitHub Actions Job Summary as the
 
 ## Under the hood
 
-- **Main step**: Downloads `jibril`, creates a Garnet agent via the control-plane API, fetches your merged network policy from the API, and starts Jibril as a `systemd` service on the runner. If Jibril crashes during startup, the action logs diagnostics and continues so later workflow steps still run.
+- **Main step**: Downloads `jibril`, authenticates with the Garnet control plane via GitHub OIDC or `api_token`, fetches your merged network policy, and starts Jibril as a `systemd` service on the runner. If neither auth method is available the action falls back to a best-effort local review. If Jibril crashes during startup, the action logs diagnostics and continues so later workflow steps still run.
 - **Post step (always)**: Stops Jibril so it flushes events, appends the Garnet Execution Summary to `GITHUB_STEP_SUMMARY`, and creates or updates the pull request comment for the current push when the workflow runs for a PR. Multiple jobs and workflows from the same push merge into a single comment. When `debug=true`, it also uploads Jibril logs as build artifacts.
 
 ---
@@ -176,14 +187,14 @@ The same full-detail record is appended to the GitHub Actions Job Summary as the
 
 | Input               | Required | Default                 | Description                                    |
 | ------------------- | -------- | ----------------------- | ---------------------------------------------- |
-| `api_token`         | Yes¹     | —                       | Your Garnet API token from app.garnet.ai       |
+| `api_token`         | No       | —                       | Garnet API token from app.garnet.ai. Not needed when the job has `id-token: write` (GitHub OIDC is preferred). Without OIDC, this token authenticates with the control plane for full review quality. If neither is provided, the action still runs and posts a best-effort local review. |
 | `github_token`      | No       | `${{ github.token }}`   | GitHub token used for pull request comments    |
 | `api_url`           | No       | `https://api.garnet.ai` | Garnet API base URL                            |
 | `jibril_version`    | No       | `""` (auto)             | Jibril version (for example `v2.16.0`, `v0.0`, or `latest`); empty resolves to the pinned stable release for your action ref (daily builds on `@v0`) |
 | `debug`             | No       | `false`                 | Enable debug mode and upload logs as artifacts |
 | `preview`           | No       | `false`                 | Render the full-fidelity Step Summary record (assertions + evidence); preview shape is unstable and may change without a major version bump |
 
-¹ Required at runtime, with one exception: on `pull_request` runs from forked repositories, GitHub exposes no secrets, so the action emits a notice, skips recording, and the job continues. An OIDC alternative is landing behind the `GARNET_ACTION_ENABLE_OIDC_AUTH` flag; until that flag is on, the token is the auth path.
+> **Fork PRs:** On `pull_request` runs from forked repositories GitHub does not expose secrets, so `api_token` will be unavailable. Use OIDC (`id-token: write`) in that case, or the action will fall back to a best-effort local review.
 
 ---
 
@@ -217,7 +228,7 @@ Your team reviews the code; your CI runs it. Between `git push` and production, 
 
 - Linux x86_64 runner with systemd (`runs-on: ubuntu-latest` or another supported label below)
 - `sudo` access to install binaries and configure the Jibril service
-- `GARNET_API_TOKEN` set as a repository secret
+- `id-token: write` permission (preferred) **or** `GARNET_API_TOKEN` set as a repository secret
 
 ### Supported runners
 
@@ -233,7 +244,7 @@ On unsupported platforms (Windows, macOS, arm64) the action logs a warning and s
 
 | Symptom                                   | Fix                                                                                                    |
 | ----------------------------------------- | ------------------------------------------------------------------------------------------------------ |
-| "API token is required"                   | Confirm `GARNET_API_TOKEN` is set in repository secrets and passed as `api_token`.                     |
+| Missing control-plane auth                | Add `id-token: write` to the job permissions (preferred), or confirm `GARNET_API_TOKEN` is set in repository secrets and passed as `api_token`. Without either, the action falls back to a best-effort local review. |
 | "Garnet skips profiling on pull requests from forked repositories" | Expected on fork PRs: secrets are unavailable there, so the action skips recording and the job continues. |
 | No PR comment appearing                   | The action posts comments only on `pull_request` events — confirm your workflow includes that trigger. |
 | PR comment says "Resource not accessible" | Add `pull-requests: write` to the workflow `permissions` block.                                        |
