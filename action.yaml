@@ -6,10 +6,16 @@ branding:
     color: "purple"
 inputs:
     api_token:
-        description: "Your Garnet API token from app.garnet.ai"
+        description: |
+            Garnet API token from app.garnet.ai. Optional when the job has `id-token: write`
+            (GitHub OIDC is the preferred authentication method). Without OIDC, providing this
+            token authenticates with the Garnet control plane for the best review quality.
+            If neither OIDC nor api_token is available, the action still runs and posts a
+            best-effort local review to the PR, but execution evidence is not sent to the
+            control plane.
         required: false
     github_token:
-        description: "GitHub token used for pull request comments"
+        description: "GitHub token used to post pull request comments. Defaults to the built-in GITHUB_TOKEN."
         required: false
         default: ${{ github.token }}
     api_url:
