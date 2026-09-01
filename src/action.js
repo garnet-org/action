@@ -4,7 +4,8 @@
 import * as core from "@actions/core"
 import * as exec from "@actions/exec"
 import { HttpClient } from "@actions/http-client"
-import { createWriteStream } from "node:fs"
+import { createHash } from "node:crypto"
+import { createReadStream, createWriteStream } from "node:fs"
 import * as fs from "node:fs/promises"
 import * as os from "node:os"
 import * as path from "node:path"
@@ -27,6 +28,17 @@ const INSTPATH = "/usr/local/bin"
 // Default Jibril sensor version: the same stable pin as the floating v2 tag,
 // so the sensor never floats under an unchanged action ref.
 const JIBRIL_STABLE_VERSION = "v2.16.0"
+// From v2.17.0 on a release ships one linux-x86_64 tarball carrying the binary
+// next to its checksums, a release manifest, and a detached Sigstore bundle for
+// each of those payloads. Older releases only offer the bare `jibril` asset.
+const JIBRIL_RELEASES_REPO = "garnet-org/jibril-releases"
+const JIBRIL_RELEASES_URL = `https://github.com/${JIBRIL_RELEASES_REPO}/releases`
+/** @type {JibrilCoreVersion} */
+const JIBRIL_BUNDLE_MIN_VERSION = { major: 2, minor: 17, patch: 0 }
+const JIBRIL_BINARY = "jibril"
+const JIBRIL_CHECKSUMS = "jibril-checksums.txt"
+const JIBRIL_MANIFEST = "release.json"
+const SIGSTORE_SUFFIX = ".sigstore.json"
 // Stop ceiling for the jibril unit. On stop the daemon flushes its whole
 // event backlog and writes the JSON profile only when the flush completes;
 // the binary's stock TimeoutStopSec=600 has been observed SIGKILLing the
@@ -111,23 +123,19 @@ export async function run() {
             JIBRILVER = `v${JIBRILVER}`
         }
 
+        // The bundled tarball's filename embeds the tag, and the agent record
+        // should name the exact sensor that ran.
+        if (JIBRILVER === "latest") {
+            JIBRILVER = await resolveLatestJibrilTag()
+        }
+
         core.info(`API server: ${API}`)
         core.info(`Jibril Version: ${JIBRILVER}`)
 
         // Create a temporary directory for the script to use.
         tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "garnet-"))
 
-        // Download jibril
-        const jibrilPrefix = "https://github.com/garnet-org/jibril-releases/releases"
-        let jibrilURL =
-            JIBRILVER === "latest"
-                ? `${jibrilPrefix}/latest/download/jibril`
-                : `${jibrilPrefix}/download/${JIBRILVER}/jibril`
-
-        core.info(`Downloading jibril: ${jibrilURL}`)
-
-        const jibrilDest = path.join(tmpDir, "jibril")
-        await downloadFile(jibrilURL, jibrilDest)
+        const jibrilDest = await downloadJibril(JIBRILVER, tmpDir)
         if (!(await pathExists(jibrilDest))) {
             throw new Error("Failed to download jibril binary")
         }
@@ -607,6 +615,305 @@ export function resolveJibrilVersion(inputVersion, actionRef) {
     // Every other ref (branch/SHA/exact tag) gets the same stable pin as v2:
     // a root eBPF binary must not change under an unchanged action ref.
     return JIBRIL_STABLE_VERSION
+}
+
+/**
+ * @typedef {Object} JibrilCoreVersion
+ * @prop {number} major
+ * @prop {number} minor
+ * @prop {number} patch
+ */
+
+/**
+ * Prereleases sort with their core version, so v2.17.0-rc.5 is bundled too.
+ * Non-semver tags (daily builds) keep the bare binary.
+ * @param {string} tag
+ * @returns {boolean}
+ */
+export function usesBundledJibrilRelease(tag) {
+    const version = parseCoreVersion(tag)
+    if (version === null) return false
+
+    const { major, minor, patch } = JIBRIL_BUNDLE_MIN_VERSION
+    if (version.major !== major) return version.major > major
+    if (version.minor !== minor) return version.minor > minor
+    return version.patch >= patch
+}
+
+/**
+ * Ignores any prerelease or build suffix.
+ * @param {string} tag
+ * @returns {JibrilCoreVersion|null}
+ */
+function parseCoreVersion(tag) {
+    const match = /^v?(\d+)\.(\d+)\.(\d+)(?:[-+].*)?$/.exec(tag.trim())
+    if (match === null) return null
+
+    const [, major = "0", minor = "0", patch = "0"] = match
+    return { major: Number(major), minor: Number(minor), patch: Number(patch) }
+}
+
+/**
+ * GitHub redirects /releases/latest to the tag page, so the tag comes from the
+ * Location header with no body download.
+ * @returns {Promise<string>}
+ */
+async function resolveLatestJibrilTag() {
+    const client = new HttpClient("garnet-action", undefined, { allowRedirects: false })
+    const response = await client.head(`${JIBRIL_RELEASES_URL}/latest`)
+    response.message.resume()
+
+    const location = response.message.headers.location ?? ""
+    const match = /\/releases\/tag\/([\w.+-]+)$/.exec(location)
+    if (match === null) {
+        const statusCode = response.message.statusCode ?? 0
+        throw new Error(`Failed to resolve the latest jibril release tag (HTTP ${statusCode})`)
+    }
+
+    const [, tag = ""] = match
+    core.info(`Resolved jibril 'latest' to ${tag}`)
+    return tag
+}
+
+/**
+ * Returns the path of the verified binary. `tag` is always concrete: "latest"
+ * is resolved before this is called.
+ * @param {string} tag
+ * @param {string} tmpDir
+ * @returns {Promise<string>}
+ */
+async function downloadJibril(tag, tmpDir) {
+    const releaseURL = `${JIBRIL_RELEASES_URL}/download/${tag}`
+    const binaryPath = path.join(tmpDir, JIBRIL_BINARY)
+
+    if (!usesBundledJibrilRelease(tag)) {
+        const binaryURL = `${releaseURL}/${JIBRIL_BINARY}`
+        core.info(`Downloading jibril: ${binaryURL}`)
+        await downloadFile(binaryURL, binaryPath)
+        return binaryPath
+    }
+
+    const archiveName = `jibril-${tag}-linux-x86_64.tar.gz`
+    const archiveURL = `${releaseURL}/${archiveName}`
+    const archivePath = path.join(tmpDir, archiveName)
+    const bundleDir = path.join(tmpDir, "bundle")
+
+    core.info(`Downloading jibril: ${archiveURL}`)
+    await downloadFile(archiveURL, archivePath)
+
+    await fs.mkdir(bundleDir, { recursive: true })
+    await exec.exec("tar", ["-xzf", archivePath, "-C", bundleDir])
+    await verifyJibrilBundle(bundleDir, tag)
+    await verifyJibrilAttestation(path.join(bundleDir, JIBRIL_BINARY))
+    await fs.rename(path.join(bundleDir, JIBRIL_BINARY), binaryPath)
+
+    return binaryPath
+}
+
+/**
+ * Proves the bundle is self-consistent and belongs to `tag`. Authenticity is
+ * verifyJibrilAttestation's job.
+ * @param {string} bundleDir
+ * @param {string} tag
+ * @returns {Promise<void>}
+ */
+export async function verifyJibrilBundle(bundleDir, tag) {
+    const binaryDigest = await verifySignedPayload(bundleDir, JIBRIL_BINARY)
+    const checksumsDigest = await verifySignedPayload(bundleDir, JIBRIL_CHECKSUMS)
+    await verifySignedPayload(bundleDir, JIBRIL_MANIFEST)
+
+    const checksums = parseChecksums(await fs.readFile(path.join(bundleDir, JIBRIL_CHECKSUMS), "utf8"))
+    assertSha256(JIBRIL_BINARY, binaryDigest, checksums.get(JIBRIL_BINARY), JIBRIL_CHECKSUMS)
+
+    const manifest = parseReleaseManifest(await fs.readFile(path.join(bundleDir, JIBRIL_MANIFEST), "utf8"))
+    if (manifest.tag !== tag) {
+        throw new Error(`jibril release bundle is for ${manifest.tag}, expected ${tag}`)
+    }
+    assertSha256(JIBRIL_BINARY, binaryDigest, manifest.subjects.get(JIBRIL_BINARY), JIBRIL_MANIFEST)
+    assertSha256(JIBRIL_CHECKSUMS, checksumsDigest, manifest.subjects.get(JIBRIL_CHECKSUMS), JIBRIL_MANIFEST)
+
+    core.info(`Verified the jibril bundle digests for ${tag}`)
+}
+
+/**
+ * Checks a payload against the digest its detached Sigstore bundle signed, and
+ * returns that digest.
+ * @param {string} bundleDir
+ * @param {string} name
+ * @returns {Promise<string>}
+ */
+async function verifySignedPayload(bundleDir, name) {
+    const signatureName = `${name}${SIGSTORE_SUFFIX}`
+    const payloadPath = path.join(bundleDir, name)
+    const signaturePath = path.join(bundleDir, signatureName)
+
+    for (const filePath of [payloadPath, signaturePath]) {
+        if (!(await pathExists(filePath))) {
+            throw new Error(`jibril release bundle is missing ${path.basename(filePath)}`)
+        }
+    }
+
+    const digest = await fileSha256(payloadPath)
+    const signedDigest = readSignedDigest(await fs.readFile(signaturePath, "utf8"))
+    assertSha256(name, digest, signedDigest, signatureName)
+
+    return digest
+}
+
+/**
+ * Establishes authenticity: `gh` checks the Sigstore signature, the signing
+ * workflow identity, and transparency-log inclusion. It is preinstalled on
+ * GitHub-hosted runners and reads GITHUB_TOKEN from the environment; when
+ * either is absent we warn rather than fail so self-hosted runners keep working.
+ * @param {string} binaryPath
+ * @returns {Promise<void>}
+ */
+async function verifyJibrilAttestation(binaryPath) {
+    if (getEnv("GITHUB_TOKEN", "") === "") {
+        core.warning("github_token is unset: skipping jibril attestation verification.")
+        return
+    }
+
+    if (!(await isCommandAvailable("gh"))) {
+        core.warning("gh CLI is unavailable: skipping jibril attestation verification.")
+        return
+    }
+
+    const args = ["attestation", "verify", binaryPath, "--repo", JIBRIL_RELEASES_REPO]
+    const exitCode = await exec.exec("gh", args, { ignoreReturnCode: true })
+    if (exitCode !== 0) {
+        throw new Error(`Attestation verification failed for ${JIBRIL_BINARY}: gh exited ${exitCode}`)
+    }
+
+    core.info("Verified the jibril attestation against the jibril-releases release workflow")
+}
+
+/**
+ * @param {string} command
+ * @returns {Promise<boolean>}
+ */
+async function isCommandAvailable(command) {
+    try {
+        const exitCode = await exec.exec(command, ["--version"], { ignoreReturnCode: true, silent: true })
+        return exitCode === 0
+    } catch (_) {
+        return false
+    }
+}
+
+/**
+ * @param {string} name
+ * @param {string} actual
+ * @param {string|undefined} expected  absent when `source` never recorded it
+ * @param {string} source
+ * @returns {void}
+ */
+function assertSha256(name, actual, expected, source) {
+    if (expected === undefined) {
+        throw new Error(`${source} records no sha256 for ${name}`)
+    }
+    if (expected !== actual) {
+        throw new Error(`sha256 mismatch for ${name}: ${source} expects ${expected}, got ${actual}`)
+    }
+}
+
+/**
+ * @param {string} filePath
+ * @returns {Promise<string>}
+ */
+async function fileSha256(filePath) {
+    const hash = createHash("sha256")
+    await pipeline(createReadStream(filePath), hash)
+    return hash.digest("hex")
+}
+
+/**
+ * Reads `<sha256>  <filename>` lines into digests keyed by filename.
+ * @param {string} checksumsText
+ * @returns {Map<string, string>}
+ */
+function parseChecksums(checksumsText) {
+    /** @type {Map<string, string>} */
+    const digests = new Map()
+    for (const line of checksumsText.split("\n")) {
+        const match = /^([a-f0-9]{64})\s+\*?(\S+)$/i.exec(line.trim())
+        if (match === null) continue
+
+        const [, digest = "", name = ""] = match
+        digests.set(name, digest.toLowerCase())
+    }
+    return digests
+}
+
+/**
+ * @param {unknown} value
+ * @returns {boolean}
+ */
+function isSha256(value) {
+    return typeof value === "string" && /^[a-f0-9]{64}$/i.test(value)
+}
+
+/**
+ * These bundles sign the raw blob, so the digest sits in `messageSignature`,
+ * base64-encoded.
+ * @param {string} bundleText
+ * @returns {string}
+ */
+function readSignedDigest(bundleText) {
+    try {
+        const bundle = JSON.parse(bundleText)
+        const encoded = bundle?.messageSignature?.messageDigest?.digest
+        if (typeof encoded !== "string") {
+            throw new Error("missing messageSignature.messageDigest.digest")
+        }
+
+        const digest = Buffer.from(encoded, "base64").toString("hex")
+        if (!isSha256(digest)) {
+            throw new Error("messageSignature.messageDigest.digest is not a sha256")
+        }
+        return digest
+    } catch (error) {
+        throw new Error(`Invalid Sigstore bundle: ${getErrorMessage(error)}`)
+    }
+}
+
+/**
+ * @typedef {Object} JibrilReleaseManifest
+ * @prop {string} tag
+ * @prop {Map<string, string>} subjects  sha256 by payload name
+ */
+
+/**
+ * @param {string} manifestText
+ * @returns {JibrilReleaseManifest}
+ */
+function parseReleaseManifest(manifestText) {
+    try {
+        const manifest = JSON.parse(manifestText)
+
+        const tag = manifest?.release?.tag
+        if (typeof tag !== "string" || tag === "") {
+            throw new Error("missing release.tag")
+        }
+
+        if (!Array.isArray(manifest?.subjects)) {
+            throw new Error("missing subjects")
+        }
+
+        /** @type {Map<string, string>} */
+        const subjects = new Map()
+        for (const subject of manifest.subjects) {
+            const name = subject?.name
+            const sha256 = subject?.sha256
+            if (typeof name === "string" && isSha256(sha256)) {
+                subjects.set(name, sha256.toLowerCase())
+            }
+        }
+
+        return { tag, subjects }
+    } catch (error) {
+        throw new Error(`Invalid ${JIBRIL_MANIFEST}: ${getErrorMessage(error)}`)
+    }
 }
 
 /**
