@@ -80,7 +80,7 @@ async function withEnv(overlay, fn) {
 test("fork + no credentials: pull_request run from a fork skips gracefully", async () => {
     const eventPath = await writeEventPayload(pullRequestPayload("outside/fork"))
     await withEnv(
-        { GARNET_ACTION_ENABLE_OIDC_AUTH: undefined, ACTIONS_ID_TOKEN_REQUEST_URL: undefined },
+        { ACTIONS_ID_TOKEN_REQUEST_URL: undefined },
         async () => {
             const decision = await resolveForkSkip({
                 eventName: "pull_request",
@@ -123,11 +123,10 @@ test("pull_request_target: never skips (secrets are available)", async () => {
     await rm(dirname(eventPath), { recursive: true, force: true })
 })
 
-test("fork + OIDC grant with flag on: no skip (credential path exists)", async () => {
+test("fork + OIDC grant: no skip (credential path exists)", async () => {
     const eventPath = await writeEventPayload(pullRequestPayload("outside/fork"))
     await withEnv(
         {
-            GARNET_ACTION_ENABLE_OIDC_AUTH: "true",
             ACTIONS_ID_TOKEN_REQUEST_URL: "https://token.actions.example",
             ACTIONS_ID_TOKEN_REQUEST_TOKEN: "runtime-token",
         },
@@ -176,7 +175,6 @@ test("run(): fork + no credentials exits success without starting jibril", async
             GITHUB_EVENT_NAME: "pull_request",
             GITHUB_EVENT_PATH: eventPath,
             GITHUB_REPOSITORY: REPOSITORY,
-            GARNET_ACTION_ENABLE_OIDC_AUTH: undefined,
             ACTIONS_ID_TOKEN_REQUEST_URL: undefined,
         },
         async () => {

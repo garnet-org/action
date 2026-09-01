@@ -48,11 +48,6 @@ jobs:
               shell: bash
               run: echo "GARNET_ACTION_SKIP_GITHUB_APP_COMMENT=true" >> "$GITHUB_ENV"
 
-            - name: Enable OIDC auth feature flag
-              if: github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'smoke-test-oidc-auth')
-              shell: bash
-              run: echo "GARNET_ACTION_ENABLE_OIDC_AUTH=true" >> "$GITHUB_ENV"
-
             - name: Run Garnet
               uses: ./
               with:

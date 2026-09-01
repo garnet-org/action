@@ -153993,8 +153993,6 @@ function getCreateRecheckDelayMs(profile) {
 
 
 
-const OIDC_AUTH_FEATURE_FLAG = "GARNET_ACTION_ENABLE_OIDC_AUTH"
-
 const GITHUB_APP_ID_PROD = "Iv23lihCfwCfqCxQNpvv"
 const GITHUB_APP_ID_STAGING = "Iv23liUXLYx9mgGKHgZk"
 const GITHUB_APP_ID_DEV = "Iv23li88DidEyxVnAR1p"
@@ -154428,17 +154426,12 @@ async function resolveProfileEnvelopeID() {
 /**
  * Exchanges a fresh GitHub OIDC ID token for a control-plane workflow token,
  * for the post step's profile envelope lookup. The token is never persisted
- * between steps; the post step performs its own exchange. Fail-closed: flag
- * off, missing permission, or any exchange failure returns "".
+ * between steps; the post step performs its own exchange. Fail-closed: missing
+ * permission or any exchange failure returns "".
  * @param {string} baseURL
  * @returns {Promise<string>}
  */
 async function resolvePostWorkflowToken(baseURL) {
-    const useOIDCAuth = getEnv(OIDC_AUTH_FEATURE_FLAG, "false") === "true"
-    if (useOIDCAuth !== true) {
-        return ""
-    }
-
     try {
         const idToken = await getGitHubIDToken(resolveOIDCAudience(baseURL))
         const client = new ControlPlaneClient({ baseURL })

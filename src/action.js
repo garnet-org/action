@@ -14,7 +14,7 @@ import { createGitHubContext, getProfileJobName, getWorkflowFilePath } from "./g
 import { resolveForkSkip } from "./fork-run.js"
 import { ControlPlaneClient } from "./control-plane/client.js"
 import { getEnv, getErrorMessage, isSupportedArch, isSupportedPlatform, pathExists, waitForDelay } from "./shared.js"
-import { OIDC_AUTH_FEATURE_FLAG, getGitHubIDToken, isMissingOIDCPermissionError, resolveOIDCAudience } from "./oidc.js"
+import { getGitHubIDToken, isMissingOIDCPermissionError, resolveOIDCAudience } from "./oidc.js"
 
 /**
  * @typedef {import("@actions/exec").ExecOptions} ExecOptions
@@ -65,8 +65,6 @@ export async function run() {
         let JIBRILVER = resolveJibrilVersion(getEnv("JIBRIL_VERSION", ""), getEnv("GITHUB_ACTION_REF", ""))
         const DEBUG = getEnv("DEBUG", "false")
 
-        const useOIDCAuth = getEnv(OIDC_AUTH_FEATURE_FLAG, "false") === "true"
-
         if (TOKEN === "") {
             const forkSkip = await resolveForkSkip({
                 eventName: getEnv("GITHUB_EVENT_NAME"),
@@ -82,7 +80,6 @@ export async function run() {
         const controlPlaneAuth = await resolveControlPlaneAuth({
             apiURL: API,
             apiToken: TOKEN,
-            useOIDCAuth,
         })
 
         // Prevent accidental leakage of tokens in logs.
@@ -475,7 +472,6 @@ TimeoutStopSec=${stopTimeoutSeconds}
  * @typedef {{
  *   apiURL: string
  *   apiToken: string
- *   useOIDCAuth: boolean
  * }} ResolveControlPlaneAuthInput
  */
 
@@ -492,14 +488,6 @@ TimeoutStopSec=${stopTimeoutSeconds}
  * @returns {Promise<ControlPlaneAuth>}
  */
 export async function resolveControlPlaneAuth(input) {
-    if (input.useOIDCAuth !== true) {
-        return {
-            projectToken: requireApiToken(input.apiToken),
-            workflowToken: "",
-            workflowTokenExpiresAt: "",
-        }
-    }
-
     const audience = resolveOIDCAudience(input.apiURL)
 
     const unauthenticatedControlPlaneClient = new ControlPlaneClient({
