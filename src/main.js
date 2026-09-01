@@ -1,7 +1,7 @@
 import * as core from "@actions/core"
 import * as os from "node:os"
 import { run } from "./action.js"
-import { buildReportLink } from "./profile-comment.js"
+import { buildReportLink } from "./report-link.js"
 import { getEnv, isSupportedArch, isSupportedPlatform } from "./shared.js"
 
 // This is the main entry point for the action. It is called by the GitHub Actions
@@ -36,12 +36,11 @@ async function main() {
         core.saveState("preview", preview ? "true" : "")
 
         const githubToken = core.getInput("github_token")
-        core.saveState("githubToken", githubToken)
 
         // Set inputs as environment variables for the action
         process.env.GARNET_API_TOKEN = core.getInput("api_token")
 
-        // Make the token available to both the main and post steps when provided.
+        // gh attestation verify reads GITHUB_TOKEN during binary verification.
         if (githubToken !== "") {
             process.env.GITHUB_TOKEN = githubToken
         }

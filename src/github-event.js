@@ -3,33 +3,6 @@ import { getOptionalRecord, isRecord } from "./shared.js"
 
 /**
  * @param {string} eventPath
- * @returns {Promise<number | null>}
- */
-export async function getPullRequestNumberFromEvent(eventPath) {
-  const payload = await readGitHubEventPayload(eventPath)
-  if (payload === null) {
-    return null
-  }
-
-  const pullRequest = getOptionalRecord(payload.pull_request)
-  if (pullRequest !== null && typeof pullRequest.number === "number") {
-    return pullRequest.number
-  }
-
-  const issue = getOptionalRecord(payload.issue)
-  if (
-    issue !== null &&
-    getOptionalRecord(issue.pull_request) !== null &&
-    typeof issue.number === "number"
-  ) {
-    return issue.number
-  }
-
-  return null
-}
-
-/**
- * @param {string} eventPath
  * @returns {Promise<string | null>}
  */
 export async function getPullRequestHeadShaFromEvent(eventPath) {
