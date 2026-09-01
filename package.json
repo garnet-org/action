@@ -33,10 +33,10 @@
         "@actions/exec": "^3.0.0",
         "@actions/github": "^9.1.1",
         "@actions/http-client": "^4.0.1",
-        "zod": "^4.4.3"
+        "zod": "^4.5.4"
     },
     "devDependencies": {
-        "@types/node": "^26.2.0",
+        "@types/node": "^26.4.0",
         "@vercel/ncc": "^0.45.0",
         "typescript": "^7.0.2"
     },
