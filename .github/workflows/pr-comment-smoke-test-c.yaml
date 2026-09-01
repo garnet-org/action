@@ -59,7 +59,7 @@ jobs:
                   api_url: ${{ inputs.api_url || 'https://dev-api.garnet.ai' }}
                   debug: ${{ inputs.debug || 'true' }}
                   api_token: ${{ inputs.api_token || secrets.GARNET_API_TOKEN_DEV }}
-                  jibril_version: ${{ inputs.jibril_version || 'v0.0' }}
+                  jibril_version: ${{ inputs.jibril_version || 'v2.17.0-rc.8' }}
 
             - name: Attempt egress to known IPs
               shell: bash
