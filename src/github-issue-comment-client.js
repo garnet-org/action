@@ -2,7 +2,7 @@ import * as github from "@actions/github"
 import { isRecord } from "./shared.js"
 
 /**
- * @typedef {{ id: number, body: string }} PullRequestComment
+ * @typedef {{ id: number, body: string, authorLogin?: string, authorType?: string }} PullRequestComment
  */
 
 export class GitHubIssueCommentClient {
@@ -110,9 +110,21 @@ function normalizeComment(value) {
     return null
   }
 
-  return typeof value.id === "number" && typeof value.body === "string"
-    ? { id: value.id, body: value.body }
-    : null
+  if (typeof value.id !== "number" || typeof value.body !== "string") {
+    return null
+  }
+
+  /** @type {PullRequestComment} */
+  const comment = { id: value.id, body: value.body }
+  if (isRecord(value.user)) {
+    if (typeof value.user.login === "string") {
+      comment.authorLogin = value.user.login
+    }
+    if (typeof value.user.type === "string") {
+      comment.authorType = value.user.type
+    }
+  }
+  return comment
 }
 
 /**
