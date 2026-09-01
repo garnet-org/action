@@ -1,8 +1,37 @@
-# Runtime Review v6.2 — surfaces, framing, and the preview flag
+# Runtime Review v6.2 — historical record of the v6.1 → v6.2 step
 
-Contract source of truth: `garnet-org/runtime-review-testbed` `docs/ux-contract.md`
-(v6.2). The testbed's byte-gated goldens are the spec; this action's renderer
-(`src/runtime-review.js`) is a port of the testbed reference renderer.
+Status: **superseded.** The contract has moved to v6.10.0. This page is kept
+for the reasoning behind the v6.2 step, not as a description of what the
+action renders today.
+
+Contract source of truth: `garnet-org/runtime-review-testbed`
+`contract/vocab.json` **6.10.0** + `docs/ux-contract.md`. The testbed's
+byte-gated goldens are the spec. This action's renderer
+(`src/runtime-review.js`) is a port of the testbed reference renderer and
+vendors the contract byte-identically as `src/runtime-review-vocab.js`; read
+that file for the strings the renderer actually emits.
+
+## What v6.10.0 says instead
+
+Everything in the "What changed in the PR comment" section below is
+superseded. The current shape:
+
+- Headline: `**Execution Profiles recorded for N job(s), triggered by
+  <sha7>**` — bold body text, no heading, no product name.
+- Meta block: two blockquote lines. The italic finding line first (the
+  destination total, or the job segments and `compared with <sha7>`, or
+  `No changes since <sha7>`), then one quiet line
+  `recorded at the kernel by Garnet · <timestamp>` at minute precision. The
+  words `as of` no longer render.
+- One fold per job, one block per fold, holding every recorded root of that
+  job. Fold rows carry `· N destination(s)`; changed rows lead with a bold
+  `+A −R` split that counts your workflow's destinations. Movement in the
+  runner's background is counted by a `(runner background · +A −B)` label on
+  the root above those marks.
+- Observed actions render as `○ <destination>` leaves. The explainer teaches
+  one execution chain: a path from a root down to an observed action.
+- Fold summaries carry counts and identity only — the `reached` sentence is
+  gone.
 
 ## Two surfaces, one renderer
 
@@ -13,7 +42,7 @@ Contract source of truth: `garnet-org/runtime-review-testbed` `docs/ux-contract.
   It is a faithful, readable projection of the Run Profile artifact: could you
   reconstruct the profile's story from it? That is the test it must pass.
 
-## What changed in the PR comment (v6.1 → v6.2)
+## What changed in the PR comment (v6.1 → v6.2) — superseded, see above
 
 - Marker block: canonical marker, self marker, then `<!-- garnet:commit {full sha} -->`.
 - Actor-conditional heading: standalone mode (this action, `github-actions[bot]`)
@@ -32,7 +61,7 @@ Contract source of truth: `garnet-org/runtime-review-testbed` `docs/ux-contract.
   absent in the waiting state.
 - Job fold summaries use the verb **reached** (never `contacted`).
 
-## Step Summary: delta vs Djalal's markdown printer (jibril)
+## Step Summary: delta vs Djalal's markdown printer (jibril) — v6.2 shape
 
 Djalal's most recent Go markdown printer (`pkg/printers/profiler/markdown.go`,
 "Garnet - Runtime Report") was destination-first and full-fidelity: Profile
@@ -41,8 +70,10 @@ telemetry — but it also carried verdict framing (✅/❌ headline, per-row sta
 icons, bad-first sorting) and a lossy remote-name dedupe ("omitted
 destinations").
 
-The v6.x Step Summary restores Djalal's faithful-record shape while removing
-only the verdict framing:
+The v6.2 Step Summary restored Djalal's faithful-record shape while removing
+only the verdict framing. The v6.10.0 Step Summary keeps that intent, but the
+table is lineage-first (`Process Tree | Destinations`), not the
+destination-first table described here:
 
 - Egress table is **destination-first** (`Destination | Port | Lineage Tree`),
   one row per recorded destination in the profile's own
@@ -77,6 +108,6 @@ with their own fixtures so prod bytes cannot drift while preview evolves.
 The action renders from the JSON Run Profile, so jibril's own Go markdown
 printer output ("Garnet - Runtime Report", ✅/❌ headline, `contacted`) is no
 longer user-visible through this action — no runtime coupling breaks. If that
-printer's output resurfaces on a user-facing path, it should adopt the v6.2
-`VOCAB` strings. Ashkaal is the schema layer (field names) and is untouched by
+printer's output resurfaces on a user-facing path, it should adopt the
+contract strings vendored in `src/runtime-review-vocab.js`. Ashkaal is the schema layer (field names) and is untouched by
 renderer vocabulary.

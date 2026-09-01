@@ -1,30 +1,47 @@
 # Tokenless path for the Garnet Action — design spec (draft)
 
-Status: **draft for review** — no product code changes in this PR.
+Status: **draft, not implemented.** Read it as a design proposal, not as
+behavior. Two things have moved under it since it was written:
+
+- The contract of record is now `garnet-org/runtime-review-testbed`
+  `contract/vocab.json` **6.10.0** + `docs/ux-contract.md`, vendored in this
+  repo as `src/runtime-review-vocab.js`. Every v6.1/v6.2 string and section
+  reference below is stale. The v6.2 amendment this spec asks for was never
+  ratified: 6.10.0 contains no tokenless, local-only, or upgrade-CTA
+  vocabulary. The permalink it calls
+  `View Run Profile in Garnet ↗` is today
+  `View this job's Execution Profile in Garnet →`, and the record is an
+  Execution Profile, not a Run Profile.
+- `api_token` is already `required: false` in `action.yaml` (§3 landed), but
+  the local-only branch did not: `src/action.js` still throws
+  "Input 'api_token' is required…" when neither a token nor OIDC produces
+  control-plane auth. The fork-PR path taken since is OIDC behind
+  `GARNET_ACTION_ENABLE_OIDC_AUTH`, not the tokenless mode described here.
 
 Tracking: [ENG-1329](https://linear.app/garnet-labs/issue/ENG-1329/tokenless-path-for-github-action)
 (tokenless path) and the fallback half of
 [ENG-1346](https://linear.app/garnet-labs/issue/ENG-1346) (simpler comment
 shape + token-optional local-only fallback). Sequenced against
 [ENG-1355](https://linear.app/garnet-labs/issue/ENG-1355) (v6.x renderer port
-to this repo; ENG-1345 was canceled into it). Contract of record:
-`garnet-org/runtime-review-testbed` `docs/ux-contract.md` **v6.1** (testbed
-PRs #52/#53/#55/#59). Prior analysis: Devin session
+to this repo; ENG-1345 was canceled into it). Contract of record when this
+spec was written: `garnet-org/runtime-review-testbed` `docs/ux-contract.md`
+**v6.1** (testbed PRs #52/#53/#55/#59). Prior analysis: Devin session
 `022557ef6b7d4534b9c5085147f23d67` (`token-optional-and-plg-review.md`) and
 testbed `docs/step-summary.md` §"Tokenless-by-default fallback".
 
 ## 1. Motivation (PLG: value before signup)
 
-Today `api_token` is `required: true` and the main step throws when it is
-empty (`src/action.js` — "Input 'api_token' is required…"). The two biggest
+When this spec was written `api_token` was `required: true` and the main step
+threw when it was empty (`src/action.js` — "Input 'api_token' is required…").
+The input is optional now; the throw is still there. The two biggest
 consequences:
 
 - **Adoption friction**: a user must sign up, create a project, copy a token,
   and add a repo secret *before first value*. The README one-liner cannot be
   a one-liner.
 - **Fork PRs always fail**: forks never receive repository secrets, so the
-  action degrades to "no runtime monitoring" on exactly the PRs where an
-  OSS maintainer most wants runtime evidence.
+  action records nothing on exactly the PRs where an OSS maintainer most
+  wants runtime evidence.
 
 The goal: `uses: garnet-org/action@v2` with **no inputs** produces a complete
 local Runtime Review — GitHub Step Summary always, standalone PR comment when
