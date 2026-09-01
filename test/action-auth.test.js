@@ -1,36 +1,33 @@
 /**
  * Containment gates for the main-step credential and sensor-version
- * resolution: with the OIDC feature flag off, auth resolves exactly the
- * pre-OIDC api_token shape with no network reachable, and the Jibril
- * sensor version never floats — every action ref resolves to an explicit
- * pinned version.
+ * resolution: when the OIDC endpoint is unavailable (missing token URL), auth
+ * falls back to the api_token shape with no network fetch reached, and the
+ * Jibril sensor version never floats — every action ref resolves to an
+ * explicit pinned version.
  */
 import test from "node:test"
 import assert from "node:assert/strict"
 import { resolveControlPlaneAuth, resolveJibrilVersion } from "../src/action.js"
 
-test("gate: OIDC flag off resolves the pre-OIDC api_token auth shape byte-exactly", async () => {
+test("gate: OIDC unavailable falls back to the api_token auth shape byte-exactly", async () => {
     const expected = {
         projectToken: "project-token-1",
         workflowToken: "",
         workflowTokenExpiresAt: "",
     }
-    for (const useOIDCAuth of [false, undefined]) {
-        const auth = await resolveControlPlaneAuth({
-            apiURL: "https://api.garnet.ai",
-            apiToken: "project-token-1",
-            useOIDCAuth,
-        })
-        assert.deepEqual(auth, expected)
-    }
+    const auth = await resolveControlPlaneAuth({
+        apiURL: "https://api.garnet.ai",
+        apiToken: "project-token-1",
+    })
+    assert.deepEqual(auth, expected)
 })
 
-test("gate: OIDC flag off performs no network request", async (t) => {
+test("gate: OIDC failure does not reach fetch", async (t) => {
     const originalFetch = globalThis.fetch
     let fetched = false
     globalThis.fetch = async () => {
         fetched = true
-        throw new Error("network must not be reached with OIDC off")
+        throw new Error("network must not be reached when OIDC token URL is absent")
     }
     t.after(() => {
         globalThis.fetch = originalFetch
@@ -39,17 +36,15 @@ test("gate: OIDC flag off performs no network request", async (t) => {
     await resolveControlPlaneAuth({
         apiURL: "https://api.garnet.ai",
         apiToken: "project-token-1",
-        useOIDCAuth: false,
     })
     assert.equal(fetched, false)
 })
 
-test("gate: OIDC flag off with empty api_token fails exactly like the pre-OIDC path", async () => {
+test("gate: empty api_token fails when OIDC is also unavailable", async () => {
     await assert.rejects(
         resolveControlPlaneAuth({
             apiURL: "https://api.garnet.ai",
             apiToken: "",
-            useOIDCAuth: false,
         }),
         /'api_token' is required/,
     )

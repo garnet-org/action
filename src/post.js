@@ -20,7 +20,7 @@ import { uploadJibrilArtifacts } from "./post-artifacts.js"
 import { buildReportLink, getDefaultJsonProfileFile, parseProfileJson, resolveAppBaseURL } from "./profile-comment.js"
 import { profilePermalink, renderPendingReview, renderStepSummary, summarizeProfile } from "./runtime-review.js"
 import { publishPullRequestComment } from "./pr-comment.js"
-import { OIDC_AUTH_FEATURE_FLAG, getGitHubIDToken, resolveOIDCAudience } from "./oidc.js"
+import { getGitHubIDToken, resolveOIDCAudience } from "./oidc.js"
 import { isCommentPermissionError } from "./pr-comment-error.js"
 import { parseSystemdTimespanSeconds } from "./systemd-timespan.js"
 
@@ -251,17 +251,12 @@ async function resolveProfileEnvelopeID() {
 /**
  * Exchanges a fresh GitHub OIDC ID token for a control-plane workflow token,
  * for the post step's profile envelope lookup. The token is never persisted
- * between steps; the post step performs its own exchange. Fail-closed: flag
- * off, missing permission, or any exchange failure returns "".
+ * between steps; the post step performs its own exchange. Fail-closed: missing
+ * permission or any exchange failure returns "".
  * @param {string} baseURL
  * @returns {Promise<string>}
  */
 async function resolvePostWorkflowToken(baseURL) {
-    const useOIDCAuth = getEnv(OIDC_AUTH_FEATURE_FLAG, "false") === "true"
-    if (useOIDCAuth !== true) {
-        return ""
-    }
-
     try {
         const idToken = await getGitHubIDToken(resolveOIDCAudience(baseURL))
         const client = new ControlPlaneClient({ baseURL })

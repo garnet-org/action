@@ -31522,7 +31522,7 @@ async function getProfileSha() {
  * `api_token` input did not resolve (empty).
  *
  * The skip applies only when OIDC is also unavailable (no runtime ID-token
- * grant) or the OIDC flag is off.
+ * grant).
  *
  * Detection never throws: on unexpected payload shapes or read errors the
  * decision is "do not skip", which falls back to current behavior.
@@ -31558,15 +31558,13 @@ async function resolveForkSkip(context) {
 }
 
 /**
- * Returns true when the runtime granted an OIDC ID-token endpoint and the
- * flag-gated OIDC auth path is enabled.
+ * Returns true when the runtime granted an OIDC ID-token endpoint.
  * @returns {boolean}
  */
 function isOIDCAvailable() {
-    const flagEnabled = getEnv("GARNET_ACTION_ENABLE_OIDC_AUTH") === "true"
     const requestURL = getEnv("ACTIONS_ID_TOKEN_REQUEST_URL")
     const requestToken = getEnv("ACTIONS_ID_TOKEN_REQUEST_TOKEN")
-    return flagEnabled && requestURL !== "" && requestToken !== ""
+    return requestURL !== "" && requestToken !== ""
 }
 
 /**
@@ -41327,8 +41325,6 @@ function getValidationErrorDetail(payload) {
 
 
 
-const OIDC_AUTH_FEATURE_FLAG = "GARNET_ACTION_ENABLE_OIDC_AUTH"
-
 const GITHUB_APP_ID_PROD = "Iv23lihCfwCfqCxQNpvv"
 const GITHUB_APP_ID_STAGING = "Iv23liUXLYx9mgGKHgZk"
 const GITHUB_APP_ID_DEV = "Iv23li88DidEyxVnAR1p"
@@ -41464,8 +41460,6 @@ async function run() {
         let JIBRILVER = resolveJibrilVersion(getEnv("JIBRIL_VERSION", ""), getEnv("GITHUB_ACTION_REF", ""))
         const DEBUG = getEnv("DEBUG", "false")
 
-        const useOIDCAuth = getEnv(OIDC_AUTH_FEATURE_FLAG, "false") === "true"
-
         if (TOKEN === "") {
             const forkSkip = await resolveForkSkip({
                 eventName: getEnv("GITHUB_EVENT_NAME"),
@@ -41481,7 +41475,6 @@ async function run() {
         const controlPlaneAuth = await resolveControlPlaneAuth({
             apiURL: API,
             apiToken: TOKEN,
-            useOIDCAuth,
         })
 
         // Prevent accidental leakage of tokens in logs.
@@ -41874,7 +41867,6 @@ TimeoutStopSec=${stopTimeoutSeconds}
  * @typedef {{
  *   apiURL: string
  *   apiToken: string
- *   useOIDCAuth: boolean
  * }} ResolveControlPlaneAuthInput
  */
 
@@ -41891,14 +41883,6 @@ TimeoutStopSec=${stopTimeoutSeconds}
  * @returns {Promise<ControlPlaneAuth>}
  */
 async function resolveControlPlaneAuth(input) {
-    if (input.useOIDCAuth !== true) {
-        return {
-            projectToken: requireApiToken(input.apiToken),
-            workflowToken: "",
-            workflowTokenExpiresAt: "",
-        }
-    }
-
     const audience = resolveOIDCAudience(input.apiURL)
 
     const unauthenticatedControlPlaneClient = new ControlPlaneClient({
