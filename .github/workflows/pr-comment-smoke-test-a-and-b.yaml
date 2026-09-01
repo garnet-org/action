@@ -10,7 +10,7 @@ on:
             jibril_version:
                 description: "Jibril version (e.g. v0.0, v2.10.8, latest)"
                 required: false
-                default: "v0.0"
+                default: "latest"
             api_token:
                 description: "Garnet API token (optional; defaults to repo secret)"
                 required: false
@@ -59,7 +59,7 @@ jobs:
                   api_url: ${{ inputs.api_url || 'https://dev-api.garnet.ai' }}
                   debug: ${{ inputs.debug || 'true' }}
                   api_token: ${{ inputs.api_token || secrets.GARNET_API_TOKEN_DEV }}
-                  jibril_version: ${{ inputs.jibril_version || 'v0.0' }}
+                  jibril_version: ${{ inputs.jibril_version || 'latest' }}
 
             - name: Attempt egress to known IPs
               shell: bash
@@ -124,7 +124,7 @@ jobs:
                   api_url: ${{ inputs.api_url || 'https://dev-api.garnet.ai' }}
                   debug: ${{ inputs.debug || 'true' }}
                   api_token: ${{ inputs.api_token || secrets.GARNET_API_TOKEN_DEV }}
-                  jibril_version: ${{ inputs.jibril_version || 'v0.0' }}
+                  jibril_version: ${{ inputs.jibril_version || 'latest' }}
 
             - name: Attempt egress to known IPs
               shell: bash

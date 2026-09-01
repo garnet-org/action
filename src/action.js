@@ -33,6 +33,12 @@ const JIBRIL_STABLE_VERSION = "v2.16.0"
 // each of those payloads. Older releases only offer the bare `jibril` asset.
 const JIBRIL_RELEASES_REPO = "garnet-org/jibril-releases"
 const JIBRIL_RELEASES_URL = `https://github.com/${JIBRIL_RELEASES_REPO}/releases`
+// The release workflow signs its own attestation over the bundle payloads.
+// `gh attestation verify` filters on SLSA provenance by default, which this
+// release process does not publish, so the predicate type is passed explicitly.
+// Update both if the jibril release workflow ever changes them.
+const JIBRIL_ATTESTATION_PREDICATE = `https://github.com/${JIBRIL_RELEASES_REPO}/attestations/release/v1`
+const JIBRIL_SIGNER_WORKFLOW = `${JIBRIL_RELEASES_REPO}/.github/workflows/jibril-public-release.yml`
 /** @type {JibrilCoreVersion} */
 const JIBRIL_BUNDLE_MIN_VERSION = { major: 2, minor: 17, patch: 0 }
 const JIBRIL_BINARY = "jibril"
@@ -761,10 +767,11 @@ async function verifySignedPayload(bundleDir, name) {
 }
 
 /**
- * Establishes authenticity: `gh` checks the Sigstore signature, the signing
- * workflow identity, and transparency-log inclusion. It is preinstalled on
- * GitHub-hosted runners and reads GITHUB_TOKEN from the environment; when
- * either is absent we warn rather than fail so self-hosted runners keep working.
+ * Establishes authenticity: `gh` checks the Sigstore signature, that the signer
+ * is the jibril release workflow, and transparency-log inclusion. It is
+ * preinstalled on GitHub-hosted runners and reads GITHUB_TOKEN from the
+ * environment; when either is absent we warn rather than fail so self-hosted
+ * runners keep working.
  * @param {string} binaryPath
  * @returns {Promise<void>}
  */
@@ -779,13 +786,23 @@ async function verifyJibrilAttestation(binaryPath) {
         return
     }
 
-    const args = ["attestation", "verify", binaryPath, "--repo", JIBRIL_RELEASES_REPO]
+    const args = [
+        "attestation",
+        "verify",
+        binaryPath,
+        "--repo",
+        JIBRIL_RELEASES_REPO,
+        "--predicate-type",
+        JIBRIL_ATTESTATION_PREDICATE,
+        "--signer-workflow",
+        JIBRIL_SIGNER_WORKFLOW,
+    ]
     const exitCode = await exec.exec("gh", args, { ignoreReturnCode: true })
     if (exitCode !== 0) {
         throw new Error(`Attestation verification failed for ${JIBRIL_BINARY}: gh exited ${exitCode}`)
     }
 
-    core.info("Verified the jibril attestation against the jibril-releases release workflow")
+    core.info(`Verified the jibril attestation signed by ${JIBRIL_SIGNER_WORKFLOW}`)
 }
 
 /**
