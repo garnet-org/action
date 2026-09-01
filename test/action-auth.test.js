@@ -9,17 +9,55 @@ import test from "node:test"
 import assert from "node:assert/strict"
 import { resolveControlPlaneAuth, resolveJibrilVersion } from "../src/action.js"
 
+/**
+ * Runs a function with a controlled process.env overlay, restoring the
+ * original values afterwards.
+ * @param {Record<string, string | undefined>} overlay
+ * @param {() => Promise<void>} fn
+ * @returns {Promise<void>}
+ */
+async function withEnv(overlay, fn) {
+    const saved = {}
+    for (const [name, value] of Object.entries(overlay)) {
+        saved[name] = process.env[name]
+        if (value === undefined) {
+            delete process.env[name]
+        } else {
+            process.env[name] = value
+        }
+    }
+    try {
+        await fn()
+    } finally {
+        for (const [name, value] of Object.entries(saved)) {
+            if (value === undefined) {
+                delete process.env[name]
+            } else {
+                process.env[name] = value
+            }
+        }
+    }
+}
+
 test("gate: OIDC unavailable falls back to the api_token auth shape byte-exactly", async () => {
     const expected = {
         projectToken: "project-token-1",
         workflowToken: "",
         workflowTokenExpiresAt: "",
     }
-    const auth = await resolveControlPlaneAuth({
-        apiURL: "https://api.garnet.ai",
-        apiToken: "project-token-1",
-    })
-    assert.deepEqual(auth, expected)
+    await withEnv(
+        {
+            ACTIONS_ID_TOKEN_REQUEST_URL: undefined,
+            ACTIONS_ID_TOKEN_REQUEST_TOKEN: undefined,
+        },
+        async () => {
+            const auth = await resolveControlPlaneAuth({
+                apiURL: "https://api.garnet.ai",
+                apiToken: "project-token-1",
+            })
+            assert.deepEqual(auth, expected)
+        },
+    )
 })
 
 test("gate: OIDC failure does not reach fetch", async (t) => {
@@ -33,20 +71,36 @@ test("gate: OIDC failure does not reach fetch", async (t) => {
         globalThis.fetch = originalFetch
     })
 
-    await resolveControlPlaneAuth({
-        apiURL: "https://api.garnet.ai",
-        apiToken: "project-token-1",
-    })
-    assert.equal(fetched, false)
+    await withEnv(
+        {
+            ACTIONS_ID_TOKEN_REQUEST_URL: undefined,
+            ACTIONS_ID_TOKEN_REQUEST_TOKEN: undefined,
+        },
+        async () => {
+            await resolveControlPlaneAuth({
+                apiURL: "https://api.garnet.ai",
+                apiToken: "project-token-1",
+            })
+            assert.equal(fetched, false)
+        },
+    )
 })
 
 test("gate: empty api_token fails when OIDC is also unavailable", async () => {
-    await assert.rejects(
-        resolveControlPlaneAuth({
-            apiURL: "https://api.garnet.ai",
-            apiToken: "",
-        }),
-        /'api_token' is required/,
+    await withEnv(
+        {
+            ACTIONS_ID_TOKEN_REQUEST_URL: undefined,
+            ACTIONS_ID_TOKEN_REQUEST_TOKEN: undefined,
+        },
+        async () => {
+            await assert.rejects(
+                resolveControlPlaneAuth({
+                    apiURL: "https://api.garnet.ai",
+                    apiToken: "",
+                }),
+                /'api_token' is required/,
+            )
+        },
     )
 })
 
