@@ -6,8 +6,25 @@ import { CONTROL_PLANE_MARKERS, RUNTIME_REVIEW_MARKER } from "./runtime-review.j
  */
 
 /**
- * @typedef {{ id: number, body: string }} PullRequestComment
+ * @typedef {{ id: number, body: string, authorLogin?: string, authorType?: string }} PullRequestComment
  */
+
+// Marker text and hidden comment state only count when the comment was
+// authored by a bot (the workflow token's github-actions[bot] or the Garnet
+// App). A human commenter pasting the marker must not be able to suppress,
+// stale-mark, or hijack the Runtime Review comment. Comments without author
+// metadata (older normalized fixtures) stay trusted for compatibility.
+/**
+ * @param {PullRequestComment} comment
+ * @returns {boolean}
+ */
+function isTrustedCommentAuthor(comment) {
+    if (comment.authorType === undefined && comment.authorLogin === undefined) {
+        return true
+    }
+
+    return comment.authorType === "Bot"
+}
 
 /**
  * @typedef {{
@@ -38,6 +55,7 @@ import { CONTROL_PLANE_MARKERS, RUNTIME_REVIEW_MARKER } from "./runtime-review.j
  * @returns {PublishCommentPlan}
  */
 export function planPullRequestComment(comments, profile, runAttempt, renderOptions = {}) {
+    comments = comments.filter(isTrustedCommentAuthor)
     if (containsControlPlaneComment(comments)) {
         return {
             kind: "blocked-by-control-plane",

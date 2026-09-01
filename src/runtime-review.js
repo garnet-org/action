@@ -600,10 +600,83 @@ export function edgeComparator(a, b) {
  */
 export function pullRequestURL(github) {
   const match = /^refs\/pull\/(\d+)\//.exec(String(github.ref || ""))
-  const repository = String(github.repository || "")
+  const repository = safeRepositorySlug(github.repository)
   if (match === null || repository === "") return ""
-  const server = String(github.server_url || "https://github.com").replace(/\/+$/, "")
+  const server = safeServerURL(github.server_url)
+  if (server === "") return ""
   return `${server}/${repository}/pull/${match[1]}`
+}
+
+// Record-derived values that land in Markdown/HTML link targets are
+// untrusted input: a forged profile could carry markup-breaking or
+// javascript: values. These normalizers fail closed to "" (the renderers
+// already degrade to unlinked text on empty URLs).
+
+/**
+ * A GitHub `owner/name` slug restricted to the characters GitHub allows;
+ * anything else returns "".
+ * @param {unknown} value
+ * @returns {string}
+ */
+export function safeRepositorySlug(value) {
+  const repository = String(value || "")
+  return /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(repository) ? repository : ""
+}
+
+/**
+ * A server base URL that parses as http(s) with no path, query, fragment,
+ * or credentials; anything else falls back to "".
+ * @param {unknown} value
+ * @returns {string}
+ */
+export function safeServerURL(value) {
+  const raw = String(value || "https://github.com").replace(/\/+$/, "")
+  let parsed
+  try {
+    parsed = new URL(raw)
+  } catch (_) {
+    return ""
+  }
+  const isHTTP = parsed.protocol === "https:" || parsed.protocol === "http:"
+  const isBare =
+    parsed.pathname === "/" &&
+    parsed.search === "" &&
+    parsed.hash === "" &&
+    parsed.username === "" &&
+    parsed.password === ""
+  return isHTTP && isBare ? raw : ""
+}
+
+/**
+ * The run URL derived from validated record fields; "" when any part is
+ * untrusted or missing.
+ * @param {Record<string, any>} github
+ * @returns {string}
+ */
+function buildRunURL(github) {
+  const repository = safeRepositorySlug(github.repository)
+  const server = safeServerURL(github.server_url)
+  const runID = String(github.run_id || "")
+  if (repository === "" || server === "" || !/^\d+$/.test(runID)) return ""
+  return `${server}/${repository}/actions/runs/${runID}`
+}
+
+/**
+ * An absolute http(s) URL for use as a link target; anything else
+ * (including javascript: and data: schemes) returns "".
+ * @param {unknown} value
+ * @returns {string}
+ */
+export function safeHTTPURL(value) {
+  const raw = String(value || "")
+  if (raw === "") return ""
+  let parsed
+  try {
+    parsed = new URL(raw)
+  } catch (_) {
+    return ""
+  }
+  return parsed.protocol === "https:" || parsed.protocol === "http:" ? raw : ""
 }
 
 /**
@@ -651,13 +724,10 @@ export function summarizeProfile(profile) {
   return {
     name: String(github.job || ""),
     workflow: String(github.workflow || ""),
-    repository: String(github.repository || ""),
+    repository: safeRepositorySlug(github.repository),
     sha: String(github.sha || ""),
     run_id: String(github.run_id || ""),
-    run_url:
-      github.run_id && github.repository
-        ? `${github.server_url || "https://github.com"}/${github.repository}/actions/runs/${github.run_id}`
-        : "",
+    run_url: buildRunURL(github),
     profile_id: String(envelope.id || envelope.profile_id || ""),
     uuid: String(p?.uuid || ""),
     timestamp: String(p?.timestamp || ""),
@@ -781,8 +851,8 @@ export function buildRunReview(input) {
       name: String(j.name || ""),
       workflow: String(j.workflow || ""),
       run_id: String(j.run_id || ""),
-      run_url: String(j.run_url || ""),
-      job_url: String(j.job_url || ""),
+      run_url: safeHTTPURL(j.run_url),
+      job_url: safeHTTPURL(j.job_url),
       profile_id: String(j.profile_id || ""),
       uuid: String(j.uuid || ""),
       timestamp: String(j.timestamp || ""),
@@ -2231,7 +2301,8 @@ function retentionOrder(edges) {
  */
 function commitRef(sha, commitUrl) {
   const sha7 = escapeCode(sha.slice(0, 7) || "unknown")
-  return commitUrl ? `[\`${sha7}\`](${commitUrl})` : `\`${sha7}\``
+  const url = safeHTTPURL(commitUrl)
+  return url !== "" ? `[\`${sha7}\`](${url})` : `\`${sha7}\``
 }
 
 /**

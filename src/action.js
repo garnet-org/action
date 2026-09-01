@@ -61,7 +61,7 @@ export async function run() {
     try {
         // Get the variables from the environment.
         const TOKEN = getEnv("GARNET_API_TOKEN")
-        const API = getEnv("GARNET_API_URL", "https://api.garnet.ai")
+        const API = validateApiURL(getEnv("GARNET_API_URL", "https://api.garnet.ai"))
         let JIBRILVER = resolveJibrilVersion(getEnv("JIBRIL_VERSION", ""), getEnv("GITHUB_ACTION_REF", ""))
         const DEBUG = getEnv("DEBUG", "false")
 
@@ -125,6 +125,7 @@ export async function run() {
         if (JIBRILVER !== "latest" && !JIBRILVER.startsWith("v")) {
             JIBRILVER = `v${JIBRILVER}`
         }
+        validateJibrilVersion(JIBRILVER)
 
         // The bundled tarball's filename embeds the tag, and the agent record
         // should name the exact sensor that ran.
@@ -239,6 +240,7 @@ export async function run() {
                 workflow_name: WORKFLOW,
             })
 
+            validateNetworkPolicyYAML(networkPolicyYaml)
             await fs.writeFile(NETPOLICY_PATH, networkPolicyYaml)
         } catch (error) {
             throw new Error(`Failed to fetch network policy: ${getErrorMessage(error)}`)
@@ -592,6 +594,80 @@ function requireApiToken(token) {
     throw new Error(
         "Input 'api_token' is required when OIDC authentication is unavailable. This commonly happens on pull requests from forks, where repository secrets are not exposed to workflows, or when 'id-token: write' permission is not granted. Add/verify that your workflow passes a valid token to this input, grant 'id-token: write', or conditionally skip this action for forked PRs.",
     )
+}
+
+// Accepted jibril_version shapes: `latest` or a release tag such as v0.0,
+// v2.16.0, 2.16.0, or v2.17.0-rc.1. Anything else is rejected before the
+// value reaches the release download URL.
+const JIBRIL_VERSION_PATTERN = /^v?\d+\.\d+(\.\d+)?(-[A-Za-z0-9.]+)?$/
+
+/**
+ * Rejects jibril_version values that do not name a release: the version is
+ * interpolated into the release download URL, so a free-form value could
+ * point the root-executed binary at an arbitrary URL path.
+ * @param {string} version
+ * @returns {string}
+ */
+export function validateJibrilVersion(version) {
+    if (version === "latest" || JIBRIL_VERSION_PATTERN.test(version)) {
+        return version
+    }
+
+    throw new Error(
+        `Invalid jibril_version '${version}': expected 'latest' or a release version such as 'v2.16.0'.`,
+    )
+}
+
+/**
+ * Requires the API URL to be https (http is allowed for localhost only), so
+ * tokens are never sent in cleartext to a remote host.
+ * @param {string} value
+ * @returns {string}
+ */
+export function validateApiURL(value) {
+    let parsed
+    try {
+        parsed = new URL(value)
+    } catch (_) {
+        throw new Error(`Invalid api_url '${value}': not a valid URL.`)
+    }
+
+    if (parsed.protocol === "https:") {
+        return value
+    }
+
+    const isLoopbackHost =
+        parsed.hostname === "localhost" || parsed.hostname === "127.0.0.1" || parsed.hostname === "::1"
+    if (parsed.protocol === "http:" && isLoopbackHost) {
+        return value
+    }
+
+    throw new Error(`Invalid api_url '${value}': must use https (http is allowed for localhost only).`)
+}
+
+const NETPOLICY_MAX_BYTES = 1024 * 1024
+
+/**
+ * Sanity-checks the network policy fetched from the control plane before it
+ * is written under /etc/jibril: it must be non-empty printable YAML text of
+ * bounded size.
+ * @param {string} content
+ * @returns {string}
+ */
+export function validateNetworkPolicyYAML(content) {
+    if (typeof content !== "string" || content.trim() === "") {
+        throw new Error("Network policy from the control plane is empty.")
+    }
+
+    if (Buffer.byteLength(content, "utf8") > NETPOLICY_MAX_BYTES) {
+        throw new Error("Network policy from the control plane exceeds the 1 MiB size bound.")
+    }
+
+    if (/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/.test(content)) {
+        throw new Error("Network policy from the control plane contains control characters.")
+    }
+
+    return content
 }
 
 /**

@@ -41544,7 +41544,7 @@ async function run() {
     try {
         // Get the variables from the environment.
         const TOKEN = getEnv("GARNET_API_TOKEN")
-        const API = getEnv("GARNET_API_URL", "https://api.garnet.ai")
+        const API = validateApiURL(getEnv("GARNET_API_URL", "https://api.garnet.ai"))
         let JIBRILVER = resolveJibrilVersion(getEnv("JIBRIL_VERSION", ""), getEnv("GITHUB_ACTION_REF", ""))
         const DEBUG = getEnv("DEBUG", "false")
 
@@ -41608,6 +41608,7 @@ async function run() {
         if (JIBRILVER !== "latest" && !JIBRILVER.startsWith("v")) {
             JIBRILVER = `v${JIBRILVER}`
         }
+        validateJibrilVersion(JIBRILVER)
 
         // The bundled tarball's filename embeds the tag, and the agent record
         // should name the exact sensor that ran.
@@ -41722,6 +41723,7 @@ async function run() {
                 workflow_name: WORKFLOW,
             })
 
+            validateNetworkPolicyYAML(networkPolicyYaml)
             await promises_namespaceObject.writeFile(NETPOLICY_PATH, networkPolicyYaml)
         } catch (error) {
             throw new Error(`Failed to fetch network policy: ${getErrorMessage(error)}`)
@@ -42075,6 +42077,80 @@ function requireApiToken(token) {
     throw new Error(
         "Input 'api_token' is required when OIDC authentication is unavailable. This commonly happens on pull requests from forks, where repository secrets are not exposed to workflows, or when 'id-token: write' permission is not granted. Add/verify that your workflow passes a valid token to this input, grant 'id-token: write', or conditionally skip this action for forked PRs.",
     )
+}
+
+// Accepted jibril_version shapes: `latest` or a release tag such as v0.0,
+// v2.16.0, 2.16.0, or v2.17.0-rc.1. Anything else is rejected before the
+// value reaches the release download URL.
+const JIBRIL_VERSION_PATTERN = /^v?\d+\.\d+(\.\d+)?(-[A-Za-z0-9.]+)?$/
+
+/**
+ * Rejects jibril_version values that do not name a release: the version is
+ * interpolated into the release download URL, so a free-form value could
+ * point the root-executed binary at an arbitrary URL path.
+ * @param {string} version
+ * @returns {string}
+ */
+function validateJibrilVersion(version) {
+    if (version === "latest" || JIBRIL_VERSION_PATTERN.test(version)) {
+        return version
+    }
+
+    throw new Error(
+        `Invalid jibril_version '${version}': expected 'latest' or a release version such as 'v2.16.0'.`,
+    )
+}
+
+/**
+ * Requires the API URL to be https (http is allowed for localhost only), so
+ * tokens are never sent in cleartext to a remote host.
+ * @param {string} value
+ * @returns {string}
+ */
+function validateApiURL(value) {
+    let parsed
+    try {
+        parsed = new URL(value)
+    } catch (_) {
+        throw new Error(`Invalid api_url '${value}': not a valid URL.`)
+    }
+
+    if (parsed.protocol === "https:") {
+        return value
+    }
+
+    const isLoopbackHost =
+        parsed.hostname === "localhost" || parsed.hostname === "127.0.0.1" || parsed.hostname === "::1"
+    if (parsed.protocol === "http:" && isLoopbackHost) {
+        return value
+    }
+
+    throw new Error(`Invalid api_url '${value}': must use https (http is allowed for localhost only).`)
+}
+
+const NETPOLICY_MAX_BYTES = 1024 * 1024
+
+/**
+ * Sanity-checks the network policy fetched from the control plane before it
+ * is written under /etc/jibril: it must be non-empty printable YAML text of
+ * bounded size.
+ * @param {string} content
+ * @returns {string}
+ */
+function validateNetworkPolicyYAML(content) {
+    if (typeof content !== "string" || content.trim() === "") {
+        throw new Error("Network policy from the control plane is empty.")
+    }
+
+    if (Buffer.byteLength(content, "utf8") > NETPOLICY_MAX_BYTES) {
+        throw new Error("Network policy from the control plane exceeds the 1 MiB size bound.")
+    }
+
+    if (/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/.test(content)) {
+        throw new Error("Network policy from the control plane contains control characters.")
+    }
+
+    return content
 }
 
 /**
@@ -43795,10 +43871,83 @@ function edgeComparator(a, b) {
  */
 function runtime_review_pullRequestURL(github) {
   const match = /^refs\/pull\/(\d+)\//.exec(String(github.ref || ""))
-  const repository = String(github.repository || "")
+  const repository = safeRepositorySlug(github.repository)
   if (match === null || repository === "") return ""
-  const server = String(github.server_url || "https://github.com").replace(/\/+$/, "")
+  const server = safeServerURL(github.server_url)
+  if (server === "") return ""
   return `${server}/${repository}/pull/${match[1]}`
+}
+
+// Record-derived values that land in Markdown/HTML link targets are
+// untrusted input: a forged profile could carry markup-breaking or
+// javascript: values. These normalizers fail closed to "" (the renderers
+// already degrade to unlinked text on empty URLs).
+
+/**
+ * A GitHub `owner/name` slug restricted to the characters GitHub allows;
+ * anything else returns "".
+ * @param {unknown} value
+ * @returns {string}
+ */
+function safeRepositorySlug(value) {
+  const repository = String(value || "")
+  return /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(repository) ? repository : ""
+}
+
+/**
+ * A server base URL that parses as http(s) with no path, query, fragment,
+ * or credentials; anything else falls back to "".
+ * @param {unknown} value
+ * @returns {string}
+ */
+function safeServerURL(value) {
+  const raw = String(value || "https://github.com").replace(/\/+$/, "")
+  let parsed
+  try {
+    parsed = new URL(raw)
+  } catch (_) {
+    return ""
+  }
+  const isHTTP = parsed.protocol === "https:" || parsed.protocol === "http:"
+  const isBare =
+    parsed.pathname === "/" &&
+    parsed.search === "" &&
+    parsed.hash === "" &&
+    parsed.username === "" &&
+    parsed.password === ""
+  return isHTTP && isBare ? raw : ""
+}
+
+/**
+ * The run URL derived from validated record fields; "" when any part is
+ * untrusted or missing.
+ * @param {Record<string, any>} github
+ * @returns {string}
+ */
+function buildRunURL(github) {
+  const repository = safeRepositorySlug(github.repository)
+  const server = safeServerURL(github.server_url)
+  const runID = String(github.run_id || "")
+  if (repository === "" || server === "" || !/^\d+$/.test(runID)) return ""
+  return `${server}/${repository}/actions/runs/${runID}`
+}
+
+/**
+ * An absolute http(s) URL for use as a link target; anything else
+ * (including javascript: and data: schemes) returns "".
+ * @param {unknown} value
+ * @returns {string}
+ */
+function safeHTTPURL(value) {
+  const raw = String(value || "")
+  if (raw === "") return ""
+  let parsed
+  try {
+    parsed = new URL(raw)
+  } catch (_) {
+    return ""
+  }
+  return parsed.protocol === "https:" || parsed.protocol === "http:" ? raw : ""
 }
 
 /**
@@ -43846,13 +43995,10 @@ function runtime_review_summarizeProfile(profile) {
   return {
     name: String(github.job || ""),
     workflow: String(github.workflow || ""),
-    repository: String(github.repository || ""),
+    repository: safeRepositorySlug(github.repository),
     sha: String(github.sha || ""),
     run_id: String(github.run_id || ""),
-    run_url:
-      github.run_id && github.repository
-        ? `${github.server_url || "https://github.com"}/${github.repository}/actions/runs/${github.run_id}`
-        : "",
+    run_url: buildRunURL(github),
     profile_id: String(envelope.id || envelope.profile_id || ""),
     uuid: String(p?.uuid || ""),
     timestamp: String(p?.timestamp || ""),
@@ -43976,8 +44122,8 @@ function runtime_review_buildRunReview(input) {
       name: String(j.name || ""),
       workflow: String(j.workflow || ""),
       run_id: String(j.run_id || ""),
-      run_url: String(j.run_url || ""),
-      job_url: String(j.job_url || ""),
+      run_url: safeHTTPURL(j.run_url),
+      job_url: safeHTTPURL(j.job_url),
       profile_id: String(j.profile_id || ""),
       uuid: String(j.uuid || ""),
       timestamp: String(j.timestamp || ""),
@@ -45426,7 +45572,8 @@ function retentionOrder(edges) {
  */
 function commitRef(sha, commitUrl) {
   const sha7 = escapeCode(sha.slice(0, 7) || "unknown")
-  return commitUrl ? `[\`${sha7}\`](${commitUrl})` : `\`${sha7}\``
+  const url = safeHTTPURL(commitUrl)
+  return url !== "" ? `[\`${sha7}\`](${url})` : `\`${sha7}\``
 }
 
 /**
