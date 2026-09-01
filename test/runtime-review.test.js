@@ -42,7 +42,6 @@ import {
   hasRecordedDetection,
   isGithubInfraName,
   profilePermalink,
-  publicationDecision,
   defangHostname,
   commentEdges,
   addressNameMap,
@@ -53,7 +52,6 @@ import {
   loadProfile,
   renderFromProfiles,
   renderNoRecord,
-  renderPublicRunProfileMockup,
 } from "./render-states-real.mjs"
 import { renderCombined } from "./render-combined-real.mjs"
 
@@ -184,7 +182,6 @@ await test("contract: vocab.json is the v6.10.0 machine-readable lock", () => {
   }
   assert.equal(SIZE_BUDGET, 60_000)
   assert.equal(STEP_SUMMARY_BUDGET, 1_048_576)
-  assert.ok(CONTRACT_VOCAB.v7Deferrals.length >= 10)
 })
 
 await test("contract: reference mockup preserves App-mode output without App/Action ownership markers", () => {
@@ -967,7 +964,6 @@ await test("gate: checked-in mockups byte-equal fresh renderer output (states, p
     "3-workload-egress.md": renderFromProfiles([worthLive]).body,
     "4-multi-job.md": renderFromProfiles(record).body,
     "5-raw-profile-no-selector.md": renderFromProfiles([normalV215]).body,
-    "6-public-run-profile.md": renderPublicRunProfileMockup(),
   }
   for (const [file, body] of Object.entries(states)) {
     assert.equal(mockup(file), `${body}\n`, `test/fixtures/mockups/${file} drifted from renderer output`)
@@ -1157,41 +1153,6 @@ await test("gate: preview material is contained — default bytes carry none of 
       assert.ok(!prComment.includes(marker), `PR comment leaked ${JSON.stringify(marker)}`)
     }
   }
-})
-
-await test("gate 20b: publication policy is fail-closed with one non-oracular 404", () => {
-  // Exact profile selection — ?profile supplied and resolving.
-  const exact = publicationDecision({
-    visibility: "public",
-    consent: true,
-    revoked: false,
-    profileRequested: true,
-    selectorResolves: true,
-  })
-  assert.deepEqual(exact, { status: 200, body: "render" })
-  const denied = [
-    {},
-    { visibility: "private", consent: true },
-    { visibility: "internal", consent: true },
-    { visibility: "unknown", consent: true },
-    { visibility: "public", consent: false },
-    { visibility: "public", consent: true, revoked: true },
-    // Missing selector and job-only/bare-run requests never render.
-    { visibility: "public", consent: true, revoked: false },
-    // ?profile supplied with an empty/wrong UUID: exact, no fallback.
-    { visibility: "public", consent: true, profileRequested: true, selectorResolves: false },
-    { visibility: "public", consent: true, profileRequested: true },
-    // Publication policy denies even a resolving selector.
-    { visibility: "private", consent: true, profileRequested: true, selectorResolves: true },
-    { visibility: "public", consent: false, profileRequested: true, selectorResolves: true },
-  ]
-  const bodies = new Set()
-  for (const state of denied) {
-    const res = publicationDecision(state)
-    assert.equal(res.status, 404, JSON.stringify(state))
-    bodies.add(res.body)
-  }
-  assert.equal(bodies.size, 1, "denied responses must be indistinguishable")
 })
 
 await test("gate 20c: completed comment renders one exact selector per enveloped job fold", () => {

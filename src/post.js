@@ -6,31 +6,23 @@ import {
     firstNonEmptyString,
     getEnv,
     getErrorMessage,
-    getOptionalNumber,
-    getOptionalRecord,
-    getOptionalString,
     isSupportedArch,
     isSupportedPlatform,
     pathExists,
     waitForDelay,
 } from "./shared.js"
-import { getPullRequestNumberFromEvent } from "./github-event.js"
 import { getProfileJobName } from "./github-context.js"
 import { ControlPlaneClient } from "./control-plane/client.js"
 import { uploadJibrilArtifacts } from "./post-artifacts.js"
-import { buildReportLink, getDefaultJsonProfileFile, resolveAppBaseURL } from "./profile-comment.js"
+import { buildReportLink, getDefaultJsonProfileFile, resolveAppBaseURL } from "./report-link.js"
 import { profilePermalink, renderPendingReview, renderStepSummary, summarizeProfile } from "./runtime-review.js"
-import { publishPullRequestComment } from "./pr-comment.js"
 import { getGitHubIDToken, resolveOIDCAudience } from "./oidc.js"
-import { isCommentPermissionError } from "./pr-comment-error.js"
 import { parseSystemdTimespanSeconds } from "./systemd-timespan.js"
 import { classifyProfileContent } from "./post-profile-state.js"
 import { classifyAgentStop, formatAgentStopDetail } from "./post-signal.js"
 import { resolveJobStatusFromGitHub } from "./github-job-status.js"
 import { resolveStopTimeoutFromSettings, resolveStopTimeoutFromUnit } from "./post-stop-timeout.js"
 
-/** @typedef {import("./profile-comment.js").NormalizedProfile} NormalizedProfile */
-/** @typedef {import("./profile-comment.js").RenderOptions} RenderOptions */
 /** @typedef {import("./post-profile-state.js").LoadedProfile} LoadedProfile */
 /** @typedef {import("./post-profile-state.js").ProfileResult} ProfileResult */
 /** @typedef {import("./post-profile-state.js").RootFileStat} RootFileStat */
@@ -51,13 +43,6 @@ import { resolveStopTimeoutFromSettings, resolveStopTimeoutFromUnit } from "./po
  * @property {boolean} forceStopped
  * @property {number} stopTimeoutSeconds
  * @property {ProfileResult} profileResult
- */
-
-/**
- * @typedef {{
- *   statusCode?: number
- *   apiCode?: string
- * }} GitHubApiErrorDetails
  */
 
 const JSON_PROFILE_LABEL = "JSON profile"
@@ -83,8 +68,8 @@ const STOP_TIMED_OUT_EXIT_CODE = 124
 // This is the post step for the action. It is called by the GitHub Actions
 // runtime. It stops the Jibril service so the daemon flushes all pending events
 // and writes the JSON profile before we read it. It then renders the Garnet
-// Runtime Summary (Step Summary) and publishes the Garnet Runtime Review PR
-// comment from the same Run Profile.
+// Runtime Summary (Step Summary) from the Run Profile. The Runtime Review PR
+// comment is published by the Garnet GitHub App, not by this action.
 
 async function run() {
     const platform = os.platform()
@@ -183,7 +168,6 @@ async function run() {
         }
 
         const profileResult = await readProfile(jsonProfilerFile, debug === "true")
-        const renderOptions = getRenderOptions()
 
         const profile = profileResult.profile
         if (profile !== null) {
@@ -210,10 +194,9 @@ async function run() {
             })
         }
 
-        await appendRuntimeReviewSummary(profile, renderOptions)
+        await appendRuntimeReviewSummary(profile)
         if (profile !== null) {
             logProfileReportLink(profile)
-            await publishProfilerComment(profile.normalized, renderOptions)
         }
     } catch (err) {
         // Never fail the job because of the Runtime Review step.
@@ -474,25 +457,15 @@ function resolveControlPlaneBaseURL() {
 }
 
 /**
- * Render options for this publish flow; the clock is pinned once so every
- * render in the flow produces identical bytes.
- * @returns {RenderOptions}
- */
-function getRenderOptions() {
-    return { renderedAt: new Date() }
-}
-
-/**
  * Writes the Garnet Runtime Summary — the per-run full-detail tabular
  * record (v6.1 §8) — to the GitHub Step Summary, rendered from the RAW
  * parsed profile. When no profile was produced, the waiting-state body
  * (v6.1 §2) is written instead, markerless and with the explainer
  * collapsed.
  * @param {LoadedProfile | null} profile
- * @param {RenderOptions} renderOptions
  * @returns {Promise<void>}
  */
-async function appendRuntimeReviewSummary(profile, renderOptions) {
+async function appendRuntimeReviewSummary(profile) {
     const summaryFile = getEnv("GITHUB_STEP_SUMMARY")
     if (summaryFile === "") {
         core.warning("GITHUB_STEP_SUMMARY is not set, cannot write summary")
@@ -548,154 +521,6 @@ function logProfileReportLink(profile) {
     }
 
     core.info(`Garnet Run Profile report: ${link}`)
-}
-
-/**
- * @param {NormalizedProfile} profile
- * @param {RenderOptions} renderOptions
- * @returns {Promise<void>}
- */
-async function publishProfilerComment(profile, renderOptions) {
-    const eventPath = getEnv("GITHUB_EVENT_PATH")
-    if (eventPath === "") {
-        core.info("github: GITHUB_EVENT_PATH is not set, skipping PR comment")
-        return
-    }
-
-    const repository = getEnv("GITHUB_REPOSITORY")
-    if (repository === "") {
-        core.warning("github: GITHUB_REPOSITORY is not set, skipping PR comment")
-        return
-    }
-
-    const token = firstNonEmptyString(core.getState("githubToken"), getEnv("GITHUB_TOKEN"))
-    if (token === "") {
-        core.warning("github: github_token is not set, skipping PR comment")
-        return
-    }
-
-    const pullRequestNumber = await getPullRequestNumberFromEvent(eventPath)
-    if (pullRequestNumber === null) {
-        core.info("github: workflow is not running for a pull request, skipping PR comment")
-        return
-    }
-
-    const runAttempt = parseRunAttempt(getEnv("GITHUB_RUN_ATTEMPT"))
-
-    try {
-        const result = await publishPullRequestComment({
-            repository,
-            pullRequestNumber,
-            token,
-            profile,
-            runAttempt,
-            renderOptions,
-        })
-        core.info(`github: PR comment ${result}`)
-    } catch (error) {
-        if (isCommentPermissionError(error)) {
-            core.info(
-                "github: PR comment skipped: the workflow token cannot comment on this pull request. " +
-                    "The Garnet GitHub App is the supported comment path and needs no workflow permissions: " +
-                    "https://github.com/apps/garnet-runtime-review/installations/select_target. " +
-                    "To publish from this action instead, grant this workflow `pull-requests: write`.",
-            )
-            return
-        }
-        core.warning(`github: failed to publish PR comment: ${formatPullRequestCommentPublishError(error)}`)
-    }
-}
-
-/**
- * @param {unknown} error
- * @returns {string}
- */
-function formatPullRequestCommentPublishError(error) {
-    const details = getGitHubApiErrorDetails(error)
-    const messageParts = [getErrorMessage(error)]
-
-    if (details.statusCode !== undefined) {
-        messageParts.push(`status=${details.statusCode}`)
-    }
-    if (details.apiCode !== undefined) {
-        messageParts.push(`api_code=${details.apiCode}`)
-    }
-
-    return messageParts.join("; ")
-}
-
-/**
- * @param {unknown} error
- * @returns {GitHubApiErrorDetails}
- */
-function getGitHubApiErrorDetails(error) {
-    const errorRecord = getOptionalRecord(error)
-    if (errorRecord === null) {
-        return {}
-    }
-
-    const details = {}
-
-    const statusCode = getOptionalNumber(errorRecord.status)
-    if (statusCode !== undefined) {
-        details.statusCode = statusCode
-    }
-
-    const response = getOptionalRecord(errorRecord.response)
-    if (response !== null) {
-        if (details.statusCode === undefined) {
-            const responseStatus = getOptionalNumber(response.status)
-            if (responseStatus !== undefined) {
-                details.statusCode = responseStatus
-            }
-        }
-
-        const responseData = getOptionalRecord(response.data)
-        if (responseData !== null) {
-            const directCode = getOptionalString(responseData.code)
-            if (directCode !== undefined) {
-                details.apiCode = directCode
-            } else {
-                const nestedCode = getApiCodeFromErrorList(responseData.errors)
-                if (nestedCode !== undefined) {
-                    details.apiCode = nestedCode
-                }
-            }
-        }
-    }
-
-    if (details.apiCode === undefined) {
-        const topLevelCode = getOptionalString(errorRecord.code)
-        if (topLevelCode !== undefined) {
-            details.apiCode = topLevelCode
-        }
-    }
-
-    return details
-}
-
-/**
- * @param {unknown} value
- * @returns {string | undefined}
- */
-function getApiCodeFromErrorList(value) {
-    if (!Array.isArray(value)) {
-        return undefined
-    }
-
-    for (const item of value) {
-        const record = getOptionalRecord(item)
-        if (record === null) {
-            continue
-        }
-
-        const code = getOptionalString(record.code)
-        if (code !== undefined) {
-            return code
-        }
-    }
-
-    return undefined
 }
 
 /**
@@ -862,15 +687,6 @@ async function readOptionalRootFile(filePath) {
     } catch {
         return ""
     }
-}
-
-/**
- * @param {string} value
- * @returns {number}
- */
-function parseRunAttempt(value) {
-    const parsedValue = Number.parseInt(value, 10)
-    return Number.isSafeInteger(parsedValue) ? parsedValue : 1
 }
 
 /**

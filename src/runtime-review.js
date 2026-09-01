@@ -8,8 +8,8 @@
  * contract/vocab.json + docs/ux-contract.md; the testbed's v6.7.0 renderer
  * had not landed at vendoring time, so this implementation follows the
  * contract directly) with two mechanical changes: the CLI plumbing section
- * is dropped (the action drives the renderer from src/post.js and
- * src/profile-comment.js) and CONTRACT_VOCAB is imported from the vendored
+ * is dropped (the action drives the renderer from src/post.js) and
+ * CONTRACT_VOCAB is imported from the vendored
  * ./runtime-review-vocab.js instead of a filesystem read.
  *
  * Three projections of the same selected record set: the GitHub PR comment,
@@ -227,16 +227,6 @@ export const COMMENT_MARKER = "<!-- garnet-run-profile -->"
  */
 export const REFERENCE_MOCKUP_MARKER = "<!-- garnet-reference-renderer-mockup -->"
 
-/**
- * Markers emitted by the control-plane GitHub App comment (the AUTHORITATIVE
- * "Garnet Runtime Review"). When the App has commented, this standalone
- * Action fallback is suppressed.
- */
-export const CONTROL_PLANE_MARKERS = [
-  "garnet-control-plane-pr-comment:v1",
-  "garnet-control-plane-pending-pr-comment:v1",
-]
-
 /** Exact emitted vocabulary — byte-locked by contract/vocab.json. */
 export const VOCAB = {
   headlineLead: CONTRACT_VOCAB.copy.headlineLead,
@@ -338,15 +328,6 @@ export const escapeHtml = (value) =>
     .replace(/`{3,}/g, (m) => "ʼ".repeat(m.length))
     .replace(/[\r\n]+/g, " ")
     .trim()
-
-/**
- * Neutralize markdown link vectors in record-sourced text that renders as
- * plain (non-<code>) content: `](` can close a link label and `://` can
- * autolink. HTML entities render identically but never parse as markdown.
- * @param {string} value
- */
-export const neutralizeMarkdown = (value) =>
-  value.replaceAll("](", "]&#40;").replaceAll("://", "&#58;//")
 
 /**
  * Escape a value destined for INSIDE an HTML attribute.
@@ -1029,25 +1010,6 @@ export function exportReviewModel(review) {
 export function profilePermalink(job, appUrl, utmMedium) {
   if (!job.run_id || !job.profile_id || !appUrl) return ""
   return `${appUrl}/public/runs/${encodeURIComponent(String(job.run_id))}?profile=${encodeURIComponent(String(job.profile_id))}&utm_source=github&utm_medium=${utmMedium}`
-}
-
-/**
- * Fail-closed publication decision, rechecked at request time. Default deny.
- * Renders only when backend-truth visibility is exactly "public" AND explicit
- * consent exists AND consent is not revoked AND an exact envelope Profile.ID
- * selector resolves. Missing, empty, wrong, or job-only selectors return 404
- * and never fall back to a run index/job/first profile. Every denied case
- * returns the same non-oracular 404 for HTML and JSON.
- * @param {{visibility?: string, consent?: boolean, revoked?: boolean,
- *          profileRequested?: boolean, selectorResolves?: boolean}} state
- * @returns {{status: 200|404, body: "render"|"not found"}}
- */
-export function publicationDecision(state = {}) {
-  const base =
-    state.visibility === "public" && state.consent === true && state.revoked !== true
-  const allowed =
-    base && state.profileRequested === true && state.selectorResolves === true
-  return allowed ? { status: 200, body: "render" } : { status: 404, body: "not found" }
 }
 
 // ---------------------------------------------------------------------------
