@@ -90883,23 +90883,23 @@ const API_ERROR_SCHEMA = object({
 
 /**
  * @typedef {object} AgentStoppedJibrilFields
- * @property {string=} active_state
+ * @property {string=} activeState
  * @property {string=} result
- * @property {number=} exec_main_status
- * @property {AgentStopOutcome=} stop_outcome
- * @property {boolean=} force_stopped
+ * @property {number=} execMainStatus
+ * @property {AgentStopOutcome=} stopOutcome
+ * @property {boolean=} forceStopped
  */
 
 /**
  * @typedef {object} AgentStoppedRequest
  * @property {AgentStopReason} reason
- * @property {AgentProfileState} profile_state
+ * @property {AgentProfileState} profileState
  * @property {string=} detail
- * @property {string} run_id
- * @property {string=} run_attempt
+ * @property {string} runID
+ * @property {string=} runAttempt
  * @property {string=} job
- * @property {string=} job_status
- * @property {JobStatusSource=} job_status_source
+ * @property {"cancelled" | "failure"=} jobStatus
+ * @property {JobStatusSource=} jobStatusSource
  * @property {AgentStoppedJibrilFields=} jibril
  */
 
@@ -90919,19 +90919,19 @@ const AGENT_STOP_REASON_SCHEMA = schemas_enum(["run_cancelled", "crashed", "flus
 
 const AGENT_STOPPED_REQUEST_SCHEMA = object({
     reason: AGENT_STOP_REASON_SCHEMA,
-    profile_state: schemas_enum(["present", "missing", "empty", "invalid"]),
+    profileState: schemas_enum(["present", "missing", "empty", "invalid"]),
     detail: schemas_string().optional(),
-    run_id: schemas_string().min(1),
-    run_attempt: schemas_string().min(1).optional(),
+    runID: schemas_string().min(1),
+    runAttempt: schemas_string().min(1).optional(),
     job: schemas_string().min(1).optional(),
-    job_status: schemas_string().min(1).optional(),
-    job_status_source: schemas_enum(["github_api"]).optional(),
+    jobStatus: schemas_enum(["cancelled", "failure"]).optional(),
+    jobStatusSource: schemas_enum(["github_api"]).optional(),
     jibril: object({
-            active_state: schemas_string().optional(),
+            activeState: schemas_string().optional(),
             result: schemas_string().optional(),
-            exec_main_status: schemas_number().int().optional(),
-            stop_outcome: schemas_enum(["completed", "timed_out"]).optional(),
-            force_stopped: schemas_boolean().optional(),
+            execMainStatus: schemas_number().int().optional(),
+            stopOutcome: schemas_enum(["completed", "timed_out"]).optional(),
+            forceStopped: schemas_boolean().optional(),
         })
         .optional(),
 })
@@ -155034,7 +155034,7 @@ async function reportAgentStop(observations) {
         })
 
         await client.reportAgentStopped(request)
-        info(`control plane: reported agent stop (reason=${request.reason}, profile=${request.profile_state})`)
+        info(`control plane: reported agent stop (reason=${request.reason}, profile=${request.profileState})`)
     } catch (error) {
         info(`control plane: agent stop report skipped: ${getErrorMessage(error)}`)
     }
@@ -155065,29 +155065,29 @@ async function resolveJobStatus() {
 function buildAgentStoppedRequest(evidence, jobStatus, parseDetail) {
     /** @type {AgentStoppedJibrilFields} */
     const jibril = {
-        stop_outcome: evidence.stopOutcome,
-        force_stopped: evidence.forceStopped,
+        stopOutcome: evidence.stopOutcome,
+        forceStopped: evidence.forceStopped,
     }
 
     const unitState = evidence.unitStateAfterStop
     if (unitState !== null) {
-        jibril.active_state = unitState.activeState
+        jibril.activeState = unitState.activeState
         jibril.result = unitState.result
-        jibril.exec_main_status = unitState.execMainStatus
+        jibril.execMainStatus = unitState.execMainStatus
     }
 
     /** @type {AgentStoppedRequest} */
     const request = {
         reason: classifyAgentStop(evidence),
-        profile_state: evidence.profileState,
+        profileState: evidence.profileState,
         detail: joinDetails(formatAgentStopDetail(evidence), parseDetail),
-        run_id: shared_getEnv("GITHUB_RUN_ID"),
+        runID: shared_getEnv("GITHUB_RUN_ID"),
         jibril,
     }
 
     const runAttempt = shared_getEnv("GITHUB_RUN_ATTEMPT")
     if (runAttempt !== "") {
-        request.run_attempt = runAttempt
+        request.runAttempt = runAttempt
     }
 
     const job = getProfileJobName()
@@ -155097,9 +155097,10 @@ function buildAgentStoppedRequest(evidence, jobStatus, parseDetail) {
 
     // The source is only meaningful alongside a status, and "unknown" is
     // expressed by omitting both.
-    if (jobStatus.status !== "" && jobStatus.source !== "unknown") {
-        request.job_status = jobStatus.status
-        request.job_status_source = jobStatus.source
+    const status = toAgentStoppedJobStatus(jobStatus.status)
+    if (status !== "" && jobStatus.source !== "unknown") {
+        request.jobStatus = status
+        request.jobStatusSource = jobStatus.source
     }
 
     return request
@@ -155111,6 +155112,17 @@ function buildAgentStoppedRequest(evidence, jobStatus, parseDetail) {
  */
 function joinDetails(...details) {
     return details.filter(detail => detail !== "").join("; ")
+}
+
+/**
+ * @param {string} value
+ * @returns {"cancelled" | "failure" | ""}
+ */
+function toAgentStoppedJobStatus(value) {
+    if (value === "cancelled" || value === "failure") {
+        return value
+    }
+    return ""
 }
 
 /**

@@ -299,7 +299,7 @@ async function reportAgentStop(observations) {
         })
 
         await client.reportAgentStopped(request)
-        core.info(`control plane: reported agent stop (reason=${request.reason}, profile=${request.profile_state})`)
+        core.info(`control plane: reported agent stop (reason=${request.reason}, profile=${request.profileState})`)
     } catch (error) {
         core.info(`control plane: agent stop report skipped: ${getErrorMessage(error)}`)
     }
@@ -330,29 +330,29 @@ async function resolveJobStatus() {
 function buildAgentStoppedRequest(evidence, jobStatus, parseDetail) {
     /** @type {AgentStoppedJibrilFields} */
     const jibril = {
-        stop_outcome: evidence.stopOutcome,
-        force_stopped: evidence.forceStopped,
+        stopOutcome: evidence.stopOutcome,
+        forceStopped: evidence.forceStopped,
     }
 
     const unitState = evidence.unitStateAfterStop
     if (unitState !== null) {
-        jibril.active_state = unitState.activeState
+        jibril.activeState = unitState.activeState
         jibril.result = unitState.result
-        jibril.exec_main_status = unitState.execMainStatus
+        jibril.execMainStatus = unitState.execMainStatus
     }
 
     /** @type {AgentStoppedRequest} */
     const request = {
         reason: classifyAgentStop(evidence),
-        profile_state: evidence.profileState,
+        profileState: evidence.profileState,
         detail: joinDetails(formatAgentStopDetail(evidence), parseDetail),
-        run_id: getEnv("GITHUB_RUN_ID"),
+        runID: getEnv("GITHUB_RUN_ID"),
         jibril,
     }
 
     const runAttempt = getEnv("GITHUB_RUN_ATTEMPT")
     if (runAttempt !== "") {
-        request.run_attempt = runAttempt
+        request.runAttempt = runAttempt
     }
 
     const job = getProfileJobName()
@@ -362,9 +362,10 @@ function buildAgentStoppedRequest(evidence, jobStatus, parseDetail) {
 
     // The source is only meaningful alongside a status, and "unknown" is
     // expressed by omitting both.
-    if (jobStatus.status !== "" && jobStatus.source !== "unknown") {
-        request.job_status = jobStatus.status
-        request.job_status_source = jobStatus.source
+    const status = toAgentStoppedJobStatus(jobStatus.status)
+    if (status !== "" && jobStatus.source !== "unknown") {
+        request.jobStatus = status
+        request.jobStatusSource = jobStatus.source
     }
 
     return request
@@ -376,6 +377,17 @@ function buildAgentStoppedRequest(evidence, jobStatus, parseDetail) {
  */
 function joinDetails(...details) {
     return details.filter(detail => detail !== "").join("; ")
+}
+
+/**
+ * @param {string} value
+ * @returns {"cancelled" | "failure" | ""}
+ */
+function toAgentStoppedJobStatus(value) {
+    if (value === "cancelled" || value === "failure") {
+        return value
+    }
+    return ""
 }
 
 /**

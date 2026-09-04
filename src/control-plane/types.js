@@ -182,23 +182,23 @@ export const API_ERROR_SCHEMA = z.object({
 
 /**
  * @typedef {object} AgentStoppedJibrilFields
- * @property {string=} active_state
+ * @property {string=} activeState
  * @property {string=} result
- * @property {number=} exec_main_status
- * @property {AgentStopOutcome=} stop_outcome
- * @property {boolean=} force_stopped
+ * @property {number=} execMainStatus
+ * @property {AgentStopOutcome=} stopOutcome
+ * @property {boolean=} forceStopped
  */
 
 /**
  * @typedef {object} AgentStoppedRequest
  * @property {AgentStopReason} reason
- * @property {AgentProfileState} profile_state
+ * @property {AgentProfileState} profileState
  * @property {string=} detail
- * @property {string} run_id
- * @property {string=} run_attempt
+ * @property {string} runID
+ * @property {string=} runAttempt
  * @property {string=} job
- * @property {string=} job_status
- * @property {JobStatusSource=} job_status_source
+ * @property {"cancelled" | "failure"=} jobStatus
+ * @property {JobStatusSource=} jobStatusSource
  * @property {AgentStoppedJibrilFields=} jibril
  */
 
@@ -220,20 +220,20 @@ export const AGENT_STOP_REASON_SCHEMA = z.enum(["run_cancelled", "crashed", "flu
 
 export const AGENT_STOPPED_REQUEST_SCHEMA = z.object({
     reason: AGENT_STOP_REASON_SCHEMA,
-    profile_state: z.enum(["present", "missing", "empty", "invalid"]),
+    profileState: z.enum(["present", "missing", "empty", "invalid"]),
     detail: z.string().optional(),
-    run_id: z.string().min(1),
-    run_attempt: z.string().min(1).optional(),
+    runID: z.string().min(1),
+    runAttempt: z.string().min(1).optional(),
     job: z.string().min(1).optional(),
-    job_status: z.string().min(1).optional(),
-    job_status_source: z.enum(["github_api"]).optional(),
+    jobStatus: z.enum(["cancelled", "failure"]).optional(),
+    jobStatusSource: z.enum(["github_api"]).optional(),
     jibril: z
         .object({
-            active_state: z.string().optional(),
+            activeState: z.string().optional(),
             result: z.string().optional(),
-            exec_main_status: z.number().int().optional(),
-            stop_outcome: z.enum(["completed", "timed_out"]).optional(),
-            force_stopped: z.boolean().optional(),
+            execMainStatus: z.number().int().optional(),
+            stopOutcome: z.enum(["completed", "timed_out"]).optional(),
+            forceStopped: z.boolean().optional(),
         })
         .optional(),
 })

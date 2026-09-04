@@ -79,19 +79,19 @@ function startErrorServer(onRequest) {
 function getReport() {
     return {
         reason: "flush_timeout",
-        profile_state: "missing",
+        profileState: "missing",
         detail: "stop timed out after 1830s; unit SIGKILLed; profile file missing",
-        run_id: "123456",
-        run_attempt: "1",
+        runID: "123456",
+        runAttempt: "1",
         job: "smoke-c",
-        job_status: "cancelled",
-        job_status_source: "github_api",
+        jobStatus: "cancelled",
+        jobStatusSource: "github_api",
         jibril: {
-            active_state: "failed",
+            activeState: "failed",
             result: "signal",
-            exec_main_status: 9,
-            stop_outcome: "timed_out",
-            force_stopped: true,
+            execMainStatus: 9,
+            stopOutcome: "timed_out",
+            forceStopped: true,
         },
     }
 }
@@ -181,8 +181,8 @@ test("reportAgentStopped schema validation rejects invalid payload", async () =>
     await assert.rejects(
         client.reportAgentStopped({
             reason: "unknown_reason",
-            profile_state: "missing",
-            run_id: "123",
+            profileState: "missing",
+            runID: "123",
         }),
     )
 })
