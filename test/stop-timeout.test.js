@@ -16,10 +16,10 @@ test("positive integer override wins", () => {
 test("non-numeric override falls back to the default", () => {
     assert.equal(resolveStopTimeoutSeconds("ten minutes"), DEFAULT_SECONDS)
     assert.equal(resolveStopTimeoutSeconds("600s"), DEFAULT_SECONDS)
-    assert.equal(resolveStopTimeoutSeconds("-600"), DEFAULT_SECONDS)
     assert.equal(resolveStopTimeoutSeconds("6.5"), DEFAULT_SECONDS)
 })
 
-test("zero override falls back to the default", () => {
-    assert.equal(resolveStopTimeoutSeconds("0"), DEFAULT_SECONDS)
+test("zero or negative override disables the timeout", () => {
+    assert.equal(resolveStopTimeoutSeconds("0"), 0)
+    assert.equal(resolveStopTimeoutSeconds("-600"), 0)
 })

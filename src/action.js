@@ -218,6 +218,9 @@ export async function run() {
         // The post step resolves the run's profile envelope ID from this agent.
         core.saveState("agentID", AGENT_ID)
 
+        // The post step authenticates as this agent to report stop reasons.
+        core.saveState("agentToken", AGENT_TOKEN)
+
         // Get network policy
         core.info("Getting network policy")
 
@@ -341,11 +344,15 @@ StandardOutput=append:/var/log/jibril.log
         await execSudo(["cp", loggingConfPath, "/etc/systemd/system/jibril.service.d/logging.conf"])
 
         // Raise the unit's stop ceiling so the shutdown event flush can
-        // complete and the JSON profile gets written on heavy jobs.
+        // complete and the JSON profile gets written on heavy jobs. A
+        // disabled bound is written as `infinity` rather than `0`: systemd
+        // only reads `0` as "no timeout" through a legacy compatibility
+        // path, and `0s` meant an immediate SIGKILL on some versions.
         const stopTimeoutSeconds = resolveStopTimeoutSeconds(getEnv(JIBRIL_STOP_TIMEOUT_ENV, ""))
-        core.info(`Configuring Jibril stop timeout (${stopTimeoutSeconds}s)`)
+        const stopTimeoutValue = stopTimeoutSeconds > 0 ? String(stopTimeoutSeconds) : "infinity"
+        core.info(`Configuring Jibril stop timeout (${stopTimeoutValue})`)
         const stopTimeoutConf = `[Service]
-TimeoutStopSec=${stopTimeoutSeconds}
+TimeoutStopSec=${stopTimeoutValue}
 `
         const stopTimeoutConfPath = path.join(tmpDir, "stop-timeout.conf")
         await fs.writeFile(stopTimeoutConfPath, stopTimeoutConf)
@@ -923,19 +930,23 @@ function parseReleaseManifest(manifestText) {
 
 /**
  * Resolves the stop ceiling written into the unit's drop-in. An explicit
- * positive-integer environment override wins; otherwise the default is used.
+ * integer wins, where zero or negative means "no bound at all"; anything
+ * unset or unparsable falls back to the default.
  * @param {string} overrideValue
- * @returns {number}
+ * @returns {number} seconds, or 0 when the bound is disabled
  */
 export function resolveStopTimeoutSeconds(overrideValue) {
     const text = String(overrideValue === undefined || overrideValue === null ? "" : overrideValue).trim()
-    if (text !== "" && /^\d+$/.test(text)) {
-        const parsed = Number.parseInt(text, 10)
-        if (Number.isSafeInteger(parsed) && parsed > 0) {
-            return parsed
-        }
+    if (!/^-?\d+$/.test(text)) {
+        return DEFAULT_JIBRIL_STOP_TIMEOUT_SECONDS
     }
-    return DEFAULT_JIBRIL_STOP_TIMEOUT_SECONDS
+
+    const parsed = Number.parseInt(text, 10)
+    if (!Number.isSafeInteger(parsed)) {
+        return DEFAULT_JIBRIL_STOP_TIMEOUT_SECONDS
+    }
+
+    return parsed > 0 ? parsed : 0
 }
 
 /**

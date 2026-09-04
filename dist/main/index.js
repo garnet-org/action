@@ -40954,6 +40954,44 @@ const API_ERROR_SCHEMA = object({
  * @property {ProfileEnvelope[]} items
  */
 
+/**
+ * @typedef {"run_cancelled" | "crashed" | "flush_timeout" | "stopped_cleanly"} AgentStopReason
+ */
+
+/**
+ * @typedef {"present" | "missing" | "empty" | "invalid"} AgentProfileState
+ */
+
+/**
+ * @typedef {"completed" | "timed_out"} AgentStopOutcome
+ */
+
+/**
+ * @typedef {"github_api"} JobStatusSource
+ */
+
+/**
+ * @typedef {object} AgentStoppedJibrilFields
+ * @property {string=} activeState
+ * @property {string=} result
+ * @property {number=} execMainStatus
+ * @property {AgentStopOutcome=} stopOutcome
+ * @property {boolean=} forceStopped
+ */
+
+/**
+ * @typedef {object} AgentStoppedRequest
+ * @property {AgentStopReason} reason
+ * @property {AgentProfileState} profileState
+ * @property {string=} detail
+ * @property {string} runID
+ * @property {string=} runAttempt
+ * @property {string=} job
+ * @property {"cancelled" | "failure"=} jobStatus
+ * @property {JobStatusSource=} jobStatusSource
+ * @property {AgentStoppedJibrilFields=} jibril
+ */
+
 const PROFILE_ENVELOPE_SCHEMA = object({
         id: schemas_string().min(1),
         runID: schemas_string().default(""),
@@ -40966,6 +41004,27 @@ const PROFILE_ENVELOPE_PAGE_SCHEMA = object({
     })
     .passthrough()
 
+const AGENT_STOP_REASON_SCHEMA = schemas_enum(["run_cancelled", "crashed", "flush_timeout", "stopped_cleanly"])
+
+const AGENT_STOPPED_REQUEST_SCHEMA = object({
+    reason: AGENT_STOP_REASON_SCHEMA,
+    profileState: schemas_enum(["present", "missing", "empty", "invalid"]),
+    detail: schemas_string().optional(),
+    runID: schemas_string().min(1),
+    runAttempt: schemas_string().min(1).optional(),
+    job: schemas_string().min(1).optional(),
+    jobStatus: schemas_enum(["cancelled", "failure"]).optional(),
+    jobStatusSource: schemas_enum(["github_api"]).optional(),
+    jibril: object({
+            activeState: schemas_string().optional(),
+            result: schemas_string().optional(),
+            execMainStatus: schemas_number().int().optional(),
+            stopOutcome: schemas_enum(["completed", "timed_out"]).optional(),
+            forceStopped: schemas_boolean().optional(),
+        })
+        .optional(),
+})
+
 ;// CONCATENATED MODULE: ./src/control-plane/client.js
 
 
@@ -40975,6 +41034,7 @@ const PROFILE_ENVELOPE_PAGE_SCHEMA = object({
  * @typedef {import("./types.js").MergedNetPoliciesRequest} MergedNetPoliciesRequest
  * @typedef {import("./types.js").ExchangeOIDCResponse} ExchangeOIDCResponse
  * @typedef {import("./types.js").ProfileEnvelopePage} ProfileEnvelopePage
+ * @typedef {import("./types.js").AgentStoppedRequest} AgentStoppedRequest
  */
 
 /**
@@ -40989,6 +41049,7 @@ const PROFILE_ENVELOPE_PAGE_SCHEMA = object({
  *   baseURL: string
  *   projectToken?: string
  *   workflowToken?: string
+ *   agentToken?: string
  *   userAgent?: string
  * }} ControlPlaneClientOptions
  */
@@ -41001,6 +41062,7 @@ const PROFILE_ENVELOPE_PAGE_SCHEMA = object({
  *   body?: unknown
  *   accept?: string
  *   skipAuthHeader?: boolean
+ *   timeoutMs?: number
  * }} RequestOptions
  */
 
@@ -41051,9 +41113,14 @@ class ControlPlaneClient {
             throw new Error("ControlPlaneClient: 'workflowToken' must be a string when provided")
         }
 
+        if (options.agentToken !== undefined && typeof options.agentToken !== "string") {
+            throw new Error("ControlPlaneClient: 'agentToken' must be a string when provided")
+        }
+
         this.baseURL = parsedBaseURL.toString().replace(/\/+$/, "")
         this.projectToken = options.projectToken?.trim() ?? ""
         this.workflowToken = options.workflowToken?.trim() ?? ""
+        this.agentToken = options.agentToken?.trim() ?? ""
         this.userAgent = options.userAgent ?? "garnet-action"
     }
 
@@ -41118,6 +41185,24 @@ class ControlPlaneClient {
         })
 
         return PROFILE_ENVELOPE_PAGE_SCHEMA.parse(responseJson)
+    }
+
+    /**
+     * Signals that this run's sensor stopped, with the reason and whether a usable
+     * Run Profile was produced, so the control plane can resolve pending state.
+     * Authenticated as the agent itself.
+     * @param {AgentStoppedRequest} input
+     * @returns {Promise<void>}
+     */
+    async reportAgentStopped(input) {
+        const payload = AGENT_STOPPED_REQUEST_SCHEMA.parse(input)
+        // Keep the post step fast: one bounded best-effort request only.
+        await this.requestText({
+            method: "POST",
+            path: "/api/v1/agent/stopped",
+            body: payload,
+            timeoutMs: 10_000,
+        })
     }
 
     /**
@@ -41193,7 +41278,9 @@ class ControlPlaneClient {
         }
 
         if (options.skipAuthHeader !== true) {
-            if (this.workflowToken !== "") {
+            if (this.agentToken !== "") {
+                headers["X-Agent-Token"] = this.agentToken
+            } else if (this.workflowToken !== "") {
                 headers["X-Workflow-Token"] = this.workflowToken
             } else if (this.projectToken !== "") {
                 headers["X-Project-Token"] = this.projectToken
@@ -41204,38 +41291,39 @@ class ControlPlaneClient {
             headers["Content-Type"] = "application/json"
         }
 
+        /** @type {RequestInit} */
+        const requestInit = {
+            method: options.method,
+            headers,
+        }
+
+        if (options.body !== undefined) {
+            requestInit.body = JSON.stringify(options.body)
+        }
+
+        if (options.timeoutMs !== undefined) {
+            requestInit.signal = AbortSignal.timeout(options.timeoutMs)
+        }
+
         let response
         try {
-            if (options.body === undefined) {
-                response = await fetch(requestURL, {
-                    method: options.method,
-                    headers,
-                })
-            } else {
-                response = await fetch(requestURL, {
-                    method: options.method,
-                    headers,
-                    body: JSON.stringify(options.body),
-                })
-            }
+            response = await fetch(requestURL, requestInit)
         } catch (error) {
             const reason = error instanceof Error ? error.message : String(error)
-            throw new Error(
-                `Control plane request failed: ${options.method} ${options.path} (network error: ${reason})`,
-            )
+            throw new Error(`Control plane request failed: ${options.method} ${options.path} (network error: ${reason})`)
         }
 
         const responseText = await response.text()
-        if (!response.ok) {
-            const detail = getApiErrorDetail(responseText)
-            const statusDetail = detail === "" ? `HTTP ${response.status}` : `HTTP ${response.status}: ${detail}`
-            throw new Error(`Control plane request failed: ${options.method} ${options.path} (${statusDetail})`)
+        if (response.ok) {
+            return {
+                status: response.status,
+                responseText,
+            }
         }
 
-        return {
-            status: response.status,
-            responseText,
-        }
+        const detail = getApiErrorDetail(responseText)
+        const statusDetail = detail === "" ? `HTTP ${response.status}` : `HTTP ${response.status}: ${detail}`
+        throw new Error(`Control plane request failed: ${options.method} ${options.path} (${statusDetail})`)
     }
 }
 
@@ -41613,6 +41701,9 @@ async function run() {
         // The post step resolves the run's profile envelope ID from this agent.
         saveState("agentID", AGENT_ID)
 
+        // The post step authenticates as this agent to report stop reasons.
+        saveState("agentToken", AGENT_TOKEN)
+
         // Get network policy
         info("Getting network policy")
 
@@ -41736,11 +41827,15 @@ StandardOutput=append:/var/log/jibril.log
         await execSudo(["cp", loggingConfPath, "/etc/systemd/system/jibril.service.d/logging.conf"])
 
         // Raise the unit's stop ceiling so the shutdown event flush can
-        // complete and the JSON profile gets written on heavy jobs.
+        // complete and the JSON profile gets written on heavy jobs. A
+        // disabled bound is written as `infinity` rather than `0`: systemd
+        // only reads `0` as "no timeout" through a legacy compatibility
+        // path, and `0s` meant an immediate SIGKILL on some versions.
         const stopTimeoutSeconds = resolveStopTimeoutSeconds(getEnv(JIBRIL_STOP_TIMEOUT_ENV, ""))
-        info(`Configuring Jibril stop timeout (${stopTimeoutSeconds}s)`)
+        const stopTimeoutValue = stopTimeoutSeconds > 0 ? String(stopTimeoutSeconds) : "infinity"
+        info(`Configuring Jibril stop timeout (${stopTimeoutValue})`)
         const stopTimeoutConf = `[Service]
-TimeoutStopSec=${stopTimeoutSeconds}
+TimeoutStopSec=${stopTimeoutValue}
 `
         const stopTimeoutConfPath = external_node_path_namespaceObject.join(tmpDir, "stop-timeout.conf")
         await promises_namespaceObject.writeFile(stopTimeoutConfPath, stopTimeoutConf)
@@ -42318,19 +42413,23 @@ function parseReleaseManifest(manifestText) {
 
 /**
  * Resolves the stop ceiling written into the unit's drop-in. An explicit
- * positive-integer environment override wins; otherwise the default is used.
+ * integer wins, where zero or negative means "no bound at all"; anything
+ * unset or unparsable falls back to the default.
  * @param {string} overrideValue
- * @returns {number}
+ * @returns {number} seconds, or 0 when the bound is disabled
  */
 function resolveStopTimeoutSeconds(overrideValue) {
     const text = String(overrideValue === undefined || overrideValue === null ? "" : overrideValue).trim()
-    if (text !== "" && /^\d+$/.test(text)) {
-        const parsed = Number.parseInt(text, 10)
-        if (Number.isSafeInteger(parsed) && parsed > 0) {
-            return parsed
-        }
+    if (!/^-?\d+$/.test(text)) {
+        return DEFAULT_JIBRIL_STOP_TIMEOUT_SECONDS
     }
-    return DEFAULT_JIBRIL_STOP_TIMEOUT_SECONDS
+
+    const parsed = Number.parseInt(text, 10)
+    if (!Number.isSafeInteger(parsed)) {
+        return DEFAULT_JIBRIL_STOP_TIMEOUT_SECONDS
+    }
+
+    return parsed > 0 ? parsed : 0
 }
 
 /**
@@ -47388,6 +47487,16 @@ async function main() {
         process.env.GARNET_API_URL = getInput("api_url")
         process.env.JIBRIL_VERSION = getInput("jibril_version")
         process.env.DEBUG = getInput("debug")
+
+        // Resolve the shutdown flush bound once, here at the boundary: the
+        // main step writes it into the unit and the post step reuses the exact
+        // same number from state instead of re-deriving it. Zero means the
+        // bound is disabled.
+        const stopTimeoutSeconds = resolveStopTimeoutSeconds(
+            firstNonEmptyString(getInput("stop_timeout_seconds"), getEnv("GARNET_JIBRIL_STOP_TIMEOUT_SECONDS")),
+        )
+        process.env.GARNET_JIBRIL_STOP_TIMEOUT_SECONDS = String(stopTimeoutSeconds)
+        saveState("stopTimeoutSeconds", String(stopTimeoutSeconds))
 
         // The Run Profile permalink derives from the run id and the configured
         // API host, so it is known up front — emit the declared report_url output

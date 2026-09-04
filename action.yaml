@@ -34,6 +34,16 @@ inputs:
         description: "Render the full-fidelity Step Summary record (assertions + evidence). Preview shape is unstable and may change without a major version bump"
         required: false
         default: "false"
+    stop_timeout_seconds:
+        description: |
+            Maximum seconds Jibril is given at shutdown to finish writing its Run Profile and flushing
+            events. The post step waits this long (plus a small grace) and then force stops the sensor,
+            so a heavy backlog cannot stall the job indefinitely. Lower it to bound the post step;
+            raise it on long jobs where the profile matters more than post-step latency. Set to `0`
+            or a negative integer to disable the flush timeout entirely.
+        required: false
+        default: "1800"
+
 outputs:
     profile_result:
         description: "Reserved for the companion GitHub App and control plane; this action records the Runtime Review"

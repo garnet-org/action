@@ -1,5 +1,6 @@
 import {
     AGENT_CREATED_RESPONSE_SCHEMA,
+    AGENT_STOPPED_REQUEST_SCHEMA,
     API_ERROR_SCHEMA,
     CREATE_AGENT_REQUEST_SCHEMA,
     EXCHANGE_OIDC_REQUEST_SCHEMA,
@@ -14,6 +15,7 @@ import {
  * @typedef {import("./types.js").MergedNetPoliciesRequest} MergedNetPoliciesRequest
  * @typedef {import("./types.js").ExchangeOIDCResponse} ExchangeOIDCResponse
  * @typedef {import("./types.js").ProfileEnvelopePage} ProfileEnvelopePage
+ * @typedef {import("./types.js").AgentStoppedRequest} AgentStoppedRequest
  */
 
 /**
@@ -28,6 +30,7 @@ import {
  *   baseURL: string
  *   projectToken?: string
  *   workflowToken?: string
+ *   agentToken?: string
  *   userAgent?: string
  * }} ControlPlaneClientOptions
  */
@@ -40,6 +43,7 @@ import {
  *   body?: unknown
  *   accept?: string
  *   skipAuthHeader?: boolean
+ *   timeoutMs?: number
  * }} RequestOptions
  */
 
@@ -90,9 +94,14 @@ export class ControlPlaneClient {
             throw new Error("ControlPlaneClient: 'workflowToken' must be a string when provided")
         }
 
+        if (options.agentToken !== undefined && typeof options.agentToken !== "string") {
+            throw new Error("ControlPlaneClient: 'agentToken' must be a string when provided")
+        }
+
         this.baseURL = parsedBaseURL.toString().replace(/\/+$/, "")
         this.projectToken = options.projectToken?.trim() ?? ""
         this.workflowToken = options.workflowToken?.trim() ?? ""
+        this.agentToken = options.agentToken?.trim() ?? ""
         this.userAgent = options.userAgent ?? "garnet-action"
     }
 
@@ -157,6 +166,24 @@ export class ControlPlaneClient {
         })
 
         return PROFILE_ENVELOPE_PAGE_SCHEMA.parse(responseJson)
+    }
+
+    /**
+     * Signals that this run's sensor stopped, with the reason and whether a usable
+     * Run Profile was produced, so the control plane can resolve pending state.
+     * Authenticated as the agent itself.
+     * @param {AgentStoppedRequest} input
+     * @returns {Promise<void>}
+     */
+    async reportAgentStopped(input) {
+        const payload = AGENT_STOPPED_REQUEST_SCHEMA.parse(input)
+        // Keep the post step fast: one bounded best-effort request only.
+        await this.requestText({
+            method: "POST",
+            path: "/api/v1/agent/stopped",
+            body: payload,
+            timeoutMs: 10_000,
+        })
     }
 
     /**
@@ -232,7 +259,9 @@ export class ControlPlaneClient {
         }
 
         if (options.skipAuthHeader !== true) {
-            if (this.workflowToken !== "") {
+            if (this.agentToken !== "") {
+                headers["X-Agent-Token"] = this.agentToken
+            } else if (this.workflowToken !== "") {
                 headers["X-Workflow-Token"] = this.workflowToken
             } else if (this.projectToken !== "") {
                 headers["X-Project-Token"] = this.projectToken
@@ -243,38 +272,39 @@ export class ControlPlaneClient {
             headers["Content-Type"] = "application/json"
         }
 
+        /** @type {RequestInit} */
+        const requestInit = {
+            method: options.method,
+            headers,
+        }
+
+        if (options.body !== undefined) {
+            requestInit.body = JSON.stringify(options.body)
+        }
+
+        if (options.timeoutMs !== undefined) {
+            requestInit.signal = AbortSignal.timeout(options.timeoutMs)
+        }
+
         let response
         try {
-            if (options.body === undefined) {
-                response = await fetch(requestURL, {
-                    method: options.method,
-                    headers,
-                })
-            } else {
-                response = await fetch(requestURL, {
-                    method: options.method,
-                    headers,
-                    body: JSON.stringify(options.body),
-                })
-            }
+            response = await fetch(requestURL, requestInit)
         } catch (error) {
             const reason = error instanceof Error ? error.message : String(error)
-            throw new Error(
-                `Control plane request failed: ${options.method} ${options.path} (network error: ${reason})`,
-            )
+            throw new Error(`Control plane request failed: ${options.method} ${options.path} (network error: ${reason})`)
         }
 
         const responseText = await response.text()
-        if (!response.ok) {
-            const detail = getApiErrorDetail(responseText)
-            const statusDetail = detail === "" ? `HTTP ${response.status}` : `HTTP ${response.status}: ${detail}`
-            throw new Error(`Control plane request failed: ${options.method} ${options.path} (${statusDetail})`)
+        if (response.ok) {
+            return {
+                status: response.status,
+                responseText,
+            }
         }
 
-        return {
-            status: response.status,
-            responseText,
-        }
+        const detail = getApiErrorDetail(responseText)
+        const statusDetail = detail === "" ? `HTTP ${response.status}` : `HTTP ${response.status}: ${detail}`
+        throw new Error(`Control plane request failed: ${options.method} ${options.path} (${statusDetail})`)
     }
 }
 

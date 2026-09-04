@@ -179,7 +179,7 @@ The same full-detail record is appended to the GitHub Actions Job Summary as the
 ## Under the hood
 
 - **Main step**: Downloads `jibril`, authenticates with the Garnet control plane via GitHub OIDC or `api_token`, fetches your merged network policy, and starts Jibril as a `systemd` service on the runner. If neither auth method is available the action falls back to a best-effort local review. If Jibril crashes during startup, the action logs diagnostics and continues so later workflow steps still run.
-- **Post step (always)**: Stops Jibril so it flushes events, appends the Garnet Execution Summary to `GITHUB_STEP_SUMMARY`, and creates or updates the pull request comment for the current push when the workflow runs for a PR. Multiple jobs and workflows from the same push merge into a single comment. When `debug=true`, it also uploads Jibril logs as build artifacts.
+- **Post step (always)**: Stops Jibril so it flushes events, appends the Garnet Execution Summary to `GITHUB_STEP_SUMMARY`, and creates or updates the pull request comment for the current push when the workflow runs for a PR. Multiple jobs and workflows from the same push merge into a single comment. If the shutdown flush exceeds the configured bound, the post step force stops the sensor so the job does not hang. When no usable Run Profile is produced, the action reports that stop to the control plane so pending comment state can be resolved. When `debug=true`, it also uploads Jibril logs as build artifacts.
 
 ---
 
@@ -191,6 +191,8 @@ The same full-detail record is appended to the GitHub Actions Job Summary as the
 | `github_token`      | No       | `${{ github.token }}`   | GitHub token used for pull request comments    |
 | `api_url`           | No       | `https://api.garnet.ai` | Garnet API base URL                            |
 | `jibril_version`    | No       | `""` (auto)             | Jibril version (for example `v2.16.0`, `v0.0`, or `latest`); empty resolves to the pinned stable release for your action ref (daily builds on `@v0`) |
+| `stop_timeout_seconds` | No    | `1800`                  | Maximum seconds Jibril gets at shutdown to finish writing the Run Profile and flushing events. The post step waits this long (plus a small grace), then force stops the sensor. Set to `0` or a negative integer to disable the timeout entirely. |
+
 | `debug`             | No       | `false`                 | Enable debug mode and upload logs as artifacts |
 | `preview`           | No       | `false`                 | Render the full-fidelity Step Summary record (assertions + evidence); preview shape is unstable and may change without a major version bump |
 

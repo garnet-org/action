@@ -1,8 +1,8 @@
 import * as core from "@actions/core"
 import * as os from "node:os"
-import { run } from "./action.js"
+import { resolveStopTimeoutSeconds, run } from "./action.js"
 import { buildReportLink } from "./profile-comment.js"
-import { getEnv, isSupportedArch, isSupportedPlatform } from "./shared.js"
+import { firstNonEmptyString, getEnv, isSupportedArch, isSupportedPlatform } from "./shared.js"
 
 // This is the main entry point for the action. It is called by the GitHub Actions
 // runtime. The action installs the Jibril security scanner and sets it up as a
@@ -48,6 +48,16 @@ async function main() {
         process.env.GARNET_API_URL = core.getInput("api_url")
         process.env.JIBRIL_VERSION = core.getInput("jibril_version")
         process.env.DEBUG = core.getInput("debug")
+
+        // Resolve the shutdown flush bound once, here at the boundary: the
+        // main step writes it into the unit and the post step reuses the exact
+        // same number from state instead of re-deriving it. Zero means the
+        // bound is disabled.
+        const stopTimeoutSeconds = resolveStopTimeoutSeconds(
+            firstNonEmptyString(core.getInput("stop_timeout_seconds"), getEnv("GARNET_JIBRIL_STOP_TIMEOUT_SECONDS")),
+        )
+        process.env.GARNET_JIBRIL_STOP_TIMEOUT_SECONDS = String(stopTimeoutSeconds)
+        core.saveState("stopTimeoutSeconds", String(stopTimeoutSeconds))
 
         // The Run Profile permalink derives from the run id and the configured
         // API host, so it is known up front — emit the declared report_url output
