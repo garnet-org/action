@@ -164,6 +164,44 @@ export const API_ERROR_SCHEMA = z.object({
  * @property {ProfileEnvelope[]} items
  */
 
+/**
+ * @typedef {"run_cancelled" | "crashed" | "flush_timeout" | "stopped_cleanly"} AgentStopReason
+ */
+
+/**
+ * @typedef {"present" | "missing" | "empty" | "invalid"} AgentProfileState
+ */
+
+/**
+ * @typedef {"completed" | "timed_out"} AgentStopOutcome
+ */
+
+/**
+ * @typedef {"github_api"} JobStatusSource
+ */
+
+/**
+ * @typedef {object} AgentStoppedJibrilFields
+ * @property {string=} active_state
+ * @property {string=} result
+ * @property {number=} exec_main_status
+ * @property {AgentStopOutcome=} stop_outcome
+ * @property {boolean=} force_stopped
+ */
+
+/**
+ * @typedef {object} AgentStoppedRequest
+ * @property {AgentStopReason} reason
+ * @property {AgentProfileState} profile_state
+ * @property {string=} detail
+ * @property {string} run_id
+ * @property {string=} run_attempt
+ * @property {string=} job
+ * @property {string=} job_status
+ * @property {JobStatusSource=} job_status_source
+ * @property {AgentStoppedJibrilFields=} jibril
+ */
+
 export const PROFILE_ENVELOPE_SCHEMA = z
     .object({
         id: z.string().min(1),
@@ -177,3 +215,25 @@ export const PROFILE_ENVELOPE_PAGE_SCHEMA = z
         items: z.array(PROFILE_ENVELOPE_SCHEMA).default([]),
     })
     .passthrough()
+
+export const AGENT_STOP_REASON_SCHEMA = z.enum(["run_cancelled", "crashed", "flush_timeout", "stopped_cleanly"])
+
+export const AGENT_STOPPED_REQUEST_SCHEMA = z.object({
+    reason: AGENT_STOP_REASON_SCHEMA,
+    profile_state: z.enum(["present", "missing", "empty", "invalid"]),
+    detail: z.string().optional(),
+    run_id: z.string().min(1),
+    run_attempt: z.string().min(1).optional(),
+    job: z.string().min(1).optional(),
+    job_status: z.string().min(1).optional(),
+    job_status_source: z.enum(["github_api"]).optional(),
+    jibril: z
+        .object({
+            active_state: z.string().optional(),
+            result: z.string().optional(),
+            exec_main_status: z.number().int().optional(),
+            stop_outcome: z.enum(["completed", "timed_out"]).optional(),
+            force_stopped: z.boolean().optional(),
+        })
+        .optional(),
+})

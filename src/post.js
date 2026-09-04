@@ -15,20 +15,42 @@ import {
     waitForDelay,
 } from "./shared.js"
 import { getPullRequestNumberFromEvent } from "./github-event.js"
+import { getProfileJobName } from "./github-context.js"
 import { ControlPlaneClient } from "./control-plane/client.js"
 import { uploadJibrilArtifacts } from "./post-artifacts.js"
-import { buildReportLink, getDefaultJsonProfileFile, parseProfileJson, resolveAppBaseURL } from "./profile-comment.js"
+import { buildReportLink, getDefaultJsonProfileFile, resolveAppBaseURL } from "./profile-comment.js"
 import { profilePermalink, renderPendingReview, renderStepSummary, summarizeProfile } from "./runtime-review.js"
 import { publishPullRequestComment } from "./pr-comment.js"
 import { getGitHubIDToken, resolveOIDCAudience } from "./oidc.js"
 import { isCommentPermissionError } from "./pr-comment-error.js"
 import { parseSystemdTimespanSeconds } from "./systemd-timespan.js"
+import { classifyProfileContent } from "./post-profile-state.js"
+import { classifyAgentStop, formatAgentStopDetail } from "./post-signal.js"
+import { resolveJobStatusFromGitHub } from "./github-job-status.js"
+import { resolveStopTimeoutFromSettings, resolveStopTimeoutFromUnit } from "./post-stop-timeout.js"
 
 /** @typedef {import("./profile-comment.js").NormalizedProfile} NormalizedProfile */
 /** @typedef {import("./profile-comment.js").RenderOptions} RenderOptions */
+/** @typedef {import("./post-profile-state.js").LoadedProfile} LoadedProfile */
+/** @typedef {import("./post-profile-state.js").ProfileResult} ProfileResult */
+/** @typedef {import("./post-profile-state.js").RootFileStat} RootFileStat */
+/** @typedef {import("./post-signal.js").JibrilUnitState} JibrilUnitState */
+/** @typedef {import("./post-signal.js").AgentStopEvidence} AgentStopEvidence */
+/** @typedef {import("./github-job-status.js").JobStatusResolution} JobStatusResolution */
+/** @typedef {import("./control-plane/types.js").AgentStoppedRequest} AgentStoppedRequest */
+/** @typedef {import("./control-plane/types.js").AgentStoppedJibrilFields} AgentStoppedJibrilFields */
 
 /**
- * @typedef {{ normalized: NormalizedProfile, raw: unknown }} LoadedProfile
+ * Everything the post step observed about how the sensor stopped, from which
+ * the control-plane signal is derived.
+ * @typedef {object} AgentStopObservations
+ * @property {string} agentToken
+ * @property {JibrilUnitState | null} unitStateBeforeStop
+ * @property {JibrilUnitState | null} unitStateAfterStop
+ * @property {"completed" | "timed_out"} stopOutcome
+ * @property {boolean} forceStopped
+ * @property {number} stopTimeoutSeconds
+ * @property {ProfileResult} profileResult
  */
 
 /**
@@ -48,11 +70,11 @@ const DOCS_URL = "https://github.com/garnet-org/action#readme"
 // past it), so the post
 // step waits for the stop to complete — aligned to the unit's own deadline
 // plus a small grace — rather than abandoning a still-deactivating service
-// and losing the profile. The bound stays overridable for consumers that
-// prefer a shorter post step over profile capture on heavy jobs.
+// and losing the profile. The `stop_timeout_seconds` input is the supported
+// knob; this env var stays as an advanced escape hatch and is used verbatim.
 const STOP_TIMEOUT_ENV = "GARNET_POST_STOP_TIMEOUT_SECONDS"
-const FALLBACK_STOP_TIMEOUT_SECONDS = 1800
-const STOP_TIMEOUT_GRACE_SECONDS = 30
+const STOP_TIMEOUT_INPUT = "stop_timeout_seconds"
+
 const PROFILE_WAIT_ENV = "GARNET_POST_PROFILE_WAIT_SECONDS"
 const DEFAULT_PROFILE_WAIT_SECONDS = 60
 const PROFILE_POLL_INTERVAL_MS = 5000
@@ -81,6 +103,13 @@ async function run() {
 
     try {
         const jibrilStarted = core.getState("jibrilStarted") === "true"
+        const agentID = core.getState("agentID")
+        const agentToken = core.getState("agentToken")
+        const jsonProfilerFile = firstNonEmptyString(core.getState("jsonProfilerFile"), getDefaultJsonProfileFile())
+
+        if (agentToken !== "") {
+            core.setSecret(agentToken)
+        }
 
         // Remove secrets from disk (best-effort). Important for self-hosted runners.
         await exec.exec("sudo", ["rm", "-f", "/etc/default/jibril"], {
@@ -92,29 +121,36 @@ async function run() {
             return
         }
 
-        const jsonProfilerFile = firstNonEmptyString(core.getState("jsonProfilerFile"), getDefaultJsonProfileFile())
+        // Read before the stop as well: it is the only way to tell a sensor
+        // that had already crashed from one we timed out waiting on.
+        const unitStateBeforeStop = await readJibrilUnitState()
+        logJibrilUnitState("jibril service state before stop", unitStateBeforeStop)
 
         // Stop the Jibril service and wait for the stop to complete so the
         // daemon flushes all pending events and writes the JSON profile. The
         // wait is aligned to the unit's own stop deadline (TimeoutStopSec)
         // plus a grace period, because the profile is written only when the
         // flush completes: abandoning a still-deactivating service loses it.
-        const stopTimeoutSeconds = await resolveStopTimeoutSeconds()
+        const stopTimeoutSeconds = await resolvePostStopTimeoutSeconds()
+        let stopArgs = ["systemctl", "stop", "jibril.service"]
+        if (stopTimeoutSeconds > 0) {
+            stopArgs = ["timeout", `${stopTimeoutSeconds}s`, ...stopArgs]
+            core.info(`stopping jibril service (waiting up to ${stopTimeoutSeconds}s for the event flush to complete)`)
+        } else {
+            core.info("stopping jibril service (flush bound disabled, waiting for the event flush to complete)")
+        }
+
         const stopStart = Date.now()
-        core.info(`stopping jibril service (waiting up to ${stopTimeoutSeconds}s for the event flush to complete)`)
-        const stopExitCode = await exec.exec(
-            "sudo",
-            ["timeout", `${stopTimeoutSeconds}s`, "systemctl", "stop", "jibril.service"],
-            {
-                ignoreReturnCode: true,
-            },
-        )
+        const stopExitCode = await exec.exec("sudo", stopArgs, {
+            ignoreReturnCode: true,
+        })
+        const stopOutcome = stopExitCode === STOP_TIMED_OUT_EXIT_CODE ? "timed_out" : "completed"
         core.info(`jibril service stop finished in ${Math.round((Date.now() - stopStart) / 1000)}s`)
 
         const profileWaitSeconds = parsePositiveInteger(getEnv(PROFILE_WAIT_ENV), DEFAULT_PROFILE_WAIT_SECONDS)
-        if (stopExitCode === STOP_TIMED_OUT_EXIT_CODE) {
+        if (stopOutcome === "timed_out") {
             core.info(
-                `jibril was still flushing its event backlog after ${stopTimeoutSeconds}s (set ${STOP_TIMEOUT_ENV} to change the bound); ` +
+                `jibril was still flushing its event backlog after ${stopTimeoutSeconds}s (set the ${STOP_TIMEOUT_INPUT} input to change the bound); ` +
                     `waiting up to ${profileWaitSeconds}s more for the ${JSON_PROFILE_LABEL} at ${jsonProfilerFile}`,
             )
         }
@@ -130,7 +166,14 @@ async function run() {
             )
         }
 
-        await logJibrilServiceState()
+        let forceStopped = false
+        if (stopOutcome === "timed_out") {
+            await forceStopJibril()
+            forceStopped = true
+        }
+
+        const unitStateAfterStop = await readJibrilUnitState()
+        logJibrilUnitState("jibril service state", unitStateAfterStop)
 
         // Upload jibril logs as artifacts when debug is enabled (only after service stops).
         // Get the debug state from the main.js.
@@ -139,17 +182,32 @@ async function run() {
             await uploadJibrilArtifacts()
         }
 
-        const profile = await readProfile(jsonProfilerFile, debug === "true")
+        const profileResult = await readProfile(jsonProfilerFile, debug === "true")
         const renderOptions = getRenderOptions()
 
+        const profile = profileResult.profile
         if (profile !== null) {
-            const envelopeID = await resolveProfileEnvelopeID()
+            const envelopeID = await resolveProfileEnvelopeID(agentID)
             if (envelopeID !== "") {
                 // The raw on-disk Jibril profile has no control-plane envelope
                 // ID; wrapping it threads the ID into every render so the
                 // exact public profile selector resolves.
                 profile.raw = { id: envelopeID, data: profile.raw }
             }
+        }
+
+        // A run that produced no usable profile leaves the control plane's
+        // pending state unresolved, so the agent reports how it stopped.
+        if (profileResult.state !== "present" && agentToken !== "") {
+            await reportAgentStop({
+                agentToken,
+                unitStateBeforeStop,
+                unitStateAfterStop,
+                stopOutcome,
+                forceStopped,
+                stopTimeoutSeconds,
+                profileResult,
+            })
         }
 
         await appendRuntimeReviewSummary(profile, renderOptions)
@@ -164,35 +222,160 @@ async function run() {
 }
 
 /**
- * Reads and parses the JSON profile produced by Jibril, or null when the
- * profile is missing or unreadable. Returns both the raw parsed JSON (the
- * Step Summary renders the full-detail report from it, v6.1 §8) and the
- * normalized shape used by the PR-comment state machinery.
+ * Reads and parses the JSON profile produced by Jibril, distinguishing a
+ * missing file from an empty or unparsable one so the control plane can be
+ * told which of them happened.
  * @param {string} jsonProfilerFile
  * @param {boolean} debug
- * @returns {Promise<LoadedProfile | null>}
+ * @returns {Promise<ProfileResult>}
  */
 async function readProfile(jsonProfilerFile, debug) {
     try {
-        const jsonProfile = await readOptionalRootFile(jsonProfilerFile)
-        if (jsonProfile === "") {
-            core.info(`${JSON_PROFILE_LABEL} not found: ${jsonProfilerFile}`)
-            return null
-        }
+        const stat = await statRootFile(jsonProfilerFile)
+        const jsonProfile = stat.exists ? await readOptionalRootFile(jsonProfilerFile) : ""
 
-        if (debug) {
+        if (debug && jsonProfile !== "") {
             core.info(`${JSON_PROFILE_LABEL} contents:`)
             core.info(jsonProfile)
         }
 
-        return {
-            normalized: parseProfileJson(jsonProfile),
-            raw: JSON.parse(jsonProfile),
+        const result = classifyProfileContent(stat, jsonProfile)
+        switch (result.state) {
+            case "missing":
+                core.info(`${JSON_PROFILE_LABEL} not found: ${jsonProfilerFile}`)
+                break
+            case "empty":
+                core.info(`${JSON_PROFILE_LABEL} is empty: ${jsonProfilerFile}`)
+                break
+            case "invalid":
+                core.warning(`failed to parse ${JSON_PROFILE_LABEL}: ${result.detail}`)
+                break
         }
+
+        return result
     } catch (error) {
         core.warning(`failed to read ${JSON_PROFILE_LABEL}: ${getErrorMessage(error)}`)
-        return null
+        return {
+            state: "invalid",
+            profile: null,
+            detail: getErrorMessage(error),
+        }
     }
+}
+
+/**
+ * Reports to the control plane that this run's sensor stopped without leaving
+ * a usable Run Profile, authenticated as the agent itself. Best-effort: every
+ * failure is logged and swallowed so the job stays green.
+ * @param {AgentStopObservations} observations
+ * @returns {Promise<void>}
+ */
+async function reportAgentStop(observations) {
+    try {
+        const jobStatus = await resolveJobStatus()
+
+        /** @type {AgentStopEvidence} */
+        const evidence = {
+            jobStatus: jobStatus.status,
+            unitStateBeforeStop: observations.unitStateBeforeStop,
+            unitStateAfterStop: observations.unitStateAfterStop,
+            stopOutcome: observations.stopOutcome,
+            forceStopped: observations.forceStopped,
+            stopTimeoutSeconds: observations.stopTimeoutSeconds,
+            profileState: observations.profileResult.state,
+        }
+
+        // The evidence detail already names the profile state; only a parse
+        // failure carries extra information worth forwarding.
+        let parseDetail = ""
+        if (observations.profileResult.state === "invalid") {
+            parseDetail = observations.profileResult.detail
+        }
+
+        const request = buildAgentStoppedRequest(evidence, jobStatus, parseDetail)
+        const client = new ControlPlaneClient({
+            baseURL: resolveControlPlaneBaseURL(),
+            agentToken: observations.agentToken,
+        })
+
+        await client.reportAgentStopped(request)
+        core.info(`control plane: reported agent stop (reason=${request.reason}, profile=${request.profile_state})`)
+    } catch (error) {
+        core.info(`control plane: agent stop report skipped: ${getErrorMessage(error)}`)
+    }
+}
+
+/**
+ * Resolves the job's status from the GitHub API (best-effort). The signal is
+ * only used to classify missing-profile runs more accurately.
+ * @returns {Promise<JobStatusResolution>}
+ */
+async function resolveJobStatus() {
+    return resolveJobStatusFromGitHub({
+        token: firstNonEmptyString(core.getState("githubToken"), getEnv("GITHUB_TOKEN")),
+        repository: getEnv("GITHUB_REPOSITORY"),
+        runID: getEnv("GITHUB_RUN_ID"),
+        runAttempt: getEnv("GITHUB_RUN_ATTEMPT"),
+        runnerName: getEnv("RUNNER_NAME"),
+        jobName: getEnv("GITHUB_JOB"),
+    })
+}
+
+/**
+ * @param {AgentStopEvidence} evidence
+ * @param {JobStatusResolution} jobStatus
+ * @param {string} parseDetail
+ * @returns {AgentStoppedRequest}
+ */
+function buildAgentStoppedRequest(evidence, jobStatus, parseDetail) {
+    /** @type {AgentStoppedJibrilFields} */
+    const jibril = {
+        stop_outcome: evidence.stopOutcome,
+        force_stopped: evidence.forceStopped,
+    }
+
+    const unitState = evidence.unitStateAfterStop
+    if (unitState !== null) {
+        jibril.active_state = unitState.activeState
+        jibril.result = unitState.result
+        jibril.exec_main_status = unitState.execMainStatus
+    }
+
+    /** @type {AgentStoppedRequest} */
+    const request = {
+        reason: classifyAgentStop(evidence),
+        profile_state: evidence.profileState,
+        detail: joinDetails(formatAgentStopDetail(evidence), parseDetail),
+        run_id: getEnv("GITHUB_RUN_ID"),
+        jibril,
+    }
+
+    const runAttempt = getEnv("GITHUB_RUN_ATTEMPT")
+    if (runAttempt !== "") {
+        request.run_attempt = runAttempt
+    }
+
+    const job = getProfileJobName()
+    if (job !== "") {
+        request.job = job
+    }
+
+    // The source is only meaningful alongside a status, and "unknown" is
+    // expressed by omitting both.
+    if (jobStatus.status !== "" && jobStatus.source !== "unknown") {
+        request.job_status = jobStatus.status
+        request.job_status_source = jobStatus.source
+    }
+
+    return request
+}
+
+/**
+ * @param {...string} details
+ * @returns {string}
+ */
+function joinDetails(...details) {
+    return details.filter(detail => detail !== "").join("; ")
 }
 
 /**
@@ -200,15 +383,15 @@ async function readProfile(jsonProfilerFile, debug) {
  * the profiles recorded for the agent created in the main step. Fail-closed:
  * any missing credential, missing agent, ambiguity, or request failure
  * returns "" and the render keeps its existing linkless behavior.
+ * @param {string} agentID
  * @returns {Promise<string>}
  */
-async function resolveProfileEnvelopeID() {
-    const agentID = core.getState("agentID")
+async function resolveProfileEnvelopeID(agentID) {
     if (agentID === "") {
         return ""
     }
 
-    const baseURL = firstNonEmptyString(getEnv("GARNET_API_URL"), core.getInput("api_url"), "https://api.garnet.ai")
+    const baseURL = resolveControlPlaneBaseURL()
     const projectToken = firstNonEmptyString(core.getInput("api_token"), getEnv("GARNET_API_TOKEN"))
     const workflowToken = projectToken === "" ? await resolvePostWorkflowToken(baseURL) : ""
     if (projectToken === "" && workflowToken === "") {
@@ -269,6 +452,13 @@ async function resolvePostWorkflowToken(baseURL) {
         core.info(`post-step OIDC exchange skipped: ${getErrorMessage(error)}`)
         return ""
     }
+}
+
+/**
+ * @returns {string}
+ */
+function resolveControlPlaneBaseURL() {
+    return firstNonEmptyString(getEnv("GARNET_API_URL"), core.getInput("api_url"), "https://api.garnet.ai")
 }
 
 /**
@@ -518,12 +708,10 @@ async function waitForRootFile(filePath, deadlineMs) {
 }
 
 /**
- * Logs the jibril unit state so runs with a missing or partial profile
- * carry enough context to diagnose (still deactivating, killed on the
- * stop timeout, or exited cleanly).
- * @returns {Promise<void>}
+ * Reads the jibril unit state for diagnostics and stop-reason classification.
+ * @returns {Promise<JibrilUnitState | null>}
  */
-async function logJibrilServiceState() {
+async function readJibrilUnitState() {
     try {
         const result = await exec.getExecOutput(
             "sudo",
@@ -533,29 +721,71 @@ async function logJibrilServiceState() {
                 ignoreReturnCode: true,
             },
         )
-        const state = result.stdout.trim().split("\n").join(", ")
-        if (state !== "") {
-            core.info(`jibril service state: ${state}`)
+        if (result.exitCode !== 0) {
+            return null
+        }
+
+        const properties = parseSystemctlProperties(result.stdout)
+        return {
+            activeState: properties.get("ActiveState") ?? "",
+            result: properties.get("Result") ?? "",
+            execMainStatus: parseExecMainStatus(properties.get("ExecMainStatus")),
         }
     } catch (error) {
         core.info(`could not read jibril service state: ${getErrorMessage(error)}`)
+        return null
     }
 }
 
 /**
- * Resolves how long the post step waits for `systemctl stop` to complete.
- * An explicit environment override wins; otherwise the unit's own
- * TimeoutStopSec is read live (so the bound tracks the unit instead of a
- * hardcoded copy) plus a grace period, with a fallback when the unit
- * property is unreadable or infinite.
- * @returns {Promise<number>}
+ * @param {string} label
+ * @param {JibrilUnitState | null} state
+ * @returns {void}
  */
-async function resolveStopTimeoutSeconds() {
-    const override = parsePositiveInteger(getEnv(STOP_TIMEOUT_ENV), 0)
-    if (override > 0) {
-        return override
+function logJibrilUnitState(label, state) {
+    if (state === null) {
+        return
     }
 
+    const line = `ActiveState=${state.activeState}, Result=${state.result}, ExecMainStatus=${state.execMainStatus}`
+    core.info(`${label}: ${line}`)
+}
+
+/**
+ * Resolves how long the post step waits for `systemctl stop` to complete.
+ * @returns {Promise<number>}
+ */
+async function resolvePostStopTimeoutSeconds() {
+    const fromSettings = resolveStopTimeoutFromSettings({
+        envOverride: getEnv(STOP_TIMEOUT_ENV),
+        savedState: core.getState("stopTimeoutSeconds"),
+    })
+    if (fromSettings !== null) {
+        return fromSettings
+    }
+
+    // Only runs whose saved state predates `stopTimeoutSeconds` pay for this
+    // extra `systemctl` round-trip.
+    return resolveStopTimeoutFromUnit(await readUnitStopTimeoutSeconds())
+}
+
+/**
+ * @returns {Promise<void>}
+ */
+async function forceStopJibril() {
+    core.warning("force stopping jibril: the shutdown flush did not finish within the configured bound")
+    await exec.exec("sudo", ["systemctl", "kill", "--signal=SIGKILL", "jibril.service"], {
+        ignoreReturnCode: true,
+    })
+    await exec.exec("sudo", ["timeout", "30s", "systemctl", "stop", "jibril.service"], {
+        ignoreReturnCode: true,
+    })
+}
+
+/**
+ * @returns {Promise<number | null>}
+ */
+async function readUnitStopTimeoutSeconds() {
     try {
         const result = await exec.getExecOutput(
             "sudo",
@@ -565,17 +795,15 @@ async function resolveStopTimeoutSeconds() {
                 ignoreReturnCode: true,
             },
         )
-        if (result.exitCode === 0) {
-            const unitSeconds = parseSystemdTimespanSeconds(result.stdout.trim())
-            if (unitSeconds !== null) {
-                return unitSeconds + STOP_TIMEOUT_GRACE_SECONDS
-            }
+        if (result.exitCode !== 0) {
+            return null
         }
+
+        return parseSystemdTimespanSeconds(result.stdout.trim())
     } catch (error) {
         core.info(`could not read jibril unit stop timeout: ${getErrorMessage(error)}`)
+        return null
     }
-
-    return FALLBACK_STOP_TIMEOUT_SECONDS + STOP_TIMEOUT_GRACE_SECONDS
 }
 
 /**
@@ -589,6 +817,23 @@ function parsePositiveInteger(value, def) {
         return parsedValue
     }
     return def
+}
+
+/**
+ * @param {string} filePath
+ * @returns {Promise<RootFileStat>}
+ */
+async function statRootFile(filePath) {
+    const result = await exec.getExecOutput("sudo", ["stat", "-c", "%s", filePath], {
+        silent: true,
+        ignoreReturnCode: true,
+    })
+    if (result.exitCode !== 0) {
+        return { exists: false, size: 0 }
+    }
+
+    const size = Number.parseInt(result.stdout.trim(), 10)
+    return { exists: true, size: Number.isSafeInteger(size) && size > 0 ? size : 0 }
 }
 
 /**
@@ -630,6 +875,35 @@ async function readRootFileContent(filePath) {
     }
 
     return result.stdout.trim()
+}
+
+/**
+ * Parses the `key=value` lines printed by `systemctl show`.
+ * @param {string} output
+ * @returns {Map<string, string>}
+ */
+function parseSystemctlProperties(output) {
+    /** @type {Map<string, string>} */
+    const properties = new Map()
+
+    for (const line of output.split("\n")) {
+        const separatorIndex = line.indexOf("=")
+        if (separatorIndex === -1) {
+            continue
+        }
+        properties.set(line.slice(0, separatorIndex).trim(), line.slice(separatorIndex + 1).trim())
+    }
+
+    return properties
+}
+
+/**
+ * @param {string | undefined} value
+ * @returns {number}
+ */
+function parseExecMainStatus(value) {
+    const parsedValue = Number.parseInt(value ?? "", 10)
+    return Number.isSafeInteger(parsedValue) ? parsedValue : 0
 }
 
 run()
