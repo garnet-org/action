@@ -1,13 +1,21 @@
-// Fork pull request detection. GitHub never exposes repository secrets or
-// grants `id-token: write` to `pull_request` runs from forked repositories,
-// so those runs structurally cannot authenticate with the Garnet API. The
-// action skips profiling gracefully in that case instead of erroring.
+// Credential-less run detection. Two run shapes structurally cannot
+// authenticate with the Garnet API, and the action skips profiling gracefully
+// for both instead of erroring:
+//
+// - `pull_request` runs from forked repositories: GitHub exposes neither
+//   repository secrets nor an `id-token: write` grant to them.
+// - Runs triggered by Dependabot: GitHub populates `secrets.*` from the
+//   repository's separate Dependabot secrets store, so an `api_token` wired to
+//   an Actions secret resolves empty. When the run also carries no OIDC
+//   grant, there is no credential path left.
 //
 // `pull_request_target` runs DO receive secrets and must never be treated
-// as credential-less; only the `pull_request` event is considered here.
+// as credential-less; only the `pull_request` event is considered for forks.
 
 import * as fs from "node:fs/promises"
 import { getEnv, getOptionalRecord, getOptionalString } from "./shared.js"
+
+const DEPENDABOT_ACTOR = "dependabot[bot]"
 
 /**
  * @typedef {{
@@ -15,6 +23,42 @@ import { getEnv, getOptionalRecord, getOptionalString } from "./shared.js"
  *   reason: string
  * }} ForkSkipDecision
  */
+
+/**
+ * @typedef {{
+ *   eventName: string
+ *   eventPath: string
+ *   repository: string
+ *   actor: string
+ * }} CredentialLessRunContext
+ */
+
+/**
+ * Decides whether this run has no path to Garnet credentials at all and should
+ * skip profiling gracefully. Callers invoke it only when the `api_token` input
+ * did not resolve (empty); a runtime OIDC grant always means "do not skip".
+ *
+ * The Dependabot shape is checked first: a Dependabot pull request is a
+ * same-repository branch, so the fork check alone would let it fall through
+ * to the hard `api_token` error.
+ *
+ * @param {CredentialLessRunContext} context
+ * @returns {Promise<ForkSkipDecision>}
+ */
+export async function resolveCredentialLessSkip(context) {
+    if (context.actor === DEPENDABOT_ACTOR && !isOIDCAvailable()) {
+        return {
+            skip: true,
+            reason:
+                "Garnet skips profiling on this Dependabot-triggered run: GitHub resolves `secrets.*` from the " +
+                "repository's Dependabot secrets store and this run has no OIDC grant, so no credentials are available. " +
+                "To record Dependabot runs, add the Garnet API token to the repository's Dependabot secrets under " +
+                "the same name. The job continues normally.",
+        }
+    }
+
+    return resolveForkSkip(context)
+}
 
 /**
  * Decides whether this run is a credential-less pull request from a fork

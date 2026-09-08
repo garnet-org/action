@@ -94,7 +94,7 @@ jobs:
         run: npm test
 ```
 
-**API token fallback:** If your environment does not support OIDC, create an API token at <https://app.garnet.ai>, store it as a repo secret named `GARNET_API_TOKEN`, and pass it explicitly:
+**API token:** If your environment does not support OIDC, create an API token at <https://app.garnet.ai>, store it as a repo secret named `GARNET_API_TOKEN`, and pass it explicitly. When `api_token` is set the action uses it as-is and does not request an OIDC token; `id-token: write` is not needed:
 
 ```yaml
     permissions:
@@ -184,7 +184,7 @@ The same full-detail record is appended to the GitHub Actions Job Summary as the
 
 | Input               | Required | Default                 | Description                                    |
 | ------------------- | -------- | ----------------------- | ---------------------------------------------- |
-| `api_token`         | No       | —                       | Garnet API token from app.garnet.ai. Not needed when the job has `id-token: write` (GitHub OIDC is preferred). Without OIDC, this token authenticates with the control plane for full review quality. If neither is provided, the action still runs and writes a best-effort local Execution Summary. |
+| `api_token`         | No       | —                       | Garnet API token from app.garnet.ai. Not needed when the job has `id-token: write` (GitHub OIDC is preferred). When set, it is used as-is and no OIDC token is requested. If neither is provided, the action still runs and writes a best-effort local Execution Summary. |
 | `github_token`      | No       | `${{ github.token }}`   | GitHub token used by `gh attestation verify` when verifying the Jibril binary and to read the job status when no Run Profile was produced |
 | `api_url`           | No       | `https://api.garnet.ai` | Garnet API base URL                            |
 | `jibril_version`    | No       | `""` (auto)             | Jibril version (for example `v2.16.0`, `v0.0`, or `latest`); empty resolves to the pinned stable release for your action ref (daily builds on `@v0`) |
@@ -194,6 +194,8 @@ The same full-detail record is appended to the GitHub Actions Job Summary as the
 | `preview`           | No       | `false`                 | Render the full-fidelity Step Summary record (assertions + evidence); preview shape is unstable and may change without a major version bump |
 
 > **Fork PRs:** On `pull_request` runs from forked repositories GitHub does not expose secrets, so `api_token` will be unavailable. Use OIDC (`id-token: write`) in that case, or the action will fall back to a best-effort local review.
+>
+> **Dependabot PRs:** GitHub resolves `secrets.*` from the repository's Dependabot secrets store on Dependabot-triggered runs, so an `api_token` wired to an Actions secret resolves empty and the action skips recording. To record those runs, add the same token under the same name in **Settings → Secrets and variables → Dependabot**.
 
 ---
 

@@ -31471,16 +31471,24 @@ async function getProfileSha() {
 }
 
 ;// CONCATENATED MODULE: ./src/fork-run.js
-// Fork pull request detection. GitHub never exposes repository secrets or
-// grants `id-token: write` to `pull_request` runs from forked repositories,
-// so those runs structurally cannot authenticate with the Garnet API. The
-// action skips profiling gracefully in that case instead of erroring.
+// Credential-less run detection. Two run shapes structurally cannot
+// authenticate with the Garnet API, and the action skips profiling gracefully
+// for both instead of erroring:
+//
+// - `pull_request` runs from forked repositories: GitHub exposes neither
+//   repository secrets nor an `id-token: write` grant to them.
+// - Runs triggered by Dependabot: GitHub populates `secrets.*` from the
+//   repository's separate Dependabot secrets store, so an `api_token` wired to
+//   an Actions secret resolves empty. When the run also carries no OIDC
+//   grant, there is no credential path left.
 //
 // `pull_request_target` runs DO receive secrets and must never be treated
-// as credential-less; only the `pull_request` event is considered here.
+// as credential-less; only the `pull_request` event is considered for forks.
 
 
 
+
+const DEPENDABOT_ACTOR = "dependabot[bot]"
 
 /**
  * @typedef {{
@@ -31488,6 +31496,42 @@ async function getProfileSha() {
  *   reason: string
  * }} ForkSkipDecision
  */
+
+/**
+ * @typedef {{
+ *   eventName: string
+ *   eventPath: string
+ *   repository: string
+ *   actor: string
+ * }} CredentialLessRunContext
+ */
+
+/**
+ * Decides whether this run has no path to Garnet credentials at all and should
+ * skip profiling gracefully. Callers invoke it only when the `api_token` input
+ * did not resolve (empty); a runtime OIDC grant always means "do not skip".
+ *
+ * The Dependabot shape is checked first: a Dependabot pull request is a
+ * same-repository branch, so the fork check alone would let it fall through
+ * to the hard `api_token` error.
+ *
+ * @param {CredentialLessRunContext} context
+ * @returns {Promise<ForkSkipDecision>}
+ */
+async function resolveCredentialLessSkip(context) {
+    if (context.actor === DEPENDABOT_ACTOR && !isOIDCAvailable()) {
+        return {
+            skip: true,
+            reason:
+                "Garnet skips profiling on this Dependabot-triggered run: GitHub resolves `secrets.*` from the " +
+                "repository's Dependabot secrets store and this run has no OIDC grant, so no credentials are available. " +
+                "To record Dependabot runs, add the Garnet API token to the repository's Dependabot secrets under " +
+                "the same name. The job continues normally.",
+        }
+    }
+
+    return resolveForkSkip(context)
+}
 
 /**
  * Decides whether this run is a credential-less pull request from a fork
@@ -41774,13 +41818,14 @@ async function run() {
         const DEBUG = getEnv("DEBUG", "false")
 
         if (TOKEN === "") {
-            const forkSkip = await resolveForkSkip({
+            const credentialLessSkip = await resolveCredentialLessSkip({
                 eventName: getEnv("GITHUB_EVENT_NAME"),
                 eventPath: getEnv("GITHUB_EVENT_PATH"),
                 repository: getEnv("GITHUB_REPOSITORY"),
+                actor: getEnv("GITHUB_ACTOR"),
             })
-            if (forkSkip.skip) {
-                info(forkSkip.reason)
+            if (credentialLessSkip.skip) {
+                info(credentialLessSkip.reason)
                 return false
             }
         }
@@ -42193,10 +42238,25 @@ TimeoutStopSec=${stopTimeoutValue}
  */
 
 /**
+ * A supplied `api_token` is an explicit choice of the token path, so the
+ * action honours it without requesting an OIDC token first: a workflow that
+ * intentionally runs without `id-token: write` must not be told on every run
+ * that the permission is missing. OIDC is attempted only when no token was
+ * supplied.
  * @param {ResolveControlPlaneAuthInput} input
  * @returns {Promise<ControlPlaneAuth>}
  */
 async function resolveControlPlaneAuth(input) {
+    const apiToken = input.apiToken.trim()
+    if (apiToken !== "") {
+        info("Using the supplied 'api_token' for control-plane requests (OIDC exchange not attempted)")
+        return {
+            projectToken: apiToken,
+            workflowToken: "",
+            workflowTokenExpiresAt: "",
+        }
+    }
+
     const audience = resolveOIDCAudience(input.apiURL)
 
     const unauthenticatedControlPlaneClient = new ControlPlaneClient({
@@ -42211,19 +42271,15 @@ async function resolveControlPlaneAuth(input) {
         const errorMessage = getErrorMessage(error)
         if (isMissingOIDCPermissionError(errorMessage)) {
             warning(
-                "github: OIDC token request failed because this workflow is missing 'id-token: write' permission. Falling back to 'api_token'.",
+                "github: OIDC token request failed because this workflow is missing 'id-token: write' permission and no 'api_token' was supplied.",
             )
         } else if (errorMessage.startsWith("OIDC token request failed")) {
-            warning(`github: ${errorMessage}. Falling back to 'api_token'.`)
+            warning(`github: ${errorMessage}. No 'api_token' was supplied.`)
         } else {
-            warning(`OIDC exchange failed (${errorMessage}). Falling back to 'api_token'.`)
+            warning(`OIDC exchange failed (${errorMessage}). No 'api_token' was supplied.`)
         }
 
-        return {
-            projectToken: requireApiToken(input.apiToken),
-            workflowToken: "",
-            workflowTokenExpiresAt: "",
-        }
+        throw missingCredentialsError()
     }
 
     if (isTimestampExpired(exchanged.expiresAt)) {
@@ -42235,24 +42291,16 @@ async function resolveControlPlaneAuth(input) {
         } catch (error) {
             const errorMessage = getErrorMessage(error)
             if (errorMessage.startsWith("OIDC token request failed")) {
-                warning(`github: ${errorMessage}. Falling back to 'api_token'.`)
+                warning(`github: ${errorMessage}.`)
             } else {
-                warning(`OIDC exchange retry failed (${errorMessage}). Falling back to 'api_token'.`)
+                warning(`OIDC exchange retry failed (${errorMessage}).`)
             }
-            return {
-                projectToken: requireApiToken(input.apiToken),
-                workflowToken: "",
-                workflowTokenExpiresAt: "",
-            }
+            throw missingCredentialsError()
         }
 
         if (isTimestampExpired(exchanged.expiresAt)) {
-            warning("OIDC workflow token remains expired after retry. Falling back to 'api_token'.")
-            return {
-                projectToken: requireApiToken(input.apiToken),
-                workflowToken: "",
-                workflowTokenExpiresAt: "",
-            }
+            warning("OIDC workflow token remains expired after retry.")
+            throw missingCredentialsError()
         }
     }
 
@@ -42283,15 +42331,10 @@ function isTimestampExpired(value) {
 }
 
 /**
- * @param {string} token
- * @returns {string}
+ * @returns {Error}
  */
-function requireApiToken(token) {
-    if (token !== "") {
-        return token
-    }
-
-    throw new Error(
+function missingCredentialsError() {
+    return new Error(
         "Input 'api_token' is required when OIDC authentication is unavailable. This commonly happens on pull requests from forks, where repository secrets are not exposed to workflows, or when 'id-token: write' permission is not granted. Add/verify that your workflow passes a valid token to this input, grant 'id-token: write', or conditionally skip this action for forked PRs.",
     )
 }

@@ -1,8 +1,8 @@
 /**
- * Gates for the credential-less fork pull request no-op: a `pull_request`
- * run from a fork with no api_token and no OIDC grant skips profiling
- * gracefully; every other credential shape keeps today's behavior, and the
- * post step no-ops cleanly when the main step never started jibril.
+ * Gates for the credential-less no-op: a `pull_request` run from a fork, or
+ * any Dependabot-triggered run, with no api_token and no OIDC grant skips
+ * profiling gracefully; every other credential shape keeps today's behavior,
+ * and the post step no-ops cleanly when the main step never started jibril.
  */
 import test from "node:test"
 import assert from "node:assert/strict"
@@ -12,7 +12,7 @@ import { tmpdir } from "node:os"
 import { join, dirname } from "node:path"
 import { fileURLToPath } from "node:url"
 import { promisify } from "node:util"
-import { resolveForkSkip } from "../src/fork-run.js"
+import { resolveCredentialLessSkip, resolveForkSkip } from "../src/fork-run.js"
 import { run } from "../src/action.js"
 
 const execFileAsync = promisify(execFile)
@@ -79,26 +79,87 @@ async function withEnv(overlay, fn) {
 
 test("fork + no credentials: pull_request run from a fork skips gracefully", async () => {
     const eventPath = await writeEventPayload(pullRequestPayload("outside/fork"))
+    await withEnv({ ACTIONS_ID_TOKEN_REQUEST_URL: undefined }, async () => {
+        const decision = await resolveForkSkip({
+            eventName: "pull_request",
+            eventPath,
+            repository: REPOSITORY,
+        })
+        assert.equal(decision.skip, true)
+        assert.match(decision.reason, /forked repositories/)
+        assert.match(decision.reason, /job continues normally/)
+    })
+    await rm(dirname(eventPath), { recursive: true, force: true })
+})
+
+test("api_token provided: behaves exactly as today (skip is never consulted)", async () => {
+    const source = await readFile(join(here, "..", "src", "action.js"), "utf8")
+    const gated = /if \(TOKEN === ""\) \{\s*\n\s*const credentialLessSkip = await resolveCredentialLessSkip\(/.test(
+        source,
+    )
+    assert.ok(gated, "resolveCredentialLessSkip must only run when the api_token input resolved empty")
+})
+
+test("dependabot + no credentials: skips gracefully and names the Dependabot secrets store", async () => {
+    const eventPath = await writeEventPayload(pullRequestPayload(REPOSITORY))
     await withEnv(
-        { ACTIONS_ID_TOKEN_REQUEST_URL: undefined },
+        {
+            ACTIONS_ID_TOKEN_REQUEST_URL: undefined,
+            ACTIONS_ID_TOKEN_REQUEST_TOKEN: undefined,
+        },
         async () => {
-            const decision = await resolveForkSkip({
+            const decision = await resolveCredentialLessSkip({
                 eventName: "pull_request",
                 eventPath,
                 repository: REPOSITORY,
+                actor: "dependabot[bot]",
             })
             assert.equal(decision.skip, true)
-            assert.match(decision.reason, /forked repositories/)
+            assert.match(decision.reason, /Dependabot secrets/)
             assert.match(decision.reason, /job continues normally/)
         },
     )
     await rm(dirname(eventPath), { recursive: true, force: true })
 })
 
-test("fork + api_token provided: behaves exactly as today (skip is never consulted)", async () => {
-    const source = await readFile(join(here, "..", "src", "action.js"), "utf8")
-    const gated = /if \(TOKEN === ""\) \{\s*\n\s*const forkSkip = await resolveForkSkip\(/.test(source)
-    assert.ok(gated, "resolveForkSkip must only run when the api_token input resolved empty")
+test("dependabot + OIDC grant: no skip (credential path exists)", async () => {
+    const eventPath = await writeEventPayload(pullRequestPayload(REPOSITORY))
+    await withEnv(
+        {
+            ACTIONS_ID_TOKEN_REQUEST_URL: "https://token.actions.example",
+            ACTIONS_ID_TOKEN_REQUEST_TOKEN: "runtime-token",
+        },
+        async () => {
+            const decision = await resolveCredentialLessSkip({
+                eventName: "pull_request",
+                eventPath,
+                repository: REPOSITORY,
+                actor: "dependabot[bot]",
+            })
+            assert.equal(decision.skip, false)
+        },
+    )
+    await rm(dirname(eventPath), { recursive: true, force: true })
+})
+
+test("human actor, same repo, no credentials: falls through to the fork rule (no skip)", async () => {
+    const eventPath = await writeEventPayload(pullRequestPayload(REPOSITORY))
+    await withEnv(
+        {
+            ACTIONS_ID_TOKEN_REQUEST_URL: undefined,
+            ACTIONS_ID_TOKEN_REQUEST_TOKEN: undefined,
+        },
+        async () => {
+            const decision = await resolveCredentialLessSkip({
+                eventName: "pull_request",
+                eventPath,
+                repository: REPOSITORY,
+                actor: "zkochan",
+            })
+            assert.equal(decision.skip, false)
+        },
+    )
+    await rm(dirname(eventPath), { recursive: true, force: true })
 })
 
 test("same-repo + no token: no skip, existing hard error path stays", async () => {
@@ -143,7 +204,12 @@ test("fork + OIDC grant: no skip (credential path exists)", async () => {
 })
 
 test("detection never throws: malformed payloads fall back to current behavior", async () => {
-    for (const payload of [{}, { pull_request: null }, { pull_request: { head: {} } }, { pull_request: { head: { repo: { full_name: "" } } } }]) {
+    for (const payload of [
+        {},
+        { pull_request: null },
+        { pull_request: { head: {} } },
+        { pull_request: { head: { repo: { full_name: "" } } } },
+    ]) {
         const eventPath = await writeEventPayload(payload)
         const decision = await resolveForkSkip({
             eventName: "pull_request",
@@ -176,6 +242,26 @@ test("run(): fork + no credentials exits success without starting jibril", async
             GITHUB_EVENT_PATH: eventPath,
             GITHUB_REPOSITORY: REPOSITORY,
             ACTIONS_ID_TOKEN_REQUEST_URL: undefined,
+        },
+        async () => {
+            const started = await run()
+            assert.equal(started, false)
+        },
+    )
+    await rm(dirname(eventPath), { recursive: true, force: true })
+})
+
+test("run(): dependabot + no credentials exits success without starting jibril", async () => {
+    const eventPath = await writeEventPayload(pullRequestPayload(REPOSITORY))
+    await withEnv(
+        {
+            GARNET_API_TOKEN: "",
+            GITHUB_EVENT_NAME: "pull_request",
+            GITHUB_EVENT_PATH: eventPath,
+            GITHUB_REPOSITORY: REPOSITORY,
+            GITHUB_ACTOR: "dependabot[bot]",
+            ACTIONS_ID_TOKEN_REQUEST_URL: undefined,
+            ACTIONS_ID_TOKEN_REQUEST_TOKEN: undefined,
         },
         async () => {
             const started = await run()
