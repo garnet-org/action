@@ -16,7 +16,7 @@ import {
 } from "./shared.js"
 import { getPullRequestHeadShaFromEvent, getPullRequestNumberFromEvent } from "./github-event.js"
 import { COMMIT_STATUS_CONTEXT, createExecutionReceiptStatus, describeCommitStatus } from "./commit-status.js"
-import { GARNET_STATUS_STATE, publishGarnetStatus } from "./garnet-status.js"
+import { publishGarnetStatus } from "./garnet-status.js"
 import { getProfileJobName } from "./github-context.js"
 import { ControlPlaneClient } from "./control-plane/client.js"
 import { uploadJibrilArtifacts } from "./post-artifacts.js"
@@ -106,7 +106,6 @@ async function run() {
 
     try {
         const jibrilStarted = core.getState("jibrilStarted") === "true"
-        const garnetStatusFromMain = core.getState(GARNET_STATUS_STATE)
         const agentID = core.getState("agentID")
         const agentToken = core.getState("agentToken")
         const jsonProfilerFile = firstNonEmptyString(core.getState("jsonProfilerFile"), getDefaultJsonProfileFile())
@@ -202,11 +201,7 @@ async function run() {
             }
         }
 
-        // The main step already published start_failed when the sensor never
-        // attached; otherwise the profile classification decides recorded vs
-        // no_profile.
-        const garnetStatus =
-            garnetStatusFromMain === "start_failed" ? "start_failed" : garnetStatusFromProfileState(profileResult.state)
+        const garnetStatus = garnetStatusFromProfileState(profileResult.state)
         publishGarnetStatus(garnetStatus)
 
         // A run that produced no usable profile leaves the control plane's

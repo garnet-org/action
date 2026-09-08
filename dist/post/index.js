@@ -155008,7 +155008,6 @@ async function run() {
 
     try {
         const jibrilStarted = getState("jibrilStarted") === "true"
-        const garnetStatusFromMain = getState(GARNET_STATUS_STATE)
         const agentID = getState("agentID")
         const agentToken = getState("agentToken")
         const jsonProfilerFile = firstNonEmptyString(getState("jsonProfilerFile"), getDefaultJsonProfileFile())
@@ -155104,11 +155103,7 @@ async function run() {
             }
         }
 
-        // The main step already published start_failed when the sensor never
-        // attached; otherwise the profile classification decides recorded vs
-        // no_profile.
-        const garnetStatus =
-            garnetStatusFromMain === "start_failed" ? "start_failed" : garnetStatusFromProfileState(profileResult.state)
+        const garnetStatus = garnetStatusFromProfileState(profileResult.state)
         publishGarnetStatus(garnetStatus)
 
         // A run that produced no usable profile leaves the control plane's
