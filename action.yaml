@@ -6,10 +6,16 @@ branding:
     color: "purple"
 inputs:
     api_token:
-        description: "Your Garnet API token from app.garnet.ai"
+        description: |
+            Garnet API token from app.garnet.ai. Optional when the job has `id-token: write`
+            (GitHub OIDC is the preferred authentication method). Without OIDC, providing this
+            token authenticates with the Garnet control plane for the best review quality.
+            If neither OIDC nor api_token is available, the action still runs and posts a
+            best-effort local review to the PR, but execution evidence is not sent to the
+            control plane.
         required: false
     github_token:
-        description: "GitHub token used for pull request comments"
+        description: "GitHub token used to post pull request comments. Defaults to the built-in GITHUB_TOKEN."
         required: false
         default: ${{ github.token }}
     api_url:
@@ -21,7 +27,7 @@ inputs:
         required: false
         default: ""
     skip_signature_verification:
-        description: "Install the Jibril sensor without verifying its checksum and build attestation (not recommended)"
+        description: "Install the Jibril sensor without verifying the release bundle checksums, Sigstore signatures, and build attestation (not recommended)"
         required: false
         default: "false"
     debug:
@@ -32,6 +38,16 @@ inputs:
         description: "Render the full-fidelity Step Summary record (assertions + evidence). Preview shape is unstable and may change without a major version bump"
         required: false
         default: "false"
+    stop_timeout_seconds:
+        description: |
+            Maximum seconds Jibril is given at shutdown to finish writing its Run Profile and flushing
+            events. The post step waits this long (plus a small grace) and then force stops the sensor,
+            so a heavy backlog cannot stall the job indefinitely. Lower it to bound the post step;
+            raise it on long jobs where the profile matters more than post-step latency. Set to `0`
+            or a negative integer to disable the flush timeout entirely.
+        required: false
+        default: "1800"
+
 outputs:
     profile_result:
         description: "Reserved for the companion GitHub App and control plane; this action records the Runtime Review"

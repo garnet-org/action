@@ -5,8 +5,6 @@
 import * as core from "@actions/core"
 import { getErrorMessage } from "./shared.js"
 
-export const OIDC_AUTH_FEATURE_FLAG = "GARNET_ACTION_ENABLE_OIDC_AUTH"
-
 const GITHUB_APP_ID_PROD = "Iv23lihCfwCfqCxQNpvv"
 const GITHUB_APP_ID_STAGING = "Iv23liUXLYx9mgGKHgZk"
 const GITHUB_APP_ID_DEV = "Iv23li88DidEyxVnAR1p"

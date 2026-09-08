@@ -22,7 +22,7 @@ import { getEnv, getOptionalRecord, getOptionalString } from "./shared.js"
  * `api_token` input did not resolve (empty).
  *
  * The skip applies only when OIDC is also unavailable (no runtime ID-token
- * grant) or the OIDC flag is off.
+ * grant).
  *
  * Detection never throws: on unexpected payload shapes or read errors the
  * decision is "do not skip", which falls back to current behavior.
@@ -58,15 +58,13 @@ export async function resolveForkSkip(context) {
 }
 
 /**
- * Returns true when the runtime granted an OIDC ID-token endpoint and the
- * flag-gated OIDC auth path is enabled.
+ * Returns true when the runtime granted an OIDC ID-token endpoint.
  * @returns {boolean}
  */
 function isOIDCAvailable() {
-    const flagEnabled = getEnv("GARNET_ACTION_ENABLE_OIDC_AUTH") === "true"
     const requestURL = getEnv("ACTIONS_ID_TOKEN_REQUEST_URL")
     const requestToken = getEnv("ACTIONS_ID_TOKEN_REQUEST_TOKEN")
-    return flagEnabled && requestURL !== "" && requestToken !== ""
+    return requestURL !== "" && requestToken !== ""
 }
 
 /**

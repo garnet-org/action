@@ -30828,8 +30828,8 @@ function getExecOutput(commandLine, args, options) {
         let stdout = '';
         let stderr = '';
         //Using string decoder covers the case where a mult-byte character is split
-        const stdoutDecoder = new external_string_decoder_.StringDecoder('utf8');
-        const stderrDecoder = new external_string_decoder_.StringDecoder('utf8');
+        const stdoutDecoder = new StringDecoder('utf8');
+        const stderrDecoder = new StringDecoder('utf8');
         const originalStdoutListener = (_a = options === null || options === void 0 ? void 0 : options.listeners) === null || _a === void 0 ? void 0 : _a.stdout;
         const originalStdErrListener = (_b = options === null || options === void 0 ? void 0 : options.listeners) === null || _b === void 0 ? void 0 : _b.stderr;
         const stdErrListener = (data) => {
@@ -31555,7 +31555,7 @@ async function getProfileSha() {
  * `api_token` input did not resolve (empty).
  *
  * The skip applies only when OIDC is also unavailable (no runtime ID-token
- * grant) or the OIDC flag is off.
+ * grant).
  *
  * Detection never throws: on unexpected payload shapes or read errors the
  * decision is "do not skip", which falls back to current behavior.
@@ -31591,15 +31591,13 @@ async function resolveForkSkip(context) {
 }
 
 /**
- * Returns true when the runtime granted an OIDC ID-token endpoint and the
- * flag-gated OIDC auth path is enabled.
+ * Returns true when the runtime granted an OIDC ID-token endpoint.
  * @returns {boolean}
  */
 function isOIDCAvailable() {
-    const flagEnabled = getEnv("GARNET_ACTION_ENABLE_OIDC_AUTH") === "true"
     const requestURL = getEnv("ACTIONS_ID_TOKEN_REQUEST_URL")
     const requestToken = getEnv("ACTIONS_ID_TOKEN_REQUEST_TOKEN")
-    return flagEnabled && requestURL !== "" && requestToken !== ""
+    return requestURL !== "" && requestToken !== ""
 }
 
 /**
@@ -39544,6 +39542,44 @@ const API_ERROR_SCHEMA = object({
  * @property {ProfileEnvelope[]} items
  */
 
+/**
+ * @typedef {"run_cancelled" | "crashed" | "flush_timeout" | "stopped_cleanly"} AgentStopReason
+ */
+
+/**
+ * @typedef {"present" | "missing" | "empty" | "invalid"} AgentProfileState
+ */
+
+/**
+ * @typedef {"completed" | "timed_out"} AgentStopOutcome
+ */
+
+/**
+ * @typedef {"github_api"} JobStatusSource
+ */
+
+/**
+ * @typedef {object} AgentStoppedJibrilFields
+ * @property {string=} activeState
+ * @property {string=} result
+ * @property {number=} execMainStatus
+ * @property {AgentStopOutcome=} stopOutcome
+ * @property {boolean=} forceStopped
+ */
+
+/**
+ * @typedef {object} AgentStoppedRequest
+ * @property {AgentStopReason} reason
+ * @property {AgentProfileState} profileState
+ * @property {string=} detail
+ * @property {string} runID
+ * @property {string=} runAttempt
+ * @property {string=} job
+ * @property {"cancelled" | "failure"=} jobStatus
+ * @property {JobStatusSource=} jobStatusSource
+ * @property {AgentStoppedJibrilFields=} jibril
+ */
+
 const PROFILE_ENVELOPE_SCHEMA = object({
         id: schemas_string().min(1),
         runID: schemas_string().default(""),
@@ -39556,6 +39592,27 @@ const PROFILE_ENVELOPE_PAGE_SCHEMA = object({
     })
     .passthrough()
 
+const AGENT_STOP_REASON_SCHEMA = schemas_enum(["run_cancelled", "crashed", "flush_timeout", "stopped_cleanly"])
+
+const AGENT_STOPPED_REQUEST_SCHEMA = object({
+    reason: AGENT_STOP_REASON_SCHEMA,
+    profileState: schemas_enum(["present", "missing", "empty", "invalid"]),
+    detail: schemas_string().optional(),
+    runID: schemas_string().min(1),
+    runAttempt: schemas_string().min(1).optional(),
+    job: schemas_string().min(1).optional(),
+    jobStatus: schemas_enum(["cancelled", "failure"]).optional(),
+    jobStatusSource: schemas_enum(["github_api"]).optional(),
+    jibril: object({
+            activeState: schemas_string().optional(),
+            result: schemas_string().optional(),
+            execMainStatus: schemas_number().int().optional(),
+            stopOutcome: schemas_enum(["completed", "timed_out"]).optional(),
+            forceStopped: schemas_boolean().optional(),
+        })
+        .optional(),
+})
+
 ;// CONCATENATED MODULE: ./src/control-plane/client.js
 
 
@@ -39565,6 +39622,7 @@ const PROFILE_ENVELOPE_PAGE_SCHEMA = object({
  * @typedef {import("./types.js").MergedNetPoliciesRequest} MergedNetPoliciesRequest
  * @typedef {import("./types.js").ExchangeOIDCResponse} ExchangeOIDCResponse
  * @typedef {import("./types.js").ProfileEnvelopePage} ProfileEnvelopePage
+ * @typedef {import("./types.js").AgentStoppedRequest} AgentStoppedRequest
  */
 
 /**
@@ -39579,6 +39637,7 @@ const PROFILE_ENVELOPE_PAGE_SCHEMA = object({
  *   baseURL: string
  *   projectToken?: string
  *   workflowToken?: string
+ *   agentToken?: string
  *   userAgent?: string
  * }} ControlPlaneClientOptions
  */
@@ -39591,6 +39650,7 @@ const PROFILE_ENVELOPE_PAGE_SCHEMA = object({
  *   body?: unknown
  *   accept?: string
  *   skipAuthHeader?: boolean
+ *   timeoutMs?: number
  * }} RequestOptions
  */
 
@@ -39641,9 +39701,14 @@ class ControlPlaneClient {
             throw new Error("ControlPlaneClient: 'workflowToken' must be a string when provided")
         }
 
+        if (options.agentToken !== undefined && typeof options.agentToken !== "string") {
+            throw new Error("ControlPlaneClient: 'agentToken' must be a string when provided")
+        }
+
         this.baseURL = parsedBaseURL.toString().replace(/\/+$/, "")
         this.projectToken = options.projectToken?.trim() ?? ""
         this.workflowToken = options.workflowToken?.trim() ?? ""
+        this.agentToken = options.agentToken?.trim() ?? ""
         this.userAgent = options.userAgent ?? "garnet-action"
     }
 
@@ -39708,6 +39773,24 @@ class ControlPlaneClient {
         })
 
         return PROFILE_ENVELOPE_PAGE_SCHEMA.parse(responseJson)
+    }
+
+    /**
+     * Signals that this run's sensor stopped, with the reason and whether a usable
+     * Run Profile was produced, so the control plane can resolve pending state.
+     * Authenticated as the agent itself.
+     * @param {AgentStoppedRequest} input
+     * @returns {Promise<void>}
+     */
+    async reportAgentStopped(input) {
+        const payload = AGENT_STOPPED_REQUEST_SCHEMA.parse(input)
+        // Keep the post step fast: one bounded best-effort request only.
+        await this.requestText({
+            method: "POST",
+            path: "/api/v1/agent/stopped",
+            body: payload,
+            timeoutMs: 10_000,
+        })
     }
 
     /**
@@ -39783,7 +39866,9 @@ class ControlPlaneClient {
         }
 
         if (options.skipAuthHeader !== true) {
-            if (this.workflowToken !== "") {
+            if (this.agentToken !== "") {
+                headers["X-Agent-Token"] = this.agentToken
+            } else if (this.workflowToken !== "") {
                 headers["X-Workflow-Token"] = this.workflowToken
             } else if (this.projectToken !== "") {
                 headers["X-Project-Token"] = this.projectToken
@@ -39794,38 +39879,39 @@ class ControlPlaneClient {
             headers["Content-Type"] = "application/json"
         }
 
+        /** @type {RequestInit} */
+        const requestInit = {
+            method: options.method,
+            headers,
+        }
+
+        if (options.body !== undefined) {
+            requestInit.body = JSON.stringify(options.body)
+        }
+
+        if (options.timeoutMs !== undefined) {
+            requestInit.signal = AbortSignal.timeout(options.timeoutMs)
+        }
+
         let response
         try {
-            if (options.body === undefined) {
-                response = await fetch(requestURL, {
-                    method: options.method,
-                    headers,
-                })
-            } else {
-                response = await fetch(requestURL, {
-                    method: options.method,
-                    headers,
-                    body: JSON.stringify(options.body),
-                })
-            }
+            response = await fetch(requestURL, requestInit)
         } catch (error) {
             const reason = error instanceof Error ? error.message : String(error)
-            throw new Error(
-                `Control plane request failed: ${options.method} ${options.path} (network error: ${reason})`,
-            )
+            throw new Error(`Control plane request failed: ${options.method} ${options.path} (network error: ${reason})`)
         }
 
         const responseText = await response.text()
-        if (!response.ok) {
-            const detail = getApiErrorDetail(responseText)
-            const statusDetail = detail === "" ? `HTTP ${response.status}` : `HTTP ${response.status}: ${detail}`
-            throw new Error(`Control plane request failed: ${options.method} ${options.path} (${statusDetail})`)
+        if (response.ok) {
+            return {
+                status: response.status,
+                responseText,
+            }
         }
 
-        return {
-            status: response.status,
-            responseText,
-        }
+        const detail = getApiErrorDetail(responseText)
+        const statusDetail = detail === "" ? `HTTP ${response.status}` : `HTTP ${response.status}: ${detail}`
+        throw new Error(`Control plane request failed: ${options.method} ${options.path} (${statusDetail})`)
     }
 }
 
@@ -40126,8 +40212,6 @@ function invalid(error) {
 
 
 
-const OIDC_AUTH_FEATURE_FLAG = "GARNET_ACTION_ENABLE_OIDC_AUTH"
-
 const GITHUB_APP_ID_PROD = "Iv23lihCfwCfqCxQNpvv"
 const GITHUB_APP_ID_STAGING = "Iv23liUXLYx9mgGKHgZk"
 const GITHUB_APP_ID_DEV = "Iv23li88DidEyxVnAR1p"
@@ -40227,6 +40311,23 @@ const INSTPATH = "/usr/local/bin"
 // Default Jibril sensor version: the same stable pin as the floating v2 tag,
 // so the sensor never floats under an unchanged action ref.
 const JIBRIL_STABLE_VERSION = "v2.16.0"
+// From v2.17.0 on a release ships one linux-x86_64 tarball carrying the binary
+// next to its checksums, a release manifest, and a detached Sigstore bundle for
+// each of those payloads. Older releases only offer the bare `jibril` asset.
+const JIBRIL_RELEASES_REPO = "garnet-org/jibril-releases"
+const JIBRIL_RELEASES_URL = `https://github.com/${JIBRIL_RELEASES_REPO}/releases`
+// The release workflow signs its own attestation over the bundle payloads.
+// `gh attestation verify` filters on SLSA provenance by default, which this
+// release process does not publish, so the predicate type is passed explicitly.
+// Update both if the jibril release workflow ever changes them.
+const JIBRIL_ATTESTATION_PREDICATE = `https://github.com/${JIBRIL_RELEASES_REPO}/attestations/release/v1`
+const JIBRIL_SIGNER_WORKFLOW = `${JIBRIL_RELEASES_REPO}/.github/workflows/jibril-public-release.yml`
+/** @type {JibrilCoreVersion} */
+const JIBRIL_BUNDLE_MIN_VERSION = { major: 2, minor: 17, patch: 0 }
+const JIBRIL_BINARY = "jibril"
+const JIBRIL_CHECKSUMS = "jibril-checksums.txt"
+const JIBRIL_MANIFEST = "release.json"
+const SIGSTORE_SUFFIX = ".sigstore.json"
 // Stop ceiling for the jibril unit. On stop the daemon flushes its whole
 // event backlog and writes the JSON profile only when the flush completes;
 // the binary's stock TimeoutStopSec=600 has been observed SIGKILLing the
@@ -40244,9 +40345,6 @@ const JIBRIL_VERSION_PATTERN = /^v?\d+\.\d+\.\d+(-[A-Za-z0-9.]+)?$/
 // Release tags this action pins itself, kept accepted because they predate
 // the three-component tag scheme (`v0.0` is the daily-build channel).
 const JIBRIL_INTERNAL_VERSION_PINS = ["v0.0", "v2.10.4", JIBRIL_STABLE_VERSION]
-
-const JIBRIL_RELEASES_REPOSITORY = "garnet-org/jibril-releases"
-const JIBRIL_CHECKSUMS_FILE = "checksums.txt"
 const SKIP_SIGNATURE_VERIFICATION_ENV = "GARNET_SKIP_SIGNATURE_VERIFICATION"
 
 // This function is the main entry point for the script.
@@ -40263,8 +40361,6 @@ async function run() {
         let JIBRILVER = resolveJibrilVersion(getEnv("JIBRIL_VERSION", ""), getEnv("GITHUB_ACTION_REF", ""))
         const DEBUG = getEnv("DEBUG", "false")
 
-        const useOIDCAuth = getEnv(OIDC_AUTH_FEATURE_FLAG, "false") === "true"
-
         if (TOKEN === "") {
             const forkSkip = await resolveForkSkip({
                 eventName: getEnv("GITHUB_EVENT_NAME"),
@@ -40280,7 +40376,6 @@ async function run() {
         const controlPlaneAuth = await resolveControlPlaneAuth({
             apiURL: API,
             apiToken: TOKEN,
-            useOIDCAuth,
         })
 
         // Prevent accidental leakage of tokens in logs.
@@ -40329,34 +40424,23 @@ async function run() {
 
         assertDownloadableJibrilVersion(JIBRILVER)
 
+        // The bundled tarball's filename embeds the tag, and the agent record
+        // should name the exact sensor that ran.
+        if (JIBRILVER === "latest") {
+            JIBRILVER = await resolveLatestJibrilTag()
+            assertDownloadableJibrilVersion(JIBRILVER)
+        }
+
         info(`API server: ${API}`)
         info(`Jibril Version: ${JIBRILVER}`)
 
         // Create a temporary directory for the script to use.
         tmpDir = await promises_namespaceObject.mkdtemp(external_node_path_namespaceObject.join(external_node_os_namespaceObject.tmpdir(), "garnet-"))
 
-        // Download jibril
-        const jibrilPrefix = `https://github.com/${JIBRIL_RELEASES_REPOSITORY}/releases`
-        const releasePrefix =
-            JIBRILVER === "latest" ? `${jibrilPrefix}/latest/download` : `${jibrilPrefix}/download/${JIBRILVER}`
-        const jibrilURL = `${releasePrefix}/jibril`
-
-        info(`Downloading jibril: ${jibrilURL}`)
-
-        const jibrilDest = external_node_path_namespaceObject.join(tmpDir, "jibril")
-        await downloadFile(jibrilURL, jibrilDest)
+        const jibrilDest = await downloadJibril(JIBRILVER, tmpDir)
         if (!(await pathExists(jibrilDest))) {
             throw new Error("Failed to download jibril binary")
         }
-
-        // The binary is about to run as root: verify it before it is
-        // installed, made executable, or started.
-        await verifyJibrilBinary({
-            binaryPath: jibrilDest,
-            checksumsURL: `${releasePrefix}/${JIBRIL_CHECKSUMS_FILE}`,
-            skipVerification: getEnv(SKIP_SIGNATURE_VERIFICATION_ENV, "false") === "true",
-        })
-
         await execSudo(["mv", jibrilDest, `${INSTPATH}/jibril`])
         await execSudo(["chmod", "+x", `${INSTPATH}/jibril`])
 
@@ -40433,6 +40517,9 @@ async function run() {
         // The post step resolves the run's profile envelope ID from this agent.
         saveState("agentID", AGENT_ID)
 
+        // The post step authenticates as this agent to report stop reasons.
+        saveState("agentToken", AGENT_TOKEN)
+
         // Get network policy
         info("Getting network policy")
 
@@ -40451,6 +40538,9 @@ async function run() {
                 workflow_name: WORKFLOW,
             })
 
+            // The policy is installed under /etc and read by a root daemon,
+            // so the response is checked to be a policy document before it is
+            // written anywhere.
             assertValidNetworkPolicyYAML(networkPolicyYaml)
             await promises_namespaceObject.writeFile(NETPOLICY_PATH, networkPolicyYaml)
         } catch (error) {
@@ -40557,11 +40647,15 @@ StandardOutput=append:/var/log/jibril.log
         await execSudo(["cp", loggingConfPath, "/etc/systemd/system/jibril.service.d/logging.conf"])
 
         // Raise the unit's stop ceiling so the shutdown event flush can
-        // complete and the JSON profile gets written on heavy jobs.
+        // complete and the JSON profile gets written on heavy jobs. A
+        // disabled bound is written as `infinity` rather than `0`: systemd
+        // only reads `0` as "no timeout" through a legacy compatibility
+        // path, and `0s` meant an immediate SIGKILL on some versions.
         const stopTimeoutSeconds = resolveStopTimeoutSeconds(getEnv(JIBRIL_STOP_TIMEOUT_ENV, ""))
-        info(`Configuring Jibril stop timeout (${stopTimeoutSeconds}s)`)
+        const stopTimeoutValue = stopTimeoutSeconds > 0 ? String(stopTimeoutSeconds) : "infinity"
+        info(`Configuring Jibril stop timeout (${stopTimeoutValue})`)
         const stopTimeoutConf = `[Service]
-TimeoutStopSec=${stopTimeoutSeconds}
+TimeoutStopSec=${stopTimeoutValue}
 `
         const stopTimeoutConfPath = external_node_path_namespaceObject.join(tmpDir, "stop-timeout.conf")
         await promises_namespaceObject.writeFile(stopTimeoutConfPath, stopTimeoutConf)
@@ -40688,7 +40782,6 @@ TimeoutStopSec=${stopTimeoutSeconds}
  * @typedef {{
  *   apiURL: string
  *   apiToken: string
- *   useOIDCAuth: boolean
  * }} ResolveControlPlaneAuthInput
  */
 
@@ -40705,14 +40798,6 @@ TimeoutStopSec=${stopTimeoutSeconds}
  * @returns {Promise<ControlPlaneAuth>}
  */
 async function resolveControlPlaneAuth(input) {
-    if (input.useOIDCAuth !== true) {
-        return {
-            projectToken: requireApiToken(input.apiToken),
-            workflowToken: "",
-            workflowTokenExpiresAt: "",
-        }
-    }
-
     const audience = resolveOIDCAudience(input.apiURL)
 
     const unauthenticatedControlPlaneClient = new ControlPlaneClient({
@@ -40884,20 +40969,341 @@ function assertDownloadableJibrilVersion(version) {
 }
 
 /**
+ * @typedef {Object} JibrilCoreVersion
+ * @prop {number} major
+ * @prop {number} minor
+ * @prop {number} patch
+ */
+
+/**
+ * Prereleases sort with their core version, so v2.17.0-rc.5 is bundled too.
+ * Non-semver tags (daily builds) keep the bare binary.
+ * @param {string} tag
+ * @returns {boolean}
+ */
+function usesBundledJibrilRelease(tag) {
+    const version = parseCoreVersion(tag)
+    if (version === null) return false
+
+    const { major, minor, patch } = JIBRIL_BUNDLE_MIN_VERSION
+    if (version.major !== major) return version.major > major
+    if (version.minor !== minor) return version.minor > minor
+    return version.patch >= patch
+}
+
+/**
+ * Ignores any prerelease or build suffix.
+ * @param {string} tag
+ * @returns {JibrilCoreVersion|null}
+ */
+function parseCoreVersion(tag) {
+    const match = /^v?(\d+)\.(\d+)\.(\d+)(?:[-+].*)?$/.exec(tag.trim())
+    if (match === null) return null
+
+    const [, major = "0", minor = "0", patch = "0"] = match
+    return { major: Number(major), minor: Number(minor), patch: Number(patch) }
+}
+
+/**
+ * GitHub redirects /releases/latest to the tag page, so the tag comes from the
+ * Location header with no body download.
+ * @returns {Promise<string>}
+ */
+async function resolveLatestJibrilTag() {
+    const client = new HttpClient("garnet-action", undefined, { allowRedirects: false })
+    const response = await client.head(`${JIBRIL_RELEASES_URL}/latest`)
+    response.message.resume()
+
+    const location = response.message.headers.location ?? ""
+    const match = /\/releases\/tag\/([\w.+-]+)$/.exec(location)
+    if (match === null) {
+        const statusCode = response.message.statusCode ?? 0
+        throw new Error(`Failed to resolve the latest jibril release tag (HTTP ${statusCode})`)
+    }
+
+    const [, tag = ""] = match
+    info(`Resolved jibril 'latest' to ${tag}`)
+    return tag
+}
+
+/**
+ * Returns the path of the verified binary. `tag` is always concrete: "latest"
+ * is resolved before this is called.
+ * @param {string} tag
+ * @param {string} tmpDir
+ * @returns {Promise<string>}
+ */
+async function downloadJibril(tag, tmpDir) {
+    const releaseURL = `${JIBRIL_RELEASES_URL}/download/${tag}`
+    const binaryPath = external_node_path_namespaceObject.join(tmpDir, JIBRIL_BINARY)
+
+    if (!usesBundledJibrilRelease(tag)) {
+        const binaryURL = `${releaseURL}/${JIBRIL_BINARY}`
+        info(`Downloading jibril: ${binaryURL}`)
+        await downloadFile(binaryURL, binaryPath)
+        return binaryPath
+    }
+
+    const archiveName = `jibril-${tag}-linux-x86_64.tar.gz`
+    const archiveURL = `${releaseURL}/${archiveName}`
+    const archivePath = external_node_path_namespaceObject.join(tmpDir, archiveName)
+    const bundleDir = external_node_path_namespaceObject.join(tmpDir, "bundle")
+
+    info(`Downloading jibril: ${archiveURL}`)
+    await downloadFile(archiveURL, archivePath)
+
+    await promises_namespaceObject.mkdir(bundleDir, { recursive: true })
+    await exec_exec("tar", ["-xzf", archivePath, "-C", bundleDir])
+    if (getEnv(SKIP_SIGNATURE_VERIFICATION_ENV, "false") === "true") {
+        warning(
+            "jibril signature verification is DISABLED ('skip_signature_verification: true'). The sensor binary " +
+                "will be installed and run as root without checksum or attestation verification.",
+        )
+    } else {
+        await verifyJibrilBundle(bundleDir, tag)
+        await verifyJibrilAttestation(external_node_path_namespaceObject.join(bundleDir, JIBRIL_BINARY))
+    }
+    await promises_namespaceObject.rename(external_node_path_namespaceObject.join(bundleDir, JIBRIL_BINARY), binaryPath)
+
+    return binaryPath
+}
+
+/**
+ * Proves the bundle is self-consistent and belongs to `tag`. Authenticity is
+ * verifyJibrilAttestation's job.
+ * @param {string} bundleDir
+ * @param {string} tag
+ * @returns {Promise<void>}
+ */
+async function verifyJibrilBundle(bundleDir, tag) {
+    const binaryDigest = await verifySignedPayload(bundleDir, JIBRIL_BINARY)
+    const checksumsDigest = await verifySignedPayload(bundleDir, JIBRIL_CHECKSUMS)
+    await verifySignedPayload(bundleDir, JIBRIL_MANIFEST)
+
+    const checksums = parseChecksums(await promises_namespaceObject.readFile(external_node_path_namespaceObject.join(bundleDir, JIBRIL_CHECKSUMS), "utf8"))
+    assertSha256(JIBRIL_BINARY, binaryDigest, checksums.get(JIBRIL_BINARY), JIBRIL_CHECKSUMS)
+
+    const manifest = parseReleaseManifest(await promises_namespaceObject.readFile(external_node_path_namespaceObject.join(bundleDir, JIBRIL_MANIFEST), "utf8"))
+    if (manifest.tag !== tag) {
+        throw new Error(`jibril release bundle is for ${manifest.tag}, expected ${tag}`)
+    }
+    assertSha256(JIBRIL_BINARY, binaryDigest, manifest.subjects.get(JIBRIL_BINARY), JIBRIL_MANIFEST)
+    assertSha256(JIBRIL_CHECKSUMS, checksumsDigest, manifest.subjects.get(JIBRIL_CHECKSUMS), JIBRIL_MANIFEST)
+
+    info(`Verified the jibril bundle digests for ${tag}`)
+}
+
+/**
+ * Checks a payload against the digest its detached Sigstore bundle signed, and
+ * returns that digest.
+ * @param {string} bundleDir
+ * @param {string} name
+ * @returns {Promise<string>}
+ */
+async function verifySignedPayload(bundleDir, name) {
+    const signatureName = `${name}${SIGSTORE_SUFFIX}`
+    const payloadPath = external_node_path_namespaceObject.join(bundleDir, name)
+    const signaturePath = external_node_path_namespaceObject.join(bundleDir, signatureName)
+
+    for (const filePath of [payloadPath, signaturePath]) {
+        if (!(await pathExists(filePath))) {
+            throw new Error(`jibril release bundle is missing ${external_node_path_namespaceObject.basename(filePath)}`)
+        }
+    }
+
+    const digest = await fileSha256(payloadPath)
+    const signedDigest = readSignedDigest(await promises_namespaceObject.readFile(signaturePath, "utf8"))
+    assertSha256(name, digest, signedDigest, signatureName)
+
+    return digest
+}
+
+/**
+ * Establishes authenticity: `gh` checks the Sigstore signature, that the signer
+ * is the jibril release workflow, and transparency-log inclusion. It is
+ * preinstalled on GitHub-hosted runners and reads GITHUB_TOKEN from the
+ * environment; when either is absent we warn rather than fail so self-hosted
+ * runners keep working.
+ * @param {string} binaryPath
+ * @returns {Promise<void>}
+ */
+async function verifyJibrilAttestation(binaryPath) {
+    if (getEnv("GITHUB_TOKEN", "") === "") {
+        warning("github_token is unset: skipping jibril attestation verification.")
+        return
+    }
+
+    if (!(await isCommandAvailable("gh"))) {
+        warning("gh CLI is unavailable: skipping jibril attestation verification.")
+        return
+    }
+
+    const args = [
+        "attestation",
+        "verify",
+        binaryPath,
+        "--repo",
+        JIBRIL_RELEASES_REPO,
+        "--predicate-type",
+        JIBRIL_ATTESTATION_PREDICATE,
+        "--signer-workflow",
+        JIBRIL_SIGNER_WORKFLOW,
+    ]
+    const exitCode = await exec_exec("gh", args, { ignoreReturnCode: true })
+    if (exitCode !== 0) {
+        throw new Error(`Attestation verification failed for ${JIBRIL_BINARY}: gh exited ${exitCode}`)
+    }
+
+    info(`Verified the jibril attestation signed by ${JIBRIL_SIGNER_WORKFLOW}`)
+}
+
+/**
+ * @param {string} command
+ * @returns {Promise<boolean>}
+ */
+async function isCommandAvailable(command) {
+    try {
+        const exitCode = await exec_exec(command, ["--version"], { ignoreReturnCode: true, silent: true })
+        return exitCode === 0
+    } catch (_) {
+        return false
+    }
+}
+
+/**
+ * @param {string} name
+ * @param {string} actual
+ * @param {string|undefined} expected  absent when `source` never recorded it
+ * @param {string} source
+ * @returns {void}
+ */
+function assertSha256(name, actual, expected, source) {
+    if (expected === undefined) {
+        throw new Error(`${source} records no sha256 for ${name}`)
+    }
+    if (expected !== actual) {
+        throw new Error(`sha256 mismatch for ${name}: ${source} expects ${expected}, got ${actual}`)
+    }
+}
+
+/**
+ * @param {string} filePath
+ * @returns {Promise<string>}
+ */
+async function fileSha256(filePath) {
+    const hash = (0,external_node_crypto_.createHash)("sha256")
+    await (0,external_node_stream_promises_namespaceObject.pipeline)((0,external_node_fs_namespaceObject.createReadStream)(filePath), hash)
+    return hash.digest("hex")
+}
+
+/**
+ * Reads `<sha256>  <filename>` lines into digests keyed by filename.
+ * @param {string} checksumsText
+ * @returns {Map<string, string>}
+ */
+function parseChecksums(checksumsText) {
+    /** @type {Map<string, string>} */
+    const digests = new Map()
+    for (const line of checksumsText.split("\n")) {
+        const match = /^([a-f0-9]{64})\s+\*?(\S+)$/i.exec(line.trim())
+        if (match === null) continue
+
+        const [, digest = "", name = ""] = match
+        digests.set(name, digest.toLowerCase())
+    }
+    return digests
+}
+
+/**
+ * @param {unknown} value
+ * @returns {boolean}
+ */
+function isSha256(value) {
+    return typeof value === "string" && /^[a-f0-9]{64}$/i.test(value)
+}
+
+/**
+ * These bundles sign the raw blob, so the digest sits in `messageSignature`,
+ * base64-encoded.
+ * @param {string} bundleText
+ * @returns {string}
+ */
+function readSignedDigest(bundleText) {
+    try {
+        const bundle = JSON.parse(bundleText)
+        const encoded = bundle?.messageSignature?.messageDigest?.digest
+        if (typeof encoded !== "string") {
+            throw new Error("missing messageSignature.messageDigest.digest")
+        }
+
+        const digest = Buffer.from(encoded, "base64").toString("hex")
+        if (!isSha256(digest)) {
+            throw new Error("messageSignature.messageDigest.digest is not a sha256")
+        }
+        return digest
+    } catch (error) {
+        throw new Error(`Invalid Sigstore bundle: ${getErrorMessage(error)}`)
+    }
+}
+
+/**
+ * @typedef {Object} JibrilReleaseManifest
+ * @prop {string} tag
+ * @prop {Map<string, string>} subjects  sha256 by payload name
+ */
+
+/**
+ * @param {string} manifestText
+ * @returns {JibrilReleaseManifest}
+ */
+function parseReleaseManifest(manifestText) {
+    try {
+        const manifest = JSON.parse(manifestText)
+
+        const tag = manifest?.release?.tag
+        if (typeof tag !== "string" || tag === "") {
+            throw new Error("missing release.tag")
+        }
+
+        if (!Array.isArray(manifest?.subjects)) {
+            throw new Error("missing subjects")
+        }
+
+        /** @type {Map<string, string>} */
+        const subjects = new Map()
+        for (const subject of manifest.subjects) {
+            const name = subject?.name
+            const sha256 = subject?.sha256
+            if (typeof name === "string" && isSha256(sha256)) {
+                subjects.set(name, sha256.toLowerCase())
+            }
+        }
+
+        return { tag, subjects }
+    } catch (error) {
+        throw new Error(`Invalid ${JIBRIL_MANIFEST}: ${getErrorMessage(error)}`)
+    }
+}
+
+/**
  * Resolves the stop ceiling written into the unit's drop-in. An explicit
- * positive-integer environment override wins; otherwise the default is used.
+ * integer wins, where zero or negative means "no bound at all"; anything
+ * unset or unparsable falls back to the default.
  * @param {string} overrideValue
- * @returns {number}
+ * @returns {number} seconds, or 0 when the bound is disabled
  */
 function resolveStopTimeoutSeconds(overrideValue) {
     const text = String(overrideValue === undefined || overrideValue === null ? "" : overrideValue).trim()
-    if (text !== "" && /^\d+$/.test(text)) {
-        const parsed = Number.parseInt(text, 10)
-        if (Number.isSafeInteger(parsed) && parsed > 0) {
-            return parsed
-        }
+    if (!/^-?\d+$/.test(text)) {
+        return DEFAULT_JIBRIL_STOP_TIMEOUT_SECONDS
     }
-    return DEFAULT_JIBRIL_STOP_TIMEOUT_SECONDS
+
+    const parsed = Number.parseInt(text, 10)
+    if (!Number.isSafeInteger(parsed)) {
+        return DEFAULT_JIBRIL_STOP_TIMEOUT_SECONDS
+    }
+
+    return parsed > 0 ? parsed : 0
 }
 
 /**
@@ -40940,190 +41346,6 @@ async function execSudo(args, options = {}) {
         debug(`$ sudo -E ${args.join(" ")}`)
     }
     return exec_exec("sudo", ["-E", ...args], options)
-}
-
-/**
- * @typedef {{
- *   binaryPath: string
- *   checksumsURL: string
- *   skipVerification: boolean
- * }} VerifyJibrilBinaryInput
- */
-
-/**
- * Verifies the downloaded sensor before it is installed and run as root:
- * its sha256 must match the release's `checksums.txt` entry, and the
- * release artifact must carry a valid build attestation. Releases that
- * predate signed distribution publish no `checksums.txt`; those are logged
- * and installed unverified, which is the pre-existing behaviour.
- * @param {VerifyJibrilBinaryInput} input
- * @returns {Promise<void>}
- */
-async function verifyJibrilBinary(input) {
-    if (input.skipVerification) {
-        warning(
-            "jibril signature verification is DISABLED ('skip_signature_verification: true'). The sensor binary will be installed and run as root without checksum or attestation verification.",
-        )
-        return
-    }
-
-    const checksums = await fetchOptionalText(input.checksumsURL)
-    if (checksums === null) {
-        info("jibril: release predates signed distribution; checksum verification unavailable")
-        return
-    }
-
-    const digest = await verifyChecksum(input.binaryPath, checksums, "jibril")
-    info(`jibril: sha256 verified against ${JIBRIL_CHECKSUMS_FILE} (${digest})`)
-
-    await verifyJibrilAttestation(input.binaryPath)
-}
-
-/**
- * Runs `gh attestation verify` against the release repository. `gh` ships
- * on GitHub-hosted runners; where it is absent the attestation check is
- * skipped with a warning, and a failed verification fails the run.
- * @param {string} binaryPath
- * @returns {Promise<void>}
- */
-async function verifyJibrilAttestation(binaryPath) {
-    if (!(await isCommandAvailable("gh"))) {
-        warning(
-            "jibril: 'gh' is not available on this runner, so the build attestation could not be verified. The sha256 checksum was verified.",
-        )
-        return
-    }
-
-    /** @type {ExecOptions} */
-    const options = {
-        ignoreReturnCode: true,
-        silent: true,
-    }
-
-    const githubToken = getEnv("GH_TOKEN", getEnv("GITHUB_TOKEN", ""))
-    if (githubToken !== "") {
-        options.env = { ...process.env, GH_TOKEN: githubToken }
-    }
-
-    const verify = await getExecOutput(
-        "gh",
-        ["attestation", "verify", binaryPath, "--repo", JIBRIL_RELEASES_REPOSITORY],
-        options,
-    )
-
-    if (verify.exitCode !== 0) {
-        throw new Error(
-            `jibril: build attestation verification failed (gh exit ${verify.exitCode}): ${verify.stderr.trim() || verify.stdout.trim()}`,
-        )
-    }
-
-    info(`jibril: build attestation verified against ${JIBRIL_RELEASES_REPOSITORY}`)
-}
-
-/**
- * Hashes the downloaded file and compares it with the release checksum
- * list. Returns the verified digest; a missing entry or a mismatch throws.
- * @param {string} filePath
- * @param {string} checksums
- * @param {string} fileName
- * @returns {Promise<string>}
- */
-async function verifyChecksum(filePath, checksums, fileName) {
-    const expectedDigest = findChecksum(checksums, fileName)
-    if (expectedDigest === null) {
-        throw new Error(`${fileName}: ${JIBRIL_CHECKSUMS_FILE} has no entry for this artifact`)
-    }
-
-    const actualDigest = await sha256File(filePath)
-    if (actualDigest !== expectedDigest) {
-        throw new Error(
-            `${fileName}: checksum mismatch (expected ${expectedDigest}, got ${actualDigest}). Refusing to install the sensor.`,
-        )
-    }
-
-    return actualDigest
-}
-
-/**
- * The sha256 digest recorded for a file name in a `checksums.txt` body
- * (`<digest>  <name>` lines), or null when the name is absent.
- * @param {string} checksums
- * @param {string} fileName
- * @returns {string | null}
- */
-function findChecksum(checksums, fileName) {
-    for (const line of checksums.split("\n")) {
-        const match = /^([a-fA-F0-9]{64})\s+\*?(\S+)$/.exec(line.trim())
-        if (match === null) {
-            continue
-        }
-
-        const [, digest, name] = match
-        if (name !== undefined && external_node_path_namespaceObject.basename(name) === fileName) {
-            return digest === undefined ? null : digest.toLowerCase()
-        }
-    }
-
-    return null
-}
-
-/**
- * @param {string} filePath
- * @returns {Promise<string>}
- */
-async function sha256File(filePath) {
-    const hash = (0,external_node_crypto_.createHash)("sha256")
-    await (0,external_node_stream_promises_namespaceObject.pipeline)((0,external_node_fs_namespaceObject.createReadStream)(filePath), hash)
-    return hash.digest("hex")
-}
-
-/**
- * @param {string} command
- * @returns {Promise<boolean>}
- */
-async function isCommandAvailable(command) {
-    try {
-        const result = await getExecOutput(command, ["--version"], {
-            ignoreReturnCode: true,
-            silent: true,
-        })
-        return result.exitCode === 0
-    } catch (_) {
-        return false
-    }
-}
-
-/**
- * Fetches a release asset as text. A 404 means the asset does not exist
- * for this release and yields null; every other failure throws.
- * @param {string} url
- * @returns {Promise<string | null>}
- */
-async function fetchOptionalText(url) {
-    if (!url.startsWith("https://")) {
-        throw new Error(`Refusing to download over non-HTTPS: ${url}`)
-    }
-
-    const client = new HttpClient("garnet-action", undefined, {
-        allowRedirects: true,
-        maxRedirects: 10,
-        socketTimeout: 60_000,
-    })
-
-    const response = await client.get(url)
-    const statusCode = response.message.statusCode ?? 0
-
-    if (statusCode === 404) {
-        response.message.resume()
-        return null
-    }
-
-    const body = await response.readBody()
-    if (statusCode !== 200) {
-        throw new Error(`Failed to download ${url}: HTTP ${statusCode}`)
-    }
-
-    return body
 }
 
 /**
@@ -46285,6 +46507,16 @@ async function main() {
         process.env.JIBRIL_VERSION = getInput("jibril_version")
         process.env.GARNET_SKIP_SIGNATURE_VERIFICATION = getInput("skip_signature_verification")
         process.env.DEBUG = getInput("debug")
+
+        // Resolve the shutdown flush bound once, here at the boundary: the
+        // main step writes it into the unit and the post step reuses the exact
+        // same number from state instead of re-deriving it. Zero means the
+        // bound is disabled.
+        const stopTimeoutSeconds = resolveStopTimeoutSeconds(
+            firstNonEmptyString(getInput("stop_timeout_seconds"), getEnv("GARNET_JIBRIL_STOP_TIMEOUT_SECONDS")),
+        )
+        process.env.GARNET_JIBRIL_STOP_TIMEOUT_SECONDS = String(stopTimeoutSeconds)
+        saveState("stopTimeoutSeconds", String(stopTimeoutSeconds))
 
         // The Run Profile permalink derives from the run id and the configured
         // API host, so it is known up front — emit the declared report_url output
