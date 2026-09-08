@@ -51,6 +51,8 @@ outputs:
         description: "Link to the run's Execution Profiles on app.garnet.ai"
     agent_id:
         description: "Identifier for the Jibril sensor instance that recorded this Runtime Review"
+    garnet_status:
+        description: "recorded, start_failed (the sensor did not attach), or no_profile (no execution profile was produced)"
 runs:
     using: "node24"
     main: "dist/main/index.js"

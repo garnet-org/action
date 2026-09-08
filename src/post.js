@@ -14,17 +14,20 @@ import {
     pathExists,
     waitForDelay,
 } from "./shared.js"
-import { getPullRequestNumberFromEvent } from "./github-event.js"
+import { getPullRequestHeadShaFromEvent, getPullRequestNumberFromEvent } from "./github-event.js"
+import { COMMIT_STATUS_CONTEXT, createExecutionReceiptStatus, describeCommitStatus } from "./commit-status.js"
+import { GARNET_STATUS_STATE, publishGarnetStatus } from "./garnet-status.js"
 import { getProfileJobName } from "./github-context.js"
 import { ControlPlaneClient } from "./control-plane/client.js"
 import { uploadJibrilArtifacts } from "./post-artifacts.js"
 import { buildReportLink, getDefaultJsonProfileFile, resolveAppBaseURL } from "./profile-comment.js"
-import { profilePermalink, renderPendingReview, renderStepSummary, summarizeProfile } from "./runtime-review.js"
+import { profilePermalink, renderStepSummary, summarizeProfile } from "./runtime-review.js"
+import { renderNoProfileSummary } from "./post-summary.js"
 import { publishPullRequestComment } from "./pr-comment.js"
 import { getGitHubIDToken, resolveOIDCAudience } from "./oidc.js"
 import { isCommentPermissionError } from "./pr-comment-error.js"
 import { parseSystemdTimespanSeconds } from "./systemd-timespan.js"
-import { classifyProfileContent } from "./post-profile-state.js"
+import { classifyProfileContent, garnetStatusFromProfileState } from "./post-profile-state.js"
 import { classifyAgentStop, formatAgentStopDetail } from "./post-signal.js"
 import { resolveJobStatusFromGitHub } from "./github-job-status.js"
 import { resolveStopTimeoutFromSettings, resolveStopTimeoutFromUnit } from "./post-stop-timeout.js"
@@ -103,6 +106,7 @@ async function run() {
 
     try {
         const jibrilStarted = core.getState("jibrilStarted") === "true"
+        const garnetStatusFromMain = core.getState(GARNET_STATUS_STATE)
         const agentID = core.getState("agentID")
         const agentToken = core.getState("agentToken")
         const jsonProfilerFile = firstNonEmptyString(core.getState("jsonProfilerFile"), getDefaultJsonProfileFile())
@@ -118,6 +122,8 @@ async function run() {
 
         if (!jibrilStarted) {
             core.info("Jibril did not start in the main step, skipping post-step runtime processing.")
+            await appendNoProfileSummary()
+            await publishCommitStatus("start_failed", null)
             return
         }
 
@@ -196,6 +202,13 @@ async function run() {
             }
         }
 
+        // The main step already published start_failed when the sensor never
+        // attached; otherwise the profile classification decides recorded vs
+        // no_profile.
+        const garnetStatus =
+            garnetStatusFromMain === "start_failed" ? "start_failed" : garnetStatusFromProfileState(profileResult.state)
+        publishGarnetStatus(garnetStatus)
+
         // A run that produced no usable profile leaves the control plane's
         // pending state unresolved, so the agent reports how it stopped.
         if (profileResult.state !== "present" && agentToken !== "") {
@@ -211,6 +224,7 @@ async function run() {
         }
 
         await appendRuntimeReviewSummary(profile, renderOptions)
+        await publishCommitStatus(garnetStatus, profile)
         if (profile !== null) {
             logProfileReportLink(profile)
             await publishProfilerComment(profile.normalized, renderOptions)
@@ -430,7 +444,7 @@ async function resolveProfileEnvelopeID(agentID) {
         // The main step creates one agent per job, so the agent's profile
         // list for this run must resolve to exactly one envelope; anything
         // else is ambiguous and the render stays linkless.
-        const matches = page.items.filter((item) => item.runID === "" || item.runID === runID)
+        const matches = page.items.filter(item => item.runID === "" || item.runID === runID)
         const match = matches.length === 1 ? matches[0] : undefined
         if (match === undefined) {
             return ""
@@ -485,9 +499,8 @@ function getRenderOptions() {
 /**
  * Writes the Garnet Runtime Summary — the per-run full-detail tabular
  * record (v6.1 §8) — to the GitHub Step Summary, rendered from the RAW
- * parsed profile. When no profile was produced, the waiting-state body
- * (v6.1 §2) is written instead, markerless and with the explainer
- * collapsed.
+ * parsed profile. When no profile was produced, a single explicit
+ * no-profile line is written instead so the job is never green and silent.
  * @param {LoadedProfile | null} profile
  * @param {RenderOptions} renderOptions
  * @returns {Promise<void>}
@@ -501,12 +514,7 @@ async function appendRuntimeReviewSummary(profile, renderOptions) {
 
     let content
     if (profile === null) {
-        const sha = getEnv("GITHUB_SHA")
-        const repository = getEnv("GITHUB_REPOSITORY")
-        content = renderPendingReview({
-            sha,
-            commitUrl: repository !== "" && sha !== "" ? `https://github.com/${repository}/commit/${sha}` : "",
-        })
+        content = renderNoProfileSummary()
     } else {
         const preview = core.getState("preview") === "true"
         content = renderStepSummary([profile.raw], { appUrl: resolveAppBaseURL(), preview })
@@ -514,6 +522,73 @@ async function appendRuntimeReviewSummary(profile, renderOptions) {
 
     await fs.appendFile(summaryFile, `\n${content}\n`)
     core.info("Garnet Runtime Summary written to job summary")
+}
+
+/**
+ * Writes the no-profile Step Summary line for the early-exit path where the
+ * sensor never attached and no profile was read at all.
+ * @returns {Promise<void>}
+ */
+async function appendNoProfileSummary() {
+    const summaryFile = getEnv("GITHUB_STEP_SUMMARY")
+    if (summaryFile === "") {
+        core.info("GITHUB_STEP_SUMMARY is not set, cannot write summary")
+        return
+    }
+    await fs.appendFile(summaryFile, `\n${renderNoProfileSummary()}\n`)
+}
+
+/**
+ * Publishes the garnet/execution-receipt commit status. The status is a
+ * receipt, never a gate: it is always created with state "success" and only
+ * when the workflow token permits it.
+ * @param {import("./garnet-status.js").GarnetStatus} status
+ * @param {LoadedProfile | null} profile
+ * @returns {Promise<void>}
+ */
+async function publishCommitStatus(status, profile) {
+    const token = firstNonEmptyString(core.getState("githubToken"), getEnv("GITHUB_TOKEN"))
+
+    const eventPath = getEnv("GITHUB_EVENT_PATH")
+    const pullRequestHeadSha = eventPath !== "" ? await getPullRequestHeadShaFromEvent(eventPath) : null
+    const sha = firstNonEmptyString(pullRequestHeadSha !== null ? pullRequestHeadSha : "", getEnv("GITHUB_SHA"))
+
+    const jobCount = profile !== null && summarizeProfile(profile.raw) !== null ? 1 : 0
+    const result = await createExecutionReceiptStatus({
+        token,
+        repository: getEnv("GITHUB_REPOSITORY"),
+        sha,
+        description: describeCommitStatus(status, jobCount),
+        targetURL: resolveReportLink(profile),
+    })
+    if (result === "created") {
+        core.info(`commit status published: ${COMMIT_STATUS_CONTEXT}`)
+    }
+}
+
+/**
+ * Resolves the public Run Profile report link for a parsed profile: the exact
+ * per-profile selector when the profile carries an envelope ID, otherwise the
+ * run-level report link. Returns "" when no link can be built.
+ * @param {LoadedProfile | null} profile
+ * @returns {string}
+ */
+function resolveReportLink(profile) {
+    if (profile !== null) {
+        const job = summarizeProfile(profile.raw)
+        if (job !== null) {
+            const link = profilePermalink(job, resolveAppBaseURL(), "ci_log")
+            if (link !== "") {
+                return link
+            }
+        }
+    }
+
+    return buildReportLink({
+        repository: getEnv("GITHUB_REPOSITORY"),
+        run_id: getEnv("GITHUB_RUN_ID"),
+        job: getEnv("GITHUB_JOB"),
+    })
 }
 
 /**
@@ -528,21 +603,7 @@ async function appendRuntimeReviewSummary(profile, renderOptions) {
  * @returns {void}
  */
 function logProfileReportLink(profile) {
-    const job = summarizeProfile(profile.raw)
-
-    let link = ""
-    if (job !== null) {
-        link = profilePermalink(job, resolveAppBaseURL(), "ci_log")
-    }
-
-    if (link === "") {
-        link = buildReportLink({
-            repository: getEnv("GITHUB_REPOSITORY"),
-            run_id: getEnv("GITHUB_RUN_ID"),
-            job: getEnv("GITHUB_JOB"),
-        })
-    }
-
+    const link = resolveReportLink(profile)
     if (link === "") {
         return
     }

@@ -415,7 +415,7 @@ TimeoutStopSec=${stopTimeoutValue}
         })
 
         if (returnCode !== 0) {
-            core.warning(
+            core.info(
                 "Jibril service failed to start. The workflow will continue without runtime monitoring for this run.",
             )
             await dumpJibrilLogs()
@@ -430,7 +430,7 @@ TimeoutStopSec=${stopTimeoutValue}
         })
 
         if (serviceState !== "active") {
-            core.warning(
+            core.info(
                 `Jibril service exited early with state '${serviceState || "unknown"}'. The workflow will continue without runtime monitoring for this run.`,
             )
             await dumpJibrilLogs()
@@ -462,7 +462,7 @@ TimeoutStopSec=${stopTimeoutValue}
         core.info("Jibril service started successfully")
         return true
     } catch (err) {
-        core.warning(
+        core.info(
             `Garnet runtime monitoring setup did not complete: ${getErrorMessage(err)}. The workflow will continue without runtime monitoring for this run.`,
         )
         await dumpJibrilLogs()
@@ -1131,56 +1131,62 @@ function formatCapturedOutput(text, emptyMessage) {
     return redacted
 }
 
-// Dumps jibril stdout/stderr and journalctl when jibril fails in debug mode.
+// Dumps jibril stdout/stderr, systemctl status, and journalctl when jibril
+// fails to attach, inside one log group so the job log stays readable.
 async function dumpJibrilLogs() {
-    if (getEnv("DEBUG") !== "true") {
-        return
-    }
-
-    /** @type {[string, string][]} */
-    const logPaths = [
-        ["/var/log/jibril.log", "Jibril stdout"],
-        ["/var/log/jibril.err", "Jibril stderr"],
-    ]
-    for (const [logPath, label] of logPaths) {
+    core.startGroup("Jibril did not attach — sensor diagnostics (journalctl -u jibril --no-pager -n 200)")
+    try {
+        /** @type {[string, string][]} */
+        const logPaths = [
+            ["/var/log/jibril.log", "Jibril stdout"],
+            ["/var/log/jibril.err", "Jibril stderr"],
+        ]
+        for (const [logPath, label] of logPaths) {
+            try {
+                const { stdout, stderr } = await execCapture("sudo", ["cat", logPath], {
+                    ignoreReturnCode: true,
+                })
+                core.info(`--- ${label} (${logPath}) ---`)
+                core.info(formatCapturedOutput(stdout, "(empty or file not found)"))
+                if (stderr !== "") {
+                    core.info(`--- ${label} stderr (${logPath}) ---`)
+                    core.info(formatCapturedOutput(stderr, "(empty stderr)"))
+                }
+            } catch (_) {
+                core.info(`--- ${label}: failed to read ---`)
+            }
+        }
         try {
-            const { stdout, stderr } = await execCapture("sudo", ["cat", logPath], {
-                ignoreReturnCode: true,
-            })
-            core.info(`--- ${label} (${logPath}) ---`)
-            core.info(formatCapturedOutput(stdout, "(empty or file not found)"))
+            core.info("--- systemctl status ---")
+            const { stdout, stderr } = await execCapture(
+                "sudo",
+                ["systemctl", "status", "jibril.service", "--no-pager"],
+                {
+                    ignoreReturnCode: true,
+                },
+            )
+            core.info(formatCapturedOutput(stdout, "(empty or failed)"))
             if (stderr !== "") {
-                core.info(`--- ${label} stderr (${logPath}) ---`)
+                core.info("--- systemctl status stderr ---")
                 core.info(formatCapturedOutput(stderr, "(empty stderr)"))
             }
-        } catch (_) {
-            core.info(`--- ${label}: failed to read ---`)
-        }
+        } catch (_) {}
+        try {
+            core.info("--- journalctl (last 200 lines) ---")
+            const { stdout, stderr } = await execCapture(
+                "sudo",
+                ["journalctl", "-u", "jibril", "--no-pager", "-n", "200"],
+                {
+                    ignoreReturnCode: true,
+                },
+            )
+            core.info(formatCapturedOutput(stdout, "(empty or failed)"))
+            if (stderr !== "") {
+                core.info("--- journalctl stderr ---")
+                core.info(formatCapturedOutput(stderr, "(empty stderr)"))
+            }
+        } catch (_) {}
+    } finally {
+        core.endGroup()
     }
-    try {
-        core.info("--- systemctl status ---")
-        const { stdout, stderr } = await execCapture("sudo", ["systemctl", "status", "jibril.service", "--no-pager"], {
-            ignoreReturnCode: true,
-        })
-        core.info(formatCapturedOutput(stdout, "(empty or failed)"))
-        if (stderr !== "") {
-            core.info("--- systemctl status stderr ---")
-            core.info(formatCapturedOutput(stderr, "(empty stderr)"))
-        }
-    } catch (_) {}
-    try {
-        core.info("--- journalctl (last 50 lines) ---")
-        const { stdout, stderr } = await execCapture(
-            "sudo",
-            ["journalctl", "-u", "jibril.service", "-n", "50", "--no-pager"],
-            {
-                ignoreReturnCode: true,
-            },
-        )
-        core.info(formatCapturedOutput(stdout, "(empty or failed)"))
-        if (stderr !== "") {
-            core.info("--- journalctl stderr ---")
-            core.info(formatCapturedOutput(stderr, "(empty stderr)"))
-        }
-    } catch (_) {}
 }
