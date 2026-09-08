@@ -81499,6 +81499,72 @@ async function getProfileSha() {
   return getEnv("GITHUB_SHA")
 }
 
+;// CONCATENATED MODULE: ./src/jibril-unit-state.js
+
+
+
+
+/** @typedef {import("./post-signal.js").JibrilUnitState} JibrilUnitState */
+
+/**
+ * Reads the jibril unit state for diagnostics and stop-reason classification.
+ * @returns {Promise<JibrilUnitState | null>}
+ */
+async function readJibrilUnitState() {
+    try {
+        const result = await getExecOutput(
+            "sudo",
+            ["systemctl", "show", "jibril.service", "-p", "ActiveState", "-p", "Result", "-p", "ExecMainStatus"],
+            {
+                silent: true,
+                ignoreReturnCode: true,
+            },
+        )
+        if (result.exitCode !== 0) {
+            return null
+        }
+
+        const properties = parseSystemctlProperties(result.stdout)
+        return {
+            activeState: properties.get("ActiveState") ?? "",
+            result: properties.get("Result") ?? "",
+            execMainStatus: parseExecMainStatus(properties.get("ExecMainStatus")),
+        }
+    } catch (error) {
+        info(`could not read jibril service state: ${getErrorMessage(error)}`)
+        return null
+    }
+}
+
+/**
+ * Parses the `key=value` lines printed by `systemctl show`.
+ * @param {string} output
+ * @returns {Map<string, string>}
+ */
+function parseSystemctlProperties(output) {
+    /** @type {Map<string, string>} */
+    const properties = new Map()
+
+    for (const line of output.split("\n")) {
+        const separatorIndex = line.indexOf("=")
+        if (separatorIndex === -1) {
+            continue
+        }
+        properties.set(line.slice(0, separatorIndex).trim(), line.slice(separatorIndex + 1).trim())
+    }
+
+    return properties
+}
+
+/**
+ * @param {string | undefined} value
+ * @returns {number}
+ */
+function parseExecMainStatus(value) {
+    const parsedValue = Number.parseInt(value ?? "", 10)
+    return Number.isSafeInteger(parsedValue) ? parsedValue : 0
+}
+
 ;// CONCATENATED MODULE: ./node_modules/zod/v4/core/util.js
 
 // functions
@@ -90839,7 +90905,7 @@ const API_ERROR_SCHEMA = object({
  */
 
 /**
- * @typedef {"run_cancelled" | "crashed" | "flush_timeout" | "stopped_cleanly"} AgentStopReason
+ * @typedef {"run_cancelled" | "crashed" | "flush_timeout" | "stopped_cleanly" | "start_failed"} AgentStopReason
  */
 
 /**
@@ -90888,7 +90954,13 @@ const PROFILE_ENVELOPE_PAGE_SCHEMA = object({
     })
     .passthrough()
 
-const AGENT_STOP_REASON_SCHEMA = schemas_enum(["run_cancelled", "crashed", "flush_timeout", "stopped_cleanly"])
+const AGENT_STOP_REASON_SCHEMA = schemas_enum([
+    "run_cancelled",
+    "crashed",
+    "flush_timeout",
+    "stopped_cleanly",
+    "start_failed",
+])
 
 const AGENT_STOPPED_REQUEST_SCHEMA = object({
     reason: AGENT_STOP_REASON_SCHEMA,
@@ -152909,7 +152981,7 @@ function classifyProfileContent(stat, content) {
  */
 
 /**
- * @typedef {"run_cancelled" | "crashed" | "flush_timeout" | "stopped_cleanly"} AgentStopReason
+ * @typedef {"run_cancelled" | "crashed" | "flush_timeout" | "stopped_cleanly" | "start_failed"} AgentStopReason
  */
 
 /**
@@ -153206,6 +153278,7 @@ function parseTimeoutSetting(value) {
 }
 
 ;// CONCATENATED MODULE: ./src/post.js
+
 
 
 
@@ -153613,7 +153686,7 @@ async function resolveProfileEnvelopeID(agentID) {
         // The main step creates one agent per job, so the agent's profile
         // list for this run must resolve to exactly one envelope; anything
         // else is ambiguous and the render stays linkless.
-        const matches = page.items.filter((item) => item.runID === "" || item.runID === runID)
+        const matches = page.items.filter(item => item.runID === "" || item.runID === runID)
         const match = matches.length === 1 ? matches[0] : undefined
         if (match === undefined) {
             return ""
@@ -153741,36 +153814,6 @@ async function waitForRootFile(filePath, deadlineMs) {
             return false
         }
         await waitForDelay(PROFILE_POLL_INTERVAL_MS)
-    }
-}
-
-/**
- * Reads the jibril unit state for diagnostics and stop-reason classification.
- * @returns {Promise<JibrilUnitState | null>}
- */
-async function readJibrilUnitState() {
-    try {
-        const result = await getExecOutput(
-            "sudo",
-            ["systemctl", "show", "jibril.service", "-p", "ActiveState", "-p", "Result", "-p", "ExecMainStatus"],
-            {
-                silent: true,
-                ignoreReturnCode: true,
-            },
-        )
-        if (result.exitCode !== 0) {
-            return null
-        }
-
-        const properties = parseSystemctlProperties(result.stdout)
-        return {
-            activeState: properties.get("ActiveState") ?? "",
-            result: properties.get("Result") ?? "",
-            execMainStatus: parseExecMainStatus(properties.get("ExecMainStatus")),
-        }
-    } catch (error) {
-        info(`could not read jibril service state: ${getErrorMessage(error)}`)
-        return null
     }
 }
 
@@ -153903,35 +153946,6 @@ async function readRootFileContent(filePath) {
     }
 
     return result.stdout.trim()
-}
-
-/**
- * Parses the `key=value` lines printed by `systemctl show`.
- * @param {string} output
- * @returns {Map<string, string>}
- */
-function parseSystemctlProperties(output) {
-    /** @type {Map<string, string>} */
-    const properties = new Map()
-
-    for (const line of output.split("\n")) {
-        const separatorIndex = line.indexOf("=")
-        if (separatorIndex === -1) {
-            continue
-        }
-        properties.set(line.slice(0, separatorIndex).trim(), line.slice(separatorIndex + 1).trim())
-    }
-
-    return properties
-}
-
-/**
- * @param {string | undefined} value
- * @returns {number}
- */
-function parseExecMainStatus(value) {
-    const parsedValue = Number.parseInt(value ?? "", 10)
-    return Number.isSafeInteger(parsedValue) ? parsedValue : 0
 }
 
 run()

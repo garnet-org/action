@@ -175,7 +175,7 @@ The same full-detail record is appended to the GitHub Actions Job Summary as the
 
 ## Under the hood
 
-- **Main step**: Downloads `jibril`, authenticates with the Garnet control plane via GitHub OIDC or `api_token`, fetches your merged network policy, and starts Jibril as a `systemd` service on the runner. If neither auth method is available the action falls back to a best-effort local review. If Jibril crashes during startup, the action logs diagnostics and continues so later workflow steps still run.
+- **Main step**: Downloads `jibril`, authenticates with the Garnet control plane via GitHub OIDC or `api_token`, fetches your merged network policy, and starts Jibril as a `systemd` service on the runner. If neither auth method is available the action falls back to a best-effort local review. If Jibril does not start, the action continues so later workflow steps still run, and discloses the gap instead of staying silent: a job-log warning with the reason, a Job Summary block with the bounded startup log (systemd state, journal, sensor stderr), and — when the agent was already registered — a `start_failed` stop report to the control plane so the run is never left pending.
 - **Post step (always)**: Stops Jibril so it flushes events, appends the Garnet Execution Summary to `GITHUB_STEP_SUMMARY`, and logs the run's public Execution Profile permalink. If the shutdown flush exceeds the configured bound, the post step force stops the sensor so the job does not hang. When no usable Run Profile is produced, the action reports that stop to the control plane so pending comment state can be resolved. When `debug=true`, it also uploads Jibril logs as build artifacts.
 
 ---

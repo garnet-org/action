@@ -12,6 +12,7 @@ import {
     waitForDelay,
 } from "./shared.js"
 import { getProfileJobName } from "./github-context.js"
+import { readJibrilUnitState } from "./jibril-unit-state.js"
 import { ControlPlaneClient } from "./control-plane/client.js"
 import { uploadJibrilArtifacts } from "./post-artifacts.js"
 import { buildReportLink, getDefaultJsonProfileFile, resolveAppBaseURL } from "./report-link.js"
@@ -413,7 +414,7 @@ async function resolveProfileEnvelopeID(agentID) {
         // The main step creates one agent per job, so the agent's profile
         // list for this run must resolve to exactly one envelope; anything
         // else is ambiguous and the render stays linkless.
-        const matches = page.items.filter((item) => item.runID === "" || item.runID === runID)
+        const matches = page.items.filter(item => item.runID === "" || item.runID === runID)
         const match = matches.length === 1 ? matches[0] : undefined
         if (match === undefined) {
             return ""
@@ -541,36 +542,6 @@ async function waitForRootFile(filePath, deadlineMs) {
             return false
         }
         await waitForDelay(PROFILE_POLL_INTERVAL_MS)
-    }
-}
-
-/**
- * Reads the jibril unit state for diagnostics and stop-reason classification.
- * @returns {Promise<JibrilUnitState | null>}
- */
-async function readJibrilUnitState() {
-    try {
-        const result = await exec.getExecOutput(
-            "sudo",
-            ["systemctl", "show", "jibril.service", "-p", "ActiveState", "-p", "Result", "-p", "ExecMainStatus"],
-            {
-                silent: true,
-                ignoreReturnCode: true,
-            },
-        )
-        if (result.exitCode !== 0) {
-            return null
-        }
-
-        const properties = parseSystemctlProperties(result.stdout)
-        return {
-            activeState: properties.get("ActiveState") ?? "",
-            result: properties.get("Result") ?? "",
-            execMainStatus: parseExecMainStatus(properties.get("ExecMainStatus")),
-        }
-    } catch (error) {
-        core.info(`could not read jibril service state: ${getErrorMessage(error)}`)
-        return null
     }
 }
 
@@ -703,35 +674,6 @@ async function readRootFileContent(filePath) {
     }
 
     return result.stdout.trim()
-}
-
-/**
- * Parses the `key=value` lines printed by `systemctl show`.
- * @param {string} output
- * @returns {Map<string, string>}
- */
-function parseSystemctlProperties(output) {
-    /** @type {Map<string, string>} */
-    const properties = new Map()
-
-    for (const line of output.split("\n")) {
-        const separatorIndex = line.indexOf("=")
-        if (separatorIndex === -1) {
-            continue
-        }
-        properties.set(line.slice(0, separatorIndex).trim(), line.slice(separatorIndex + 1).trim())
-    }
-
-    return properties
-}
-
-/**
- * @param {string | undefined} value
- * @returns {number}
- */
-function parseExecMainStatus(value) {
-    const parsedValue = Number.parseInt(value ?? "", 10)
-    return Number.isSafeInteger(parsedValue) ? parsedValue : 0
 }
 
 run()

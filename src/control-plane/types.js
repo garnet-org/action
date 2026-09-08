@@ -165,7 +165,7 @@ export const API_ERROR_SCHEMA = z.object({
  */
 
 /**
- * @typedef {"run_cancelled" | "crashed" | "flush_timeout" | "stopped_cleanly"} AgentStopReason
+ * @typedef {"run_cancelled" | "crashed" | "flush_timeout" | "stopped_cleanly" | "start_failed"} AgentStopReason
  */
 
 /**
@@ -216,7 +216,13 @@ export const PROFILE_ENVELOPE_PAGE_SCHEMA = z
     })
     .passthrough()
 
-export const AGENT_STOP_REASON_SCHEMA = z.enum(["run_cancelled", "crashed", "flush_timeout", "stopped_cleanly"])
+export const AGENT_STOP_REASON_SCHEMA = z.enum([
+    "run_cancelled",
+    "crashed",
+    "flush_timeout",
+    "stopped_cleanly",
+    "start_failed",
+])
 
 export const AGENT_STOPPED_REQUEST_SCHEMA = z.object({
     reason: AGENT_STOP_REASON_SCHEMA,

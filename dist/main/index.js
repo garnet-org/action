@@ -30828,8 +30828,8 @@ function getExecOutput(commandLine, args, options) {
         let stdout = '';
         let stderr = '';
         //Using string decoder covers the case where a mult-byte character is split
-        const stdoutDecoder = new StringDecoder('utf8');
-        const stderrDecoder = new StringDecoder('utf8');
+        const stdoutDecoder = new external_string_decoder_.StringDecoder('utf8');
+        const stderrDecoder = new external_string_decoder_.StringDecoder('utf8');
         const originalStdoutListener = (_a = options === null || options === void 0 ? void 0 : options.listeners) === null || _a === void 0 ? void 0 : _a.stdout;
         const originalStdErrListener = (_b = options === null || options === void 0 ? void 0 : options.listeners) === null || _b === void 0 ? void 0 : _b.stderr;
         const stdErrListener = (data) => {
@@ -40928,7 +40928,7 @@ const API_ERROR_SCHEMA = object({
  */
 
 /**
- * @typedef {"run_cancelled" | "crashed" | "flush_timeout" | "stopped_cleanly"} AgentStopReason
+ * @typedef {"run_cancelled" | "crashed" | "flush_timeout" | "stopped_cleanly" | "start_failed"} AgentStopReason
  */
 
 /**
@@ -40977,7 +40977,13 @@ const PROFILE_ENVELOPE_PAGE_SCHEMA = object({
     })
     .passthrough()
 
-const AGENT_STOP_REASON_SCHEMA = schemas_enum(["run_cancelled", "crashed", "flush_timeout", "stopped_cleanly"])
+const AGENT_STOP_REASON_SCHEMA = schemas_enum([
+    "run_cancelled",
+    "crashed",
+    "flush_timeout",
+    "stopped_cleanly",
+    "start_failed",
+])
 
 const AGENT_STOPPED_REQUEST_SCHEMA = object({
     reason: AGENT_STOP_REASON_SCHEMA,
@@ -41453,9 +41459,252 @@ function isMissingOIDCPermissionError(errorMessage) {
     return false
 }
 
+;// CONCATENATED MODULE: ./src/jibril-unit-state.js
+
+
+
+
+/** @typedef {import("./post-signal.js").JibrilUnitState} JibrilUnitState */
+
+/**
+ * Reads the jibril unit state for diagnostics and stop-reason classification.
+ * @returns {Promise<JibrilUnitState | null>}
+ */
+async function readJibrilUnitState() {
+    try {
+        const result = await getExecOutput(
+            "sudo",
+            ["systemctl", "show", "jibril.service", "-p", "ActiveState", "-p", "Result", "-p", "ExecMainStatus"],
+            {
+                silent: true,
+                ignoreReturnCode: true,
+            },
+        )
+        if (result.exitCode !== 0) {
+            return null
+        }
+
+        const properties = parseSystemctlProperties(result.stdout)
+        return {
+            activeState: properties.get("ActiveState") ?? "",
+            result: properties.get("Result") ?? "",
+            execMainStatus: parseExecMainStatus(properties.get("ExecMainStatus")),
+        }
+    } catch (error) {
+        info(`could not read jibril service state: ${getErrorMessage(error)}`)
+        return null
+    }
+}
+
+/**
+ * Parses the `key=value` lines printed by `systemctl show`.
+ * @param {string} output
+ * @returns {Map<string, string>}
+ */
+function parseSystemctlProperties(output) {
+    /** @type {Map<string, string>} */
+    const properties = new Map()
+
+    for (const line of output.split("\n")) {
+        const separatorIndex = line.indexOf("=")
+        if (separatorIndex === -1) {
+            continue
+        }
+        properties.set(line.slice(0, separatorIndex).trim(), line.slice(separatorIndex + 1).trim())
+    }
+
+    return properties
+}
+
+/**
+ * @param {string | undefined} value
+ * @returns {number}
+ */
+function parseExecMainStatus(value) {
+    const parsedValue = Number.parseInt(value ?? "", 10)
+    return Number.isSafeInteger(parsedValue) ? parsedValue : 0
+}
+
+;// CONCATENATED MODULE: ./src/start-failure.js
+/** @typedef {import("./post-signal.js").JibrilUnitState} JibrilUnitState */
+/** @typedef {import("./control-plane/types.js").AgentStoppedRequest} AgentStoppedRequest */
+/** @typedef {import("./control-plane/types.js").AgentStoppedJibrilFields} AgentStoppedJibrilFields */
+
+/**
+ * @typedef {object} StartFailureDiagnostics
+ * @property {JibrilUnitState | null} unitState
+ * @property {string} journal
+ * @property {string} sensorLog
+ */
+
+/**
+ * @typedef {object} StartFailure
+ * @property {string} reason
+ * @property {StartFailureDiagnostics} diagnostics
+ */
+
+/**
+ * @typedef {object} StartFailureRunContext
+ * @property {string} runID
+ * @property {string} runAttempt
+ * @property {string} job
+ */
+
+// Each captured excerpt is bounded so the Job Summary stays readable and the
+// control-plane detail stays a short fact, not a log dump.
+const START_FAILURE_EXCERPT_MAX_CHARS = 2000
+const START_FAILURE_DETAIL_MAX_CHARS = 1000
+const START_FAILURE_REASON_MAX_CHARS = 300
+
+/**
+ * Keeps the end of the text, where the failing line lands.
+ * @param {string} text
+ * @param {number} maxChars
+ * @returns {string}
+ */
+function truncateTail(text, maxChars) {
+    if (text.length <= maxChars) return text
+    return `…${text.slice(text.length - maxChars + 1)}`
+}
+
+/**
+ * Keeps the start of the text.
+ * @param {string} text
+ * @param {number} maxChars
+ * @returns {string}
+ */
+function truncateHead(text, maxChars) {
+    if (text.length <= maxChars) return text
+    return `${text.slice(0, maxChars - 1)}…`
+}
+
+/**
+ * @param {JibrilUnitState | null} unitState
+ * @returns {string}
+ */
+function formatUnitState(unitState) {
+    if (unitState === null) return ""
+    return `ActiveState=${unitState.activeState} Result=${unitState.result} ExecMainStatus=${unitState.execMainStatus}`
+}
+
+/**
+ * @param {string} text
+ * @returns {string}
+ */
+function escapeHTML(text) {
+    return text.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;")
+}
+
+/**
+ * @param {string} text
+ * @returns {string}
+ */
+function lastNonEmptyLine(text) {
+    const lines = text.split("\n").filter(line => line.trim() !== "")
+    const [last = ""] = lines.slice(-1)
+    return last.trim()
+}
+
+/**
+ * The bounded detail the control plane stores alongside the start_failed
+ * reason: the failure phrase, the unit state and the sensor's last log line.
+ * @param {StartFailure} failure
+ * @returns {string}
+ */
+function formatStartFailureDetail(failure) {
+    const parts = [failure.reason]
+
+    const unitState = formatUnitState(failure.diagnostics.unitState)
+    if (unitState !== "") parts.push(unitState)
+
+    const lastLine = lastNonEmptyLine(failure.diagnostics.sensorLog)
+    if (lastLine !== "") parts.push(`sensor log: ${lastLine}`)
+
+    return truncateHead(parts.join("; "), START_FAILURE_DETAIL_MAX_CHARS)
+}
+
+/**
+ * @param {StartFailure} failure
+ * @param {StartFailureRunContext} context
+ * @returns {AgentStoppedRequest}
+ */
+function buildStartFailedRequest(failure, context) {
+    /** @type {AgentStoppedRequest} */
+    const request = {
+        reason: "start_failed",
+        profileState: "missing",
+        detail: formatStartFailureDetail(failure),
+        runID: context.runID,
+    }
+
+    if (context.runAttempt !== "") {
+        request.runAttempt = context.runAttempt
+    }
+    if (context.job !== "") {
+        request.job = context.job
+    }
+
+    const unitState = failure.diagnostics.unitState
+    if (unitState !== null) {
+        /** @type {AgentStoppedJibrilFields} */
+        const jibril = {
+            activeState: unitState.activeState,
+            result: unitState.result,
+            execMainStatus: unitState.execMainStatus,
+        }
+        request.jibril = jibril
+    }
+
+    return request
+}
+
+/**
+ * The Job Summary disclosure for a job whose sensor never started: one fact
+ * in the Runtime Review terminal register, with the bounded startup log in a
+ * collapsed fold so the reader can see why without opening the job log.
+ * @param {StartFailure} failure
+ * @returns {string}
+ */
+function renderStartFailureSummary(failure) {
+    const sections = []
+
+    const unitState = formatUnitState(failure.diagnostics.unitState)
+    if (unitState !== "") sections.push(`systemd: ${unitState}`)
+
+    if (failure.diagnostics.journal !== "") {
+        sections.push(`--- journalctl -u jibril.service ---\n${failure.diagnostics.journal}`)
+    }
+    if (failure.diagnostics.sensorLog !== "") {
+        sections.push(`--- /var/log/jibril.err ---\n${failure.diagnostics.sensorLog}`)
+    }
+    if (sections.length === 0) {
+        sections.push("(no startup log captured)")
+    }
+
+    // A fence inside the fold keeps the log verbatim; a stray fence in the log
+    // itself would close ours early, so it is neutralised.
+    const excerpt = sections.join("\n\n").replaceAll("```", "'''")
+
+    return [
+        "**Execution Profile for this job · not recorded**",
+        "",
+        `<sub>the sensor did not start on this runner — ${escapeHTML(failure.reason)}</sub>`,
+        "",
+        "<details><summary><sub>sensor startup log</sub></summary>",
+        "",
+        "```text",
+        excerpt,
+        "```",
+        "",
+        "</details>",
+    ].join("\n")
+}
+
 ;// CONCATENATED MODULE: ./src/action.js
 // This script installs jibril, calls the control-plane API to create the
 // agent and fetch network policy, and sets up Jibril as a systemd service.
+
+
 
 
 
@@ -41514,10 +41763,13 @@ const DEFAULT_JIBRIL_STOP_TIMEOUT_SECONDS = 1800
 // Returns true when Jibril started successfully, false otherwise.
 async function run() {
     let tmpDir = ""
+    /** @type {StartContext} */
+    const startContext = { apiURL: "", agentToken: "" }
     try {
         // Get the variables from the environment.
         const TOKEN = getEnv("GARNET_API_TOKEN")
         const API = validateApiURL(getEnv("GARNET_API_URL", "https://api.garnet.ai"))
+        startContext.apiURL = API
         let JIBRILVER = resolveJibrilVersion(getEnv("JIBRIL_VERSION", ""), getEnv("GITHUB_ACTION_REF", ""))
         const DEBUG = getEnv("DEBUG", "false")
 
@@ -41669,6 +41921,7 @@ async function run() {
         }
 
         if (AGENT_TOKEN) setSecret(AGENT_TOKEN)
+        startContext.agentToken = AGENT_TOKEN
 
         info(`Created agent with ID: ${AGENT_ID}`)
 
@@ -41873,11 +42126,7 @@ TimeoutStopSec=${stopTimeoutValue}
         })
 
         if (returnCode !== 0) {
-            warning(
-                "Jibril service failed to start. The workflow will continue without runtime monitoring for this run.",
-            )
-            await dumpJibrilLogs()
-            return false
+            return await discloseStartFailure(startContext, "the jibril service failed to start")
         }
 
         // Give the daemon a moment to settle so an immediate crash is surfaced here.
@@ -41888,11 +42137,10 @@ TimeoutStopSec=${stopTimeoutValue}
         })
 
         if (serviceState !== "active") {
-            warning(
-                `Jibril service exited early with state '${serviceState || "unknown"}'. The workflow will continue without runtime monitoring for this run.`,
+            return await discloseStartFailure(
+                startContext,
+                `the jibril service exited early with state '${serviceState || "unknown"}'`,
             )
-            await dumpJibrilLogs()
-            return false
         }
 
         // Check Jibril service status.
@@ -41920,11 +42168,7 @@ TimeoutStopSec=${stopTimeoutValue}
         info("Jibril service started successfully")
         return true
     } catch (err) {
-        warning(
-            `Garnet runtime monitoring setup did not complete: ${getErrorMessage(err)}. The workflow will continue without runtime monitoring for this run.`,
-        )
-        await dumpJibrilLogs()
-        return false
+        return await discloseStartFailure(startContext, `setup did not complete: ${getErrorMessage(err)}`)
     } finally {
         // Clean up the temporary directory.
         if (tmpDir !== "") {
@@ -42661,6 +42905,98 @@ function formatCapturedOutput(text, emptyMessage) {
         return emptyMessage
     }
     return redacted
+}
+
+/**
+ * @typedef {object} StartContext
+ * @property {string} apiURL
+ * @property {string} agentToken
+ */
+
+/**
+ * A sensor that never started leaves no profile, so the coverage gap has to
+ * be disclosed here: the job stays green (fail-open) while the gap is made
+ * visible in the job log, in the Job Summary, and — when the agent was
+ * already registered — in the control plane as a `start_failed` stop, which
+ * resolves the run's pending state.
+ * @param {StartContext} context
+ * @param {string} reason
+ * @returns {Promise<false>}
+ */
+async function discloseStartFailure(context, reason) {
+    const boundedReason = truncateHead(redactSensitive(reason) ?? "", START_FAILURE_REASON_MAX_CHARS)
+    warning(
+        `Jibril did not start: ${boundedReason}. The workflow continues without runtime monitoring for this job.`,
+    )
+
+    const diagnostics = await collectStartDiagnostics()
+    const failure = { reason: boundedReason, diagnostics }
+
+    await dumpJibrilLogs()
+    await appendStartFailureSummary(failure)
+
+    if (context.agentToken === "") {
+        info("control plane: no agent registered for this job, start failure not reported")
+        return false
+    }
+
+    try {
+        const client = new ControlPlaneClient({ baseURL: context.apiURL, agentToken: context.agentToken })
+        const request = buildStartFailedRequest(failure, {
+            runID: getEnv("GITHUB_RUN_ID"),
+            runAttempt: getEnv("GITHUB_RUN_ATTEMPT"),
+            job: getProfileJobName(),
+        })
+        await client.reportAgentStopped(request)
+        info("control plane: reported agent stop (reason=start_failed, profile=missing)")
+    } catch (error) {
+        info(`control plane: start failure report skipped: ${getErrorMessage(error)}`)
+    }
+
+    return false
+}
+
+/**
+ * Bounded, redacted evidence of why the sensor did not start. The unit state
+ * and journal come from systemd; the sensor's own reason lands in
+ * /var/log/jibril.err because the runtime status file is only written once
+ * the main loop is entered.
+ * @returns {Promise<import("./start-failure.js").StartFailureDiagnostics>}
+ */
+async function collectStartDiagnostics() {
+    const unitState = await readJibrilUnitState()
+    const journal = await captureCommandTail(["journalctl", "-u", "jibril.service", "-n", "30", "--no-pager"])
+    const sensorLog = await captureCommandTail(["tail", "-n", "30", "/var/log/jibril.err"])
+    return { unitState, journal, sensorLog }
+}
+
+/**
+ * @param {string[]} args
+ * @returns {Promise<string>}
+ */
+async function captureCommandTail(args) {
+    try {
+        const { stdout } = await execCapture("sudo", args, { ignoreReturnCode: true })
+        return truncateTail(redactSensitive(stdout) ?? "", START_FAILURE_EXCERPT_MAX_CHARS)
+    } catch (_) {
+        return ""
+    }
+}
+
+/**
+ * @param {import("./start-failure.js").StartFailure} failure
+ * @returns {Promise<void>}
+ */
+async function appendStartFailureSummary(failure) {
+    const summaryFile = getEnv("GITHUB_STEP_SUMMARY")
+    if (summaryFile === "") {
+        return
+    }
+    try {
+        await promises_namespaceObject.appendFile(summaryFile, `\n${renderStartFailureSummary(failure)}\n`)
+    } catch (error) {
+        info(`job summary not written: ${getErrorMessage(error)}`)
+    }
 }
 
 // Dumps jibril stdout/stderr and journalctl when jibril fails in debug mode.
