@@ -109,8 +109,6 @@ jobs:
         with:
           client-id: ${{ vars.GARNET_CI_BOT_CLIENT_ID }}
           private-key: ${{ secrets.GARNET_CI_BOT_PRIVATE_KEY }}
-          permission-contents: write
-          permission-pull-requests: write
 
       - name: Get bot user ID
         if: steps.check.outputs.skip == 'false'
