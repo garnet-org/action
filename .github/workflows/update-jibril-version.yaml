@@ -44,9 +44,11 @@ jobs:
         run: |
           set -euo pipefail
           BRANCH="update-jibril-version/$VERSION"
-          CURRENT=$(sed -n 's/^const JIBRIL_STABLE_VERSION = "\(.*\)"$/\1/p' src/action.js)
+          CURRENT_SRC=$(sed -n 's/^const JIBRIL_STABLE_VERSION = "\(.*\)"$/\1/p' src/action.js)
+          CURRENT_YAML=$(sed -n '/jibril_version:/,/default:/{ s/[[:space:]]*default: "\([^"]*\)".*/\1/p }' action.yaml)
+          CURRENT_README=$(sed -n -E 's/.*`jibril_version`[^|]+\|[^|]+\| `([^`]*)`[^|]*\|.*/\1/p' README.md)
 
-          if [ "$CURRENT" = "$VERSION" ]; then
+          if [ "$CURRENT_SRC" = "$VERSION" ] && [ "$CURRENT_YAML" = "$VERSION" ] && [ "$CURRENT_README" = "$VERSION" ]; then
             echo "Already at $VERSION — skipping."
             echo "skip=true" >> "$GITHUB_OUTPUT"
             exit 0
@@ -58,7 +60,9 @@ jobs:
             exit 0
           fi
 
-          echo "Will bump: $CURRENT → $VERSION"
+          echo "src/action.js:  $CURRENT_SRC → $VERSION"
+          echo "action.yaml:    $CURRENT_YAML → $VERSION"
+          echo "README.md:      $CURRENT_README → $VERSION"
           echo "skip=false" >> "$GITHUB_OUTPUT"
 
       - name: Update src/action.js
