@@ -133,7 +133,7 @@ jobs:
           git checkout -b "$BRANCH"
           git add src/action.js action.yaml README.md dist/
           git commit -m "chore: update Jibril default version to $VERSION"
-          git push origin "$BRANCH"
+          git push --force origin "$BRANCH"
 
           cat > /tmp/pr-body.md << EOF
           Bumps the pinned Jibril version to the latest stable release: \`$VERSION\`.
