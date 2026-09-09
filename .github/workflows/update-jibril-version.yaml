@@ -1,7 +1,8 @@
 # CI: daily cron that fetches the latest stable Jibril release and opens a PR to bump
 # the pinned version in src/action.js, action.yaml, and README.md (plus a dist rebuild).
 #
-# No extra secrets required — garnet-org/jibril-releases is a public repo.
+# Required org variable: GARNET_CI_BOT_CLIENT_ID
+# Required org secret:   GARNET_CI_BOT_PRIVATE_KEY
 
 name: Update Jibril default version
 
@@ -101,21 +102,13 @@ jobs:
           npm ci --include=dev
           npm run build
 
-      - name: Decode GitHub App private key
-        if: steps.check.outputs.skip == 'false'
-        id: app-key
-        run: |
-          private_key=$(echo "${{ secrets.GH_APP_PVT_KEY }}" | base64 -d | awk 'BEGIN {ORS="\\n"} {print}' | head -c -2) &> /dev/null
-          echo "::add-mask::$private_key"
-          echo "private-key=$private_key" >> "$GITHUB_OUTPUT"
-
       - name: Generate GitHub App token
         if: steps.check.outputs.skip == 'false'
         id: app-token
         uses: actions/create-github-app-token@v3
         with:
-          client-id: "Iv23liZYaDfmXj96Blhz"
-          private-key: ${{ steps.app-key.outputs.private-key }}
+          client-id: ${{ vars.GARNET_CI_BOT_CLIENT_ID }}
+          private-key: ${{ secrets.GARNET_CI_BOT_PRIVATE_KEY }}
           permission-contents: write
           permission-pull-requests: write
 
