@@ -6,8 +6,33 @@ import { CONTROL_PLANE_MARKERS, RUNTIME_REVIEW_MARKER } from "./runtime-review.j
  */
 
 /**
- * @typedef {{ id: number, body: string }} PullRequestComment
+ * @typedef {import("./github-issue-comment-client.js").PullRequestComment} PullRequestComment
  */
+
+// Anyone who can comment on a pull request can copy this action's markers
+// and state payload. Markers are honored only on comments written by the
+// identities that legitimately own them: the workflow token's own bot and
+// the Garnet Runtime Review App.
+const GITHUB_ACTIONS_AUTHOR = "github-actions[bot]"
+const GARNET_APP_AUTHOR_PATTERN = /^garnet-runtime-review(-[A-Za-z0-9-]+)?\[bot\]$/
+const BOT_AUTHOR_TYPE = "Bot"
+
+/**
+ * Whether marker and state found in this comment may be acted on.
+ * @param {PullRequestComment} comment
+ * @returns {boolean}
+ */
+export function isTrustedCommentAuthor(comment) {
+    if (comment.authorType !== BOT_AUTHOR_TYPE) {
+        return false
+    }
+
+    if (comment.author === GITHUB_ACTIONS_AUTHOR) {
+        return true
+    }
+
+    return GARNET_APP_AUTHOR_PATTERN.test(comment.author)
+}
 
 /**
  * @typedef {{
@@ -31,13 +56,18 @@ import { CONTROL_PLANE_MARKERS, RUNTIME_REVIEW_MARKER } from "./runtime-review.j
  */
 
 /**
- * @param {PullRequestComment[]} comments
+ * Existing comments are untrusted input: only comments authored by the
+ * expected bot identities take part in the plan, so a third-party comment
+ * can neither suppress, stale-mark, nor hijack the Runtime Review comment.
+ * @param {PullRequestComment[]} allComments
  * @param {NormalizedProfile} profile
  * @param {number} runAttempt
  * @param {RenderOptions} [renderOptions]
  * @returns {PublishCommentPlan}
  */
-export function planPullRequestComment(comments, profile, runAttempt, renderOptions = {}) {
+export function planPullRequestComment(allComments, profile, runAttempt, renderOptions = {}) {
+    const comments = allComments.filter(isTrustedCommentAuthor)
+
     if (containsControlPlaneComment(comments)) {
         return {
             kind: "blocked-by-control-plane",

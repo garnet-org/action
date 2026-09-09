@@ -13,7 +13,16 @@ import { pipeline } from "node:stream/promises"
 import { createGitHubContext, getProfileJobName, getWorkflowFilePath } from "./github-context.js"
 import { resolveForkSkip } from "./fork-run.js"
 import { ControlPlaneClient } from "./control-plane/client.js"
-import { getEnv, getErrorMessage, isSupportedArch, isSupportedPlatform, pathExists, waitForDelay } from "./shared.js"
+import { assertValidNetworkPolicyYAML } from "./netpolicy.js"
+import {
+    assertSecureApiURL,
+    getEnv,
+    getErrorMessage,
+    isSupportedArch,
+    isSupportedPlatform,
+    pathExists,
+    waitForDelay,
+} from "./shared.js"
 import { getGitHubIDToken, isMissingOIDCPermissionError, resolveOIDCAudience } from "./oidc.js"
 
 /**
@@ -54,6 +63,16 @@ const SIGSTORE_SUFFIX = ".sigstore.json"
 const JIBRIL_STOP_TIMEOUT_ENV = "GARNET_JIBRIL_STOP_TIMEOUT_SECONDS"
 const DEFAULT_JIBRIL_STOP_TIMEOUT_SECONDS = 1800
 
+// The sensor version becomes a path segment of the release download URL, so
+// it is accepted only as `latest` or a semantic release tag. Anything else
+// (path separators, `..`, query strings, shell metacharacters) is rejected
+// before a URL is built.
+const JIBRIL_VERSION_PATTERN = /^v?\d+\.\d+\.\d+(-[A-Za-z0-9.]+)?$/
+// Release tags this action pins itself, kept accepted because they predate
+// the three-component tag scheme (`v0.0` is the daily-build channel).
+const JIBRIL_INTERNAL_VERSION_PINS = ["v0.0", "v2.10.4", JIBRIL_STABLE_VERSION]
+const SKIP_SIGNATURE_VERIFICATION_ENV = "GARNET_SKIP_SIGNATURE_VERIFICATION"
+
 // This function is the main entry point for the script.
 // Returns true when Jibril started successfully, false otherwise.
 export async function run() {
@@ -62,6 +81,9 @@ export async function run() {
         // Get the variables from the environment.
         const TOKEN = getEnv("GARNET_API_TOKEN")
         const API = getEnv("GARNET_API_URL", "https://api.garnet.ai")
+        // The API token travels to this origin, so the destination is
+        // checked before anything is sent to it.
+        assertSecureApiURL(API)
         let JIBRILVER = resolveJibrilVersion(getEnv("JIBRIL_VERSION", ""), getEnv("GITHUB_ACTION_REF", ""))
         const DEBUG = getEnv("DEBUG", "false")
 
@@ -126,10 +148,13 @@ export async function run() {
             JIBRILVER = `v${JIBRILVER}`
         }
 
+        assertDownloadableJibrilVersion(JIBRILVER)
+
         // The bundled tarball's filename embeds the tag, and the agent record
         // should name the exact sensor that ran.
         if (JIBRILVER === "latest") {
             JIBRILVER = await resolveLatestJibrilTag()
+            assertDownloadableJibrilVersion(JIBRILVER)
         }
 
         core.info(`API server: ${API}`)
@@ -239,6 +264,10 @@ export async function run() {
                 workflow_name: WORKFLOW,
             })
 
+            // The policy is installed under /etc and read by a root daemon,
+            // so the response is checked to be a policy document before it is
+            // written anywhere.
+            assertValidNetworkPolicyYAML(networkPolicyYaml)
             await fs.writeFile(NETPOLICY_PATH, networkPolicyYaml)
         } catch (error) {
             throw new Error(`Failed to fetch network policy: ${getErrorMessage(error)}`)
@@ -600,7 +629,10 @@ function requireApiToken(token) {
  */
 export function resolveJibrilVersion(inputVersion, actionRef) {
     const v = String(inputVersion || "").trim()
-    if (v) return v
+    if (v !== "") {
+        assertValidJibrilVersionInput(v)
+        return v
+    }
 
     const ref = String(actionRef || "")
         .trim()
@@ -616,6 +648,50 @@ export function resolveJibrilVersion(inputVersion, actionRef) {
     // Every other ref (branch/SHA/exact tag) gets the same stable pin as v2:
     // a root eBPF binary must not change under an unchanged action ref.
     return JIBRIL_STABLE_VERSION
+}
+
+/**
+ * The sensor version reaches the network as a release-tag path segment of
+ * the jibril download URL. Only `latest` and semantic release tags are
+ * accepted; everything else fails the run before a URL exists.
+ * @param {string} version
+ * @returns {boolean}
+ */
+export function isValidJibrilVersion(version) {
+    if (version === "latest") {
+        return true
+    }
+
+    return JIBRIL_VERSION_PATTERN.test(version)
+}
+
+/**
+ * Validates the user-supplied `jibril_version` input.
+ * @param {string} version
+ * @returns {void}
+ */
+export function assertValidJibrilVersionInput(version) {
+    if (isValidJibrilVersion(version)) {
+        return
+    }
+
+    throw new Error(
+        `Invalid 'jibril_version' input: ${JSON.stringify(version)}. Use 'latest' or a release tag such as 'v2.16.0'.`,
+    )
+}
+
+/**
+ * Last check before the download URL is built: the resolved version is
+ * either a valid release tag or one of this action's own legacy pins.
+ * @param {string} version
+ * @returns {void}
+ */
+export function assertDownloadableJibrilVersion(version) {
+    if (isValidJibrilVersion(version) || JIBRIL_INTERNAL_VERSION_PINS.includes(version)) {
+        return
+    }
+
+    throw new Error(`Refusing to download jibril for an invalid version: ${JSON.stringify(version)}`)
 }
 
 /**
@@ -704,8 +780,15 @@ async function downloadJibril(tag, tmpDir) {
 
     await fs.mkdir(bundleDir, { recursive: true })
     await exec.exec("tar", ["-xzf", archivePath, "-C", bundleDir])
-    await verifyJibrilBundle(bundleDir, tag)
-    await verifyJibrilAttestation(path.join(bundleDir, JIBRIL_BINARY))
+    if (getEnv(SKIP_SIGNATURE_VERIFICATION_ENV, "false") === "true") {
+        core.warning(
+            "jibril signature verification is DISABLED ('skip_signature_verification: true'). The sensor binary " +
+                "will be installed and run as root without checksum or attestation verification.",
+        )
+    } else {
+        await verifyJibrilBundle(bundleDir, tag)
+        await verifyJibrilAttestation(path.join(bundleDir, JIBRIL_BINARY))
+    }
     await fs.rename(path.join(bundleDir, JIBRIL_BINARY), binaryPath)
 
     return binaryPath

@@ -3,6 +3,7 @@ import * as exec from "@actions/exec"
 import * as fs from "node:fs/promises"
 import * as os from "node:os"
 import {
+    assertSecureApiURL,
     firstNonEmptyString,
     getEnv,
     getErrorMessage,
@@ -403,7 +404,15 @@ async function resolveProfileEnvelopeID(agentID) {
         return ""
     }
 
-    const baseURL = resolveControlPlaneBaseURL()
+    /** @type {string} */
+    let baseURL
+    try {
+        baseURL = resolveControlPlaneBaseURL()
+    } catch (error) {
+        core.warning(getErrorMessage(error))
+        return ""
+    }
+
     const projectToken = firstNonEmptyString(core.getInput("api_token"), getEnv("GARNET_API_TOKEN"))
     const workflowToken = projectToken === "" ? await resolvePostWorkflowToken(baseURL) : ""
     if (projectToken === "" && workflowToken === "") {
@@ -470,7 +479,11 @@ async function resolvePostWorkflowToken(baseURL) {
  * @returns {string}
  */
 function resolveControlPlaneBaseURL() {
-    return firstNonEmptyString(getEnv("GARNET_API_URL"), core.getInput("api_url"), "https://api.garnet.ai")
+    const baseURL = firstNonEmptyString(getEnv("GARNET_API_URL"), core.getInput("api_url"), "https://api.garnet.ai")
+    // The post step carries the same credentials as the main step, so the
+    // destination is checked before any of them are sent.
+    assertSecureApiURL(baseURL)
+    return baseURL
 }
 
 /**

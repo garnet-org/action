@@ -191,6 +191,7 @@ The same full-detail record is appended to the GitHub Actions Job Summary as the
 | `github_token`      | No       | `${{ github.token }}`   | GitHub token used for pull request comments    |
 | `api_url`           | No       | `https://api.garnet.ai` | Garnet API base URL                            |
 | `jibril_version`    | No       | `""` (auto)             | Jibril version (for example `v2.16.0`, `v0.0`, or `latest`); empty resolves to the pinned stable release for your action ref (daily builds on `@v0`) |
+| `skip_signature_verification` | No | `false`            | Install the sensor without verifying the release bundle's checksums, Sigstore signatures, and build attestation (not recommended) |
 | `stop_timeout_seconds` | No    | `1800`                  | Maximum seconds Jibril gets at shutdown to finish writing the Run Profile and flushing events. The post step waits this long (plus a small grace), then force stops the sensor. Set to `0` or a negative integer to disable the timeout entirely. |
 
 | `debug`             | No       | `false`                 | Enable debug mode and upload logs as artifacts |

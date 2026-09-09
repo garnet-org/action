@@ -47,6 +47,7 @@ async function main() {
         }
         process.env.GARNET_API_URL = core.getInput("api_url")
         process.env.JIBRIL_VERSION = core.getInput("jibril_version")
+        process.env.GARNET_SKIP_SIGNATURE_VERIFICATION = core.getInput("skip_signature_verification")
         process.env.DEBUG = core.getInput("debug")
 
         // Resolve the shutdown flush bound once, here at the boundary: the

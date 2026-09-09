@@ -39,6 +39,18 @@ async function loadProfileJson(name) {
     return readFile(join(fixturesDir, "profiles", name), "utf8")
 }
 
+function botComment(id, body) {
+    return { id, body, author: "github-actions[bot]", authorType: "Bot" }
+}
+
+function appComment(id, body) {
+    return { id, body, author: "garnet-runtime-review[bot]", authorType: "Bot" }
+}
+
+function untrustedComment(id, body) {
+    return { id, body, author: "mallory", authorType: "User" }
+}
+
 function stateFor(profile) {
     const merged = mergeCommentState(null, profile, 1)
     assert.equal(merged.kind, "updated")
@@ -131,22 +143,19 @@ test("profile permalink is profile-scoped when the envelope ID exists, absent wh
 })
 
 test("stand-down: control-plane comment blocks the CREATE path", () => {
-    const comments = [{ id: 1, body: `<!-- ${CONTROL_PLANE_MARKERS[0]} -->\nCP comment` }]
+    const comments = [appComment(1, `<!-- ${CONTROL_PLANE_MARKERS[0]} -->\nCP comment`)]
     const plan = planPullRequestComment(comments, worth, 1)
     assert.equal(plan.kind, "blocked-by-control-plane")
 })
 
 test("stand-down: control-plane comment blocks the UPDATE path too", () => {
-    const comments = [
-        { id: 1, body },
-        { id: 2, body: `<!-- ${CONTROL_PLANE_MARKERS[1]} -->\nCP pending comment` },
-    ]
+    const comments = [botComment(1, body), appComment(2, `<!-- ${CONTROL_PLANE_MARKERS[1]} -->\nCP pending comment`)]
     const plan = planPullRequestComment(comments, worth, 2)
     assert.equal(plan.kind, "blocked-by-control-plane")
 })
 
 test("no control-plane comment: update path proceeds normally", () => {
-    const plan = planPullRequestComment([{ id: 1, body }], worth, 2)
+    const plan = planPullRequestComment([botComment(1, body)], worth, 2)
     assert.equal(plan.kind, "update")
 })
 
@@ -160,7 +169,7 @@ test("explainer opens through the first-commit lifecycle and collapses after", (
 
     // Updating the SAME commit's comment is still the first-commit
     // lifecycle: the explainer stays open.
-    const updatePlan = planPullRequestComment([{ id: 1, body: createPlan.body }], worth, 2)
+    const updatePlan = planPullRequestComment([botComment(1, createPlan.body)], worth, 2)
     assert.equal(updatePlan.kind, "update")
     assert.ok(updatePlan.body.includes(openExplainer), "same-commit update keeps the explainer open")
 
@@ -173,12 +182,12 @@ test("explainer opens through the first-commit lifecycle and collapses after", (
         job: { ...worth.job, sha: otherSha },
     }
     const otherBody = renderCommentBody(stateFor(otherProfile))
-    const secondCommitPlan = planPullRequestComment([{ id: 1, body: otherBody }], worth, 1)
+    const secondCommitPlan = planPullRequestComment([botComment(1, otherBody)], worth, 1)
     assert.equal(secondCommitPlan.kind, "create")
     assert.ok(!secondCommitPlan.body.includes(openExplainer), "second commit collapses the explainer")
 
     // A Garnet-marked comment we cannot attribute also counts as history.
-    const foreign = [{ id: 9, body: `${RUNTIME_REVIEW_MARKER}\nsome earlier garnet comment` }]
+    const foreign = [botComment(9, `${RUNTIME_REVIEW_MARKER}\nsome earlier garnet comment`)]
     const foreignPlan = planPullRequestComment(foreign, worth, 1)
     assert.equal(foreignPlan.kind, "create")
     assert.ok(!foreignPlan.body.includes(openExplainer), "unattributable garnet comment collapses the explainer")
@@ -266,14 +275,12 @@ test("publishPullRequestCommentWithClient leaves takeover comments alone when co
                 return []
             }
 
-            return [
-                { id: 100, body: `<!-- ${CONTROL_PLANE_MARKERS[0]} -->\nCP comment` },
-            ]
+            return [appComment(100, `<!-- ${CONTROL_PLANE_MARKERS[0]} -->\nCP comment`)]
         },
         async createComment(body) {
             calls.createBody = body
             calls.createID = 321
-            return { id: calls.createID, body }
+            return botComment(calls.createID, body)
         },
         async updateComment() {
             throw new Error("updateComment should not be called")
@@ -291,4 +298,80 @@ test("publishPullRequestCommentWithClient leaves takeover comments alone when co
     assert.ok(calls.createBody !== null)
     assert.deepEqual(calls.deletedIds, [])
     assert.equal(calls.listComments, 3)
+})
+
+test("a third-party comment cannot suppress the Runtime Review comment", () => {
+    const forged = [
+        untrustedComment(1, `<!-- ${CONTROL_PLANE_MARKERS[0]} -->\nnot the control plane`),
+        untrustedComment(2, body),
+    ]
+
+    const plan = planPullRequestComment(forged, worth, 1)
+    assert.equal(plan.kind, "create", "an untrusted author never blocks or hijacks the comment")
+    assert.deepEqual(plan.duplicateCommentIDs, [], "untrusted comments are never deleted")
+})
+
+test("a third-party comment cannot stale-mark the Runtime Review comment", () => {
+    // A later run attempt carried by an untrusted comment would mark the
+    // incoming profile stale if its state were honored.
+    const aheadState = stateFor(worth)
+    aheadState.workflow_runs = Object.fromEntries(
+        Object.entries(aheadState.workflow_runs).map(([key, run]) => [key, { ...run, run_attempt: 99 }]),
+    )
+    const forged = [untrustedComment(7, renderCommentBody(aheadState))]
+
+    assert.equal(planPullRequestComment(forged, worth, 1).kind, "create")
+    assert.equal(planPullRequestComment([botComment(7, renderCommentBody(aheadState))], worth, 1).kind, "stale")
+})
+
+test("a bot-shaped login from a human account is not trusted", () => {
+    const impostor = [{ id: 3, body, author: "github-actions[bot]", authorType: "User" }]
+
+    assert.equal(planPullRequestComment(impostor, worth, 2).kind, "create")
+})
+
+test("malformed comment state is ignored rather than acted on", () => {
+    const marker = "garnet-action-comment-state:"
+    const payloads = [
+        "not base64url!!",
+        Buffer.from("{", "utf8").toString("base64url"),
+        Buffer.from(JSON.stringify({ version: 3 }), "utf8").toString("base64url"),
+        Buffer.from(JSON.stringify({ version: 3, workflow_runs: {}, profiles: "all" }), "utf8").toString("base64url"),
+        Buffer.from(
+            JSON.stringify({ version: 3, workflow_runs: { a: { run_id: 1, run_attempt: "x" } }, profiles: [] }),
+            "utf8",
+        ).toString("base64url"),
+        Buffer.from(JSON.stringify({ version: 9, workflow_runs: {}, profiles: [] }), "utf8").toString("base64url"),
+    ]
+
+    for (const payload of payloads) {
+        assert.equal(parseCommentState(`<!-- ${marker}${payload} -->`), null, payload.slice(0, 24))
+    }
+})
+
+test("comment state beyond the size limits is ignored", () => {
+    const marker = "garnet-action-comment-state:"
+    const oversizedState = {
+        version: 3,
+        workflow_runs: {},
+        profiles: Array.from({ length: 200 }, () => structuredClone(stateFor(worth).profiles[0])),
+    }
+    const encoded = Buffer.from(JSON.stringify(oversizedState), "utf8").toString("base64url")
+
+    assert.equal(parseCommentState(`<!-- ${marker}${encoded} -->`), null)
+    assert.equal(parseCommentState(`<!-- ${marker}${"A".repeat(70000)} -->`), null)
+})
+
+test("a forged state payload never survives into a published body", () => {
+    const marker = "garnet-action-comment-state:"
+    const forgedState = {
+        version: 3,
+        workflow_runs: { "wf\u0000job": { run_id: "1", run_attempt: 1 } },
+        profiles: [{ timestamp: "2026-01-01T00:00:00Z", github: { workflow: "wf" }, job: {} }],
+    }
+    const encoded = Buffer.from(JSON.stringify(forgedState), "utf8").toString("base64url")
+    const forgedBody = `${RUNTIME_REVIEW_MARKER}\n<!-- ${marker}${encoded} -->`
+
+    assert.equal(parseCommentState(forgedBody), null)
+    assert.equal(planPullRequestComment([botComment(4, forgedBody)], worth, 1).kind, "create")
 })
