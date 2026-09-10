@@ -41510,7 +41510,7 @@ function isMissingOIDCPermissionError(errorMessage) {
 const INSTPATH = "/usr/local/bin"
 // Default Jibril sensor version: the same stable pin as the floating v2 tag,
 // so the sensor never floats under an unchanged action ref.
-const JIBRIL_STABLE_VERSION = "v2.16.0"
+const JIBRIL_STABLE_VERSION = "v2.17.0"
 // From v2.17.0 on a release ships one linux-x86_64 tarball carrying the binary
 // next to its checksums, a release manifest, and a detached Sigstore bundle for
 // each of those payloads. Older releases only offer the bare `jibril` asset.

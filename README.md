@@ -190,7 +190,7 @@ The same full-detail record is appended to the GitHub Actions Job Summary as the
 | `api_token`         | No       | —                       | Garnet API token from app.garnet.ai. Not needed when the job has `id-token: write` (GitHub OIDC is preferred). Without OIDC, this token authenticates with the control plane for full review quality. If neither is provided, the action still runs and posts a best-effort local review. |
 | `github_token`      | No       | `${{ github.token }}`   | GitHub token used for pull request comments    |
 | `api_url`           | No       | `https://api.garnet.ai` | Garnet API base URL                            |
-| `jibril_version`    | No       | `v2.16.0`             | Jibril version (for example `v2.16.0`, `v0.0`, or `latest`); empty resolves to the pinned stable release for your action ref (daily builds on `@v0`) |
+| `jibril_version`    | No       | `v2.17.0`             | Jibril version (for example `v2.16.0`, `v0.0`, or `latest`); empty resolves to the pinned stable release for your action ref (daily builds on `@v0`) |
 | `stop_timeout_seconds` | No    | `1800`                  | Maximum seconds Jibril gets at shutdown to finish writing the Run Profile and flushing events. The post step waits this long (plus a small grace), then force stops the sensor. Set to `0` or a negative integer to disable the timeout entirely. |
 
 | `debug`             | No       | `false`                 | Enable debug mode and upload logs as artifacts |
