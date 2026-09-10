@@ -98,7 +98,7 @@ test("gate: empty api_token fails when OIDC is also unavailable", async () => {
                     apiURL: "https://api.garnet.ai",
                     apiToken: "",
                 }),
-                /'api_token' is required/,
+                /no credential is left for the control plane/,
             )
         },
     )
