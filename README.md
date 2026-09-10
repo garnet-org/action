@@ -247,7 +247,7 @@ On unsupported platforms (Windows, macOS, arm64) the action logs a warning and s
 | Symptom                                   | Fix                                                                                                    |
 | ----------------------------------------- | ------------------------------------------------------------------------------------------------------ |
 | Missing control-plane auth                | Add `id-token: write` to the job permissions (preferred), or confirm `GARNET_API_TOKEN` is set in repository secrets and passed as `api_token`. Without either, the action falls back to a best-effort local review. |
-| "Garnet skips profiling on pull requests from forked repositories" | Expected on fork PRs: secrets are unavailable there, so the action skips recording and the job continues. |
+| "Garnet skipped this Runtime Review because no authentication mechanism was available" | Neither credential resolved: the `api_token` input was empty and no OIDC ID token could be requested. Common on fork `pull_request` runs (no secrets, no `id-token: write`). Grant `id-token: write` or pass `api_token`; the job continues either way. |
 | No PR comment appearing                   | The action posts comments only on `pull_request` events — confirm your workflow includes that trigger. |
 | PR comment says "Resource not accessible" | Add `pull-requests: write` to the workflow `permissions` block.                                        |
 | No summary output                         | Enable `debug: "true"` to upload Jibril logs as artifacts, then inspect `jibril.log` and `jibril.err`. |

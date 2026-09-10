@@ -11,7 +11,7 @@ import * as os from "node:os"
 import * as path from "node:path"
 import { pipeline } from "node:stream/promises"
 import { createGitHubContext, getProfileJobName, getWorkflowFilePath } from "./github-context.js"
-import { resolveForkSkip } from "./fork-run.js"
+import { resolveCredentialSkip } from "./credential-less-run.js"
 import { ControlPlaneClient } from "./control-plane/client.js"
 import { getEnv, getErrorMessage, isSupportedArch, isSupportedPlatform, pathExists, waitForDelay } from "./shared.js"
 import { getGitHubIDToken, isMissingOIDCPermissionError, resolveOIDCAudience } from "./oidc.js"
@@ -66,13 +66,15 @@ export async function run() {
         const DEBUG = getEnv("DEBUG", "false")
 
         if (TOKEN === "") {
-            const forkSkip = await resolveForkSkip({
+            const credentialSkip = await resolveCredentialSkip({
                 eventName: getEnv("GITHUB_EVENT_NAME"),
                 eventPath: getEnv("GITHUB_EVENT_PATH"),
                 repository: getEnv("GITHUB_REPOSITORY"),
             })
-            if (forkSkip.skip) {
-                core.info(forkSkip.reason)
+            // A warning, not an info line: the skip has to be visible as a run
+            // annotation, otherwise a credential-less run reads as a silent no-op.
+            if (credentialSkip.skip) {
+                core.warning(credentialSkip.reason)
                 return false
             }
         }
@@ -589,8 +591,10 @@ function requireApiToken(token) {
         return token
     }
 
+    // Reachable only when the runtime granted an ID token but the exchange
+    // failed: a run with neither credential is skipped before this point.
     throw new Error(
-        "Input 'api_token' is required when OIDC authentication is unavailable. This commonly happens on pull requests from forks, where repository secrets are not exposed to workflows, or when 'id-token: write' permission is not granted. Add/verify that your workflow passes a valid token to this input, grant 'id-token: write', or conditionally skip this action for forked PRs.",
+        "OIDC authentication was granted but did not produce a workflow token, and the 'api_token' input resolved empty, so no credential is left for the control plane. Pass a valid Garnet API token to 'api_token' as a fallback, or resolve the OIDC failure reported above.",
     )
 }
 

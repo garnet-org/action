@@ -31631,14 +31631,18 @@ async function getProfileSha() {
   return getEnv("GITHUB_SHA")
 }
 
-;// CONCATENATED MODULE: ./src/fork-run.js
-// Fork pull request detection. GitHub never exposes repository secrets or
-// grants `id-token: write` to `pull_request` runs from forked repositories,
-// so those runs structurally cannot authenticate with the Garnet API. The
-// action skips profiling gracefully in that case instead of erroring.
+;// CONCATENATED MODULE: ./src/credential-less-run.js
+// Credential-less run detection. The action authenticates with GitHub OIDC
+// first and falls back to the `api_token` input; a run that offers neither
+// cannot reach the control plane at all. Such a run skips profiling instead
+// of failing the job, but the skip must always name the credential that was
+// missing — a silent no-op is indistinguishable from a broken action.
 //
-// `pull_request_target` runs DO receive secrets and must never be treated
-// as credential-less; only the `pull_request` event is considered here.
+// `pull_request` runs from forked repositories are the common case (GitHub
+// exposes neither repository secrets nor an ID token to them), so they get
+// their own wording. Every other credential-less shape gets the generic
+// wording; `pull_request_target` is not special-cased, because by the time
+// this runs the `api_token` input has already resolved empty.
 
 
 
@@ -31647,47 +31651,57 @@ async function getProfileSha() {
  * @typedef {{
  *   skip: boolean
  *   reason: string
- * }} ForkSkipDecision
+ * }} CredentialSkipDecision
  */
 
 /**
- * Decides whether this run is a credential-less pull request from a fork
- * that should skip profiling gracefully. Callers invoke it only when the
- * `api_token` input did not resolve (empty).
- *
- * The skip applies only when OIDC is also unavailable (no runtime ID-token
- * grant).
- *
- * Detection never throws: on unexpected payload shapes or read errors the
- * decision is "do not skip", which falls back to current behavior.
- *
- * @param {{
+ * @typedef {{
  *   eventName: string
  *   eventPath: string
  *   repository: string
- * }} context
- * @returns {Promise<ForkSkipDecision>}
+ * }} CredentialSkipContext
  */
-async function resolveForkSkip(context) {
-    if (context.eventName !== "pull_request") {
-        return { skip: false, reason: `event is ${context.eventName || "unknown"}` }
-    }
 
+const REMEDIATION =
+    "Grant 'id-token: write' to this job to authenticate with OIDC, or pass a Garnet API token to the 'api_token' input."
+
+/**
+ * Decides whether this run has no authentication mechanism at all and must
+ * skip profiling. Callers invoke it only when the `api_token` input did not
+ * resolve (empty), so the remaining question is whether the runtime granted
+ * an OIDC ID-token endpoint.
+ *
+ * Detection never throws: the event payload only refines the wording, so an
+ * unexpected shape or read error still yields a skip with the generic reason.
+ *
+ * @param {CredentialSkipContext} context
+ * @returns {Promise<CredentialSkipDecision>}
+ */
+async function resolveCredentialSkip(context) {
     if (isOIDCAvailable()) {
         return { skip: false, reason: "OIDC is available" }
     }
 
-    const fromFork = await isForkPullRequest(context.eventPath, context.repository)
-    if (!fromFork) {
-        return { skip: false, reason: "pull request is not from a fork" }
+    const fromFork =
+        context.eventName === "pull_request" && (await isForkPullRequest(context.eventPath, context.repository))
+
+    if (fromFork) {
+        return {
+            skip: true,
+            reason:
+                "Garnet skipped this Runtime Review because no authentication mechanism was available: the " +
+                "'api_token' input resolved empty and no OIDC ID token could be requested. GitHub exposes " +
+                "neither repository secrets nor an 'id-token: write' grant to 'pull_request' runs from forked " +
+                `repositories. ${REMEDIATION} The job continues normally.`,
+        }
     }
 
     return {
         skip: true,
         reason:
-            "Garnet skips profiling on pull requests from forked repositories: " +
-            "GitHub does not expose repository secrets or OIDC tokens to fork runs, " +
-            "so no credentials are available. The job continues normally.",
+            "Garnet skipped this Runtime Review because no authentication mechanism was available: the " +
+            "'api_token' input resolved empty and this job has no OIDC ID-token endpoint, which means " +
+            `'id-token: write' permission was not granted. ${REMEDIATION} The job continues normally.`,
     }
 }
 
@@ -42071,13 +42085,15 @@ async function run() {
         const DEBUG = getEnv("DEBUG", "false")
 
         if (TOKEN === "") {
-            const forkSkip = await resolveForkSkip({
+            const credentialSkip = await resolveCredentialSkip({
                 eventName: getEnv("GITHUB_EVENT_NAME"),
                 eventPath: getEnv("GITHUB_EVENT_PATH"),
                 repository: getEnv("GITHUB_REPOSITORY"),
             })
-            if (forkSkip.skip) {
-                info(forkSkip.reason)
+            // A warning, not an info line: the skip has to be visible as a run
+            // annotation, otherwise a credential-less run reads as a silent no-op.
+            if (credentialSkip.skip) {
+                warning(credentialSkip.reason)
                 return false
             }
         }
@@ -42594,8 +42610,10 @@ function requireApiToken(token) {
         return token
     }
 
+    // Reachable only when the runtime granted an ID token but the exchange
+    // failed: a run with neither credential is skipped before this point.
     throw new Error(
-        "Input 'api_token' is required when OIDC authentication is unavailable. This commonly happens on pull requests from forks, where repository secrets are not exposed to workflows, or when 'id-token: write' permission is not granted. Add/verify that your workflow passes a valid token to this input, grant 'id-token: write', or conditionally skip this action for forked PRs.",
+        "OIDC authentication was granted but did not produce a workflow token, and the 'api_token' input resolved empty, so no credential is left for the control plane. Pass a valid Garnet API token to 'api_token' as a fallback, or resolve the OIDC failure reported above.",
     )
 }
 
