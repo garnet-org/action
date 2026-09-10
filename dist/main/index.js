@@ -40967,10 +40967,6 @@ const API_ERROR_SCHEMA = object({
  */
 
 /**
- * @typedef {"github_api"} JobStatusSource
- */
-
-/**
  * @typedef {object} AgentStoppedJibrilFields
  * @property {string=} activeState
  * @property {string=} result
@@ -40984,11 +40980,7 @@ const API_ERROR_SCHEMA = object({
  * @property {AgentStopReason} reason
  * @property {AgentProfileState} profileState
  * @property {string=} detail
- * @property {string} runID
- * @property {string=} runAttempt
- * @property {string=} job
  * @property {"cancelled" | "failure"=} jobStatus
- * @property {JobStatusSource=} jobStatusSource
  * @property {AgentStoppedJibrilFields=} jibril
  */
 
@@ -41010,11 +41002,7 @@ const AGENT_STOPPED_REQUEST_SCHEMA = object({
     reason: AGENT_STOP_REASON_SCHEMA,
     profileState: schemas_enum(["present", "missing", "empty", "invalid"]),
     detail: schemas_string().optional(),
-    runID: schemas_string().min(1),
-    runAttempt: schemas_string().min(1).optional(),
-    job: schemas_string().min(1).optional(),
     jobStatus: schemas_enum(["cancelled", "failure"]).optional(),
-    jobStatusSource: schemas_enum(["github_api"]).optional(),
     jibril: object({
             activeState: schemas_string().optional(),
             result: schemas_string().optional(),

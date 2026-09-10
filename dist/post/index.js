@@ -81459,7 +81459,7 @@ async function readGitHubEventPayload(eventPath) {
  * @returns {string}
  */
 function getProfileJobName() {
-  return shared_getEnv("GARNET_PROFILE_JOB", shared_getEnv("GITHUB_JOB"))
+  return getEnv("GARNET_PROFILE_JOB", getEnv("GITHUB_JOB"))
 }
 
 /**
@@ -90878,10 +90878,6 @@ const API_ERROR_SCHEMA = object({
  */
 
 /**
- * @typedef {"github_api"} JobStatusSource
- */
-
-/**
  * @typedef {object} AgentStoppedJibrilFields
  * @property {string=} activeState
  * @property {string=} result
@@ -90895,11 +90891,7 @@ const API_ERROR_SCHEMA = object({
  * @property {AgentStopReason} reason
  * @property {AgentProfileState} profileState
  * @property {string=} detail
- * @property {string} runID
- * @property {string=} runAttempt
- * @property {string=} job
  * @property {"cancelled" | "failure"=} jobStatus
- * @property {JobStatusSource=} jobStatusSource
  * @property {AgentStoppedJibrilFields=} jibril
  */
 
@@ -90921,11 +90913,7 @@ const AGENT_STOPPED_REQUEST_SCHEMA = object({
     reason: AGENT_STOP_REASON_SCHEMA,
     profileState: schemas_enum(["present", "missing", "empty", "invalid"]),
     detail: schemas_string().optional(),
-    runID: schemas_string().min(1),
-    runAttempt: schemas_string().min(1).optional(),
-    job: schemas_string().min(1).optional(),
     jobStatus: schemas_enum(["cancelled", "failure"]).optional(),
-    jobStatusSource: schemas_enum(["github_api"]).optional(),
     jibril: object({
             activeState: schemas_string().optional(),
             result: schemas_string().optional(),
@@ -155081,26 +155069,12 @@ function buildAgentStoppedRequest(evidence, jobStatus, parseDetail) {
         reason: classifyAgentStop(evidence),
         profileState: evidence.profileState,
         detail: joinDetails(formatAgentStopDetail(evidence), parseDetail),
-        runID: shared_getEnv("GITHUB_RUN_ID"),
         jibril,
     }
 
-    const runAttempt = shared_getEnv("GITHUB_RUN_ATTEMPT")
-    if (runAttempt !== "") {
-        request.runAttempt = runAttempt
-    }
-
-    const job = getProfileJobName()
-    if (job !== "") {
-        request.job = job
-    }
-
-    // The source is only meaningful alongside a status, and "unknown" is
-    // expressed by omitting both.
     const status = toAgentStoppedJobStatus(jobStatus.status)
-    if (status !== "" && jobStatus.source !== "unknown") {
+    if (status !== "") {
         request.jobStatus = status
-        request.jobStatusSource = jobStatus.source
     }
 
     return request
