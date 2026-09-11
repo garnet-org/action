@@ -35,7 +35,7 @@ inputs:
         default: "false"
     stop_timeout_seconds:
         description: |
-            Maximum seconds Jibril is given at shutdown to finish writing its Run Profile and flushing
+            Maximum seconds Jibril is given at shutdown to finish writing its Execution Profile and flushing
             events. The post step waits this long (plus a small grace) and then force stops the sensor,
             so a heavy backlog cannot stall the job indefinitely. Lower it to bound the post step;
             raise it on long jobs where the profile matters more than post-step latency. Set to `0`
@@ -47,9 +47,9 @@ outputs:
     profile_result:
         description: "Reserved for compatibility; this action does not set profile_result"
     report_url:
-        description: "Link to the run's Execution Profiles on app.garnet.ai"
+        description: "Run URL set before capture; use the comment or Step Summary for an exact profile permalink"
     agent_id:
-        description: "Identifier for the Jibril sensor instance that recorded this Runtime Review"
+        description: "Registered sensor identifier; registration alone does not confirm capture"
 runs:
     using: "node24"
     main: "dist/main/index.js"

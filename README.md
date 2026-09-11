@@ -169,7 +169,7 @@ The same full-detail record is appended to the GitHub Actions Job Summary as the
 ## Under the hood
 
 - **Main step**: Downloads `jibril`, authenticates with the Garnet control plane via GitHub OIDC or `api_token`, fetches your merged network policy, and starts Jibril as a `systemd` service on the runner. If neither auth method is available, recording is skipped with a warning and Job Summary explanation. If Jibril does not start, later workflow steps still run. The gap is disclosed through a job-log warning, a Job Summary block with bounded startup diagnostics, and — when the agent was already registered — a best-effort `start_failed` stop report. Resolving the pending PR comment requires control-plane support for that signal.
-- **Post step (always)**: Stops Jibril so it flushes events, appends the Garnet Execution Summary to `GITHUB_STEP_SUMMARY`, and logs the run's public Execution Profile permalink. If the shutdown flush exceeds the configured bound, the post step force stops the sensor so the job does not hang. When no usable Run Profile is produced, the action reports that stop to the control plane so pending comment state can be resolved. When `debug=true`, it also uploads Jibril logs as build artifacts.
+- **Post step (always)**: Stops Jibril so it flushes events, appends the Garnet Execution Summary to `GITHUB_STEP_SUMMARY`, and logs the run's public Execution Profile permalink. If the shutdown flush exceeds the configured bound, the post step force stops the sensor so the job does not hang. When no usable Execution Profile is produced, the action reports that stop to the control plane so pending comment state can be resolved. When `debug=true`, it also uploads Jibril logs as build artifacts.
 
 ---
 
@@ -177,16 +177,15 @@ The same full-detail record is appended to the GitHub Actions Job Summary as the
 
 | Input               | Required | Default                 | Description                                    |
 | ------------------- | -------- | ----------------------- | ---------------------------------------------- |
-| `api_token`         | No       | —                       | Garnet API token from app.garnet.ai. Not needed when the job has `id-token: write` (GitHub OIDC is preferred). When set, it is used as-is and no OIDC token is requested. If neither is provided, the action still runs and writes a best-effort local Execution Summary. |
-| `github_token`      | No       | `${{ github.token }}`   | GitHub token used by `gh attestation verify` when verifying the Jibril binary and to read the job status when no Run Profile was produced |
+| `api_token`         | No       | —                       | Garnet API token from app.garnet.ai. When supplied, it is used without requesting OIDC. Otherwise the action attempts OIDC, which needs `id-token: write`. Without either credential, recording is skipped with a warning and Job Summary explanation; the workflow continues. |
+| `github_token`      | No       | `${{ github.token }}`   | GitHub token used by `gh attestation verify` when verifying the Jibril binary and to read the job status when no Execution Profile was produced |
 | `api_url`           | No       | `https://api.garnet.ai` | Garnet API base URL                            |
 | `jibril_version`    | No       | `v2.17.0`             | Jibril version (for example `v2.16.0`, `v0.0`, or `latest`); empty resolves to the pinned stable release for your action ref (daily builds on `@v0`) |
-| `stop_timeout_seconds` | No    | `1800`                  | Maximum seconds Jibril gets at shutdown to finish writing the Run Profile and flushing events. The post step waits this long (plus a small grace), then force stops the sensor. Set to `0` or a negative integer to disable the timeout entirely. |
-
+| `stop_timeout_seconds` | No    | `1800`                  | Maximum seconds Jibril gets at shutdown to finish writing the Execution Profile and flushing events. The post step waits this long (plus a small grace), then force stops the sensor. Set to `0` or a negative integer to disable the timeout entirely. |
 | `debug`             | No       | `false`                 | Enable debug mode and upload logs as artifacts |
 | `preview`           | No       | `false`                 | Render the full-fidelity Step Summary record (assertions + evidence); preview shape is unstable and may change without a major version bump |
 
-> **Fork PRs:** On `pull_request` runs from forked repositories GitHub does not expose secrets, so `api_token` will be unavailable. Use OIDC (`id-token: write`) in that case, or the action will fall back to a best-effort local review.
+> **Fork PRs:** On `pull_request` runs from forked repositories GitHub does not expose the base repository's secrets. If neither `api_token` nor OIDC is available, the action skips recording, emits a warning and a Job Summary explanation, and lets the workflow continue.
 >
 > **Dependabot PRs:** GitHub resolves `secrets.*` from the repository's Dependabot secrets store on Dependabot-triggered runs, so an `api_token` wired to an Actions secret resolves empty and the action skips recording. To record those runs, add the same token under the same name in **Settings → Secrets and variables → Dependabot**.
 
@@ -196,9 +195,9 @@ The same full-detail record is appended to the GitHub Actions Job Summary as the
 
 | Output           | Description                                                          |
 | ---------------- | -------------------------------------------------------------------- |
-| `profile_result` | Reserved for the companion GitHub App and control plane; this action records what happened |
-| `report_url`     | The run's public report URL on app.garnet.ai; only exact `?profile=` permalinks from the comment or Execution Summary resolve — a bare run URL returns 404 |
-| `agent_id`       | Identifier for the Jibril sensor instance that recorded this run     |
+| `profile_result` | Reserved for compatibility; this action does not set it |
+| `report_url`     | Run URL set during the main step, before capture. It is not an exact profile permalink or proof of upload. Use the `?profile=` link in the comment or Execution Summary to open a recorded profile. |
+| `agent_id`       | Set when the control plane registers the sensor; registration alone does not confirm capture |
 
 ---
 
@@ -242,12 +241,6 @@ On unsupported platforms (Windows, macOS, arm64) the action logs a warning and s
 | "Garnet skipped this Runtime Review because no authentication mechanism was available" | Neither credential resolved: the `api_token` input was empty and no OIDC ID token could be requested. Common on fork `pull_request` runs (no secrets, no `id-token: write`). Grant `id-token: write` or pass `api_token`; the job continues either way. |
 | No PR comment appearing                   | The Runtime Review comment is posted by the companion GitHub App — [install it](https://github.com/apps/garnet-runtime-review/installations/select_target) on the repository. |
 | No summary output                         | Enable `debug: "true"` to upload Jibril logs as artifacts, then inspect `jibril.log` and `jibril.err`. |
-
-### Outputs
-
-`report_url` is available from the main step and links to this run's Execution Profiles.
-`agent_id` is set when the control plane registers the sensor; registration alone does not confirm capture.
-`profile_result` is reserved for compatibility and is not set by this action.
 
 ### Security & license
 

@@ -42,26 +42,37 @@ jobs:
 
           if [[ "$TAG_NAME" =~ $STABLE_REGEX ]]; then
             MAJOR_TAG="${TAG_NAME%%.*}"
-            RELEASE_TITLE="Garnet Runtime Security Action ${MAJOR_TAG}"
+            RELEASE_TITLE="Garnet Runtime Review Action ${MAJOR_TAG}"
 
             git tag -f "$MAJOR_TAG" "$COMMIT_SHA"
             git push --force origin "refs/tags/$MAJOR_TAG"
 
             printf '%s\n' \
-              "# Garnet Runtime Security $MAJOR_TAG" \
+              "# Garnet Runtime Review $MAJOR_TAG" \
               "" \
-              "This release provides the Garnet Runtime Security for GitHub Actions." \
+              "Record execution chains and outbound connections from supported Linux x86_64 CI jobs." \
               "" \
               "Current version: \`$TAG_NAME\`" \
               "" \
               "## Usage" \
               "" \
               "\`\`\`yaml" \
-              "- name: Run Garnet Runtime Security" \
-              "  uses: garnet-org/action@$MAJOR_TAG" \
-              "  with:" \
-              "    api_token: XXXXX" \
+              "permissions:" \
+              "  contents: read" \
+              "" \
+              "steps:" \
+              "  - uses: garnet-org/action@$COMMIT_SHA # $TAG_NAME" \
+              "    with:" \
+              '      api_token: $''{{ secrets.GARNET_API_TOKEN }}' \
               "\`\`\`" \
+              "" \
+              "A supplied \`api_token\` is used directly; no OIDC token is requested. To use OIDC instead, omit \`api_token\` and grant \`id-token: write\` alongside \`contents: read\`." \
+              "" \
+              "Without either credential, recording is skipped with a warning and a Job Summary explanation; the workflow continues. Fork and Dependabot runs can take this path." \
+              "" \
+              "The Action owns recording, upload and the local Execution Summary. The companion GitHub App owns PR comments. Sensor startup failure is reported as not recorded, with bounded diagnostics; backend finalization requires support for \`start_failed\`." \
+              "" \
+              "The default Jibril version is explicitly pinned in the action metadata at this release's commit. Existing SHA-pinned workflows change only when their pin is updated." \
               "" \
               "To pin exactly to this published version, use \`garnet-org/action@$TAG_NAME\`." \
               "" \
@@ -69,7 +80,7 @@ jobs:
               "" \
               "To track the latest unreleased code from main instead of a published release tag, use \`garnet-org/action@main\`." \
               "" \
-              "For more details, see the [Garnet Dashboard](https://dashboard.garnet.ai)." \
+              "See the [versioned README](https://github.com/garnet-org/action/blob/$COMMIT_SHA/README.md), [security guidance](https://github.com/garnet-org/action/blob/$COMMIT_SHA/SECURITY.md), and [Garnet app](https://app.garnet.ai)." \
               "" \
               > release-body.md
             cat release-body.md
