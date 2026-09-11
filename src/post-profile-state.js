@@ -76,3 +76,16 @@ export function classifyProfileContent(stat, content) {
         }
     }
 }
+
+/**
+ * Maps a classified profile to the public garnet_status value: only a parsed,
+ * non-empty profile counts as recorded.
+ * @param {ProfileState} state
+ * @returns {import("./garnet-status.js").GarnetStatus}
+ */
+export function garnetStatusFromProfileState(state) {
+    if (state === "present") {
+        return "recorded"
+    }
+    return "no_profile"
+}

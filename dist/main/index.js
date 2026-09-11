@@ -31297,13 +31297,13 @@ function info(message) {
  * @param name The name of the output group
  */
 function startGroup(name) {
-    issue('group', name);
+    command_issue('group', name);
 }
 /**
  * End an output group.
  */
 function endGroup() {
-    issue('endgroup');
+    command_issue('endgroup');
 }
 /**
  * Wrap an asynchronous function call in a group.
@@ -42436,7 +42436,7 @@ TimeoutStopSec=${stopTimeoutValue}
         })
 
         if (returnCode !== 0) {
-            warning(
+            info(
                 "Jibril service failed to start. The workflow will continue without runtime monitoring for this run.",
             )
             await dumpJibrilLogs()
@@ -42451,7 +42451,7 @@ TimeoutStopSec=${stopTimeoutValue}
         })
 
         if (serviceState !== "active") {
-            warning(
+            info(
                 `Jibril service exited early with state '${serviceState || "unknown"}'. The workflow will continue without runtime monitoring for this run.`,
             )
             await dumpJibrilLogs()
@@ -42483,7 +42483,7 @@ TimeoutStopSec=${stopTimeoutValue}
         info("Jibril service started successfully")
         return true
     } catch (err) {
-        warning(
+        info(
             `Garnet runtime monitoring setup did not complete: ${getErrorMessage(err)}. The workflow will continue without runtime monitoring for this run.`,
         )
         await dumpJibrilLogs()
@@ -43163,58 +43163,85 @@ function formatCapturedOutput(text, emptyMessage) {
     return redacted
 }
 
-// Dumps jibril stdout/stderr and journalctl when jibril fails in debug mode.
+// Dumps jibril stdout/stderr, systemctl status, and journalctl when jibril
+// fails to attach, inside one log group so the job log stays readable.
 async function dumpJibrilLogs() {
-    if (getEnv("DEBUG") !== "true") {
-        return
-    }
-
-    /** @type {[string, string][]} */
-    const logPaths = [
-        ["/var/log/jibril.log", "Jibril stdout"],
-        ["/var/log/jibril.err", "Jibril stderr"],
-    ]
-    for (const [logPath, label] of logPaths) {
+    startGroup("Jibril did not attach — sensor diagnostics (journalctl -u jibril --no-pager -n 200)")
+    try {
+        /** @type {[string, string][]} */
+        const logPaths = [
+            ["/var/log/jibril.log", "Jibril stdout"],
+            ["/var/log/jibril.err", "Jibril stderr"],
+        ]
+        for (const [logPath, label] of logPaths) {
+            try {
+                const { stdout, stderr } = await execCapture("sudo", ["cat", logPath], {
+                    ignoreReturnCode: true,
+                })
+                info(`--- ${label} (${logPath}) ---`)
+                info(formatCapturedOutput(stdout, "(empty or file not found)"))
+                if (stderr !== "") {
+                    info(`--- ${label} stderr (${logPath}) ---`)
+                    info(formatCapturedOutput(stderr, "(empty stderr)"))
+                }
+            } catch (_) {
+                info(`--- ${label}: failed to read ---`)
+            }
+        }
         try {
-            const { stdout, stderr } = await execCapture("sudo", ["cat", logPath], {
-                ignoreReturnCode: true,
-            })
-            info(`--- ${label} (${logPath}) ---`)
-            info(formatCapturedOutput(stdout, "(empty or file not found)"))
+            info("--- systemctl status ---")
+            const { stdout, stderr } = await execCapture(
+                "sudo",
+                ["systemctl", "status", "jibril.service", "--no-pager"],
+                {
+                    ignoreReturnCode: true,
+                },
+            )
+            info(formatCapturedOutput(stdout, "(empty or failed)"))
             if (stderr !== "") {
-                info(`--- ${label} stderr (${logPath}) ---`)
+                info("--- systemctl status stderr ---")
                 info(formatCapturedOutput(stderr, "(empty stderr)"))
             }
-        } catch (_) {
-            info(`--- ${label}: failed to read ---`)
-        }
+        } catch (_) {}
+        try {
+            info("--- journalctl (last 200 lines) ---")
+            const { stdout, stderr } = await execCapture(
+                "sudo",
+                ["journalctl", "-u", "jibril", "--no-pager", "-n", "200"],
+                {
+                    ignoreReturnCode: true,
+                },
+            )
+            info(formatCapturedOutput(stdout, "(empty or failed)"))
+            if (stderr !== "") {
+                info("--- journalctl stderr ---")
+                info(formatCapturedOutput(stderr, "(empty stderr)"))
+            }
+        } catch (_) {}
+    } finally {
+        endGroup()
     }
-    try {
-        info("--- systemctl status ---")
-        const { stdout, stderr } = await execCapture("sudo", ["systemctl", "status", "jibril.service", "--no-pager"], {
-            ignoreReturnCode: true,
-        })
-        info(formatCapturedOutput(stdout, "(empty or failed)"))
-        if (stderr !== "") {
-            info("--- systemctl status stderr ---")
-            info(formatCapturedOutput(stderr, "(empty stderr)"))
-        }
-    } catch (_) {}
-    try {
-        info("--- journalctl (last 50 lines) ---")
-        const { stdout, stderr } = await execCapture(
-            "sudo",
-            ["journalctl", "-u", "jibril.service", "-n", "50", "--no-pager"],
-            {
-                ignoreReturnCode: true,
-            },
-        )
-        info(formatCapturedOutput(stdout, "(empty or failed)"))
-        if (stderr !== "") {
-            info("--- journalctl stderr ---")
-            info(formatCapturedOutput(stderr, "(empty stderr)"))
-        }
-    } catch (_) {}
+}
+
+;// CONCATENATED MODULE: ./src/garnet-status.js
+
+
+/**
+ * @typedef {"recorded" | "start_failed" | "no_profile"} GarnetStatus
+ */
+
+const GARNET_STATUS_OUTPUT = "garnet_status"
+const GARNET_STATUS_STATE = "garnetStatus"
+
+/**
+ * Writes the status to $GITHUB_OUTPUT and to action state so the post step
+ * can read it back.
+ * @param {GarnetStatus} status
+ * @returns {void}
+ */
+function publishGarnetStatus(status) {
+    setOutput(GARNET_STATUS_OUTPUT, status)
+    saveState(GARNET_STATUS_STATE, status)
 }
 
 // EXTERNAL MODULE: external "node:net"
@@ -47992,6 +48019,7 @@ function getString(value) {
 
 
 
+
 // This is the main entry point for the action. It is called by the GitHub Actions
 // runtime. The action installs the Jibril security scanner and sets it up as a
 // systemd service. It retrieves the network policy for the repository and places
@@ -48071,14 +48099,22 @@ async function main() {
         const jibrilStarted = await run()
         if (jibrilStarted) {
             saveState("jibrilStarted", "true")
+        } else {
+            // A job that fails silently is the failure mode this guards: the
+            // job stays green, so the single warning annotation is the only
+            // signal that nothing was recorded.
+            publishGarnetStatus("start_failed")
+            warning("Garnet did not attach to this job — nothing was recorded.")
         }
     } catch (err) {
+        publishGarnetStatus("start_failed")
+        warning("Garnet did not attach to this job — nothing was recorded.")
         if (err instanceof Error) {
-            warning(
+            info(
                 `Garnet action encountered an unexpected error and will continue without runtime monitoring: ${err.message}`,
             )
         } else {
-            warning(
+            info(
                 `Garnet action encountered an unexpected error and will continue without runtime monitoring: ${String(err)}`,
             )
         }

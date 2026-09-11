@@ -1,6 +1,7 @@
 import * as core from "@actions/core"
 import * as os from "node:os"
 import { resolveStopTimeoutSeconds, run } from "./action.js"
+import { publishGarnetStatus } from "./garnet-status.js"
 import { buildReportLink } from "./profile-comment.js"
 import { firstNonEmptyString, getEnv, isSupportedArch, isSupportedPlatform } from "./shared.js"
 
@@ -83,14 +84,22 @@ async function main() {
         const jibrilStarted = await run()
         if (jibrilStarted) {
             core.saveState("jibrilStarted", "true")
+        } else {
+            // A job that fails silently is the failure mode this guards: the
+            // job stays green, so the single warning annotation is the only
+            // signal that nothing was recorded.
+            publishGarnetStatus("start_failed")
+            core.warning("Garnet did not attach to this job — nothing was recorded.")
         }
     } catch (err) {
+        publishGarnetStatus("start_failed")
+        core.warning("Garnet did not attach to this job — nothing was recorded.")
         if (err instanceof Error) {
-            core.warning(
+            core.info(
                 `Garnet action encountered an unexpected error and will continue without runtime monitoring: ${err.message}`,
             )
         } else {
-            core.warning(
+            core.info(
                 `Garnet action encountered an unexpected error and will continue without runtime monitoring: ${String(err)}`,
             )
         }
