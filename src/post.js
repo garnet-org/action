@@ -330,26 +330,12 @@ function buildAgentStoppedRequest(evidence, jobStatus, parseDetail) {
         reason: classifyAgentStop(evidence),
         profileState: evidence.profileState,
         detail: joinDetails(formatAgentStopDetail(evidence), parseDetail),
-        runID: getEnv("GITHUB_RUN_ID"),
         jibril,
     }
 
-    const runAttempt = getEnv("GITHUB_RUN_ATTEMPT")
-    if (runAttempt !== "") {
-        request.runAttempt = runAttempt
-    }
-
-    const job = getProfileJobName()
-    if (job !== "") {
-        request.job = job
-    }
-
-    // The source is only meaningful alongside a status, and "unknown" is
-    // expressed by omitting both.
     const status = toAgentStoppedJobStatus(jobStatus.status)
-    if (status !== "" && jobStatus.source !== "unknown") {
+    if (status !== "") {
         request.jobStatus = status
-        request.jobStatusSource = jobStatus.source
     }
 
     return request

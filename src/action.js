@@ -11,7 +11,7 @@ import * as os from "node:os"
 import * as path from "node:path"
 import { pipeline } from "node:stream/promises"
 import { createGitHubContext, getProfileJobName, getWorkflowFilePath } from "./github-context.js"
-import { resolveCredentialLessSkip } from "./fork-run.js"
+import { resolveCredentialSkip } from "./credential-less-run.js"
 import { ControlPlaneClient } from "./control-plane/client.js"
 import { getEnv, getErrorMessage, isSupportedArch, isSupportedPlatform, pathExists, waitForDelay } from "./shared.js"
 import { getGitHubIDToken, isMissingOIDCPermissionError, resolveOIDCAudience } from "./oidc.js"
@@ -36,7 +36,7 @@ import {
 const INSTPATH = "/usr/local/bin"
 // Default Jibril sensor version: the same stable pin as the floating v2 tag,
 // so the sensor never floats under an unchanged action ref.
-const JIBRIL_STABLE_VERSION = "v2.16.0"
+export const JIBRIL_STABLE_VERSION = "v2.17.0"
 // From v2.17.0 on a release ships one linux-x86_64 tarball carrying the binary
 // next to its checksums, a release manifest, and a detached Sigstore bundle for
 // each of those payloads. Older releases only offer the bare `jibril` asset.
@@ -78,14 +78,15 @@ export async function run() {
         const DEBUG = getEnv("DEBUG", "false")
 
         if (TOKEN === "") {
-            const credentialLessSkip = await resolveCredentialLessSkip({
+            const credentialSkip = await resolveCredentialSkip({
                 eventName: getEnv("GITHUB_EVENT_NAME"),
                 eventPath: getEnv("GITHUB_EVENT_PATH"),
                 repository: getEnv("GITHUB_REPOSITORY"),
-                actor: getEnv("GITHUB_ACTOR"),
             })
-            if (credentialLessSkip.skip) {
-                core.info(credentialLessSkip.reason)
+            // A warning, not an info line: the skip has to be visible as a run
+            // annotation, otherwise a credential-less run reads as a silent no-op.
+            if (credentialSkip.skip) {
+                core.warning(credentialSkip.reason)
                 return false
             }
         }
@@ -229,6 +230,7 @@ export async function run() {
         startContext.agentToken = AGENT_TOKEN
 
         core.info(`Created agent with ID: ${AGENT_ID}`)
+        core.setOutput("agent_id", AGENT_ID)
 
         // The post step resolves the run's profile envelope ID from this agent.
         core.saveState("agentID", AGENT_ID)
@@ -529,12 +531,23 @@ export async function resolveControlPlaneAuth(input) {
         exchanged = await unauthenticatedControlPlaneClient.exchangeGitHubOIDCForWorkflowToken(idToken)
     } catch (error) {
         const errorMessage = getErrorMessage(error)
+        const hasApiToken = input.apiToken !== ""
         if (isMissingOIDCPermissionError(errorMessage)) {
-            core.warning(
-                "github: OIDC token request failed because this workflow is missing 'id-token: write' permission and no 'api_token' was supplied.",
-            )
+            // No 'id-token: write' — the workflow simply wasn't configured for OIDC.
+            // When api_token is present this is a normal, expected fallback, not a problem.
+            if (hasApiToken) {
+                core.info(
+                    "OIDC unavailable (no 'id-token: write' permission); using 'api_token' for control-plane auth.",
+                )
+            } else {
+                core.warning(
+                    "github: OIDC token request failed because this workflow is missing 'id-token: write' permission. Falling back to 'api_token'.",
+                )
+            }
         } else if (errorMessage.startsWith("OIDC token request failed")) {
-            core.warning(`github: ${errorMessage}. No 'api_token' was supplied.`)
+            // OIDC was requested but failed for some other reason (rate limit, GH outage, etc.).
+            // Worth surfacing even when api_token covers the auth, in case OIDC was intended.
+            core.warning(`github: ${errorMessage}. Falling back to 'api_token'.`)
         } else {
             core.warning(`OIDC exchange failed (${errorMessage}). No 'api_token' was supplied.`)
         }
@@ -595,7 +608,7 @@ function isTimestampExpired(value) {
  */
 function missingCredentialsError() {
     return new Error(
-        "Input 'api_token' is required when OIDC authentication is unavailable. This commonly happens on pull requests from forks, where repository secrets are not exposed to workflows, or when 'id-token: write' permission is not granted. Add/verify that your workflow passes a valid token to this input, grant 'id-token: write', or conditionally skip this action for forked PRs.",
+        "OIDC authentication was granted but did not produce a workflow token, and the 'api_token' input resolved empty, so no credential is left for the control plane. Pass a valid Garnet API token to 'api_token' as a fallback, or resolve the OIDC failure reported above.",
     )
 }
 
@@ -616,9 +629,7 @@ export function validateJibrilVersion(version) {
         return version
     }
 
-    throw new Error(
-        `Invalid jibril_version '${version}': expected 'latest' or a release version such as 'v2.16.0'.`,
-    )
+    throw new Error(`Invalid jibril_version '${version}': expected 'latest' or a release version such as 'v2.16.0'.`)
 }
 
 /**
@@ -1245,11 +1256,7 @@ async function discloseStartFailure(context, reason) {
 
     try {
         const client = new ControlPlaneClient({ baseURL: context.apiURL, agentToken: context.agentToken })
-        const request = buildStartFailedRequest(failure, {
-            runID: getEnv("GITHUB_RUN_ID"),
-            runAttempt: getEnv("GITHUB_RUN_ATTEMPT"),
-            job: getProfileJobName(),
-        })
+        const request = buildStartFailedRequest(failure)
         await client.reportAgentStopped(request)
         core.info("control plane: reported agent stop (reason=start_failed, profile=missing)")
     } catch (error) {

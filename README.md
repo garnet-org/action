@@ -35,7 +35,7 @@ Get your API token at [app.garnet.ai](https://app.garnet.ai). Start with the Act
 ## What you get
 
 - **Action stage**: Add the workflow step and Jibril records runtime from that job. The action writes the Garnet Execution Summary to the job's Step Summary with a public Execution Profile permalink.
-- **Companion GitHub App stage**: Install the companion GitHub App for the full PR experience. The App owns the Runtime Review PR comment: true coverage (`k of n`), cross-run comparison, richer capability permalinks, Slack alerts, and cross-run management.
+- **Companion GitHub App stage**: Install the companion GitHub App for the PR experience. The App owns the Runtime Review PR comment across the recorded jobs, with comparisons and per-job Execution Profile links.
 - **Chain-level evidence**: When something unexpected runs, you don't just see a domain name — you see the execution chain behind it.
 
 <p align="center">
@@ -106,7 +106,7 @@ jobs:
           api_token: ${{ secrets.GARNET_API_TOKEN }}
 ```
 
-If neither OIDC nor `api_token` is available, the action still runs and writes a best-effort local Execution Summary to the job's Step Summary; execution evidence is not sent to the control plane.
+If neither OIDC nor `api_token` is available, the action skips runtime recording with a warning and a Job Summary explanation. This includes fork and Dependabot runs without credentials. Your workflow continues.
 
 > **Tip:** Major tags such as `@v2` track the latest `v2.x.x` release automatically. For maximum supply-chain safety, pin to a full commit SHA (Dependabot keeps SHA pins up to date):
 >
@@ -121,14 +121,7 @@ If neither OIDC nor `api_token` is available, the action still runs and writes a
 
 [Install Garnet Runtime Review](https://github.com/apps/garnet-runtime-review/installations/select_target) on the repos you want recorded, or from Settings → GitHub in [app.garnet.ai](https://app.garnet.ai).
 
-Two permissions, nothing else:
-
-| Permission | Access | Why |
-| ---------- | ------ | --- |
-| Pull requests | Read & write | Post and update the one Runtime Review comment per commit |
-| Metadata | Read | Required for every GitHub App |
-
-The App writes the comment and does nothing else — no webhooks, no code access. It owns the one Runtime Review comment across every recorded job on the commit.
+Review the permissions shown by GitHub during installation. The App receives GitHub webhooks and owns the Runtime Review comment across the recorded jobs on a commit. The Action does not need workflow `pull-requests: write` permission to deliver that comment.
 
 ## Not using GitHub Actions?
 
@@ -175,7 +168,7 @@ The same full-detail record is appended to the GitHub Actions Job Summary as the
 
 ## Under the hood
 
-- **Main step**: Downloads `jibril`, authenticates with the Garnet control plane via GitHub OIDC or `api_token`, fetches your merged network policy, and starts Jibril as a `systemd` service on the runner. If neither auth method is available the action falls back to a best-effort local review. If Jibril does not start, the action continues so later workflow steps still run, and discloses the gap instead of staying silent: a job-log warning with the reason, a Job Summary block with the bounded startup log (systemd state, journal, sensor stderr), and — when the agent was already registered — a `start_failed` stop report to the control plane so the run is never left pending.
+- **Main step**: Downloads `jibril`, authenticates with the Garnet control plane via GitHub OIDC or `api_token`, fetches your merged network policy, and starts Jibril as a `systemd` service on the runner. If neither auth method is available, recording is skipped with a warning and Job Summary explanation. If Jibril does not start, later workflow steps still run. The gap is disclosed through a job-log warning, a Job Summary block with bounded startup diagnostics, and — when the agent was already registered — a best-effort `start_failed` stop report. Resolving the pending PR comment requires control-plane support for that signal.
 - **Post step (always)**: Stops Jibril so it flushes events, appends the Garnet Execution Summary to `GITHUB_STEP_SUMMARY`, and logs the run's public Execution Profile permalink. If the shutdown flush exceeds the configured bound, the post step force stops the sensor so the job does not hang. When no usable Run Profile is produced, the action reports that stop to the control plane so pending comment state can be resolved. When `debug=true`, it also uploads Jibril logs as build artifacts.
 
 ---
@@ -187,7 +180,7 @@ The same full-detail record is appended to the GitHub Actions Job Summary as the
 | `api_token`         | No       | —                       | Garnet API token from app.garnet.ai. Not needed when the job has `id-token: write` (GitHub OIDC is preferred). When set, it is used as-is and no OIDC token is requested. If neither is provided, the action still runs and writes a best-effort local Execution Summary. |
 | `github_token`      | No       | `${{ github.token }}`   | GitHub token used by `gh attestation verify` when verifying the Jibril binary and to read the job status when no Run Profile was produced |
 | `api_url`           | No       | `https://api.garnet.ai` | Garnet API base URL                            |
-| `jibril_version`    | No       | `""` (auto)             | Jibril version (for example `v2.16.0`, `v0.0`, or `latest`); empty resolves to the pinned stable release for your action ref (daily builds on `@v0`) |
+| `jibril_version`    | No       | `v2.17.0`             | Jibril version (for example `v2.16.0`, `v0.0`, or `latest`); empty resolves to the pinned stable release for your action ref (daily builds on `@v0`) |
 | `stop_timeout_seconds` | No    | `1800`                  | Maximum seconds Jibril gets at shutdown to finish writing the Run Profile and flushing events. The post step waits this long (plus a small grace), then force stops the sensor. Set to `0` or a negative integer to disable the timeout entirely. |
 
 | `debug`             | No       | `false`                 | Enable debug mode and upload logs as artifacts |
@@ -245,10 +238,16 @@ On unsupported platforms (Windows, macOS, arm64) the action logs a warning and s
 
 | Symptom                                   | Fix                                                                                                    |
 | ----------------------------------------- | ------------------------------------------------------------------------------------------------------ |
-| Missing control-plane auth                | Add `id-token: write` to the job permissions (preferred), or confirm `GARNET_API_TOKEN` is set in repository secrets and passed as `api_token`. Without either, the action falls back to a best-effort local Execution Summary. |
-| "Garnet skips profiling on pull requests from forked repositories" | Expected on fork PRs: secrets are unavailable there, so the action skips recording and the job continues. |
+| Missing control-plane auth                | Add `id-token: write` to the job permissions (preferred), or confirm `GARNET_API_TOKEN` is set in repository secrets and passed as `api_token`. Without either, the action skips recording and the job continues. |
+| "Garnet skipped this Runtime Review because no authentication mechanism was available" | Neither credential resolved: the `api_token` input was empty and no OIDC ID token could be requested. Common on fork `pull_request` runs (no secrets, no `id-token: write`). Grant `id-token: write` or pass `api_token`; the job continues either way. |
 | No PR comment appearing                   | The Runtime Review comment is posted by the companion GitHub App — [install it](https://github.com/apps/garnet-runtime-review/installations/select_target) on the repository. |
 | No summary output                         | Enable `debug: "true"` to upload Jibril logs as artifacts, then inspect `jibril.log` and `jibril.err`. |
+
+### Outputs
+
+`report_url` is available from the main step and links to this run's Execution Profiles.
+`agent_id` is set when the control plane registers the sensor; registration alone does not confirm capture.
+`profile_result` is reserved for compatibility and is not set by this action.
 
 ### Security & license
 

@@ -27,26 +27,19 @@ function createFailure(overrides = {}) {
 }
 
 test("buildStartFailedRequest: start_failed with missing profile validates against the stopped schema", () => {
-    const request = buildStartFailedRequest(createFailure(), {
-        runID: "28488074733",
-        runAttempt: "2",
-        job: "build",
-    })
+    const request = buildStartFailedRequest(createFailure())
 
     assert.equal(request.reason, "start_failed")
     assert.equal(request.profileState, "missing")
-    assert.equal(request.runAttempt, "2")
-    assert.equal(request.job, "build")
+    assert.equal("runID" in request, false)
+    assert.equal("runAttempt" in request, false)
+    assert.equal("job" in request, false)
     assert.deepEqual(request.jibril, { activeState: "failed", result: "exit-code", execMainStatus: 1 })
     assert.deepEqual(AGENT_STOPPED_REQUEST_SCHEMA.parse(request), request)
 })
 
 test("buildStartFailedRequest: omits optional fields the runner cannot provide", () => {
-    const request = buildStartFailedRequest(createFailure({ unitState: null }), {
-        runID: "1",
-        runAttempt: "",
-        job: "",
-    })
+    const request = buildStartFailedRequest(createFailure({ unitState: null }))
 
     assert.equal("runAttempt" in request, false)
     assert.equal("job" in request, false)

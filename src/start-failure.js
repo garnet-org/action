@@ -15,13 +15,6 @@
  * @property {StartFailureDiagnostics} diagnostics
  */
 
-/**
- * @typedef {object} StartFailureRunContext
- * @property {string} runID
- * @property {string} runAttempt
- * @property {string} job
- */
-
 // Each captured excerpt is bounded so the Job Summary stays readable and the
 // control-plane detail stays a short fact, not a log dump.
 export const START_FAILURE_EXCERPT_MAX_CHARS = 2000
@@ -97,23 +90,14 @@ export function formatStartFailureDetail(failure) {
 
 /**
  * @param {StartFailure} failure
- * @param {StartFailureRunContext} context
  * @returns {AgentStoppedRequest}
  */
-export function buildStartFailedRequest(failure, context) {
+export function buildStartFailedRequest(failure) {
     /** @type {AgentStoppedRequest} */
     const request = {
         reason: "start_failed",
         profileState: "missing",
         detail: formatStartFailureDetail(failure),
-        runID: context.runID,
-    }
-
-    if (context.runAttempt !== "") {
-        request.runAttempt = context.runAttempt
-    }
-    if (context.job !== "") {
-        request.job = context.job
     }
 
     const unitState = failure.diagnostics.unitState

@@ -1,7 +1,8 @@
-# CI: dayly cron that fetches the latest stable Jibril release and opens a PR to bump
+# CI: daily cron that fetches the latest stable Jibril release and opens a PR to bump
 # the pinned version in src/action.js, action.yaml, and README.md (plus a dist rebuild).
 #
-# No extra secrets required — garnet-org/jibril-releases is a public repo.
+# Required org variable: GARNET_CI_BOT_CLIENT_ID
+# Required org secret:   GARNET_CI_BOT_PRIVATE_KEY
 
 name: Update Jibril default version
 
@@ -44,9 +45,11 @@ jobs:
         run: |
           set -euo pipefail
           BRANCH="update-jibril-version/$VERSION"
-          CURRENT=$(sed -n 's/^const JIBRIL_STABLE_VERSION = "\(.*\)"$/\1/p' src/action.js)
+          CURRENT_SRC=$(sed -n 's/^const JIBRIL_STABLE_VERSION = "\(.*\)"$/\1/p' src/action.js)
+          CURRENT_YAML=$(sed -n '/jibril_version:/,/default:/{ s/[[:space:]]*default: "\([^"]*\)".*/\1/p }' action.yaml)
+          CURRENT_README=$(sed -n -E 's/.*`jibril_version`[^|]+\|[^|]+\| `([^`]*)`[^|]*\|.*/\1/p' README.md)
 
-          if [ "$CURRENT" = "$VERSION" ]; then
+          if [ "$CURRENT_SRC" = "$VERSION" ] && [ "$CURRENT_YAML" = "$VERSION" ] && [ "$CURRENT_README" = "$VERSION" ]; then
             echo "Already at $VERSION — skipping."
             echo "skip=true" >> "$GITHUB_OUTPUT"
             exit 0
@@ -58,7 +61,9 @@ jobs:
             exit 0
           fi
 
-          echo "Will bump: $CURRENT → $VERSION"
+          echo "src/action.js:  $CURRENT_SRC → $VERSION"
+          echo "action.yaml:    $CURRENT_YAML → $VERSION"
+          echo "README.md:      $CURRENT_README → $VERSION"
           echo "skip=false" >> "$GITHUB_OUTPUT"
 
       - name: Update src/action.js
@@ -97,21 +102,38 @@ jobs:
           npm ci --include=dev
           npm run build
 
+      - name: Generate GitHub App token
+        if: steps.check.outputs.skip == 'false'
+        id: app-token
+        uses: actions/create-github-app-token@v3
+        with:
+          client-id: ${{ vars.GARNET_CI_BOT_CLIENT_ID }}
+          private-key: ${{ secrets.GARNET_CI_BOT_PRIVATE_KEY }}
+
+      - name: Get bot user ID
+        if: steps.check.outputs.skip == 'false'
+        id: bot-user
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: |
+          echo "id=$(gh api "/users/${{ steps.app-token.outputs.app-slug }}[bot]" --jq .id)" >> "$GITHUB_OUTPUT"
+
       - name: Open pull request
         if: steps.check.outputs.skip == 'false'
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
           VERSION: ${{ steps.jibril.outputs.version }}
         run: |
           set -euo pipefail
           BRANCH="update-jibril-version/$VERSION"
 
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git config user.name "${{ steps.app-token.outputs.app-slug }}[bot]"
+          git config user.email "${{ steps.bot-user.outputs.id }}+${{ steps.app-token.outputs.app-slug }}[bot]@users.noreply.github.com"
+          gh auth setup-git
           git checkout -b "$BRANCH"
           git add src/action.js action.yaml README.md dist/
           git commit -m "chore: update Jibril default version to $VERSION"
-          git push origin "$BRANCH"
+          git push --force origin "$BRANCH"
 
           cat > /tmp/pr-body.md << EOF
           Bumps the pinned Jibril version to the latest stable release: \`$VERSION\`.
