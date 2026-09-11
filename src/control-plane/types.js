@@ -165,7 +165,7 @@ export const API_ERROR_SCHEMA = z.object({
  */
 
 /**
- * @typedef {"run_cancelled" | "crashed" | "flush_timeout" | "stopped_cleanly"} AgentStopReason
+ * @typedef {"run_cancelled" | "crashed" | "flush_timeout" | "stopped_cleanly" | "start_failed"} AgentStopReason
  */
 
 /**
@@ -174,10 +174,6 @@ export const API_ERROR_SCHEMA = z.object({
 
 /**
  * @typedef {"completed" | "timed_out"} AgentStopOutcome
- */
-
-/**
- * @typedef {"github_api"} JobStatusSource
  */
 
 /**
@@ -194,11 +190,7 @@ export const API_ERROR_SCHEMA = z.object({
  * @property {AgentStopReason} reason
  * @property {AgentProfileState} profileState
  * @property {string=} detail
- * @property {string} runID
- * @property {string=} runAttempt
- * @property {string=} job
  * @property {"cancelled" | "failure"=} jobStatus
- * @property {JobStatusSource=} jobStatusSource
  * @property {AgentStoppedJibrilFields=} jibril
  */
 
@@ -216,17 +208,19 @@ export const PROFILE_ENVELOPE_PAGE_SCHEMA = z
     })
     .passthrough()
 
-export const AGENT_STOP_REASON_SCHEMA = z.enum(["run_cancelled", "crashed", "flush_timeout", "stopped_cleanly"])
+export const AGENT_STOP_REASON_SCHEMA = z.enum([
+    "run_cancelled",
+    "crashed",
+    "flush_timeout",
+    "stopped_cleanly",
+    "start_failed",
+])
 
 export const AGENT_STOPPED_REQUEST_SCHEMA = z.object({
     reason: AGENT_STOP_REASON_SCHEMA,
     profileState: z.enum(["present", "missing", "empty", "invalid"]),
     detail: z.string().optional(),
-    runID: z.string().min(1),
-    runAttempt: z.string().min(1).optional(),
-    job: z.string().min(1).optional(),
     jobStatus: z.enum(["cancelled", "failure"]).optional(),
-    jobStatusSource: z.enum(["github_api"]).optional(),
     jibril: z
         .object({
             activeState: z.string().optional(),

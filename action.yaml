@@ -1,6 +1,6 @@
 name: "Garnet Runtime Review"
 author: "Garnet Labs Inc."
-description: "Execution evidence for code review: what each CI job ran and reached, recorded at the kernel, posted on your PRs."
+description: "Execution evidence for code review: what each CI job ran and reached, recorded at the kernel."
 branding:
     icon: "activity"
     color: "purple"
@@ -8,14 +8,13 @@ inputs:
     api_token:
         description: |
             Garnet API token from app.garnet.ai. Optional when the job has `id-token: write`
-            (GitHub OIDC is the preferred authentication method). Without OIDC, providing this
-            token authenticates with the Garnet control plane for the best review quality.
-            If neither OIDC nor api_token is available, the action still runs and posts a
-            best-effort local review to the PR, but execution evidence is not sent to the
-            control plane.
+            (GitHub OIDC is the preferred authentication method). When set, the token is used
+            as-is and no OIDC token is requested, so `id-token: write` is not needed.
+            If neither OIDC nor api_token is available, runtime recording is skipped with
+            a warning and a Job Summary explanation. The workflow continues.
         required: false
     github_token:
-        description: "GitHub token used to post pull request comments. Defaults to the built-in GITHUB_TOKEN."
+        description: "GitHub token used to verify Jibril attestations and read workflow job status. Defaults to the built-in GITHUB_TOKEN."
         required: false
         default: ${{ github.token }}
     api_url:
@@ -25,7 +24,7 @@ inputs:
     jibril_version:
         description: "Jibril version (for example v2.16.0, v0.0, or 'latest'); empty resolves from the action tag"
         required: false
-        default: ""
+        default: "v2.17.0"
     debug:
         description: "Enable debug mode"
         required: false
@@ -36,7 +35,7 @@ inputs:
         default: "false"
     stop_timeout_seconds:
         description: |
-            Maximum seconds Jibril is given at shutdown to finish writing its Run Profile and flushing
+            Maximum seconds Jibril is given at shutdown to finish writing its Execution Profile and flushing
             events. The post step waits this long (plus a small grace) and then force stops the sensor,
             so a heavy backlog cannot stall the job indefinitely. Lower it to bound the post step;
             raise it on long jobs where the profile matters more than post-step latency. Set to `0`
@@ -46,11 +45,11 @@ inputs:
 
 outputs:
     profile_result:
-        description: "Reserved for the companion GitHub App and control plane; this action records the Runtime Review"
+        description: "Reserved for compatibility; this action does not set profile_result"
     report_url:
-        description: "Link to the run's Execution Profiles on app.garnet.ai"
+        description: "Run URL set before capture; use the comment or Step Summary for an exact profile permalink"
     agent_id:
-        description: "Identifier for the Jibril sensor instance that recorded this Runtime Review"
+        description: "Registered sensor identifier; registration alone does not confirm capture"
 runs:
     using: "node24"
     main: "dist/main/index.js"

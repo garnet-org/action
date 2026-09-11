@@ -11,10 +11,19 @@ import * as os from "node:os"
 import * as path from "node:path"
 import { pipeline } from "node:stream/promises"
 import { createGitHubContext, getProfileJobName, getWorkflowFilePath } from "./github-context.js"
-import { resolveForkSkip } from "./fork-run.js"
+import { resolveCredentialSkip } from "./credential-less-run.js"
 import { ControlPlaneClient } from "./control-plane/client.js"
 import { getEnv, getErrorMessage, isSupportedArch, isSupportedPlatform, pathExists, waitForDelay } from "./shared.js"
 import { getGitHubIDToken, isMissingOIDCPermissionError, resolveOIDCAudience } from "./oidc.js"
+import { readJibrilUnitState } from "./jibril-unit-state.js"
+import {
+    buildStartFailedRequest,
+    renderStartFailureSummary,
+    START_FAILURE_EXCERPT_MAX_CHARS,
+    START_FAILURE_REASON_MAX_CHARS,
+    truncateHead,
+    truncateTail,
+} from "./start-failure.js"
 
 /**
  * @typedef {import("@actions/exec").ExecOptions} ExecOptions
@@ -27,7 +36,7 @@ import { getGitHubIDToken, isMissingOIDCPermissionError, resolveOIDCAudience } f
 const INSTPATH = "/usr/local/bin"
 // Default Jibril sensor version: the same stable pin as the floating v2 tag,
 // so the sensor never floats under an unchanged action ref.
-const JIBRIL_STABLE_VERSION = "v2.16.0"
+export const JIBRIL_STABLE_VERSION = "v2.17.0"
 // From v2.17.0 on a release ships one linux-x86_64 tarball carrying the binary
 // next to its checksums, a release manifest, and a detached Sigstore bundle for
 // each of those payloads. Older releases only offer the bare `jibril` asset.
@@ -58,21 +67,26 @@ const DEFAULT_JIBRIL_STOP_TIMEOUT_SECONDS = 1800
 // Returns true when Jibril started successfully, false otherwise.
 export async function run() {
     let tmpDir = ""
+    /** @type {StartContext} */
+    const startContext = { apiURL: "", agentToken: "" }
     try {
         // Get the variables from the environment.
         const TOKEN = getEnv("GARNET_API_TOKEN")
         const API = validateApiURL(getEnv("GARNET_API_URL", "https://api.garnet.ai"))
+        startContext.apiURL = API
         let JIBRILVER = resolveJibrilVersion(getEnv("JIBRIL_VERSION", ""), getEnv("GITHUB_ACTION_REF", ""))
         const DEBUG = getEnv("DEBUG", "false")
 
         if (TOKEN === "") {
-            const forkSkip = await resolveForkSkip({
+            const credentialSkip = await resolveCredentialSkip({
                 eventName: getEnv("GITHUB_EVENT_NAME"),
                 eventPath: getEnv("GITHUB_EVENT_PATH"),
                 repository: getEnv("GITHUB_REPOSITORY"),
             })
-            if (forkSkip.skip) {
-                core.info(forkSkip.reason)
+            // A warning, not an info line: the skip has to be visible as a run
+            // annotation, otherwise a credential-less run reads as a silent no-op.
+            if (credentialSkip.skip) {
+                core.warning(credentialSkip.reason)
                 return false
             }
         }
@@ -213,8 +227,10 @@ export async function run() {
         }
 
         if (AGENT_TOKEN) core.setSecret(AGENT_TOKEN)
+        startContext.agentToken = AGENT_TOKEN
 
         core.info(`Created agent with ID: ${AGENT_ID}`)
+        core.setOutput("agent_id", AGENT_ID)
 
         // The post step resolves the run's profile envelope ID from this agent.
         core.saveState("agentID", AGENT_ID)
@@ -417,11 +433,7 @@ TimeoutStopSec=${stopTimeoutValue}
         })
 
         if (returnCode !== 0) {
-            core.warning(
-                "Jibril service failed to start. The workflow will continue without runtime monitoring for this run.",
-            )
-            await dumpJibrilLogs()
-            return false
+            return await discloseStartFailure(startContext, "the jibril service failed to start")
         }
 
         // Give the daemon a moment to settle so an immediate crash is surfaced here.
@@ -432,11 +444,10 @@ TimeoutStopSec=${stopTimeoutValue}
         })
 
         if (serviceState !== "active") {
-            core.warning(
-                `Jibril service exited early with state '${serviceState || "unknown"}'. The workflow will continue without runtime monitoring for this run.`,
+            return await discloseStartFailure(
+                startContext,
+                `the jibril service exited early with state '${serviceState || "unknown"}'`,
             )
-            await dumpJibrilLogs()
-            return false
         }
 
         // Check Jibril service status.
@@ -464,11 +475,7 @@ TimeoutStopSec=${stopTimeoutValue}
         core.info("Jibril service started successfully")
         return true
     } catch (err) {
-        core.warning(
-            `Garnet runtime monitoring setup did not complete: ${getErrorMessage(err)}. The workflow will continue without runtime monitoring for this run.`,
-        )
-        await dumpJibrilLogs()
-        return false
+        return await discloseStartFailure(startContext, `setup did not complete: ${getErrorMessage(err)}`)
     } finally {
         // Clean up the temporary directory.
         if (tmpDir !== "") {
@@ -493,10 +500,25 @@ TimeoutStopSec=${stopTimeoutValue}
  */
 
 /**
+ * A supplied `api_token` is an explicit choice of the token path, so the
+ * action honours it without requesting an OIDC token first: a workflow that
+ * intentionally runs without `id-token: write` must not be told on every run
+ * that the permission is missing. OIDC is attempted only when no token was
+ * supplied.
  * @param {ResolveControlPlaneAuthInput} input
  * @returns {Promise<ControlPlaneAuth>}
  */
 export async function resolveControlPlaneAuth(input) {
+    const apiToken = input.apiToken.trim()
+    if (apiToken !== "") {
+        core.info("Using the supplied 'api_token' for control-plane requests (OIDC exchange not attempted)")
+        return {
+            projectToken: apiToken,
+            workflowToken: "",
+            workflowTokenExpiresAt: "",
+        }
+    }
+
     const audience = resolveOIDCAudience(input.apiURL)
 
     const unauthenticatedControlPlaneClient = new ControlPlaneClient({
@@ -509,21 +531,28 @@ export async function resolveControlPlaneAuth(input) {
         exchanged = await unauthenticatedControlPlaneClient.exchangeGitHubOIDCForWorkflowToken(idToken)
     } catch (error) {
         const errorMessage = getErrorMessage(error)
+        const hasApiToken = input.apiToken !== ""
         if (isMissingOIDCPermissionError(errorMessage)) {
-            core.warning(
-                "github: OIDC token request failed because this workflow is missing 'id-token: write' permission. Falling back to 'api_token'.",
-            )
+            // No 'id-token: write' — the workflow simply wasn't configured for OIDC.
+            // When api_token is present this is a normal, expected fallback, not a problem.
+            if (hasApiToken) {
+                core.info(
+                    "OIDC unavailable (no 'id-token: write' permission); using 'api_token' for control-plane auth.",
+                )
+            } else {
+                core.warning(
+                    "github: OIDC token request failed because this workflow is missing 'id-token: write' permission. Falling back to 'api_token'.",
+                )
+            }
         } else if (errorMessage.startsWith("OIDC token request failed")) {
+            // OIDC was requested but failed for some other reason (rate limit, GH outage, etc.).
+            // Worth surfacing even when api_token covers the auth, in case OIDC was intended.
             core.warning(`github: ${errorMessage}. Falling back to 'api_token'.`)
         } else {
-            core.warning(`OIDC exchange failed (${errorMessage}). Falling back to 'api_token'.`)
+            core.warning(`OIDC exchange failed (${errorMessage}). No 'api_token' was supplied.`)
         }
 
-        return {
-            projectToken: requireApiToken(input.apiToken),
-            workflowToken: "",
-            workflowTokenExpiresAt: "",
-        }
+        throw missingCredentialsError()
     }
 
     if (isTimestampExpired(exchanged.expiresAt)) {
@@ -535,24 +564,16 @@ export async function resolveControlPlaneAuth(input) {
         } catch (error) {
             const errorMessage = getErrorMessage(error)
             if (errorMessage.startsWith("OIDC token request failed")) {
-                core.warning(`github: ${errorMessage}. Falling back to 'api_token'.`)
+                core.warning(`github: ${errorMessage}.`)
             } else {
-                core.warning(`OIDC exchange retry failed (${errorMessage}). Falling back to 'api_token'.`)
+                core.warning(`OIDC exchange retry failed (${errorMessage}).`)
             }
-            return {
-                projectToken: requireApiToken(input.apiToken),
-                workflowToken: "",
-                workflowTokenExpiresAt: "",
-            }
+            throw missingCredentialsError()
         }
 
         if (isTimestampExpired(exchanged.expiresAt)) {
-            core.warning("OIDC workflow token remains expired after retry. Falling back to 'api_token'.")
-            return {
-                projectToken: requireApiToken(input.apiToken),
-                workflowToken: "",
-                workflowTokenExpiresAt: "",
-            }
+            core.warning("OIDC workflow token remains expired after retry.")
+            throw missingCredentialsError()
         }
     }
 
@@ -583,16 +604,11 @@ function isTimestampExpired(value) {
 }
 
 /**
- * @param {string} token
- * @returns {string}
+ * @returns {Error}
  */
-function requireApiToken(token) {
-    if (token !== "") {
-        return token
-    }
-
-    throw new Error(
-        "Input 'api_token' is required when OIDC authentication is unavailable. This commonly happens on pull requests from forks, where repository secrets are not exposed to workflows, or when 'id-token: write' permission is not granted. Add/verify that your workflow passes a valid token to this input, grant 'id-token: write', or conditionally skip this action for forked PRs.",
+function missingCredentialsError() {
+    return new Error(
+        "OIDC authentication was granted but did not produce a workflow token, and the 'api_token' input resolved empty, so no credential is left for the control plane. Pass a valid Garnet API token to 'api_token' as a fallback, or resolve the OIDC failure reported above.",
     )
 }
 
@@ -613,9 +629,7 @@ export function validateJibrilVersion(version) {
         return version
     }
 
-    throw new Error(
-        `Invalid jibril_version '${version}': expected 'latest' or a release version such as 'v2.16.0'.`,
-    )
+    throw new Error(`Invalid jibril_version '${version}': expected 'latest' or a release version such as 'v2.16.0'.`)
 }
 
 /**
@@ -1205,6 +1219,94 @@ function formatCapturedOutput(text, emptyMessage) {
         return emptyMessage
     }
     return redacted
+}
+
+/**
+ * @typedef {object} StartContext
+ * @property {string} apiURL
+ * @property {string} agentToken
+ */
+
+/**
+ * A sensor that never started leaves no profile, so the coverage gap has to
+ * be disclosed here: the job stays green (fail-open) while the gap is made
+ * visible in the job log, in the Job Summary, and — when the agent was
+ * already registered — in the control plane as a `start_failed` stop, which
+ * resolves the run's pending state.
+ * @param {StartContext} context
+ * @param {string} reason
+ * @returns {Promise<false>}
+ */
+async function discloseStartFailure(context, reason) {
+    const boundedReason = truncateHead(redactSensitive(reason) ?? "", START_FAILURE_REASON_MAX_CHARS)
+    core.warning(
+        `Jibril did not start: ${boundedReason}. The workflow continues without runtime monitoring for this job.`,
+    )
+
+    const diagnostics = await collectStartDiagnostics()
+    const failure = { reason: boundedReason, diagnostics }
+
+    await dumpJibrilLogs()
+    await appendStartFailureSummary(failure)
+
+    if (context.agentToken === "") {
+        core.info("control plane: no agent registered for this job, start failure not reported")
+        return false
+    }
+
+    try {
+        const client = new ControlPlaneClient({ baseURL: context.apiURL, agentToken: context.agentToken })
+        const request = buildStartFailedRequest(failure)
+        await client.reportAgentStopped(request)
+        core.info("control plane: reported agent stop (reason=start_failed, profile=missing)")
+    } catch (error) {
+        core.info(`control plane: start failure report skipped: ${getErrorMessage(error)}`)
+    }
+
+    return false
+}
+
+/**
+ * Bounded, redacted evidence of why the sensor did not start. The unit state
+ * and journal come from systemd; the sensor's own reason lands in
+ * /var/log/jibril.err because the runtime status file is only written once
+ * the main loop is entered.
+ * @returns {Promise<import("./start-failure.js").StartFailureDiagnostics>}
+ */
+async function collectStartDiagnostics() {
+    const unitState = await readJibrilUnitState()
+    const journal = await captureCommandTail(["journalctl", "-u", "jibril.service", "-n", "30", "--no-pager"])
+    const sensorLog = await captureCommandTail(["tail", "-n", "30", "/var/log/jibril.err"])
+    return { unitState, journal, sensorLog }
+}
+
+/**
+ * @param {string[]} args
+ * @returns {Promise<string>}
+ */
+async function captureCommandTail(args) {
+    try {
+        const { stdout } = await execCapture("sudo", args, { ignoreReturnCode: true })
+        return truncateTail(redactSensitive(stdout) ?? "", START_FAILURE_EXCERPT_MAX_CHARS)
+    } catch (_) {
+        return ""
+    }
+}
+
+/**
+ * @param {import("./start-failure.js").StartFailure} failure
+ * @returns {Promise<void>}
+ */
+async function appendStartFailureSummary(failure) {
+    const summaryFile = getEnv("GITHUB_STEP_SUMMARY")
+    if (summaryFile === "") {
+        return
+    }
+    try {
+        await fs.appendFile(summaryFile, `\n${renderStartFailureSummary(failure)}\n`)
+    } catch (error) {
+        core.info(`job summary not written: ${getErrorMessage(error)}`)
+    }
 }
 
 // Dumps jibril stdout/stderr and journalctl when jibril fails in debug mode.

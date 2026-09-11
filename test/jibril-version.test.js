@@ -1,8 +1,6 @@
 import assert from "node:assert/strict"
 import { test } from "node:test"
-import { resolveJibrilVersion, usesBundledJibrilRelease } from "../src/action.js"
-
-const PINNED_DEFAULT = "v2.16.0"
+import { resolveJibrilVersion, usesBundledJibrilRelease, JIBRIL_STABLE_VERSION } from "../src/action.js"
 
 test("explicit jibril_version input always wins", () => {
     assert.equal(resolveJibrilVersion("v2.12.0", "v2"), "v2.12.0")
@@ -11,19 +9,19 @@ test("explicit jibril_version input always wins", () => {
 })
 
 test("empty input on the v2 tag resolves the pinned default", () => {
-    assert.equal(resolveJibrilVersion("", "v2"), PINNED_DEFAULT)
-    assert.equal(resolveJibrilVersion("", "refs/tags/v2"), PINNED_DEFAULT)
+    assert.equal(resolveJibrilVersion("", "v2"), JIBRIL_STABLE_VERSION)
+    assert.equal(resolveJibrilVersion("", "refs/tags/v2"), JIBRIL_STABLE_VERSION)
 })
 
 test("empty input on SHA refs resolves the pinned default, never latest", () => {
-    assert.equal(resolveJibrilVersion("", "3d47f4a9004f7356c980a0e8d420ef5984750e3c"), PINNED_DEFAULT)
+    assert.equal(resolveJibrilVersion("", "3d47f4a9004f7356c980a0e8d420ef5984750e3c"), JIBRIL_STABLE_VERSION)
 })
 
 test("empty input on branch and unknown refs resolves the pinned default, never latest", () => {
-    assert.equal(resolveJibrilVersion("", "main"), PINNED_DEFAULT)
-    assert.equal(resolveJibrilVersion("", "refs/heads/main"), PINNED_DEFAULT)
-    assert.equal(resolveJibrilVersion("", ""), PINNED_DEFAULT)
-    assert.equal(resolveJibrilVersion("", "v3"), PINNED_DEFAULT)
+    assert.equal(resolveJibrilVersion("", "main"), JIBRIL_STABLE_VERSION)
+    assert.equal(resolveJibrilVersion("", "refs/heads/main"), JIBRIL_STABLE_VERSION)
+    assert.equal(resolveJibrilVersion("", ""), JIBRIL_STABLE_VERSION)
+    assert.equal(resolveJibrilVersion("", "v3"), JIBRIL_STABLE_VERSION)
 })
 
 test("legacy tag pins are preserved", () => {
