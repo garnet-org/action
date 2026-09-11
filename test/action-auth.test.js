@@ -4,10 +4,19 @@
  * falls back to the api_token shape with no network fetch reached, and the
  * Jibril sensor version never floats — every action ref resolves to an
  * explicit pinned version.
+ *
+ * Crucially: an api_token-only workflow that lacks 'id-token: write' must NOT
+ * produce a warning annotation — the OIDC miss is expected and silent at info
+ * level for that configuration.
  */
 import test from "node:test"
 import assert from "node:assert/strict"
+import { readFile } from "node:fs/promises"
+import { join, dirname } from "node:path"
+import { fileURLToPath } from "node:url"
 import { resolveControlPlaneAuth, resolveJibrilVersion, JIBRIL_STABLE_VERSION } from "../src/action.js"
+
+const here = dirname(fileURLToPath(import.meta.url))
 
 /**
  * Runs a function with a controlled process.env overlay, restoring the
@@ -85,6 +94,37 @@ test("gate: OIDC failure does not reach fetch", async (t) => {
         },
     )
 })
+
+test("gate: OIDC permission miss + api_token present logs at info, not warning", async () => {
+    // When OIDC is requested but the job lacks 'id-token: write' and the user
+    // has configured api_token, the OIDC miss is deliberate — no warning annotation.
+    // The branching is straightforward enough to verify directly in source.
+    const source = await readFile(join(here, "..", "src", "action.js"), "utf8")
+
+    // When api_token is present, the permission miss must go through core.info, not core.warning.
+    assert.match(
+        source,
+        /isMissingOIDCPermissionError[\s\S]*?hasApiToken[\s\S]*?core\.info/,
+        "missing-permission branch must call core.info when api_token is available",
+    )
+
+    // The core.warning call in the else (no api_token) branch must not appear
+    // before the hasApiToken check in the missing-permission block.
+    const permissionBlock = source.match(
+        /isMissingOIDCPermissionError\(errorMessage\)[\s\S]*?\} else if \(errorMessage\.startsWith/,
+    )?.[0] ?? ""
+    assert.match(
+        permissionBlock,
+        /hasApiToken/,
+        "isMissingOIDCPermissionError block must branch on hasApiToken",
+    )
+    assert.doesNotMatch(
+        permissionBlock.split("hasApiToken")[0] ?? "",
+        /core\.warning/,
+        "core.warning must not be called before the hasApiToken check in the permission-miss block",
+    )
+})
+
 
 test("gate: empty api_token fails when OIDC is also unavailable", async () => {
     await withEnv(

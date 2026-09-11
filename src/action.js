@@ -509,11 +509,20 @@ export async function resolveControlPlaneAuth(input) {
         exchanged = await unauthenticatedControlPlaneClient.exchangeGitHubOIDCForWorkflowToken(idToken)
     } catch (error) {
         const errorMessage = getErrorMessage(error)
+        const hasApiToken = input.apiToken !== ""
         if (isMissingOIDCPermissionError(errorMessage)) {
-            core.warning(
-                "github: OIDC token request failed because this workflow is missing 'id-token: write' permission. Falling back to 'api_token'.",
-            )
+            // No 'id-token: write' — the workflow simply wasn't configured for OIDC.
+            // When api_token is present this is a normal, expected fallback, not a problem.
+            if (hasApiToken) {
+                core.info("OIDC unavailable (no 'id-token: write' permission); using 'api_token' for control-plane auth.")
+            } else {
+                core.warning(
+                    "github: OIDC token request failed because this workflow is missing 'id-token: write' permission. Falling back to 'api_token'.",
+                )
+            }
         } else if (errorMessage.startsWith("OIDC token request failed")) {
+            // OIDC was requested but failed for some other reason (rate limit, GH outage, etc.).
+            // Worth surfacing even when api_token covers the auth, in case OIDC was intended.
             core.warning(`github: ${errorMessage}. Falling back to 'api_token'.`)
         } else {
             core.warning(`OIDC exchange failed (${errorMessage}). Falling back to 'api_token'.`)
