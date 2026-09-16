@@ -28,6 +28,14 @@ import { classifyProfileContent } from "./post-profile-state.js"
 import { classifyAgentStop, formatAgentStopDetail } from "./post-signal.js"
 import { resolveJobStatusFromGitHub } from "./github-job-status.js"
 import { resolveStopTimeoutFromSettings, resolveStopTimeoutFromUnit } from "./post-stop-timeout.js"
+import { versionAtLeast } from "./jibril-version.js"
+import {
+    JIBRIL_RUN_STATUS_FILE,
+    formatAttachFailures,
+    formatEbpfErrors,
+    formatJibrilStatusSummary,
+    parseJibrilStatus,
+} from "./jibril-status.js"
 
 /** @typedef {import("./profile-comment.js").NormalizedProfile} NormalizedProfile */
 /** @typedef {import("./profile-comment.js").RenderOptions} RenderOptions */
@@ -39,6 +47,7 @@ import { resolveStopTimeoutFromSettings, resolveStopTimeoutFromUnit } from "./po
 /** @typedef {import("./github-job-status.js").JobStatusResolution} JobStatusResolution */
 /** @typedef {import("./control-plane/types.js").AgentStoppedRequest} AgentStoppedRequest */
 /** @typedef {import("./control-plane/types.js").AgentStoppedJibrilFields} AgentStoppedJibrilFields */
+/** @typedef {import("./jibril-status.js").JibrilStatus} JibrilStatus */
 
 /**
  * Everything the post step observed about how the sensor stopped, from which
@@ -51,6 +60,7 @@ import { resolveStopTimeoutFromSettings, resolveStopTimeoutFromUnit } from "./po
  * @property {boolean} forceStopped
  * @property {number} stopTimeoutSeconds
  * @property {ProfileResult} profileResult
+ * @property {JibrilStatus | null} runStatus
  */
 
 /**
@@ -175,6 +185,14 @@ async function run() {
         const unitStateAfterStop = await readJibrilUnitState()
         logJibrilUnitState("jibril service state", unitStateAfterStop)
 
+        // From v2.17.0 on jibril writes a status file before its event loop,
+        // and that startup snapshot still stands once the sensor has stopped.
+        // Older sensors write no file at all, so their silence says nothing.
+        let runStatus = null
+        if (versionAtLeast(core.getState("jibrilVersion"), 2, 17, 0)) {
+            runStatus = await reportJibrilRunStatus()
+        }
+
         // Upload jibril logs as artifacts when debug is enabled (only after service stops).
         // Get the debug state from the main.js.
         const debug = core.getState("debug")
@@ -207,6 +225,7 @@ async function run() {
                 forceStopped,
                 stopTimeoutSeconds,
                 profileResult,
+                runStatus,
             })
         }
 
@@ -283,6 +302,7 @@ async function reportAgentStop(observations) {
             forceStopped: observations.forceStopped,
             stopTimeoutSeconds: observations.stopTimeoutSeconds,
             profileState: observations.profileResult.state,
+            runStatus: observations.runStatus,
         }
 
         // The evidence detail already names the profile state; only a parse
@@ -339,6 +359,25 @@ function buildAgentStoppedRequest(evidence, jobStatus, parseDetail) {
         jibril.activeState = unitState.activeState
         jibril.result = unitState.result
         jibril.execMainStatus = unitState.execMainStatus
+    }
+
+    // What the sensor said about its own capture, so a missing or partial
+    // profile is explained instead of silent. The fields carry jibril's own
+    // shape, and an absent eBPF block stays absent: the loader never
+    // reported counters, which must not read as a clean load.
+    // TODO(control-plane): /agent/stopped must accept these jibril fields
+    // (sensorStatus, ebpfErrors, githubSteps, kernel); until it does they
+    // are only carried by `detail`.
+    const runStatus = evidence.runStatus
+    if (runStatus !== null) {
+        jibril.sensorStatus = runStatus.status
+        jibril.kernel = runStatus.kernel
+        if (runStatus.ebpf !== null) {
+            jibril.ebpfErrors = runStatus.ebpf.errors
+        }
+        if (runStatus.githubSteps !== null) {
+            jibril.githubSteps = runStatus.githubSteps
+        }
     }
 
     /** @type {AgentStoppedRequest} */
@@ -733,6 +772,54 @@ async function readJibrilUnitState() {
         core.info(`could not read jibril service state: ${getErrorMessage(error)}`)
         return null
     }
+}
+
+/**
+ * Reads and logs the sensor's own account of this run: the eBPF counters
+ * explain a thin profile, and a degraded steps block explains events
+ * attributed to the wrong workflow step, or to none.
+ * @returns {Promise<JibrilStatus | null>}
+ */
+async function reportJibrilRunStatus() {
+    const status = parseJibrilStatus(await readOptionalRootFile(JIBRIL_RUN_STATUS_FILE))
+    if (status === null) {
+        core.info(`jibril run status not reported: ${JIBRIL_RUN_STATUS_FILE} is missing or unreadable`)
+        return null
+    }
+
+    core.info(`jibril run status: ${formatJibrilStatusSummary(status)}`)
+
+    const ebpf = status.ebpf
+    if (ebpf === null) {
+        // jibril omits the block until the loader reports counters, so its
+        // absence means the eBPF layer never came up: nothing was captured.
+        core.warning("jibril reported no eBPF counters for this run; the sensor captured no runtime events")
+    } else {
+        const ebpfErrors = formatEbpfErrors(ebpf.errors)
+        if (ebpfErrors !== "") {
+            core.warning(
+                `jibril reported eBPF errors for this run (${ebpfErrors}); some runtime events were not captured`,
+            )
+            const attachFailures = formatAttachFailures(ebpf.errors.attachFailures)
+            if (attachFailures !== "") {
+                core.info(`jibril could not attach: ${attachFailures}`)
+            }
+        }
+    }
+
+    const steps = status.githubSteps
+    if (steps !== null && steps.status === "degraded") {
+        const parts = [
+            `jibril reported degraded workflow-step attribution (source=${steps.source}, steps=${steps.count})`,
+        ]
+        if (steps.errors.length > 0) {
+            parts.push(steps.errors.join("; "))
+        }
+        parts.push("events in the Runtime Review may be attributed to the wrong step")
+        core.warning(parts.join("; "))
+    }
+
+    return status
 }
 
 /**

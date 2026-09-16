@@ -14195,6 +14195,10 @@ function toString(buffer, encoding, start, end) {
   return toBuffer(buffer).toString(encoding, start, end)
 }
 
+function toHex(buffer, start, end) {
+  return toBuffer(buffer).toString('hex', start, end)
+}
+
 function write(buffer, string, offset, length, encoding) {
   return toBuffer(buffer).write(string, offset, length, encoding)
 }
@@ -14284,6 +14288,7 @@ module.exports = {
   swap64,
   toBuffer,
   toString,
+  toHex,
   write,
   readDoubleBE,
   readDoubleLE,
@@ -16371,6 +16376,26 @@ var EXPANSION_MAX = 100000
 // characters) so legitimate input is unaffected.
 var EXPANSION_MAX_LENGTH = 4000000
 
+// `expand` recurses once per level of brace *nesting* - both when expanding a
+// set's comma members and when re-wrapping a set whose body is a single part.
+// The CVE-2026-14257 fix made the *tail* iterative (recursion on `m.post`, one
+// level per chained group), which left nesting depth unbounded: about 3,100
+// levels of `{{{...a,b...}}}` - only ~6KB of input - exhausted the native stack
+// and crashed the process. `EXPANSION_MAX_DEPTH` bounds how deep the parser
+// will follow nesting. It sits far above any realistic pattern and well below
+// the depth at which the stack runs out.
+var EXPANSION_MAX_DEPTH = 1000
+
+// Bash keeps a quirk where a brace group followed by a comma set still expands
+// (`{a},b}`). The parser implements it by rewriting the string and restarting
+// the scan, absorbing one `}` per pass. `n` trailing braces therefore cost `n`
+// full passes over a string that itself grows by one `escClose` sentinel each
+// time - quadratic in `n`, with a ~26x constant from the sentinel's length.
+// 128KB of `'{a}' + '}'.repeat(n) + ',z}'` blocked the event loop for 27
+// seconds to produce two results. `EXPANSION_MAX_REWRITES` bounds how many
+// times the scan may restart. Real `{a},b}` input needs a handful.
+var EXPANSION_MAX_REWRITES = 1000
+
 function numeric(str) {
   return parseInt(str, 10) == str
     ? parseInt(str, 10)
@@ -16394,34 +16419,54 @@ function unescapeBraces(str) {
 }
 
 
+// Like `target.push(...items)` but doesn't overflow the stack
+function pushAll(target, items) {
+  for (var i = 0; i < items.length; i++) {
+    target.push(items[i]);
+  }
+}
+
 // Basically just str.split(","), but handling cases
 // where we have nested braced sections, which should be
 // treated as individual members, like {a,{b,c},d}
 function parseCommaParts(str) {
-  if (!str)
-    return [''];
-
   var parts = [];
-  var m = balanced('{', '}', str);
 
-  if (!m)
-    return str.split(',');
+  // Walk the brace groups iteratively. Recursing on `post` once per group let a
+  // chain of them exhaust the stack - the parsing-side counterpart to
+  // the `expand` overflow fixed for CVE-2026-14257, and not something `max` or
+  // `maxLength` can bound, since it happens before expansion.
+  //
+  // The part the next chunk continues
+  var carry = '';
 
-  var pre = m.pre;
-  var body = m.body;
-  var post = m.post;
-  var p = pre.split(',');
+  for (;;) {
+    var m = balanced('{', '}', str);
 
-  p[p.length-1] += '{' + body + '}';
-  var postParts = parseCommaParts(post);
-  if (post.length) {
-    p[p.length-1] += postParts.shift();
-    p.push.apply(p, postParts);
+    if (!m) {
+      var tail = str.split(',');
+      tail[0] = carry + tail[0];
+      pushAll(parts, tail);
+      return parts;
+    }
+
+    var pre = m.pre;
+    var body = m.body;
+    var post = m.post;
+    var p = pre.split(',');
+
+    p[0] = carry + p[0];
+    p[p.length-1] += '{' + body + '}';
+
+    if (!post.length) {
+      pushAll(parts, p);
+      return parts;
+    }
+
+    carry = p.pop();
+    pushAll(parts, p);
+    str = post;
   }
-
-  parts.push.apply(parts, p);
-
-  return parts;
 }
 
 function expandTop(str, options) {
@@ -16431,6 +16476,8 @@ function expandTop(str, options) {
   options = options || {};
   var max = options.max == null ? EXPANSION_MAX : options.max;
   var maxLength = options.maxLength == null ? EXPANSION_MAX_LENGTH : options.maxLength;
+  var maxDepth = options.maxDepth == null ? EXPANSION_MAX_DEPTH : options.maxDepth;
+  var maxRewrites = options.maxRewrites == null ? EXPANSION_MAX_REWRITES : options.maxRewrites;
 
   // I don't know why Bash 4.3 does this, but it does.
   // Anything starting with {} will have the first two bytes preserved
@@ -16442,7 +16489,7 @@ function expandTop(str, options) {
     str = '\\{\\}' + str.substr(2);
   }
 
-  return expand(escapeBraces(str), max, maxLength, true).map(unescapeBraces);
+  return expand(escapeBraces(str), max, maxLength, maxDepth, 0, maxRewrites, true).map(unescapeBraces);
 }
 
 function embrace(str) {
@@ -16554,8 +16601,18 @@ function expand(
   str,
   max,
   maxLength,
+  maxDepth,
+  depth,
+  maxRewrites,
   isTop
 ) {
+  // Too deeply nested to keep following: treat the rest as literal, the same
+  // way a group that cannot expand is already handled. Truncating rather than
+  // throwing keeps expansion total, matching `max` and `maxLength`.
+  if (depth > maxDepth) {
+    return [str];
+  }
+
   // Consume the string's top-level brace groups left to right, threading a
   // running set of combined prefixes (`acc`). Expanding the tail iteratively -
   // rather than recursing on `m.post` once per group - keeps the native stack
@@ -16568,6 +16625,9 @@ function expand(
   // comma set - a sequence like `{a..\}` may legitimately yield ''. The drop
   // is on the final strings, so it is applied to whichever `combine` produces
   // them (the one with no brace set left in the tail).
+  // How many times the `{a},b}` rewrite below has restarted the scan. Each pass
+  // re-reads the whole string, so leaving this unbounded is quadratic.
+  var rewrites = 0
   var dropEmpties = false
   var firstGroup = true
 
@@ -16603,7 +16663,8 @@ function expand(
     var isOptions = m.body.indexOf(',') >= 0;
     if (!isSequence && !isOptions) {
       // {a},b}
-      if (m.post.match(/,(?!,).*\}/)) {
+      if (rewrites < maxRewrites && m.post.match(/,(?!,).*\}/)) {
+        rewrites++;
         str = m.pre + '{' + m.body + escClose + m.post;
         isTop = true;
         continue;
@@ -16631,7 +16692,7 @@ function expand(
       var n = parseCommaParts(m.body);
       if (n.length === 1 && n[0] !== undefined) {
         // x{{a,b}}y ==> x{a}y x{b}y
-        n = expand(n[0], max, maxLength, false).map(embrace);
+        n = expand(n[0], max, maxLength, maxDepth, depth + 1, maxRewrites, false).map(embrace);
         //XXX is this necessary? Can't seem to hit it in tests.
         /* c8 ignore start */
         if (n.length === 1) {
@@ -16665,7 +16726,7 @@ function expand(
       values = []
       var valuesLength = 0
       outer: for (var j = 0; j < n.length; j++) {
-        var expanded = expand(n[j], max, maxLength, false)
+        var expanded = expand(n[j], max, maxLength, maxDepth, depth + 1, maxRewrites, false)
         for (var k = 0; k < expanded.length; k++) {
           var v = expanded[k]
           if (dropsEmpties && !v) continue
@@ -82388,10 +82449,6 @@ function members(proto, table) {
         else
             defineBound(proto, key, desc.value);
     }
-    // for..in sees no symbol keys, so well-known members like Symbol.iterator install here
-    for (const sym of Object.getOwnPropertySymbols(table)) {
-        defineBound(proto, sym, table[sym]);
-    }
 }
 /** Shadows a prototype member with an own value, so a getter that builds from the instance runs once. */
 function own(inst, key, value, enumerable = true) {
@@ -82586,7 +82643,7 @@ proto, params) {
                 _zodDesc.value = undefined;
             }
         }
-        if (inst._zod.traits.has(name)) {
+        else if (inst._zod.traits.has(name)) {
             return;
         }
         inst._zod.traits.add(name);
@@ -82679,9 +82736,9 @@ class $ZodCyclicError extends Error {
 /** Keyed off the context object every schema in one parse call already shares. */
 const STATE = "~memo";
 const NO_ISSUES = [];
-// a value a cycle can close through; callables count, since z.properties asserts on one
+// a value a cycle can close through
 function isRef(value) {
-    return value !== null && (typeof value === "object" || typeof value === "function");
+    return value !== null && typeof value === "object";
 }
 // Receivers prefix paths in place, so the cache and every hand-out need their own copies.
 function cloneIssues(issues) {
@@ -82738,9 +82795,6 @@ function isRecursive(inst, stack, resolve) {
             check(def.catchall);
             break;
         }
-        case "properties":
-            merge(shape(def.shape, false));
-            break;
         case "array":
             check(def.element);
             break;
@@ -83053,6 +83107,8 @@ const httpProtocol = /^https?$/;
 const e164 = /^\+[1-9]\d{6,14}$/;
 // Credit card shape: 12–19 digits, optionally separated by single spaces or single hyphens. ISO/IEC 7812 caps the PAN at 19 digits; 12 is the shortest issued length (Maestro).
 const creditCard = /^\d(?:[ -]?\d){11,18}$/;
+// ISO 4217 alpha codes from the SIX list, regenerated by scripts/update-iso-4217.ts
+const currencyCode = /^(?:AED|AFN|ALL|AMD|AOA|ARS|AUD|AWG|AZN|BAM|BBD|BDT|BHD|BIF|BMD|BND|BOB|BOV|BRL|BSD|BTN|BWP|BYN|BZD|CAD|CDF|CHE|CHF|CHW|CLF|CLP|CNY|COP|COU|CRC|CUP|CVE|CZK|DJF|DKK|DOP|DZD|EGP|ERN|ETB|EUR|FJD|FKP|GBP|GEL|GHS|GIP|GMD|GNF|GTQ|GYD|HKD|HNL|HTG|HUF|IDR|ILS|INR|IQD|IRR|ISK|JMD|JOD|JPY|KES|KGS|KHR|KMF|KPW|KRW|KWD|KYD|KZT|LAK|LBP|LKR|LRD|LSL|LYD|MAD|MDL|MGA|MKD|MMK|MNT|MOP|MRU|MUR|MVR|MWK|MXN|MXV|MYR|MZN|NAD|NGN|NIO|NOK|NPR|NZD|OMR|PAB|PEN|PGK|PHP|PKR|PLN|PYG|QAR|RON|RSD|RUB|RWF|SAR|SBD|SCR|SDG|SEK|SGD|SHP|SLE|SOS|SRD|SSP|STN|SVC|SYP|SZL|THB|TJS|TMT|TND|TOP|TRY|TTD|TWD|TZS|UAH|UGX|USD|USN|UYI|UYU|UYW|UZS|VED|VES|VND|VUV|WST|XAD|XAF|XAG|XAU|XBA|XBB|XBC|XBD|XCD|XCG|XDR|XOF|XPD|XPF|XPT|XSU|XTS|XUA|XXX|YER|ZAR|ZMW|ZWG)$/;
 // iban electronic format: 2-letter country, check digits 02-98 (the only values `98 - remainder` can produce), 11-30 bban characters
 const iban = /^[A-Z]{2}(?!00|01|99)\d{2}[A-Z0-9]{11,30}$/;
 const dateSource = `(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))`;
@@ -83588,7 +83644,7 @@ const $ZodCheckEndsWith = /*@__PURE__*/ $constructor("$ZodCheckEndsWith", (inst,
 ///////////////////////////////////
 function handleCheckPropertyResult(result, payload, property) {
     if (result.issues.length) {
-        payload.issues.push(...util.prefixIssues(property, result.issues));
+        payload.issues.push(...prefixIssues(property, result.issues));
     }
 }
 const $ZodCheckProperty = /*@__PURE__*/ (/* unused pure expression or super */ null && (core.$constructor("$ZodCheckProperty", (inst, def) => {
@@ -83605,6 +83661,37 @@ const $ZodCheckProperty = /*@__PURE__*/ (/* unused pure expression or super */ n
         return;
     };
 })));
+const $ZodCheckProperties = /*@__PURE__*/ $constructor("$ZodCheckProperties", (inst, def) => {
+    $ZodCheck.init(inst, def);
+    hide(inst, Symbol.iterator, function* () {
+        yield inst;
+    });
+    // key and schema snapshotted together: reading one live and the other cached lets a later mutation of the caller's shape object pair a stale key with a missing schema
+    let entries;
+    inst._zod.check = (payload) => {
+        // the base schema already typed the value, so only a nullish one is rejected here: the properties read on a primitive too, matching z.property() on a string's length
+        if (payload.value == null) {
+            payload.issues.push({ expected: "object", code: "invalid_type", input: payload.value, inst });
+            return undefined;
+        }
+        entries ?? (entries = Reflect.ownKeys(def.shape).map((key) => [key, def.shape[key]]));
+        const input = payload.value;
+        let proms;
+        for (const [key, schema] of entries) {
+            const result = schema._zod.run({ value: input[key], issues: [] }, {});
+            if (result instanceof Promise) {
+                proms ?? (proms = []);
+                proms.push(result.then((result) => handleCheckPropertyResult(result, payload, key)));
+            }
+            else {
+                handleCheckPropertyResult(result, payload, key);
+            }
+        }
+        if (proms)
+            return Promise.all(proms).then(() => undefined);
+        return undefined;
+    };
+});
 const $ZodCheckMimeType = /*@__PURE__*/ (/* unused pure expression or super */ null && (core.$constructor("$ZodCheckMimeType", (inst, def) => {
     $ZodCheck.init(inst, def);
     const mimeSet = new Set(def.mime);
@@ -83671,7 +83758,7 @@ class Doc {
 const version = {
     major: 4,
     minor: 6,
-    patch: 1,
+    patch: 5,
 };
 
 ;// CONCATENATED MODULE: ./node_modules/zod/v4/core/schemas.js
@@ -83886,15 +83973,37 @@ const $ZodEmail = /*@__PURE__*/ $constructor("$ZodEmail", (inst, def) => {
 });
 /** The `://` guard rejected the input before the URL constructor saw it. */
 const URL_BAD_FORMAT = 1;
-/** The URL constructor rejected the input. */
+/** The URL parser rejected the input. */
 const URL_UNPARSEABLE = 2;
-/** Parses a URL for `$ZodURL`, applying the one guard the URL constructor cannot express. Returns the parsed URL, or a code naming the stage that rejected it — the runtime needs that distinction to pick an issue note, and compiled code only needs to know it is not a URL. */
+function canParseURL(input) {
+    try {
+        if (typeof URL !== "undefined" && typeof URL.canParse === "function")
+            return URL.canParse(input);
+        new URL(input);
+        return true;
+    }
+    catch {
+        return false;
+    }
+}
+function validateURL(trimmed, def) {
+    if (!("normalize" in def) && !("hostname" in def) && !("protocol" in def)) {
+        return canParseURL(trimmed) || URL_UNPARSEABLE;
+    }
+    return parseURLObject(trimmed, def);
+}
+/** Parses a URL while preserving the non-normalizing HTTP guard. */
 function parseURLObject(trimmed, def) {
     // When normalize is off, require :// for http/https URLs. This prevents strings like "http:example.com" or "https:/path" from being silently accepted
     if (!def.normalize && def.protocol?.source === httpProtocol.source && !/^https?:\/\//i.test(trimmed)) {
         return URL_BAD_FORMAT;
     }
     try {
+        if (typeof URL !== "undefined") {
+            const URLStatic = URL;
+            if (typeof URLStatic.parse === "function")
+                return URLStatic.parse(trimmed) ?? URL_UNPARSEABLE;
+        }
         // @ts-ignore
         return new URL(trimmed);
     }
@@ -83921,7 +84030,7 @@ const $ZodURL = /*@__PURE__*/ $constructor("$ZodURL", (inst, def) => {
         try {
             // Trim whitespace from input
             const trimmed = payload.value.trim();
-            const url = parseURLObject(trimmed, def);
+            const url = validateURL(trimmed, def);
             if (url === URL_BAD_FORMAT) {
                 payload.issues.push({
                     code: "invalid_format",
@@ -83941,6 +84050,10 @@ const $ZodURL = /*@__PURE__*/ $constructor("$ZodURL", (inst, def) => {
                     inst,
                     continue: !def.abort,
                 });
+                return;
+            }
+            if (url === true) {
+                payload.value = stripTabAndNewline(trimmed);
                 return;
             }
             if (def.hostname && !urlHostnameOk(url, def.hostname)) {
@@ -84040,14 +84153,7 @@ const ipv6Alphabet = /^[0-9a-fA-F:.]+$/;
 function isValidIPv6(value) {
     if (!ipv6Alphabet.test(value))
         return false;
-    try {
-        // @ts-ignore
-        new URL(`http://[${value}]`);
-        return true;
-    }
-    catch {
-        return false;
-    }
+    return canParseURL(`http://[${value}]`);
 }
 const $ZodIPv6 = /*@__PURE__*/ $constructor("$ZodIPv6", (inst, def) => {
     def.pattern ?? (def.pattern = ipv6);
@@ -84546,7 +84652,7 @@ function handlePropertyResult(result, final, key, input, optin, optout) {
         return;
     }
     if (result.value === undefined) {
-        if (isPresent) {
+        if (isPresent || (optin === "defaulted" && !isOptionalOut)) {
             final.value[key] = undefined;
         }
     }
@@ -84801,16 +84907,17 @@ const $ZodObjectJIT = /*@__PURE__*/ $constructor("$ZodObjectJIT", (inst, def) =>
                 doc.write(`
         if (${id}.issues.length) {${prefixStr(id, k)}
         }
-        
-        if (${id}.value === undefined) {
-          if (${isPresent}) {
-            newResult[${k}] = undefined;
-          }
-        } else {
+      `);
+                if (optin === "defaulted") {
+                    doc.write(`newResult[${k}] = ${id}.value;`);
+                }
+                else {
+                    doc.write(`
+        if (${id}.value !== undefined || ${isPresent}) {
           newResult[${k}] = ${id}.value;
         }
-
       `);
+                }
             }
         }
         doc.write(`payload.value = newResult;`);
@@ -86261,67 +86368,6 @@ function handleRefineResult(result, payload, input, inst) {
         payload.issues.push(util_issue(_iss));
     }
 }
-// asserts in place: the child result's value is discarded, matching z.property(), because a nested object or array schema rebuilds its output even when nothing transformed
-function handlePropertiesResult(result, payload, key) {
-    if (result.issues.length) {
-        payload.issues.push(...prefixIssues(key, result.issues));
-    }
-}
-const $ZodProperties = /*@__PURE__*/ $constructor("$ZodProperties", (inst, def) => {
-    // $ZodType.init prepends an instance that already carries the $ZodCheck trait to its own `checks`, which would run the shape a second time and cost the parse context. Initializing the check trait after it keeps the schema role in `parse`, where the context arrives.
-    $ZodType.init(inst, def);
-    $ZodCheck.init(inst, def);
-    const memo = globalConfig.memoizer;
-    memo?.attach(inst);
-    // key and schema snapshotted together: reading one live and the other cached lets a later mutation of the caller's shape object pair a stale key with a missing schema
-    let entries;
-    const runShape = (payload, ctx) => {
-        entries ?? (entries = Reflect.ownKeys(def.shape).map((key) => [key, def.shape[key]]));
-        const input = payload.value;
-        let proms;
-        for (const [key, schema] of entries) {
-            const result = schema._zod.run({ value: input[key], issues: [] }, ctx);
-            if (result instanceof Promise) {
-                proms ?? (proms = []);
-                proms.push(result.then((result) => handlePropertiesResult(result, payload, key)));
-            }
-            else {
-                handlePropertiesResult(result, payload, key);
-            }
-        }
-        if (proms)
-            return Promise.all(proms).then(() => undefined);
-        return undefined;
-    };
-    inst._zod.parse = (payload, ctx) => {
-        const input = payload.value;
-        // as a schema this is the type gate, and it infers an object shape, so a primitive is a type error. A function passes: its properties read like any other object's, and z.instanceof allows one.
-        if (input === null || (typeof input !== "object" && typeof input !== "function")) {
-            payload.issues.push({ expected: "object", code: "invalid_type", input, inst });
-            return payload;
-        }
-        // both sides declare the shape's input type, so the assertion runs forward in either direction; encoding the children backward would reject the very type this schema claims to take
-        if (ctx.direction === "backward")
-            ctx = { ...ctx, direction: "forward" };
-        // the input is its own output here, so it registers as its own memo entry: a cycle re-entering this node hits the bucket instead of recursing forever
-        if (memo)
-            memo.alloc(inst, payload, input, ctx);
-        const result = runShape(payload, ctx);
-        return result instanceof Promise ? result.then(() => payload) : payload;
-    };
-    // as a check the base schema already typed the value, so this only asserts the properties — which read on a primitive too, matching z.property() on a string's length. It gets no context of its own, so a cycle through a spread schema is not tracked.
-    inst._zod.check = (payload) => {
-        if (payload.value == null) {
-            payload.issues.push({ expected: "object", code: "invalid_type", input: payload.value, inst });
-            return undefined;
-        }
-        return runShape(payload, {});
-    };
-}, {
-    *[Symbol.iterator]() {
-        yield this;
-    },
-});
 
 ;// CONCATENATED MODULE: ./node_modules/zod/v4/core/registries.js
 var registries_a;
@@ -86381,20 +86427,18 @@ const globalRegistry = globalThis.__zod_globalRegistry;
 
 
 
+function snapshotChecks(def) {
+    if (def.checks)
+        def.checks = [...def.checks];
+    return def;
+}
 // @__NO_SIDE_EFFECTS__
 function _string(Class, params) {
-    return new Class({
-        type: "string",
-        ...normalizeParams(params),
-    });
+    return new Class(snapshotChecks({ type: "string", ...normalizeParams(params) }));
 }
 // @__NO_SIDE_EFFECTS__
 function _coercedString(Class, params) {
-    return new Class({
-        type: "string",
-        coerce: true,
-        ...util.normalizeParams(params),
-    });
+    return new Class(snapshotChecks({ type: "string", coerce: true, ...util.normalizeParams(params) }));
 }
 // @__NO_SIDE_EFFECTS__
 function _email(Class, params) {
@@ -86703,20 +86747,11 @@ function _isoDuration(Class, params) {
 }
 // @__NO_SIDE_EFFECTS__
 function _number(Class, params) {
-    return new Class({
-        type: "number",
-        checks: [],
-        ...normalizeParams(params),
-    });
+    return new Class(snapshotChecks({ type: "number", checks: [], ...normalizeParams(params) }));
 }
 // @__NO_SIDE_EFFECTS__
 function _coercedNumber(Class, params) {
-    return new Class({
-        type: "number",
-        coerce: true,
-        checks: [],
-        ...util.normalizeParams(params),
-    });
+    return new Class(snapshotChecks({ type: "number", coerce: true, checks: [], ...util.normalizeParams(params) }));
 }
 // @__NO_SIDE_EFFECTS__
 function _int(Class, params) {
@@ -87063,9 +87098,8 @@ function _property(property, schema, params) {
     });
 }
 // @__NO_SIDE_EFFECTS__
-function _properties(Class, shape, params) {
-    return new Class({
-        type: "properties",
+function _properties(shape, params) {
+    return new $ZodCheckProperties({
         check: "properties",
         shape,
         ...normalizeParams(params),
@@ -88544,18 +88578,15 @@ const objectProcessor = (schema, ctx, _json, params) => {
         }));
     }
     // required keys
-    const allKeys = new Set(Object.keys(shape));
-    const requiredKeys = new Set([...allKeys].filter((key) => {
+    const requiredKeys = [];
+    for (const key of Object.keys(shape)) {
         const field = def.shape[key];
-        if (ctx.io === "input") {
-            return inputOptin(field) === undefined;
+        if (ctx.io === "input" ? inputOptin(field) === undefined : field._zod.optout === undefined) {
+            requiredKeys.push(key);
         }
-        else {
-            return field._zod.optout === undefined;
-        }
-    }));
-    if (requiredKeys.size > 0) {
-        json.required = Array.from(requiredKeys);
+    }
+    if (requiredKeys.length > 0) {
+        json.required = requiredKeys;
     }
     // catchall
     if (def.catchall?._zod.def.type === "never") {
@@ -88573,37 +88604,6 @@ const objectProcessor = (schema, ctx, _json, params) => {
             path: [...params.path, "additionalProperties"],
         });
     }
-};
-// asserts named properties in place and passes everything else through, so no additionalProperties constraint is emitted
-const propertiesProcessor = (schema, ctx, _json, params) => {
-    const json = _json;
-    const def = schema._zod.def;
-    // dropping a symbol key silently would emit a schema that asserts less than this one does
-    if (Object.getOwnPropertySymbols(def.shape).length &&
-        handleUnrepresentable(schema, ctx, json, params, "Symbol keys cannot be represented in JSON Schema")) {
-        return;
-    }
-    // the parsed value is the input, so an output-mode emission would describe a transformed value this schema never returns
-    if (ctx.io === "output") {
-        for (const key in def.shape) {
-            if (isTransforming(def.shape[key]) &&
-                handleUnrepresentable(schema, ctx, json, params, `z.properties() returns its input, so the output of a transforming schema at key "${key}" cannot be represented in JSON Schema`)) {
-                return;
-            }
-        }
-    }
-    json.type = "object";
-    json.properties = {};
-    for (const key in def.shape) {
-        util_assignProp(json.properties, key, to_json_schema_processSchema(def.shape[key], ctx, {
-            ...params,
-            path: [...params.path, "properties", key],
-        }));
-    }
-    // input-side optionality in both modes: the parsed value is the input, so a defaulted key that stays absent must not be required of the output either
-    const required = Object.keys(def.shape).filter((key) => inputOptin(def.shape[key]) === undefined);
-    if (required.length > 0)
-        json.required = required;
 };
 const unionProcessor = (schema, ctx, json, params) => {
     const def = schema._zod.def;
@@ -88964,7 +88964,6 @@ const allProcessors = {
     file: fileProcessor,
     success: successProcessor,
     custom: customProcessor,
-    properties: propertiesProcessor,
     function: functionProcessor,
     transform: transformProcessor,
     map: mapProcessor,
@@ -89067,6 +89066,7 @@ const error = () => {
         base64url: "base64url-encoded string",
         json_string: "JSON string",
         e164: "E.164 number",
+        currency_code: "currency code",
         credit_card: "credit card number",
         iban: "IBAN",
         jwt: "JWT",
@@ -89683,6 +89683,7 @@ const parse_safeDecodeAsync = /* @__PURE__ */ _safeDecodeAsync(ZodRealError);
 
 
 
+
 // Register English as the default locale on first ZodType construction. Hooked into the `ZodType` `$constructor` (rather than a top-level `config(en())` in `external.ts`) so bundlers honoring `sideEffects: false` can't tree-shake it out — see #5953, #5725. An explicit `z.config(z.locales.xx())` call wins regardless of order, since this only sets the default when none is present.
 function _ensureDefaultLocale() {
     if (!globalConfig.localeError)
@@ -90077,8 +90078,8 @@ function url(params) {
 }
 function httpUrl(params) {
     return core._url(ZodURL, {
-        protocol: core.regexes.httpProtocol,
-        hostname: core.regexes.domain,
+        protocol: regexes.httpProtocol,
+        hostname: regexes.domain,
         ...util.normalizeParams(params),
     });
 }
@@ -90243,10 +90244,13 @@ function stringFormat(format, fnOrRegex, _params = {}) {
     return core._stringFormat(ZodCustomStringFormat, format, fnOrRegex, _params);
 }
 function schemas_hostname(_params) {
-    return core._stringFormat(ZodCustomStringFormat, "hostname", core.regexes.hostname, _params);
+    return core._stringFormat(ZodCustomStringFormat, "hostname", regexes.hostname, _params);
 }
 function schemas_hex(_params) {
-    return core._stringFormat(ZodCustomStringFormat, "hex", core.regexes.hex, _params);
+    return core._stringFormat(ZodCustomStringFormat, "hex", regexes.hex, _params);
+}
+function schemas_currencyCode(_params) {
+    return core._stringFormat(ZodCustomStringFormat, "currency_code", regexes.currencyCode, _params);
 }
 function hash(alg, params) {
     const enc = params?.enc ?? "hex";
@@ -91133,14 +91137,6 @@ const ZodCustom = /*@__PURE__*/ $constructor("ZodCustom", (inst, def) => {
     ZodType.init(inst, def);
     inst._zod.processJSONSchema = (ctx, json, params) => customProcessor(inst, ctx, json, params);
 });
-const ZodProperties = /*@__PURE__*/ $constructor("ZodProperties", (inst, def) => {
-    _ensureDefaultMemoizer();
-    $ZodProperties.init(inst, def);
-    ZodType.init(inst, def);
-});
-function properties(shape, params) {
-    return _properties(ZodProperties, shape, params);
-}
 // custom checks
 function check(fn) {
     const ch = new core.$ZodCheck({
@@ -91168,7 +91164,7 @@ const ZodInstanceOf = /*@__PURE__*/ $constructor("ZodInstanceOf", (inst, def) =>
 }, {
     properties(shape, params) {
         // asserts in place, so the narrowed output type is truthful without a wrapper
-        return this.check(properties(shape, params));
+        return this.check(_properties(shape, params));
     },
 });
 function _instanceof(cls, params = {}) {
@@ -91412,12 +91408,22 @@ const API_ERROR_SCHEMA = object({
  */
 
 /**
+ * `sensorStatus`, `ebpfErrors`, `githubSteps` and `kernel` come from jibril's
+ * own readiness files (v2.17.0 and later) and explain a missing or partial
+ * capture. They carry jibril's shape as parsed, where null means the sensor
+ * reported no value; `ebpfErrors` is absent when the loader never reported
+ * counters at all, which is not the same as reporting zero.
+ * TODO(control-plane): /agent/stopped does not persist these four fields yet.
  * @typedef {object} AgentStoppedJibrilFields
  * @property {string=} activeState
  * @property {string=} result
  * @property {number=} execMainStatus
  * @property {AgentStopOutcome=} stopOutcome
  * @property {boolean=} forceStopped
+ * @property {import("../jibril-status.js").JibrilState | null=} sensorStatus
+ * @property {import("../jibril-status.js").JibrilEbpfErrors=} ebpfErrors
+ * @property {import("../jibril-status.js").JibrilSteps=} githubSteps
+ * @property {import("../jibril-status.js").JibrilKernel | null=} kernel
  */
 
 /**
@@ -91443,6 +91449,36 @@ const PROFILE_ENVELOPE_PAGE_SCHEMA = object({
 
 const AGENT_STOP_REASON_SCHEMA = schemas_enum(["run_cancelled", "crashed", "flush_timeout", "stopped_cleanly"])
 
+// The sensor blocks mirror jibril's status files, validated here so a shape
+// this action does not expect never reaches the control plane.
+const SENSOR_STATUS_SCHEMA = schemas_enum(["disabled", "ok", "degraded"]).nullable()
+const COUNT_SCHEMA = schemas_number().int().nonnegative()
+
+const EBPF_ERRORS_SCHEMA = object({
+    load: COUNT_SCHEMA,
+    attach: COUNT_SCHEMA,
+    link: COUNT_SCHEMA,
+    attachFailures: array(object({ program: schemas_string(), error: schemas_string() })),
+})
+
+const GITHUB_STEPS_SCHEMA = object({
+    status: SENSOR_STATUS_SCHEMA,
+    source: schemas_enum(["none", "api", "local"]).nullable(),
+    count: COUNT_SCHEMA,
+    errors: array(schemas_string()),
+})
+
+const KERNEL_SCHEMA = object({
+    release: schemas_string(),
+    bpf: object({
+        btf: schemas_boolean(),
+        lsm: schemas_boolean(),
+        tracefs: schemas_boolean(),
+        cgroup2: schemas_boolean(),
+        lockdown: schemas_enum(["none", "integrity", "confidentiality", "unknown"]).nullable(),
+    }),
+})
+
 const AGENT_STOPPED_REQUEST_SCHEMA = object({
     reason: AGENT_STOP_REASON_SCHEMA,
     profileState: schemas_enum(["present", "missing", "empty", "invalid"]),
@@ -91454,6 +91490,10 @@ const AGENT_STOPPED_REQUEST_SCHEMA = object({
             execMainStatus: schemas_number().int().optional(),
             stopOutcome: schemas_enum(["completed", "timed_out"]).optional(),
             forceStopped: schemas_boolean().optional(),
+            sensorStatus: SENSOR_STATUS_SCHEMA.optional(),
+            ebpfErrors: EBPF_ERRORS_SCHEMA.optional(),
+            githubSteps: GITHUB_STEPS_SCHEMA.optional(),
+            kernel: KERNEL_SCHEMA.nullable().optional(),
         })
         .optional(),
 })
@@ -144152,20 +144192,44 @@ var endpoint = withDefaults(null, DEFAULTS);
  * Copyright(c) 2015 Douglas Christopher Wilson
  * MIT Licensed
  */
-const TEXT_REGEXP = /^[\u0009\u0020-\u007e\u0080-\u00ff]*$/;
-const TOKEN_REGEXP = /^[!#$%&'*+.^_`|~0-9A-Za-z-]+$/;
+const SP = 32; // " "
+const HTAB = 9; // "\t"
+const SEMI = 59; // ";"
+const EQ = 61; // "="
+const DQUOTE = 34; // '"'
+const BSLASH = 92; // "\\"
+const COMMA = 44; // ","
+const LOWER_CASE = 1;
+const OWS = 2;
+const SEMI_FLAG = 4;
+const COMMA_FLAG = 8;
+const TOKEN_FLAG = 16;
+const NON_ASCII = 0xff00;
+const CASE_FLAGS = LOWER_CASE | NON_ASCII;
 /**
- * RegExp to match chars that must be quoted-pair in RFC 9110 sec 5.6.4
+ * Character flags used to normalize HTTP field values while scanning.
+ * Out-of-range reads intentionally coerce to zero in bitwise expressions.
  */
-const QUOTE_REGEXP = /[\\"]/g;
-/**
- * RegExp to match type in RFC 9110 sec 8.3.1
- *
- * media-type = type "/" subtype
- * type       = token
- * subtype    = token
- */
-const TYPE_REGEXP = /^[!#$%&'*+.^_`|~0-9A-Za-z-]+\/[!#$%&'*+.^_`|~0-9A-Za-z-]+$/;
+const CHAR_MAP = new Uint8Array(0x100);
+CHAR_MAP[HTAB] |= OWS;
+CHAR_MAP[SP] |= OWS;
+CHAR_MAP[SEMI] |= SEMI_FLAG;
+CHAR_MAP[COMMA] |= COMMA_FLAG;
+for (let code = 0x80 /* non-ASCII */; code <= 0xff; code++) {
+    CHAR_MAP[code] |= LOWER_CASE;
+}
+for (const char of "!#$%&'*+-.^_`|~") {
+    CHAR_MAP[char.charCodeAt(0)] |= TOKEN_FLAG;
+}
+for (let code = 0x30 /* 0 */; code <= 0x39 /* 9 */; code++) {
+    CHAR_MAP[code] |= TOKEN_FLAG;
+}
+for (let code = 0x41 /* A */; code <= 0x5a /* Z */; code++) {
+    CHAR_MAP[code] |= LOWER_CASE | TOKEN_FLAG;
+}
+for (let code = 0x61 /* a */; code <= 0x7a /* z */; code++) {
+    CHAR_MAP[code] |= TOKEN_FLAG;
+}
 /**
  * Null object perf optimization. Faster than `Object.create(null)` and `{ __proto__: null }`.
  */
@@ -144175,20 +144239,85 @@ const NullObject = /* @__PURE__ */ (() => {
     return C;
 })();
 /**
+ * Validate a type string against RFC 9110.
+ */
+function isTypeValid(type) {
+    const len = type.length;
+    let hasSlash = false;
+    for (let index = 0; index < len; index++) {
+        const code = type.charCodeAt(index);
+        if (code === 47 /* / */) {
+            if (hasSlash || index === 0 || index === len - 1)
+                return false;
+            hasSlash = true;
+        }
+        else if (!isTokenCode(code)) {
+            return false;
+        }
+    }
+    return hasSlash;
+}
+/**
+ * Validate a token against RFC 9110.
+ */
+function isTokenValid(name) {
+    const len = name.length;
+    if (len === 0)
+        return false;
+    for (let index = 0; index < len; index++) {
+        if (!isTokenCode(name.charCodeAt(index)))
+            return false;
+    }
+    return true;
+}
+/**
+ * Check whether a character code belongs to the token production in RFC 9110.
+ */
+function isTokenCode(code) {
+    return (CHAR_MAP[code] & TOKEN_FLAG) !== 0;
+}
+/**
+ * Serialize a parameter value.
+ */
+function parameterValue(str) {
+    const len = str.length;
+    if (len === 0)
+        return '""';
+    let index = 0;
+    while (index < len && isTokenCode(str.charCodeAt(index)))
+        index++;
+    if (index === len)
+        return str;
+    let result = '"';
+    let start = 0;
+    while (index < len) {
+        const code = str.charCodeAt(index);
+        if (code !== HTAB && (code < SP || code === 127 || code > 255)) {
+            throw new TypeError(`Invalid parameter value: ${str}`);
+        }
+        if (code === 34 /* " */ || code === 92 /* \\ */) {
+            result += `${str.slice(start, index)}\\`;
+            start = index;
+        }
+        index++;
+    }
+    return `${result}${str.slice(start)}"`;
+}
+/**
  * Format an object into a `Content-Type` header.
  */
 function format(obj) {
     const { type, parameters } = obj;
-    if (!type || !TYPE_REGEXP.test(type)) {
+    if (!type || !isTypeValid(type)) {
         throw new TypeError(`Invalid type: ${type}`);
     }
     let result = type;
     if (parameters) {
         for (const param of Object.keys(parameters)) {
-            if (!TOKEN_REGEXP.test(param)) {
+            if (!isTokenValid(param)) {
                 throw new TypeError(`Invalid parameter name: ${param}`);
             }
-            result += `; ${param}=${qstring(parameters[param])}`;
+            result += `; ${param}=${parameterValue(parameters[param])}`;
         }
     }
     return result;
@@ -144197,126 +144326,158 @@ function format(obj) {
  * Parse a `Content-Type` header.
  */
 function dist_parse(header, options) {
-    const stopChar = options?.comma === true ? COMMA : 65_536; // Sentinel for "no stop char".
+    const stopFlags = SEMI_FLAG | (options?.comma === true ? COMMA_FLAG : 0);
     const len = header.length;
-    let index = skipOWS(header, options?.start ?? 0, len);
-    const valueStart = index;
-    index = skipValue(header, index, len, stopChar);
-    const valueEnd = trailingOWS(header, valueStart, index);
-    const type = header.slice(valueStart, valueEnd).toLowerCase();
-    if (options?.parameters === false) {
+    let valueStart = options?.start ?? 0;
+    while ((CHAR_MAP[header.charCodeAt(valueStart)] & OWS) !== 0) {
+        valueStart++;
+    }
+    let index = valueStart;
+    let typeFlags = 0;
+    let whitespace = -1;
+    let stop = options?.parameters === false ? COMMA_FLAG : 0;
+    while (index < len) {
+        const code = header.charCodeAt(index);
+        const flags = CHAR_MAP[code];
+        if ((flags & stopFlags) !== 0) {
+            stop |= flags & COMMA_FLAG;
+            break;
+        }
+        if ((flags & OWS) !== 0) {
+            if (whitespace === -1)
+                whitespace = index;
+        }
+        else {
+            whitespace = -1;
+        }
+        typeFlags |= (code & NON_ASCII) | flags;
+        index++;
+    }
+    const valueEnd = whitespace === -1 ? index : whitespace;
+    const value = header.slice(valueStart, valueEnd);
+    const type = (typeFlags & CASE_FLAGS) === 0 ? value : value.toLowerCase();
+    if (index === len || stop !== 0) {
         return { type, index, parameters: new NullObject() };
     }
-    return parseParameters(header, type, index, len, stopChar);
+    return parseParameters(header, type, index, len, stopFlags);
 }
-const SP = 32; // " "
-const HTAB = 9; // "\t"
-const SEMI = 59; // ";"
-const EQ = 61; // "="
-const DQUOTE = 34; // '"'
-const BSLASH = 92; // "\\"
-const COMMA = 44; // ","
 /**
  * Parses the parameters of a `Content-Type` header starting at the given index.
  */
-function parseParameters(header, type, index, len, stopChar) {
+function parseParameters(header, type, index, len, stopFlags) {
     const parameters = new NullObject();
     parameter: while (index < len) {
-        if (header.charCodeAt(index) === stopChar)
-            break;
-        index = skipOWS(header, index + 1 /* Skip over ; */, len);
+        index++; // Skip over ;
+        while ((CHAR_MAP[header.charCodeAt(index)] & OWS) !== 0) {
+            index++;
+        }
         const keyStart = index;
+        let keyFlags = 0;
+        let keyWhitespace = -1;
         while (index < len) {
             const code = header.charCodeAt(index);
-            if (code === stopChar)
-                break parameter;
-            if (code === SEMI)
+            const flags = CHAR_MAP[code];
+            if ((flags & stopFlags) !== 0) {
+                if ((flags & COMMA_FLAG) !== 0)
+                    break parameter;
                 continue parameter;
+            }
             if (code === EQ) {
-                const keyEnd = trailingOWS(header, keyStart, index);
-                const key = header.slice(keyStart, keyEnd).toLowerCase();
-                index = skipOWS(header, index + 1, len);
-                if (index < len && header.charCodeAt(index) === DQUOTE) {
+                const keyEnd = keyWhitespace === -1 ? index : keyWhitespace;
+                const value = header.slice(keyStart, keyEnd);
+                const key = (keyFlags & CASE_FLAGS) === 0 ? value : value.toLowerCase();
+                index++;
+                while ((CHAR_MAP[header.charCodeAt(index)] & OWS) !== 0) {
                     index++;
-                    let value = "";
+                }
+                if (index < len && header.charCodeAt(index) === DQUOTE) {
+                    const quotedStart = ++index;
+                    let escaped = false;
                     while (index < len) {
-                        const code = header.charCodeAt(index++);
+                        const code = header.charCodeAt(index);
                         if (code === DQUOTE) {
-                            index = skipValue(header, index, len, stopChar);
-                            if (parameters[key] === undefined)
-                                parameters[key] = value;
-                            break;
+                            if (parameters[key] === undefined) {
+                                parameters[key] = escaped
+                                    ? unescapeQuotedPairs(header, quotedStart, index)
+                                    : header.slice(quotedStart, index);
+                            }
+                            index++;
+                            let stop = 0;
+                            // Discard characters between quote and delimiter.
+                            while (index < len) {
+                                const code = header.charCodeAt(index);
+                                const flags = CHAR_MAP[code];
+                                if ((flags & stopFlags) !== 0) {
+                                    stop = flags & COMMA_FLAG;
+                                    break;
+                                }
+                                index++;
+                            }
+                            if (stop !== 0)
+                                break parameter;
+                            continue parameter;
                         }
-                        if (code === BSLASH && index < len) {
-                            value += header[index++];
+                        if (code === BSLASH && index + 1 < len) {
+                            escaped = true;
+                            index += 2;
                             continue;
                         }
-                        value += String.fromCharCode(code);
+                        index++;
                     }
                     continue parameter;
                 }
                 const valueStart = index;
-                index = skipValue(header, index, len, stopChar);
+                let stop = 0;
+                let valueWhitespace = -1;
+                while (index < len) {
+                    const code = header.charCodeAt(index);
+                    const flags = CHAR_MAP[code];
+                    if ((flags & stopFlags) !== 0) {
+                        stop = flags & COMMA_FLAG;
+                        break;
+                    }
+                    if ((flags & OWS) !== 0) {
+                        if (valueWhitespace === -1)
+                            valueWhitespace = index;
+                    }
+                    else {
+                        valueWhitespace = -1;
+                    }
+                    index++;
+                }
                 if (parameters[key] === undefined) {
-                    const valueEnd = trailingOWS(header, valueStart, index);
+                    const valueEnd = valueWhitespace === -1 ? index : valueWhitespace;
                     parameters[key] = header.slice(valueStart, valueEnd);
                 }
+                if (stop !== 0)
+                    break parameter;
                 continue parameter;
             }
+            if ((flags & OWS) !== 0) {
+                if (keyWhitespace === -1)
+                    keyWhitespace = index;
+            }
+            else {
+                keyWhitespace = -1;
+            }
+            keyFlags |= (code & NON_ASCII) | flags;
             index++;
         }
     }
     return { type, index, parameters };
 }
 /**
- * Skip over characters until a semicolon or other exit character.
+ * Remove backslashes from quoted pairs in a known-terminated quoted string body.
  */
-function skipValue(str, index, len, stopChar) {
-    while (index < len) {
-        const code = str.charCodeAt(index);
-        if (code === SEMI || code === stopChar)
-            break;
-        index++;
+function unescapeQuotedPairs(str, start, end) {
+    let result = "";
+    for (let index = start; index < end; index++) {
+        if (str.charCodeAt(index) === BSLASH) {
+            result += str.slice(start, index);
+            start = ++index;
+        }
     }
-    return index;
-}
-/**
- * Skip optional whitespace (OWS) in an HTTP header value.
- *
- * OWS is defined in RFC 9110 sec 5.6.3 as SP (" ") or HTAB ("\t").
- */
-function skipOWS(header, index, len) {
-    while (index < len) {
-        const char = header.charCodeAt(index);
-        if (char !== SP && char !== HTAB)
-            break;
-        index++;
-    }
-    return index;
-}
-/**
- * Trim optional whitespace (OWS) from the end of a substring.
- *
- * OWS is defined in RFC 9110 sec 5.6.3 as SP (" ") or HTAB ("\t").
- */
-function trailingOWS(header, start, end) {
-    while (end > start) {
-        const char = header.charCodeAt(end - 1);
-        if (char !== SP && char !== HTAB)
-            break;
-        end--;
-    }
-    return end;
-}
-/**
- * Serialize a parameter value.
- */
-function qstring(str) {
-    if (TOKEN_REGEXP.test(str))
-        return str;
-    if (TEXT_REGEXP.test(str))
-        return `"${str.replace(QUOTE_REGEXP, "\\$&")}"`;
-    throw new TypeError(`Invalid parameter value: ${str}`);
+    return result + str.slice(start, end);
 }
 //# sourceMappingURL=index.js.map
 ;// CONCATENATED MODULE: ./node_modules/json-with-bigint/json-with-bigint.js
@@ -154947,8 +155108,369 @@ function classifyProfileContent(stat, content) {
     }
 }
 
+;// CONCATENATED MODULE: ./src/jibril-status.js
+// Readiness status files written by jibril (v2.17.0 and later) under
+// /var/run/jibril. Both are written once, right before the sensor enters its
+// main event loop, so their presence is the first moment at which events are
+// being captured, and the snapshot they hold is complete from then on:
+//
+//   - ebpf.status.json   the eBPF layer: loader counters and failures
+//   - jibril.status.json the whole sensor: one block per feature
+//
+// Both share the same envelope, and jibril.status.json carries the identical
+// eBPF block under `features` plus `github` on a runner, so one parser reads
+// both. The shapes mirror jibril's `pkg/pkgs/runstatus`; only the fields this
+// action acts on are read.
+
+
+
+const JIBRIL_STATUS_DIR = "/var/run/jibril"
+const JIBRIL_EBPF_STATUS_FILE = (/* unused pure expression or super */ null && (`${JIBRIL_STATUS_DIR}/ebpf.status.json`))
+const JIBRIL_RUN_STATUS_FILE = `${JIBRIL_STATUS_DIR}/jibril.status.json`
+
+/**
+ * The health of the sensor, or of one of its features (runstatus.State).
+ * `disabled` is also the state of a feature that never ran.
+ * @typedef {"disabled" | "ok" | "degraded"} JibrilState
+ */
+
+/** @type {readonly JibrilState[]} */
+const STATES = ["disabled", "ok", "degraded"]
+
+/**
+ * Where jibril discovered the workflow steps (runstatus.Source*).
+ * @typedef {"none" | "api" | "local"} JibrilStepsSource
+ */
+
+/** @type {readonly JibrilStepsSource[]} */
+const STEPS_SOURCES = ["none", "api", "local"]
+
+/**
+ * The active kernel lockdown mode. jibril writes `unknown` itself when the
+ * host hides /sys/kernel/security/lockdown, which says nothing about whether
+ * lockdown is on.
+ * @typedef {"none" | "integrity" | "confidentiality" | "unknown"} JibrilLockdown
+ */
+
+/** @type {readonly JibrilLockdown[]} */
+const LOCKDOWN_MODES = ["none", "integrity", "confidentiality", "unknown"]
+
+/**
+ * A program the loader could not attach. The kernel hook it names is blind
+ * for the whole run.
+ * @typedef {object} JibrilAttachFailure
+ * @property {string} program
+ * @property {string} error
+ */
+
+/**
+ * Failures counted by the stage they happened in: `load` covers object load
+ * and map, program and ringbuf creation, `attach` covers bond creation and
+ * the attach call, `link` covers detach and destroy operations.
+ * @typedef {object} JibrilEbpfErrors
+ * @property {number} load
+ * @property {number} attach
+ * @property {number} link
+ * @property {JibrilAttachFailure[]} attachFailures - one entry per program behind the attach count
+ */
+
+/**
+ * `attached` counts successful attach calls including tail programs, which
+ * hold no link, so it is always greater than or equal to `liveLinks`.
+ * @typedef {object} JibrilEbpf
+ * @property {number} programs
+ * @property {number} attached
+ * @property {number} liveLinks
+ * @property {JibrilEbpfErrors} errors
+ */
+
+/**
+ * The outcome of the workflow step discovery. A degraded discovery costs the
+ * workflow-step attribution on events, nothing else.
+ * @typedef {object} JibrilSteps
+ * @property {JibrilState | null} status
+ * @property {JibrilStepsSource | null} source
+ * @property {number} count
+ * @property {string[]} errors
+ */
+
+/**
+ * What the kernel offered the loader, which is where most attach failures
+ * come from: BTF is what CO-RE, fentry and tp_btf programs need, the BPF LSM
+ * is what bpf_lsm programs attach to, tracefs carries the kprobe and
+ * tracepoint hooks, cgroup2 is the hierarchy cgroup_skb programs attach to,
+ * and lockdown in confidentiality mode blocks the kernel reads the programs
+ * are built around. A capability jibril could not probe reads as false,
+ * which is what unsupported means from the loader's side. `lsm` is reported
+ * but never blamed: hosted runners do not enable it.
+ * @typedef {object} JibrilKernelBpf
+ * @property {boolean} btf
+ * @property {boolean} lsm
+ * @property {boolean} tracefs
+ * @property {boolean} cgroup2
+ * @property {JibrilLockdown | null} lockdown
+ */
+
+/**
+ * @typedef {object} JibrilKernel
+ * @property {string} release
+ * @property {JibrilKernelBpf} bpf
+ */
+
+/**
+ * @typedef {object} JibrilStatus
+ * @property {JibrilState | null} status
+ * @property {string} readyAt
+ * @property {JibrilKernel | null} kernel
+ * @property {JibrilEbpf | null} ebpf - null until the loader reports its counters, so an early write never claims a clean load
+ * @property {JibrilSteps | null} githubSteps - null off a GitHub runner
+ */
+
+/**
+ * Parses either status file. Null covers every way the file can fail to say
+ * anything: not written yet, unreadable, or not holding a status object.
+ * @param {string} content
+ * @returns {JibrilStatus | null}
+ */
+function parseJibrilStatus(content) {
+    /** @type {unknown} */
+    let parsed
+    try {
+        parsed = JSON.parse(content)
+    } catch {
+        return null
+    }
+
+    const record = shared_getOptionalRecord(parsed)
+    if (record === null || Array.isArray(parsed)) {
+        return null
+    }
+
+    const features = shared_getOptionalRecord(record.features)
+    // ebpf.status.json keeps the block at the top level and always writes it;
+    // jibril.status.json nests the identical block under `features` and omits
+    // it until the loader has counters to report.
+    const ebpf = features === null ? record.ebpf : features.ebpf
+
+    return {
+        status: readEnum(STATES, record.status),
+        readyAt: getOptionalString(record.ready_at) ?? "",
+        kernel: readKernel(record.kernel),
+        ebpf: readEbpf(ebpf),
+        githubSteps: readGitHubSteps(features),
+    }
+}
+
+/**
+ * Names only the non-zero counters, so it is empty exactly when the loader
+ * reported no failure at all, which is also when jibril calls itself ok.
+ * @param {JibrilEbpfErrors} errors
+ * @returns {string}
+ */
+function formatEbpfErrors(errors) {
+    /** @type {string[]} */
+    const parts = []
+
+    if (errors.load > 0) parts.push(`load=${errors.load}`)
+    if (errors.attach > 0) parts.push(`attach=${errors.attach}`)
+    if (errors.link > 0) parts.push(`link=${errors.link}`)
+
+    return parts.join(", ")
+}
+
+/**
+ * @param {JibrilAttachFailure[]} failures
+ * @returns {string}
+ */
+function formatAttachFailures(failures) {
+    return failures.map(failure => `${failure.program}: ${failure.error}`).join("; ")
+}
+
+/**
+ * Names what this kernel did not offer the loader, and only what is unusual
+ * enough to explain a failure: hosted runners ship without the BPF LSM and
+ * under lockdown integrity, so neither is evidence of anything on its own.
+ * Empty when there is nothing to explain, which keeps a healthy run from
+ * ever blaming its kernel.
+ * @param {JibrilKernel | null} kernel
+ * @returns {string}
+ */
+function formatKernelGaps(kernel) {
+    if (kernel === null) return ""
+
+    /** @type {string[]} */
+    const gaps = []
+
+    if (!kernel.bpf.btf) gaps.push("no BTF")
+    if (!kernel.bpf.tracefs) gaps.push("no tracefs")
+    if (!kernel.bpf.cgroup2) gaps.push("no cgroup2")
+    if (kernel.bpf.lockdown === "confidentiality") {
+        gaps.push("lockdown confidentiality")
+    }
+
+    if (gaps.length === 0) return ""
+
+    return `kernel ${kernel.release} offers ${gaps.join(", ")}`
+}
+
+/**
+ * One log line describing what the sensor reported about itself.
+ * @param {JibrilStatus} status
+ * @returns {string}
+ */
+function formatJibrilStatusSummary(status) {
+    /** @type {string[]} */
+    const parts = [`status=${status.status ?? UNREPORTED}`]
+
+    if (status.readyAt !== "") parts.push(`ready_at=${status.readyAt}`)
+    if (status.kernel !== null) parts.push(`kernel=${status.kernel.release}`)
+
+    if (status.ebpf === null) {
+        parts.push(`ebpf=${UNREPORTED}`)
+    } else {
+        const { programs, attached, liveLinks, errors } = status.ebpf
+        parts.push(`ebpf programs=${programs}/attached=${attached}/live_links=${liveLinks}`)
+        parts.push(`ebpf errors=${formatEbpfErrors(errors) || "none"}`)
+    }
+
+    const steps = status.githubSteps
+    if (steps !== null) {
+        parts.push(
+            `github steps=${steps.status ?? UNREPORTED} (source=${steps.source ?? UNREPORTED}, count=${steps.count})`,
+        )
+    }
+
+    return parts.join(", ")
+}
+
+const UNREPORTED = "(unreported)"
+
+/**
+ * @param {unknown} value
+ * @returns {JibrilKernel | null}
+ */
+function readKernel(value) {
+    const record = shared_getOptionalRecord(value)
+    if (record === null) return null
+
+    const bpf = shared_getOptionalRecord(record.bpf)
+
+    return {
+        release: getOptionalString(record.release) ?? "",
+        bpf: {
+            btf: bpf?.btf === true,
+            lsm: bpf?.lsm === true,
+            tracefs: bpf?.tracefs === true,
+            cgroup2: bpf?.cgroup2 === true,
+            lockdown: readEnum(LOCKDOWN_MODES, bpf?.lockdown),
+        },
+    }
+}
+
+/**
+ * @param {unknown} value
+ * @returns {JibrilEbpf | null}
+ */
+function readEbpf(value) {
+    const record = shared_getOptionalRecord(value)
+    if (record === null) return null
+
+    const errors = shared_getOptionalRecord(record.errors)
+
+    return {
+        programs: readCount(record.programs),
+        attached: readCount(record.attached),
+        liveLinks: readCount(record.live_links),
+        errors: {
+            load: readCount(errors?.load),
+            attach: readCount(errors?.attach),
+            link: readCount(errors?.link),
+            attachFailures: readAttachFailures(errors?.attach_failures),
+        },
+    }
+}
+
+/**
+ * The github block is written whenever the job environment is there to
+ * report, and always carries a steps block; off a runner it is absent.
+ * @param {Record<string, unknown> | null} features
+ * @returns {JibrilSteps | null}
+ */
+function readGitHubSteps(features) {
+    const github = shared_getOptionalRecord(features?.github)
+    const steps = shared_getOptionalRecord(github?.steps)
+    if (steps === null) return null
+
+    return {
+        status: readEnum(STATES, steps.status),
+        source: readEnum(STEPS_SOURCES, steps.source),
+        count: readCount(steps.count),
+        errors: readStringList(steps.errors),
+    }
+}
+
+/**
+ * @param {unknown} value
+ * @returns {JibrilAttachFailure[]}
+ */
+function readAttachFailures(value) {
+    if (!Array.isArray(value)) return []
+
+    /** @type {JibrilAttachFailure[]} */
+    const failures = []
+    for (const entry of value) {
+        const record = shared_getOptionalRecord(entry)
+        if (record === null) continue
+
+        failures.push({
+            program: getOptionalString(record.program) ?? "",
+            error: getOptionalString(record.error) ?? "",
+        })
+    }
+
+    return failures
+}
+
+/**
+ * Resolves one of a known set of values, so nothing downstream handles a
+ * free-form string. Null means jibril reported something outside the set,
+ * which is not a known value and must not be reported as one.
+ * @template {string} T
+ * @param {readonly T[]} members
+ * @param {unknown} value
+ * @returns {T | null}
+ */
+function readEnum(members, value) {
+    return members.find(member => member === value) ?? null
+}
+
+/**
+ * @param {unknown} value
+ * @returns {number}
+ */
+function readCount(value) {
+    const count = getOptionalNumber(value)
+    if (count === undefined || !Number.isFinite(count) || count < 0) return 0
+
+    return Math.trunc(count)
+}
+
+/**
+ * @param {unknown} value
+ * @returns {string[]}
+ */
+function readStringList(value) {
+    if (!Array.isArray(value)) return []
+
+    return value.filter(entry => typeof entry === "string" && entry.trim() !== "")
+}
+
 ;// CONCATENATED MODULE: ./src/post-signal.js
+
+
 /** @typedef {import("./post-profile-state.js").ProfileState} ProfileState */
+/** @typedef {import("./jibril-status.js").JibrilStatus} JibrilStatus */
+/** @typedef {import("./jibril-status.js").JibrilEbpf} JibrilEbpf */
 
 /**
  * @typedef {object} JibrilUnitState
@@ -154966,6 +155488,7 @@ function classifyProfileContent(stat, content) {
  * @property {boolean} forceStopped
  * @property {number} stopTimeoutSeconds
  * @property {ProfileState} profileState
+ * @property {JibrilStatus | null} runStatus - what the sensor reported about its own capture, when it reports at all
  */
 
 /**
@@ -155018,8 +155541,66 @@ function formatAgentStopDetail(evidence) {
     }
 
     parts.push(getProfileStateDetail(evidence.profileState))
+    parts.push(...getRunStatusDetails(evidence.runStatus))
 
     return parts.join("; ")
+}
+
+/**
+ * Only reports what the sensor itself flagged: a healthy status adds nothing
+ * the profile state does not already say.
+ * @param {JibrilStatus | null} runStatus
+ * @returns {string[]}
+ */
+function getRunStatusDetails(runStatus) {
+    if (runStatus === null) {
+        return []
+    }
+
+    /** @type {string[]} */
+    const parts = []
+
+    if (runStatus.status !== null && runStatus.status !== "ok") {
+        parts.push(`sensor status ${runStatus.status}`)
+    }
+
+    const ebpfDetail = getEbpfDetail(runStatus.ebpf)
+    if (ebpfDetail !== "") {
+        parts.push(ebpfDetail)
+
+        // The kernel's gaps only ever explain a failure; on their own they
+        // describe an ordinary host and must not be blamed for anything.
+        const kernelGaps = formatKernelGaps(runStatus.kernel)
+        if (kernelGaps !== "") {
+            parts.push(kernelGaps)
+        }
+    }
+
+    const steps = runStatus.githubSteps
+    if (steps !== null && steps.status !== "ok") {
+        parts.push(`github steps ${steps.status} (source=${steps.source}, count=${steps.count})`)
+    }
+
+    return parts
+}
+
+/**
+ * jibril omits the eBPF block until the loader reports counters, so its
+ * absence is the strongest explanation there is for an empty profile.
+ * @param {JibrilEbpf | null} ebpf
+ * @returns {string}
+ */
+function getEbpfDetail(ebpf) {
+    if (ebpf === null) {
+        return "ebpf counters never reported"
+    }
+
+    const errors = formatEbpfErrors(ebpf.errors)
+    if (errors === "") {
+        return ""
+    }
+
+    return `ebpf errors ${errors}`
 }
 
 /**
@@ -155265,7 +155846,62 @@ function parseTimeoutSetting(value) {
     return Number.isSafeInteger(parsedValue) ? parsedValue : null
 }
 
+;// CONCATENATED MODULE: ./src/jibril-version.js
+/**
+ * @typedef {object} JibrilCoreVersion
+ * @property {number} major
+ * @property {number} minor
+ * @property {number} patch
+ */
+
+/**
+ * Compares a jibril release tag against a minimum version, so every
+ * version-gated feature reads as one line where it is used:
+ *
+ *     // jibril writes its readiness status files from v2.17.0 on.
+ *     if (versionAtLeast(version, 2, 17, 0)) {
+ *         // ...
+ *     }
+ *
+ * Prereleases sort with their core version, so v2.17.0-rc.5 satisfies
+ * (2, 17, 0). "latest" satisfies every minimum: it is whatever jibril
+ * released most recently, and a gate is only ever written for a version that
+ * is already out. Any other non-semver tag is older than every minimum, so
+ * daily builds (v0.0) and an unresolved version ("") leave gated features
+ * off rather than guessing.
+ * @param {string} tag - a release tag, or "latest"
+ * @param {number} major
+ * @param {number} minor
+ * @param {number} patch
+ * @returns {boolean}
+ */
+function versionAtLeast(tag, major, minor, patch) {
+    if (tag.trim().toLowerCase() === "latest") return true
+
+    const version = parseCoreVersion(tag)
+    if (version === null) return false
+
+    if (version.major !== major) return version.major > major
+    if (version.minor !== minor) return version.minor > minor
+    return version.patch >= patch
+}
+
+/**
+ * Ignores any prerelease or build suffix.
+ * @param {string} tag
+ * @returns {JibrilCoreVersion|null}
+ */
+function parseCoreVersion(tag) {
+    const match = /^v?(\d+)\.(\d+)\.(\d+)(?:[-+].*)?$/.exec(tag.trim())
+    if (match === null) return null
+
+    const [, major = "0", minor = "0", patch = "0"] = match
+    return { major: Number(major), minor: Number(minor), patch: Number(patch) }
+}
+
 ;// CONCATENATED MODULE: ./src/post.js
+
+
 
 
 
@@ -155296,6 +155932,7 @@ function parseTimeoutSetting(value) {
 /** @typedef {import("./github-job-status.js").JobStatusResolution} JobStatusResolution */
 /** @typedef {import("./control-plane/types.js").AgentStoppedRequest} AgentStoppedRequest */
 /** @typedef {import("./control-plane/types.js").AgentStoppedJibrilFields} AgentStoppedJibrilFields */
+/** @typedef {import("./jibril-status.js").JibrilStatus} JibrilStatus */
 
 /**
  * Everything the post step observed about how the sensor stopped, from which
@@ -155308,6 +155945,7 @@ function parseTimeoutSetting(value) {
  * @property {boolean} forceStopped
  * @property {number} stopTimeoutSeconds
  * @property {ProfileResult} profileResult
+ * @property {JibrilStatus | null} runStatus
  */
 
 /**
@@ -155432,6 +156070,14 @@ async function run() {
         const unitStateAfterStop = await readJibrilUnitState()
         logJibrilUnitState("jibril service state", unitStateAfterStop)
 
+        // From v2.17.0 on jibril writes a status file before its event loop,
+        // and that startup snapshot still stands once the sensor has stopped.
+        // Older sensors write no file at all, so their silence says nothing.
+        let runStatus = null
+        if (versionAtLeast(getState("jibrilVersion"), 2, 17, 0)) {
+            runStatus = await reportJibrilRunStatus()
+        }
+
         // Upload jibril logs as artifacts when debug is enabled (only after service stops).
         // Get the debug state from the main.js.
         const debug = getState("debug")
@@ -155464,6 +156110,7 @@ async function run() {
                 forceStopped,
                 stopTimeoutSeconds,
                 profileResult,
+                runStatus,
             })
         }
 
@@ -155540,6 +156187,7 @@ async function reportAgentStop(observations) {
             forceStopped: observations.forceStopped,
             stopTimeoutSeconds: observations.stopTimeoutSeconds,
             profileState: observations.profileResult.state,
+            runStatus: observations.runStatus,
         }
 
         // The evidence detail already names the profile state; only a parse
@@ -155596,6 +156244,25 @@ function buildAgentStoppedRequest(evidence, jobStatus, parseDetail) {
         jibril.activeState = unitState.activeState
         jibril.result = unitState.result
         jibril.execMainStatus = unitState.execMainStatus
+    }
+
+    // What the sensor said about its own capture, so a missing or partial
+    // profile is explained instead of silent. The fields carry jibril's own
+    // shape, and an absent eBPF block stays absent: the loader never
+    // reported counters, which must not read as a clean load.
+    // TODO(control-plane): /agent/stopped must accept these jibril fields
+    // (sensorStatus, ebpfErrors, githubSteps, kernel); until it does they
+    // are only carried by `detail`.
+    const runStatus = evidence.runStatus
+    if (runStatus !== null) {
+        jibril.sensorStatus = runStatus.status
+        jibril.kernel = runStatus.kernel
+        if (runStatus.ebpf !== null) {
+            jibril.ebpfErrors = runStatus.ebpf.errors
+        }
+        if (runStatus.githubSteps !== null) {
+            jibril.githubSteps = runStatus.githubSteps
+        }
     }
 
     /** @type {AgentStoppedRequest} */
@@ -155990,6 +156657,54 @@ async function readJibrilUnitState() {
         info(`could not read jibril service state: ${getErrorMessage(error)}`)
         return null
     }
+}
+
+/**
+ * Reads and logs the sensor's own account of this run: the eBPF counters
+ * explain a thin profile, and a degraded steps block explains events
+ * attributed to the wrong workflow step, or to none.
+ * @returns {Promise<JibrilStatus | null>}
+ */
+async function reportJibrilRunStatus() {
+    const status = parseJibrilStatus(await readOptionalRootFile(JIBRIL_RUN_STATUS_FILE))
+    if (status === null) {
+        info(`jibril run status not reported: ${JIBRIL_RUN_STATUS_FILE} is missing or unreadable`)
+        return null
+    }
+
+    info(`jibril run status: ${formatJibrilStatusSummary(status)}`)
+
+    const ebpf = status.ebpf
+    if (ebpf === null) {
+        // jibril omits the block until the loader reports counters, so its
+        // absence means the eBPF layer never came up: nothing was captured.
+        warning("jibril reported no eBPF counters for this run; the sensor captured no runtime events")
+    } else {
+        const ebpfErrors = formatEbpfErrors(ebpf.errors)
+        if (ebpfErrors !== "") {
+            warning(
+                `jibril reported eBPF errors for this run (${ebpfErrors}); some runtime events were not captured`,
+            )
+            const attachFailures = formatAttachFailures(ebpf.errors.attachFailures)
+            if (attachFailures !== "") {
+                info(`jibril could not attach: ${attachFailures}`)
+            }
+        }
+    }
+
+    const steps = status.githubSteps
+    if (steps !== null && steps.status === "degraded") {
+        const parts = [
+            `jibril reported degraded workflow-step attribution (source=${steps.source}, steps=${steps.count})`,
+        ]
+        if (steps.errors.length > 0) {
+            parts.push(steps.errors.join("; "))
+        }
+        parts.push("events in the Runtime Review may be attributed to the wrong step")
+        warning(parts.join("; "))
+    }
+
+    return status
 }
 
 /**
