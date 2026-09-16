@@ -22,6 +22,12 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
 
+      # Dogfooding
+      - name: Run Garnet
+        uses: ./
+        with:
+          api_token: ${{ secrets.GARNET_API_TOKEN }}
+
       - name: Fetch latest stable Jibril release
         id: jibril
         env:
