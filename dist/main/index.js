@@ -41515,12 +41515,22 @@ const API_ERROR_SCHEMA = object({
  */
 
 /**
+ * `sensorStatus`, `ebpfErrors`, `githubSteps` and `kernel` come from jibril's
+ * own readiness files (v2.17.0 and later) and explain a missing or partial
+ * capture. They carry jibril's shape as parsed, where null means the sensor
+ * reported no value; `ebpfErrors` is absent when the loader never reported
+ * counters at all, which is not the same as reporting zero.
+ * TODO(control-plane): /agent/stopped does not persist these four fields yet.
  * @typedef {object} AgentStoppedJibrilFields
  * @property {string=} activeState
  * @property {string=} result
  * @property {number=} execMainStatus
  * @property {AgentStopOutcome=} stopOutcome
  * @property {boolean=} forceStopped
+ * @property {import("../jibril-status.js").JibrilState | null=} sensorStatus
+ * @property {import("../jibril-status.js").JibrilEbpfErrors=} ebpfErrors
+ * @property {import("../jibril-status.js").JibrilSteps=} githubSteps
+ * @property {import("../jibril-status.js").JibrilKernel | null=} kernel
  */
 
 /**
@@ -41546,6 +41556,36 @@ const PROFILE_ENVELOPE_PAGE_SCHEMA = object({
 
 const AGENT_STOP_REASON_SCHEMA = schemas_enum(["run_cancelled", "crashed", "flush_timeout", "stopped_cleanly"])
 
+// The sensor blocks mirror jibril's status files, validated here so a shape
+// this action does not expect never reaches the control plane.
+const SENSOR_STATUS_SCHEMA = schemas_enum(["disabled", "ok", "degraded"]).nullable()
+const COUNT_SCHEMA = schemas_number().int().nonnegative()
+
+const EBPF_ERRORS_SCHEMA = object({
+    load: COUNT_SCHEMA,
+    attach: COUNT_SCHEMA,
+    link: COUNT_SCHEMA,
+    attachFailures: array(object({ program: schemas_string(), error: schemas_string() })),
+})
+
+const GITHUB_STEPS_SCHEMA = object({
+    status: SENSOR_STATUS_SCHEMA,
+    source: schemas_enum(["none", "api", "local"]).nullable(),
+    count: COUNT_SCHEMA,
+    errors: array(schemas_string()),
+})
+
+const KERNEL_SCHEMA = object({
+    release: schemas_string(),
+    bpf: object({
+        btf: schemas_boolean(),
+        lsm: schemas_boolean(),
+        tracefs: schemas_boolean(),
+        cgroup2: schemas_boolean(),
+        lockdown: schemas_enum(["none", "integrity", "confidentiality", "unknown"]).nullable(),
+    }),
+})
+
 const AGENT_STOPPED_REQUEST_SCHEMA = object({
     reason: AGENT_STOP_REASON_SCHEMA,
     profileState: schemas_enum(["present", "missing", "empty", "invalid"]),
@@ -41557,6 +41597,10 @@ const AGENT_STOPPED_REQUEST_SCHEMA = object({
             execMainStatus: schemas_number().int().optional(),
             stopOutcome: schemas_enum(["completed", "timed_out"]).optional(),
             forceStopped: schemas_boolean().optional(),
+            sensorStatus: SENSOR_STATUS_SCHEMA.optional(),
+            ebpfErrors: EBPF_ERRORS_SCHEMA.optional(),
+            githubSteps: GITHUB_STEPS_SCHEMA.optional(),
+            kernel: KERNEL_SCHEMA.nullable().optional(),
         })
         .optional(),
 })
@@ -42016,6 +42060,416 @@ function isMissingOIDCPermissionError(errorMessage) {
     return false
 }
 
+;// CONCATENATED MODULE: ./src/jibril-version.js
+/**
+ * @typedef {object} JibrilCoreVersion
+ * @property {number} major
+ * @property {number} minor
+ * @property {number} patch
+ */
+
+/**
+ * Compares a jibril release tag against a minimum version, so every
+ * version-gated feature reads as one line where it is used:
+ *
+ *     // jibril writes its readiness status files from v2.17.0 on.
+ *     if (versionAtLeast(version, 2, 17, 0)) {
+ *         // ...
+ *     }
+ *
+ * Prereleases sort with their core version, so v2.17.0-rc.5 satisfies
+ * (2, 17, 0). "latest" satisfies every minimum: it is whatever jibril
+ * released most recently, and a gate is only ever written for a version that
+ * is already out. Any other non-semver tag is older than every minimum, so
+ * daily builds (v0.0) and an unresolved version ("") leave gated features
+ * off rather than guessing.
+ * @param {string} tag - a release tag, or "latest"
+ * @param {number} major
+ * @param {number} minor
+ * @param {number} patch
+ * @returns {boolean}
+ */
+function versionAtLeast(tag, major, minor, patch) {
+    if (tag.trim().toLowerCase() === "latest") return true
+
+    const version = parseCoreVersion(tag)
+    if (version === null) return false
+
+    if (version.major !== major) return version.major > major
+    if (version.minor !== minor) return version.minor > minor
+    return version.patch >= patch
+}
+
+/**
+ * Ignores any prerelease or build suffix.
+ * @param {string} tag
+ * @returns {JibrilCoreVersion|null}
+ */
+function parseCoreVersion(tag) {
+    const match = /^v?(\d+)\.(\d+)\.(\d+)(?:[-+].*)?$/.exec(tag.trim())
+    if (match === null) return null
+
+    const [, major = "0", minor = "0", patch = "0"] = match
+    return { major: Number(major), minor: Number(minor), patch: Number(patch) }
+}
+
+;// CONCATENATED MODULE: ./src/jibril-status.js
+// Readiness status files written by jibril (v2.17.0 and later) under
+// /var/run/jibril. Both are written once, right before the sensor enters its
+// main event loop, so their presence is the first moment at which events are
+// being captured, and the snapshot they hold is complete from then on:
+//
+//   - ebpf.status.json   the eBPF layer: loader counters and failures
+//   - jibril.status.json the whole sensor: one block per feature
+//
+// Both share the same envelope, and jibril.status.json carries the identical
+// eBPF block under `features` plus `github` on a runner, so one parser reads
+// both. The shapes mirror jibril's `pkg/pkgs/runstatus`; only the fields this
+// action acts on are read.
+
+
+
+const JIBRIL_STATUS_DIR = "/var/run/jibril"
+const JIBRIL_EBPF_STATUS_FILE = `${JIBRIL_STATUS_DIR}/ebpf.status.json`
+const JIBRIL_RUN_STATUS_FILE = (/* unused pure expression or super */ null && (`${JIBRIL_STATUS_DIR}/jibril.status.json`))
+
+/**
+ * The health of the sensor, or of one of its features (runstatus.State).
+ * `disabled` is also the state of a feature that never ran.
+ * @typedef {"disabled" | "ok" | "degraded"} JibrilState
+ */
+
+/** @type {readonly JibrilState[]} */
+const STATES = ["disabled", "ok", "degraded"]
+
+/**
+ * Where jibril discovered the workflow steps (runstatus.Source*).
+ * @typedef {"none" | "api" | "local"} JibrilStepsSource
+ */
+
+/** @type {readonly JibrilStepsSource[]} */
+const STEPS_SOURCES = ["none", "api", "local"]
+
+/**
+ * The active kernel lockdown mode. jibril writes `unknown` itself when the
+ * host hides /sys/kernel/security/lockdown, which says nothing about whether
+ * lockdown is on.
+ * @typedef {"none" | "integrity" | "confidentiality" | "unknown"} JibrilLockdown
+ */
+
+/** @type {readonly JibrilLockdown[]} */
+const LOCKDOWN_MODES = ["none", "integrity", "confidentiality", "unknown"]
+
+/**
+ * A program the loader could not attach. The kernel hook it names is blind
+ * for the whole run.
+ * @typedef {object} JibrilAttachFailure
+ * @property {string} program
+ * @property {string} error
+ */
+
+/**
+ * Failures counted by the stage they happened in: `load` covers object load
+ * and map, program and ringbuf creation, `attach` covers bond creation and
+ * the attach call, `link` covers detach and destroy operations.
+ * @typedef {object} JibrilEbpfErrors
+ * @property {number} load
+ * @property {number} attach
+ * @property {number} link
+ * @property {JibrilAttachFailure[]} attachFailures - one entry per program behind the attach count
+ */
+
+/**
+ * `attached` counts successful attach calls including tail programs, which
+ * hold no link, so it is always greater than or equal to `liveLinks`.
+ * @typedef {object} JibrilEbpf
+ * @property {number} programs
+ * @property {number} attached
+ * @property {number} liveLinks
+ * @property {JibrilEbpfErrors} errors
+ */
+
+/**
+ * The outcome of the workflow step discovery. A degraded discovery costs the
+ * workflow-step attribution on events, nothing else.
+ * @typedef {object} JibrilSteps
+ * @property {JibrilState | null} status
+ * @property {JibrilStepsSource | null} source
+ * @property {number} count
+ * @property {string[]} errors
+ */
+
+/**
+ * What the kernel offered the loader, which is where most attach failures
+ * come from: BTF is what CO-RE, fentry and tp_btf programs need, the BPF LSM
+ * is what bpf_lsm programs attach to, tracefs carries the kprobe and
+ * tracepoint hooks, cgroup2 is the hierarchy cgroup_skb programs attach to,
+ * and lockdown in confidentiality mode blocks the kernel reads the programs
+ * are built around. A capability jibril could not probe reads as false,
+ * which is what unsupported means from the loader's side. `lsm` is reported
+ * but never blamed: hosted runners do not enable it.
+ * @typedef {object} JibrilKernelBpf
+ * @property {boolean} btf
+ * @property {boolean} lsm
+ * @property {boolean} tracefs
+ * @property {boolean} cgroup2
+ * @property {JibrilLockdown | null} lockdown
+ */
+
+/**
+ * @typedef {object} JibrilKernel
+ * @property {string} release
+ * @property {JibrilKernelBpf} bpf
+ */
+
+/**
+ * @typedef {object} JibrilStatus
+ * @property {JibrilState | null} status
+ * @property {string} readyAt
+ * @property {JibrilKernel | null} kernel
+ * @property {JibrilEbpf | null} ebpf - null until the loader reports its counters, so an early write never claims a clean load
+ * @property {JibrilSteps | null} githubSteps - null off a GitHub runner
+ */
+
+/**
+ * Parses either status file. Null covers every way the file can fail to say
+ * anything: not written yet, unreadable, or not holding a status object.
+ * @param {string} content
+ * @returns {JibrilStatus | null}
+ */
+function parseJibrilStatus(content) {
+    /** @type {unknown} */
+    let parsed
+    try {
+        parsed = JSON.parse(content)
+    } catch {
+        return null
+    }
+
+    const record = shared_getOptionalRecord(parsed)
+    if (record === null || Array.isArray(parsed)) {
+        return null
+    }
+
+    const features = shared_getOptionalRecord(record.features)
+    // ebpf.status.json keeps the block at the top level and always writes it;
+    // jibril.status.json nests the identical block under `features` and omits
+    // it until the loader has counters to report.
+    const ebpf = features === null ? record.ebpf : features.ebpf
+
+    return {
+        status: readEnum(STATES, record.status),
+        readyAt: getOptionalString(record.ready_at) ?? "",
+        kernel: readKernel(record.kernel),
+        ebpf: readEbpf(ebpf),
+        githubSteps: readGitHubSteps(features),
+    }
+}
+
+/**
+ * Names only the non-zero counters, so it is empty exactly when the loader
+ * reported no failure at all, which is also when jibril calls itself ok.
+ * @param {JibrilEbpfErrors} errors
+ * @returns {string}
+ */
+function formatEbpfErrors(errors) {
+    /** @type {string[]} */
+    const parts = []
+
+    if (errors.load > 0) parts.push(`load=${errors.load}`)
+    if (errors.attach > 0) parts.push(`attach=${errors.attach}`)
+    if (errors.link > 0) parts.push(`link=${errors.link}`)
+
+    return parts.join(", ")
+}
+
+/**
+ * @param {JibrilAttachFailure[]} failures
+ * @returns {string}
+ */
+function formatAttachFailures(failures) {
+    return failures.map(failure => `${failure.program}: ${failure.error}`).join("; ")
+}
+
+/**
+ * Names what this kernel did not offer the loader, and only what is unusual
+ * enough to explain a failure: hosted runners ship without the BPF LSM and
+ * under lockdown integrity, so neither is evidence of anything on its own.
+ * Empty when there is nothing to explain, which keeps a healthy run from
+ * ever blaming its kernel.
+ * @param {JibrilKernel | null} kernel
+ * @returns {string}
+ */
+function formatKernelGaps(kernel) {
+    if (kernel === null) return ""
+
+    /** @type {string[]} */
+    const gaps = []
+
+    if (!kernel.bpf.btf) gaps.push("no BTF")
+    if (!kernel.bpf.tracefs) gaps.push("no tracefs")
+    if (!kernel.bpf.cgroup2) gaps.push("no cgroup2")
+    if (kernel.bpf.lockdown === "confidentiality") {
+        gaps.push("lockdown confidentiality")
+    }
+
+    if (gaps.length === 0) return ""
+
+    return `kernel ${kernel.release} offers ${gaps.join(", ")}`
+}
+
+/**
+ * One log line describing what the sensor reported about itself.
+ * @param {JibrilStatus} status
+ * @returns {string}
+ */
+function formatJibrilStatusSummary(status) {
+    /** @type {string[]} */
+    const parts = [`status=${status.status ?? UNREPORTED}`]
+
+    if (status.readyAt !== "") parts.push(`ready_at=${status.readyAt}`)
+    if (status.kernel !== null) parts.push(`kernel=${status.kernel.release}`)
+
+    if (status.ebpf === null) {
+        parts.push(`ebpf=${UNREPORTED}`)
+    } else {
+        const { programs, attached, liveLinks, errors } = status.ebpf
+        parts.push(`ebpf programs=${programs}/attached=${attached}/live_links=${liveLinks}`)
+        parts.push(`ebpf errors=${formatEbpfErrors(errors) || "none"}`)
+    }
+
+    const steps = status.githubSteps
+    if (steps !== null) {
+        parts.push(
+            `github steps=${steps.status ?? UNREPORTED} (source=${steps.source ?? UNREPORTED}, count=${steps.count})`,
+        )
+    }
+
+    return parts.join(", ")
+}
+
+const UNREPORTED = "(unreported)"
+
+/**
+ * @param {unknown} value
+ * @returns {JibrilKernel | null}
+ */
+function readKernel(value) {
+    const record = shared_getOptionalRecord(value)
+    if (record === null) return null
+
+    const bpf = shared_getOptionalRecord(record.bpf)
+
+    return {
+        release: getOptionalString(record.release) ?? "",
+        bpf: {
+            btf: bpf?.btf === true,
+            lsm: bpf?.lsm === true,
+            tracefs: bpf?.tracefs === true,
+            cgroup2: bpf?.cgroup2 === true,
+            lockdown: readEnum(LOCKDOWN_MODES, bpf?.lockdown),
+        },
+    }
+}
+
+/**
+ * @param {unknown} value
+ * @returns {JibrilEbpf | null}
+ */
+function readEbpf(value) {
+    const record = shared_getOptionalRecord(value)
+    if (record === null) return null
+
+    const errors = shared_getOptionalRecord(record.errors)
+
+    return {
+        programs: readCount(record.programs),
+        attached: readCount(record.attached),
+        liveLinks: readCount(record.live_links),
+        errors: {
+            load: readCount(errors?.load),
+            attach: readCount(errors?.attach),
+            link: readCount(errors?.link),
+            attachFailures: readAttachFailures(errors?.attach_failures),
+        },
+    }
+}
+
+/**
+ * The github block is written whenever the job environment is there to
+ * report, and always carries a steps block; off a runner it is absent.
+ * @param {Record<string, unknown> | null} features
+ * @returns {JibrilSteps | null}
+ */
+function readGitHubSteps(features) {
+    const github = shared_getOptionalRecord(features?.github)
+    const steps = shared_getOptionalRecord(github?.steps)
+    if (steps === null) return null
+
+    return {
+        status: readEnum(STATES, steps.status),
+        source: readEnum(STEPS_SOURCES, steps.source),
+        count: readCount(steps.count),
+        errors: readStringList(steps.errors),
+    }
+}
+
+/**
+ * @param {unknown} value
+ * @returns {JibrilAttachFailure[]}
+ */
+function readAttachFailures(value) {
+    if (!Array.isArray(value)) return []
+
+    /** @type {JibrilAttachFailure[]} */
+    const failures = []
+    for (const entry of value) {
+        const record = shared_getOptionalRecord(entry)
+        if (record === null) continue
+
+        failures.push({
+            program: getOptionalString(record.program) ?? "",
+            error: getOptionalString(record.error) ?? "",
+        })
+    }
+
+    return failures
+}
+
+/**
+ * Resolves one of a known set of values, so nothing downstream handles a
+ * free-form string. Null means jibril reported something outside the set,
+ * which is not a known value and must not be reported as one.
+ * @template {string} T
+ * @param {readonly T[]} members
+ * @param {unknown} value
+ * @returns {T | null}
+ */
+function readEnum(members, value) {
+    return members.find(member => member === value) ?? null
+}
+
+/**
+ * @param {unknown} value
+ * @returns {number}
+ */
+function readCount(value) {
+    const count = getOptionalNumber(value)
+    if (count === undefined || !Number.isFinite(count) || count < 0) return 0
+
+    return Math.trunc(count)
+}
+
+/**
+ * @param {unknown} value
+ * @returns {string[]}
+ */
+function readStringList(value) {
+    if (!Array.isArray(value)) return []
+
+    return value.filter(entry => typeof entry === "string" && entry.trim() !== "")
+}
+
 ;// CONCATENATED MODULE: ./src/action.js
 // This script installs jibril, calls the control-plane API to create the
 // agent and fetch network policy, and sets up Jibril as a systemd service.
@@ -42034,6 +42488,12 @@ function isMissingOIDCPermissionError(errorMessage) {
 
 
 
+
+
+
+/**
+ * @typedef {import("./jibril-status.js").JibrilStatus} JibrilStatus
+ */
 
 /**
  * @typedef {import("@actions/exec").ExecOptions} ExecOptions
@@ -42058,8 +42518,6 @@ const JIBRIL_RELEASES_URL = `https://github.com/${JIBRIL_RELEASES_REPO}/releases
 // Update both if the jibril release workflow ever changes them.
 const JIBRIL_ATTESTATION_PREDICATE = `https://github.com/${JIBRIL_RELEASES_REPO}/attestations/release/v1`
 const JIBRIL_SIGNER_WORKFLOW = `${JIBRIL_RELEASES_REPO}/.github/workflows/jibril-public-release.yml`
-/** @type {JibrilCoreVersion} */
-const JIBRIL_BUNDLE_MIN_VERSION = { major: 2, minor: 17, patch: 0 }
 const JIBRIL_BINARY = "jibril"
 const JIBRIL_CHECKSUMS = "jibril-checksums.txt"
 const JIBRIL_MANIFEST = "release.json"
@@ -42072,6 +42530,13 @@ const SIGSTORE_SUFFIX = ".sigstore.json"
 // value live and bounds its own wait to it.
 const JIBRIL_STOP_TIMEOUT_ENV = "GARNET_JIBRIL_STOP_TIMEOUT_SECONDS"
 const DEFAULT_JIBRIL_STOP_TIMEOUT_SECONDS = 1800
+// `systemctl start` returns once the unit is activating, not once the sensor
+// is attached, so the job's first steps could run before any event was
+// captured. From v2.17.0 on jibril writes its eBPF readiness file immediately
+// before entering the event loop, which turns that gap into something the
+// action can wait on instead of guess at.
+const JIBRIL_READY_TIMEOUT_SECONDS = 30
+const JIBRIL_READY_POLL_INTERVAL_MS = 1000
 
 // This function is the main entry point for the script.
 // Returns true when Jibril started successfully, false otherwise.
@@ -42155,6 +42620,11 @@ async function run() {
 
         info(`API server: ${API}`)
         info(`Jibril Version: ${JIBRILVER}`)
+
+        // The post step gates its own version-dependent behavior on the exact
+        // sensor that ran, so it gets the resolved tag rather than a set of
+        // per-feature booleans decided here.
+        saveState("jibrilVersion", JIBRILVER)
 
         // Create a temporary directory for the script to use.
         tmpDir = await promises_namespaceObject.mkdtemp(external_node_path_namespaceObject.join(external_node_os_namespaceObject.tmpdir(), "garnet-"))
@@ -42443,19 +42913,40 @@ TimeoutStopSec=${stopTimeoutValue}
             return false
         }
 
-        // Give the daemon a moment to settle so an immediate crash is surfaced here.
-        await waitForDelay(5000)
+        // From v2.17.0 on jibril writes the readiness status files the poll
+        // below waits on; older sensors only get a settle window.
+        if (versionAtLeast(JIBRILVER, 2, 17, 0)) {
+            const readiness = await waitForJibrilReadiness()
 
-        const { stdout: serviceState } = await execCapture("sudo", ["systemctl", "is-active", "jibril.service"], {
-            ignoreReturnCode: true,
-        })
+            if (readiness.state === "exited") {
+                warning(
+                    `Jibril service exited early with state '${readiness.serviceState || "unknown"}'. The workflow will continue without runtime monitoring for this run.`,
+                )
+                await dumpJibrilLogs()
+                return false
+            }
 
-        if (serviceState !== "active") {
-            warning(
-                `Jibril service exited early with state '${serviceState || "unknown"}'. The workflow will continue without runtime monitoring for this run.`,
-            )
-            await dumpJibrilLogs()
-            return false
+            if (readiness.state === "not_ready") {
+                // The unit is still up, so monitoring may still come online;
+                // what is lost is the guarantee about this run's first steps.
+                warning(
+                    `Jibril did not report eBPF readiness within ${JIBRIL_READY_TIMEOUT_SECONDS}s ` +
+                        `(${JIBRIL_EBPF_STATUS_FILE} is missing or unreadable). ` +
+                        "Events from the start of this job may be missing.",
+                )
+            }
+        } else {
+            // Give the daemon a moment to settle so an immediate crash is surfaced here.
+            await waitForDelay(5000)
+
+            const serviceState = await readJibrilServiceState()
+            if (serviceState !== "active") {
+                warning(
+                    `Jibril service exited early with state '${serviceState || "unknown"}'. The workflow will continue without runtime monitoring for this run.`,
+                )
+                await dumpJibrilLogs()
+                return false
+            }
         }
 
         // Check Jibril service status.
@@ -42651,42 +43142,6 @@ function resolveJibrilVersion(inputVersion, actionRef) {
 }
 
 /**
- * @typedef {Object} JibrilCoreVersion
- * @prop {number} major
- * @prop {number} minor
- * @prop {number} patch
- */
-
-/**
- * Prereleases sort with their core version, so v2.17.0-rc.5 is bundled too.
- * Non-semver tags (daily builds) keep the bare binary.
- * @param {string} tag
- * @returns {boolean}
- */
-function usesBundledJibrilRelease(tag) {
-    const version = parseCoreVersion(tag)
-    if (version === null) return false
-
-    const { major, minor, patch } = JIBRIL_BUNDLE_MIN_VERSION
-    if (version.major !== major) return version.major > major
-    if (version.minor !== minor) return version.minor > minor
-    return version.patch >= patch
-}
-
-/**
- * Ignores any prerelease or build suffix.
- * @param {string} tag
- * @returns {JibrilCoreVersion|null}
- */
-function parseCoreVersion(tag) {
-    const match = /^v?(\d+)\.(\d+)\.(\d+)(?:[-+].*)?$/.exec(tag.trim())
-    if (match === null) return null
-
-    const [, major = "0", minor = "0", patch = "0"] = match
-    return { major: Number(major), minor: Number(minor), patch: Number(patch) }
-}
-
-/**
  * GitHub redirects /releases/latest to the tag page, so the tag comes from the
  * Location header with no body download.
  * @returns {Promise<string>}
@@ -42719,7 +43174,9 @@ async function downloadJibril(tag, tmpDir) {
     const releaseURL = `${JIBRIL_RELEASES_URL}/download/${tag}`
     const binaryPath = external_node_path_namespaceObject.join(tmpDir, JIBRIL_BINARY)
 
-    if (!usesBundledJibrilRelease(tag)) {
+    // From v2.17.0 on a release ships the signed bundle; older releases only
+    // offer the bare `jibril` asset.
+    if (!versionAtLeast(tag, 2, 17, 0)) {
         const binaryURL = `${releaseURL}/${JIBRIL_BINARY}`
         info(`Downloading jibril: ${binaryURL}`)
         await downloadFile(binaryURL, binaryPath)
@@ -42979,6 +43436,106 @@ function resolveStopTimeoutSeconds(overrideValue) {
     }
 
     return parsed > 0 ? parsed : 0
+}
+
+/**
+ * @typedef {object} JibrilReadiness
+ * @property {"ready" | "not_ready" | "exited"} state
+ * @property {string} serviceState - systemd's view, read only while readiness is still pending
+ */
+
+/**
+ * Waits until jibril reports that its eBPF layer is attached, which is the
+ * first instant at which the sensor is capturing events. Each poll also asks
+ * systemd whether the unit is still up, so a sensor that dies during startup
+ * is reported immediately instead of after the full bound.
+ * @returns {Promise<JibrilReadiness>}
+ */
+async function waitForJibrilReadiness() {
+    info(`Waiting up to ${JIBRIL_READY_TIMEOUT_SECONDS}s for Jibril to report eBPF readiness`)
+
+    const deadline = Date.now() + JIBRIL_READY_TIMEOUT_SECONDS * 1000
+
+    for (;;) {
+        const status = parseJibrilStatus(await readRootFile(JIBRIL_EBPF_STATUS_FILE))
+        if (status !== null) {
+            reportJibrilReadiness(status)
+            return { state: "ready", serviceState: "active" }
+        }
+
+        const serviceState = await readJibrilServiceState()
+        if (serviceState !== "active" && serviceState !== "activating") {
+            return { state: "exited", serviceState }
+        }
+
+        if (Date.now() >= deadline) {
+            return { state: "not_ready", serviceState }
+        }
+
+        await waitForDelay(JIBRIL_READY_POLL_INTERVAL_MS)
+    }
+}
+
+/**
+ * @param {JibrilStatus} status
+ * @returns {void}
+ */
+function reportJibrilReadiness(status) {
+    info(`Jibril eBPF readiness: ${formatJibrilStatusSummary(status)}`)
+
+    // The readiness file always carries the eBPF block, and jibril reports
+    // itself degraded exactly when a stage failed, so the counters carry
+    // everything its status value would add.
+    const ebpf = status.ebpf
+    if (ebpf === null) {
+        return
+    }
+
+    const ebpfErrors = formatEbpfErrors(ebpf.errors)
+    if (ebpfErrors === "") {
+        return
+    }
+
+    // The kernel's gaps are where most attach failures come from, and it
+    // cannot change under a running sensor, so this is the place to say so.
+    const parts = [`Jibril attached with eBPF errors (${ebpfErrors})`]
+    const kernelGaps = formatKernelGaps(status.kernel)
+    if (kernelGaps !== "") {
+        parts.push(kernelGaps)
+    }
+    parts.push("some runtime events will be missing for this run")
+    warning(parts.join("; "))
+
+    const attachFailures = formatAttachFailures(ebpf.errors.attachFailures)
+    if (attachFailures !== "") {
+        info(`Jibril could not attach: ${attachFailures}`)
+    }
+}
+
+/**
+ * @returns {Promise<string>}
+ */
+async function readJibrilServiceState() {
+    const { stdout } = await execCapture("sudo", ["systemctl", "is-active", "jibril.service"], {
+        ignoreReturnCode: true,
+    })
+
+    return stdout
+}
+
+/**
+ * jibril writes its status files as root. An absent or unreadable file is a
+ * normal intermediate state while polling, so it reads as empty content.
+ * @param {string} filePath
+ * @returns {Promise<string>}
+ */
+async function readRootFile(filePath) {
+    try {
+        const { stdout } = await execCapture("sudo", ["cat", filePath], { ignoreReturnCode: true })
+        return stdout
+    } catch {
+        return ""
+    }
 }
 
 /**
