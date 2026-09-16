@@ -70,7 +70,10 @@ const DEFAULT_JIBRIL_STOP_TIMEOUT_SECONDS = 1800
 // before entering the event loop, which turns that gap into something the
 // action can wait on instead of guess at.
 const JIBRIL_READY_TIMEOUT_SECONDS = 30
-const JIBRIL_READY_POLL_INTERVAL_MS = 1000
+// The poll interval, not the clock, is what bounds how precisely readiness
+// can be timed, so it is kept short enough for the reported figure to mean
+// something. Each tick costs two cheap root reads.
+const JIBRIL_READY_POLL_INTERVAL_MS = 200
 
 // This function is the main entry point for the script.
 // Returns true when Jibril started successfully, false otherwise.
@@ -435,6 +438,11 @@ TimeoutStopSec=${stopTimeoutValue}
         }
 
         // Start Jibril service, but do not fail the workflow if the daemon crashes.
+        // The readiness wait times itself against this instant, so both `took`
+        // and the bound cover the whole gap the job is exposed for, the start
+        // call included. performance.now() is monotonic, so neither can be
+        // skewed by a wall-clock step mid-run.
+        const startedAt = performance.now()
         const returnCode = await execSudo(["systemctl", "start", "jibril.service"], {
             ignoreReturnCode: true,
         })
@@ -450,7 +458,7 @@ TimeoutStopSec=${stopTimeoutValue}
         // From v2.17.0 on jibril writes the readiness status files the poll
         // below waits on; older sensors only get a settle window.
         if (versionAtLeast(JIBRILVER, 2, 17, 0)) {
-            const readiness = await waitForJibrilReadiness()
+            const readiness = await waitForJibrilReadiness(startedAt)
 
             if (readiness.state === "exited") {
                 core.warning(
@@ -983,17 +991,18 @@ export function resolveStopTimeoutSeconds(overrideValue) {
  * first instant at which the sensor is capturing events. Each poll also asks
  * systemd whether the unit is still up, so a sensor that dies during startup
  * is reported immediately instead of after the full bound.
+ * @param {number} startedAt - performance.now() reading taken before the `systemctl start` call
  * @returns {Promise<JibrilReadiness>}
  */
-async function waitForJibrilReadiness() {
+async function waitForJibrilReadiness(startedAt) {
     core.info(`Waiting up to ${JIBRIL_READY_TIMEOUT_SECONDS}s for Jibril to report eBPF readiness`)
 
-    const deadline = Date.now() + JIBRIL_READY_TIMEOUT_SECONDS * 1000
+    const deadline = startedAt + JIBRIL_READY_TIMEOUT_SECONDS * 1000
 
     for (;;) {
         const status = parseJibrilStatus(await readRootFile(JIBRIL_EBPF_STATUS_FILE))
         if (status !== null) {
-            reportJibrilReadiness(status)
+            reportJibrilReadiness(status, performance.now() - startedAt)
             return { state: "ready", serviceState: "active" }
         }
 
@@ -1002,7 +1011,7 @@ async function waitForJibrilReadiness() {
             return { state: "exited", serviceState }
         }
 
-        if (Date.now() >= deadline) {
+        if (performance.now() >= deadline) {
             return { state: "not_ready", serviceState }
         }
 
@@ -1012,10 +1021,11 @@ async function waitForJibrilReadiness() {
 
 /**
  * @param {JibrilStatus} status
+ * @param {number} elapsedMs - time from the start call to the sensor being ready
  * @returns {void}
  */
-function reportJibrilReadiness(status) {
-    core.info(`Jibril eBPF readiness: ${formatJibrilStatusSummary(status)}`)
+function reportJibrilReadiness(status, elapsedMs) {
+    core.info(`Jibril eBPF readiness: took=${elapsedMs.toFixed(3)}ms, ${formatJibrilStatusSummary(status)}`)
 
     // The readiness file always carries the eBPF block, and jibril reports
     // itself degraded exactly when a stage failed, so the counters carry
