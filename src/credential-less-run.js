@@ -1,14 +1,5 @@
-// Credential-less run detection. The action authenticates with GitHub OIDC
-// first and falls back to the `api_token` input; a run that offers neither
-// cannot reach the control plane at all. Such a run skips profiling instead
-// of failing the job, but the skip must always name the credential that was
-// missing — a silent no-op is indistinguishable from a broken action.
-//
-// `pull_request` runs from forked repositories are the common case (GitHub
-// exposes neither repository secrets nor an ID token to them), so they get
-// their own wording. Every other credential-less shape gets the generic
-// wording; `pull_request_target` is not special-cased, because by the time
-// this runs the `api_token` input has already resolved empty.
+// Called only when api_token resolved empty. Fork pull requests need
+// remediation that does not expose credentials to untrusted code.
 
 import * as fs from "node:fs/promises"
 import { getEnv, getOptionalRecord, getOptionalString } from "./shared.js"
@@ -56,9 +47,10 @@ export async function resolveCredentialSkip(context) {
             skip: true,
             reason:
                 "Garnet skipped this Runtime Review because no authentication mechanism was available: the " +
-                "'api_token' input resolved empty and no OIDC ID token could be requested. GitHub exposes " +
-                "neither repository secrets nor an 'id-token: write' grant to 'pull_request' runs from forked " +
-                `repositories. ${REMEDIATION} The job continues normally.`,
+                "'api_token' input resolved empty and no OIDC ID token could be requested. For 'pull_request' " +
+                "runs from forked repositories, adding 'id-token: write' does not by itself make credentials " +
+                "available. Do not expose repository secrets to untrusted fork code. A maintainer can review " +
+                "the change and run recording in an authorized, trusted workflow. The job continues normally.",
         }
     }
 
