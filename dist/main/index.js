@@ -1,15 +1,15 @@
 import { createRequire as __WEBPACK_EXTERNAL_createRequire } from "module";
 /******/ var __webpack_modules__ = ({
 
-/***/ 2946:
+/***/ 770:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
-module.exports = __nccwpck_require__(9482);
+module.exports = __nccwpck_require__(218);
 
 
 /***/ }),
 
-/***/ 9482:
+/***/ 218:
 /***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
 
 var __webpack_unused_export__;
@@ -281,34 +281,34 @@ __webpack_unused_export__ = debug; // for test
 
 /***/ }),
 
-/***/ 592:
+/***/ 6752:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
 var __webpack_unused_export__;
 
 
-const Client = __nccwpck_require__(1813)
-const Dispatcher = __nccwpck_require__(8755)
-const Pool = __nccwpck_require__(9764)
-const BalancedPool = __nccwpck_require__(9797)
-const Agent = __nccwpck_require__(3949)
-const ProxyAgent = __nccwpck_require__(656)
-const EnvHttpProxyAgent = __nccwpck_require__(4401)
-const RetryAgent = __nccwpck_require__(2082)
-const errors = __nccwpck_require__(371)
-const util = __nccwpck_require__(6976)
+const Client = __nccwpck_require__(3701)
+const Dispatcher = __nccwpck_require__(883)
+const Pool = __nccwpck_require__(628)
+const BalancedPool = __nccwpck_require__(837)
+const Agent = __nccwpck_require__(7405)
+const ProxyAgent = __nccwpck_require__(6672)
+const EnvHttpProxyAgent = __nccwpck_require__(3137)
+const RetryAgent = __nccwpck_require__(50)
+const errors = __nccwpck_require__(8707)
+const util = __nccwpck_require__(3440)
 const { InvalidArgumentError } = errors
-const api = __nccwpck_require__(4551)
-const buildConnector = __nccwpck_require__(9632)
-const MockClient = __nccwpck_require__(5157)
-const MockAgent = __nccwpck_require__(8957)
-const MockPool = __nccwpck_require__(2484)
-const mockErrors = __nccwpck_require__(9229)
-const RetryHandler = __nccwpck_require__(6456)
-const { getGlobalDispatcher, setGlobalDispatcher } = __nccwpck_require__(8613)
-const DecoratorHandler = __nccwpck_require__(9115)
-const RedirectHandler = __nccwpck_require__(1570)
-const createRedirectInterceptor = __nccwpck_require__(8756)
+const api = __nccwpck_require__(6615)
+const buildConnector = __nccwpck_require__(9136)
+const MockClient = __nccwpck_require__(7365)
+const MockAgent = __nccwpck_require__(7501)
+const MockPool = __nccwpck_require__(4004)
+const mockErrors = __nccwpck_require__(2429)
+const RetryHandler = __nccwpck_require__(7816)
+const { getGlobalDispatcher, setGlobalDispatcher } = __nccwpck_require__(2581)
+const DecoratorHandler = __nccwpck_require__(8155)
+const RedirectHandler = __nccwpck_require__(8754)
+const createRedirectInterceptor = __nccwpck_require__(5092)
 
 Object.assign(Dispatcher.prototype, api)
 
@@ -326,10 +326,10 @@ __webpack_unused_export__ = DecoratorHandler
 __webpack_unused_export__ = RedirectHandler
 __webpack_unused_export__ = createRedirectInterceptor
 __webpack_unused_export__ = {
-  redirect: __nccwpck_require__(7098),
-  retry: __nccwpck_require__(4874),
-  dump: __nccwpck_require__(4076),
-  dns: __nccwpck_require__(6251)
+  redirect: __nccwpck_require__(1514),
+  retry: __nccwpck_require__(2026),
+  dump: __nccwpck_require__(8060),
+  dns: __nccwpck_require__(379)
 }
 
 __webpack_unused_export__ = buildConnector
@@ -391,7 +391,7 @@ function makeDispatcher (fn) {
 __webpack_unused_export__ = setGlobalDispatcher
 __webpack_unused_export__ = getGlobalDispatcher
 
-const fetchImpl = (__nccwpck_require__(9870).fetch)
+const fetchImpl = (__nccwpck_require__(4398).fetch)
 __webpack_unused_export__ = async function fetch (init, options = undefined) {
   try {
     return await fetchImpl(init, options)
@@ -403,39 +403,39 @@ __webpack_unused_export__ = async function fetch (init, options = undefined) {
     throw err
   }
 }
-/* unused reexport */ __nccwpck_require__(6052).Headers
-/* unused reexport */ __nccwpck_require__(5003).Response
-/* unused reexport */ __nccwpck_require__(703).Request
-/* unused reexport */ __nccwpck_require__(1782).FormData
+/* unused reexport */ __nccwpck_require__(660).Headers
+/* unused reexport */ __nccwpck_require__(9051).Response
+/* unused reexport */ __nccwpck_require__(9967).Request
+/* unused reexport */ __nccwpck_require__(5910).FormData
 __webpack_unused_export__ = globalThis.File ?? (__nccwpck_require__(4573).File)
-/* unused reexport */ __nccwpck_require__(3203).FileReader
+/* unused reexport */ __nccwpck_require__(8355).FileReader
 
-const { setGlobalOrigin, getGlobalOrigin } = __nccwpck_require__(5843)
+const { setGlobalOrigin, getGlobalOrigin } = __nccwpck_require__(1059)
 
 __webpack_unused_export__ = setGlobalOrigin
 __webpack_unused_export__ = getGlobalOrigin
 
-const { CacheStorage } = __nccwpck_require__(6701)
-const { kConstruct } = __nccwpck_require__(589)
+const { CacheStorage } = __nccwpck_require__(3245)
+const { kConstruct } = __nccwpck_require__(109)
 
 // Cache & CacheStorage are tightly coupled with fetch. Even if it may run
 // in an older version of Node, it doesn't have any use without fetch.
 __webpack_unused_export__ = new CacheStorage(kConstruct)
 
-const { deleteCookie, getCookies, getSetCookies, setCookie } = __nccwpck_require__(7461)
+const { deleteCookie, getCookies, getSetCookies, setCookie } = __nccwpck_require__(9061)
 
 __webpack_unused_export__ = deleteCookie
 __webpack_unused_export__ = getCookies
 __webpack_unused_export__ = getSetCookies
 __webpack_unused_export__ = setCookie
 
-const { parseMIMEType, serializeAMimeType } = __nccwpck_require__(1996)
+const { parseMIMEType, serializeAMimeType } = __nccwpck_require__(1900)
 
 __webpack_unused_export__ = parseMIMEType
 __webpack_unused_export__ = serializeAMimeType
 
-const { CloseEvent, ErrorEvent, MessageEvent } = __nccwpck_require__(3684)
-/* unused reexport */ __nccwpck_require__(9390).WebSocket
+const { CloseEvent, ErrorEvent, MessageEvent } = __nccwpck_require__(5188)
+/* unused reexport */ __nccwpck_require__(3726).WebSocket
 __webpack_unused_export__ = CloseEvent
 __webpack_unused_export__ = ErrorEvent
 __webpack_unused_export__ = MessageEvent
@@ -451,18 +451,18 @@ __webpack_unused_export__ = MockPool
 __webpack_unused_export__ = MockAgent
 __webpack_unused_export__ = mockErrors
 
-const { EventSource } = __nccwpck_require__(9878)
+const { EventSource } = __nccwpck_require__(1238)
 
 __webpack_unused_export__ = EventSource
 
 
 /***/ }),
 
-/***/ 6334:
+/***/ 158:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
-const { addAbortListener } = __nccwpck_require__(6976)
-const { RequestAbortedError } = __nccwpck_require__(371)
+const { addAbortListener } = __nccwpck_require__(3440)
+const { RequestAbortedError } = __nccwpck_require__(8707)
 
 const kListener = Symbol('kListener')
 const kSignal = Symbol('kSignal')
@@ -522,16 +522,16 @@ module.exports = {
 
 /***/ }),
 
-/***/ 3172:
+/***/ 2279:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
 
 
 const assert = __nccwpck_require__(4589)
 const { AsyncResource } = __nccwpck_require__(6698)
-const { InvalidArgumentError, SocketError } = __nccwpck_require__(371)
-const util = __nccwpck_require__(6976)
-const { addSignal, removeSignal } = __nccwpck_require__(6334)
+const { InvalidArgumentError, SocketError } = __nccwpck_require__(8707)
+const util = __nccwpck_require__(3440)
+const { addSignal, removeSignal } = __nccwpck_require__(158)
 
 class ConnectHandler extends AsyncResource {
   constructor (opts, callback) {
@@ -637,7 +637,7 @@ module.exports = connect
 
 /***/ }),
 
-/***/ 4958:
+/***/ 6862:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
 
@@ -651,10 +651,10 @@ const {
   InvalidArgumentError,
   InvalidReturnValueError,
   RequestAbortedError
-} = __nccwpck_require__(371)
-const util = __nccwpck_require__(6976)
+} = __nccwpck_require__(8707)
+const util = __nccwpck_require__(3440)
 const { AsyncResource } = __nccwpck_require__(6698)
-const { addSignal, removeSignal } = __nccwpck_require__(6334)
+const { addSignal, removeSignal } = __nccwpck_require__(158)
 const assert = __nccwpck_require__(4589)
 
 const kResume = Symbol('resume')
@@ -895,16 +895,16 @@ module.exports = pipeline
 
 /***/ }),
 
-/***/ 5371:
+/***/ 4043:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
 
 
 const assert = __nccwpck_require__(4589)
-const { Readable } = __nccwpck_require__(7319)
-const { InvalidArgumentError, RequestAbortedError } = __nccwpck_require__(371)
-const util = __nccwpck_require__(6976)
-const { getResolveErrorBodyCallback } = __nccwpck_require__(5671)
+const { Readable } = __nccwpck_require__(9927)
+const { InvalidArgumentError, RequestAbortedError } = __nccwpck_require__(8707)
+const util = __nccwpck_require__(3440)
+const { getResolveErrorBodyCallback } = __nccwpck_require__(7655)
 const { AsyncResource } = __nccwpck_require__(6698)
 
 class RequestHandler extends AsyncResource {
@@ -1116,18 +1116,18 @@ module.exports.RequestHandler = RequestHandler
 
 /***/ }),
 
-/***/ 6920:
+/***/ 3560:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
 
 
 const assert = __nccwpck_require__(4589)
 const { finished, PassThrough } = __nccwpck_require__(7075)
-const { InvalidArgumentError, InvalidReturnValueError } = __nccwpck_require__(371)
-const util = __nccwpck_require__(6976)
-const { getResolveErrorBodyCallback } = __nccwpck_require__(5671)
+const { InvalidArgumentError, InvalidReturnValueError } = __nccwpck_require__(8707)
+const util = __nccwpck_require__(3440)
+const { getResolveErrorBodyCallback } = __nccwpck_require__(7655)
 const { AsyncResource } = __nccwpck_require__(6698)
-const { addSignal, removeSignal } = __nccwpck_require__(6334)
+const { addSignal, removeSignal } = __nccwpck_require__(158)
 
 class StreamHandler extends AsyncResource {
   constructor (opts, factory, callback) {
@@ -1343,15 +1343,15 @@ module.exports = stream
 
 /***/ }),
 
-/***/ 4250:
+/***/ 1882:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
 
 
-const { InvalidArgumentError, SocketError } = __nccwpck_require__(371)
+const { InvalidArgumentError, SocketError } = __nccwpck_require__(8707)
 const { AsyncResource } = __nccwpck_require__(6698)
-const util = __nccwpck_require__(6976)
-const { addSignal, removeSignal } = __nccwpck_require__(6334)
+const util = __nccwpck_require__(3440)
+const { addSignal, removeSignal } = __nccwpck_require__(158)
 const assert = __nccwpck_require__(4589)
 
 class UpgradeHandler extends AsyncResource {
@@ -1458,21 +1458,21 @@ module.exports = upgrade
 
 /***/ }),
 
-/***/ 4551:
+/***/ 6615:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
 
 
-module.exports.request = __nccwpck_require__(5371)
-module.exports.stream = __nccwpck_require__(6920)
-module.exports.pipeline = __nccwpck_require__(4958)
-module.exports.upgrade = __nccwpck_require__(4250)
-module.exports.connect = __nccwpck_require__(3172)
+module.exports.request = __nccwpck_require__(4043)
+module.exports.stream = __nccwpck_require__(3560)
+module.exports.pipeline = __nccwpck_require__(6862)
+module.exports.upgrade = __nccwpck_require__(1882)
+module.exports.connect = __nccwpck_require__(2279)
 
 
 /***/ }),
 
-/***/ 7319:
+/***/ 9927:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
 // Ported from https://github.com/nodejs/undici/pull/907
@@ -1481,9 +1481,9 @@ module.exports.connect = __nccwpck_require__(3172)
 
 const assert = __nccwpck_require__(4589)
 const { Readable } = __nccwpck_require__(7075)
-const { RequestAbortedError, NotSupportedError, InvalidArgumentError, AbortError } = __nccwpck_require__(371)
-const util = __nccwpck_require__(6976)
-const { ReadableStreamFrom } = __nccwpck_require__(6976)
+const { RequestAbortedError, NotSupportedError, InvalidArgumentError, AbortError } = __nccwpck_require__(8707)
+const util = __nccwpck_require__(3440)
+const { ReadableStreamFrom } = __nccwpck_require__(3440)
 
 const kConsume = Symbol('kConsume')
 const kReading = Symbol('kReading')
@@ -1864,15 +1864,15 @@ module.exports = { Readable: BodyReadable, chunksDecode }
 
 /***/ }),
 
-/***/ 5671:
+/***/ 7655:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
 const assert = __nccwpck_require__(4589)
 const {
   ResponseStatusCodeError
-} = __nccwpck_require__(371)
+} = __nccwpck_require__(8707)
 
-const { chunksDecode } = __nccwpck_require__(7319)
+const { chunksDecode } = __nccwpck_require__(9927)
 const CHUNK_LIMIT = 128 * 1024
 
 async function getResolveErrorBodyCallback ({ callback, body, contentType, statusCode, statusMessage, headers }) {
@@ -1964,16 +1964,16 @@ module.exports = {
 
 /***/ }),
 
-/***/ 9632:
+/***/ 9136:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
 
 
 const net = __nccwpck_require__(7030)
 const assert = __nccwpck_require__(4589)
-const util = __nccwpck_require__(6976)
-const { InvalidArgumentError, ConnectTimeoutError } = __nccwpck_require__(371)
-const timers = __nccwpck_require__(7019)
+const util = __nccwpck_require__(3440)
+const { InvalidArgumentError, ConnectTimeoutError } = __nccwpck_require__(8707)
+const timers = __nccwpck_require__(6603)
 
 function noop () {}
 
@@ -2211,7 +2211,7 @@ module.exports = buildConnector
 
 /***/ }),
 
-/***/ 9567:
+/***/ 735:
 /***/ ((module) => {
 
 
@@ -2336,7 +2336,7 @@ module.exports = {
 
 /***/ }),
 
-/***/ 9038:
+/***/ 2414:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
 
@@ -2545,7 +2545,7 @@ module.exports = {
 
 /***/ }),
 
-/***/ 371:
+/***/ 8707:
 /***/ ((module) => {
 
 
@@ -2977,7 +2977,7 @@ module.exports = {
 
 /***/ }),
 
-/***/ 4159:
+/***/ 4655:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
 
@@ -2985,7 +2985,7 @@ module.exports = {
 const {
   InvalidArgumentError,
   NotSupportedError
-} = __nccwpck_require__(371)
+} = __nccwpck_require__(8707)
 const assert = __nccwpck_require__(4589)
 const {
   isValidHTTPToken,
@@ -3000,9 +3000,9 @@ const {
   validateHandler,
   getServerName,
   normalizedMethodRecords
-} = __nccwpck_require__(6976)
-const { channels } = __nccwpck_require__(9038)
-const { headerNameLowerCasedRecord } = __nccwpck_require__(9567)
+} = __nccwpck_require__(3440)
+const { channels } = __nccwpck_require__(2414)
+const { headerNameLowerCasedRecord } = __nccwpck_require__(735)
 
 // Verifies that a given path is valid does not contain control chars \x00 to \x20
 const invalidPathRegex = /[^\u0021-\u00ff]/
@@ -3400,7 +3400,7 @@ module.exports = Request
 
 /***/ }),
 
-/***/ 891:
+/***/ 6443:
 /***/ ((module) => {
 
 module.exports = {
@@ -3474,7 +3474,7 @@ module.exports = {
 
 /***/ }),
 
-/***/ 136:
+/***/ 7752:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
 
@@ -3482,7 +3482,7 @@ module.exports = {
 const {
   wellknownHeaderNames,
   headerNameLowerCasedRecord
-} = __nccwpck_require__(9567)
+} = __nccwpck_require__(735)
 
 class TstNode {
   /** @type {any} */
@@ -3633,13 +3633,13 @@ module.exports = {
 
 /***/ }),
 
-/***/ 6976:
+/***/ 3440:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
 
 
 const assert = __nccwpck_require__(4589)
-const { kDestroyed, kBodyUsed, kListeners, kBody } = __nccwpck_require__(891)
+const { kDestroyed, kBodyUsed, kListeners, kBody } = __nccwpck_require__(6443)
 const { IncomingMessage } = __nccwpck_require__(7067)
 const stream = __nccwpck_require__(7075)
 const net = __nccwpck_require__(7030)
@@ -3647,9 +3647,9 @@ const { Blob } = __nccwpck_require__(4573)
 const nodeUtil = __nccwpck_require__(7975)
 const { stringify } = __nccwpck_require__(1792)
 const { EventEmitter: EE } = __nccwpck_require__(8474)
-const { InvalidArgumentError } = __nccwpck_require__(371)
-const { headerNameLowerCasedRecord } = __nccwpck_require__(9567)
-const { tree } = __nccwpck_require__(136)
+const { InvalidArgumentError } = __nccwpck_require__(8707)
+const { headerNameLowerCasedRecord } = __nccwpck_require__(735)
+const { tree } = __nccwpck_require__(7752)
 
 const [nodeMajor, nodeMinor] = process.versions.node.split('.').map(v => Number(v))
 
@@ -4359,18 +4359,18 @@ module.exports = {
 
 /***/ }),
 
-/***/ 3949:
+/***/ 7405:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
 
 
-const { InvalidArgumentError } = __nccwpck_require__(371)
-const { kClients, kRunning, kClose, kDestroy, kDispatch, kInterceptors } = __nccwpck_require__(891)
-const DispatcherBase = __nccwpck_require__(7825)
-const Pool = __nccwpck_require__(9764)
-const Client = __nccwpck_require__(1813)
-const util = __nccwpck_require__(6976)
-const createRedirectInterceptor = __nccwpck_require__(8756)
+const { InvalidArgumentError } = __nccwpck_require__(8707)
+const { kClients, kRunning, kClose, kDestroy, kDispatch, kInterceptors } = __nccwpck_require__(6443)
+const DispatcherBase = __nccwpck_require__(1841)
+const Pool = __nccwpck_require__(628)
+const Client = __nccwpck_require__(3701)
+const util = __nccwpck_require__(3440)
+const createRedirectInterceptor = __nccwpck_require__(5092)
 
 const kOnConnect = Symbol('onConnect')
 const kOnDisconnect = Symbol('onDisconnect')
@@ -4495,7 +4495,7 @@ module.exports = Agent
 
 /***/ }),
 
-/***/ 9797:
+/***/ 837:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
 
@@ -4503,7 +4503,7 @@ module.exports = Agent
 const {
   BalancedPoolMissingUpstreamError,
   InvalidArgumentError
-} = __nccwpck_require__(371)
+} = __nccwpck_require__(8707)
 const {
   PoolBase,
   kClients,
@@ -4511,10 +4511,10 @@ const {
   kAddClient,
   kRemoveClient,
   kGetDispatcher
-} = __nccwpck_require__(224)
-const Pool = __nccwpck_require__(9764)
-const { kUrl, kInterceptors } = __nccwpck_require__(891)
-const { parseOrigin } = __nccwpck_require__(6976)
+} = __nccwpck_require__(2128)
+const Pool = __nccwpck_require__(628)
+const { kUrl, kInterceptors } = __nccwpck_require__(6443)
+const { parseOrigin } = __nccwpck_require__(3440)
 const kFactory = Symbol('factory')
 
 const kOptions = Symbol('options')
@@ -4711,7 +4711,7 @@ module.exports = BalancedPool
 
 /***/ }),
 
-/***/ 5501:
+/***/ 637:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
 
@@ -4719,9 +4719,9 @@ module.exports = BalancedPool
 /* global WebAssembly */
 
 const assert = __nccwpck_require__(4589)
-const util = __nccwpck_require__(6976)
-const { channels } = __nccwpck_require__(9038)
-const timers = __nccwpck_require__(7019)
+const util = __nccwpck_require__(3440)
+const { channels } = __nccwpck_require__(2414)
+const timers = __nccwpck_require__(6603)
 const {
   RequestContentLengthMismatchError,
   ResponseContentLengthMismatchError,
@@ -4734,7 +4734,7 @@ const {
   BodyTimeoutError,
   HTTPParserError,
   ResponseExceededMaxSizeError
-} = __nccwpck_require__(371)
+} = __nccwpck_require__(8707)
 const {
   kUrl,
   kReset,
@@ -4767,9 +4767,9 @@ const {
   kOnError,
   kResume,
   kHTTPContext
-} = __nccwpck_require__(891)
+} = __nccwpck_require__(6443)
 
-const constants = __nccwpck_require__(6440)
+const constants = __nccwpck_require__(2824)
 const EMPTY_BUF = Buffer.alloc(0)
 const FastBuffer = Buffer[Symbol.species]
 const addListener = util.addListener
@@ -4781,11 +4781,11 @@ const kSocketUsed = Symbol('kSocketUsed')
 let extractBody
 
 async function lazyllhttp () {
-  const llhttpWasmData = process.env.JEST_WORKER_ID ? __nccwpck_require__(1918) : undefined
+  const llhttpWasmData = process.env.JEST_WORKER_ID ? __nccwpck_require__(3870) : undefined
 
   let mod
   try {
-    mod = await WebAssembly.compile(__nccwpck_require__(6090))
+    mod = await WebAssembly.compile(__nccwpck_require__(3434))
   } catch (e) {
     /* istanbul ignore next */
 
@@ -4793,7 +4793,7 @@ async function lazyllhttp () {
     // being enabled, but the occurring of this other error
     // * https://github.com/emscripten-core/emscripten/issues/11495
     // got me to remove that check to avoid breaking Node 12.
-    mod = await WebAssembly.compile(llhttpWasmData || __nccwpck_require__(1918))
+    mod = await WebAssembly.compile(llhttpWasmData || __nccwpck_require__(3870))
   }
 
   return await WebAssembly.instantiate(mod, {
@@ -5592,7 +5592,7 @@ async function connectH1 (client, socket) {
 
 function clearIdleSocketValidation (socket) {
   if (socket[kIdleSocketValidationTimeout]) {
-    clearTimeout(socket[kIdleSocketValidationTimeout])
+    clearImmediate(socket[kIdleSocketValidationTimeout])
     socket[kIdleSocketValidationTimeout] = null
   }
 
@@ -5601,15 +5601,23 @@ function clearIdleSocketValidation (socket) {
 
 function scheduleIdleSocketValidation (client, socket) {
   socket[kIdleSocketValidation] = 1
-  socket[kIdleSocketValidationTimeout] = setTimeout(() => {
+  // Yield to the check phase (after poll) so unsolicited bytes / FIN / RST
+  // already pending on this idle keep-alive socket are processed before the
+  // next request is written (GHSA-35p6-xmwp-9g52).
+  //
+  // setTimeout(0) pays Node's ~1ms timer floor on every sequential reuse
+  // (#5493). setImmediate avoids that, but an *unref'd* Immediate lets poll
+  // block for ~500ms when the event loop is otherwise idle (#5600 / #5606).
+  // A ref'd Immediate both keeps the pending request alive and makes poll
+  // return immediately — the hybrid those issues asked for.
+  socket[kIdleSocketValidationTimeout] = setImmediate(() => {
     socket[kIdleSocketValidationTimeout] = null
     socket[kIdleSocketValidation] = 2
 
     if (client[kSocket] === socket && !socket.destroyed) {
       client[kResume]()
     }
-  }, 0)
-  socket[kIdleSocketValidationTimeout].unref?.()
+  })
 }
 
 /**
@@ -5701,7 +5709,7 @@ function writeH1 (client, request) {
 
   if (util.isFormDataLike(body)) {
     if (!extractBody) {
-      extractBody = (__nccwpck_require__(3660).extractBody)
+      extractBody = (__nccwpck_require__(4492).extractBody)
     }
 
     const [bodyStream, contentType] = extractBody(body)
@@ -6214,20 +6222,20 @@ module.exports = connectH1
 
 /***/ }),
 
-/***/ 7268:
+/***/ 8788:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
 
 
 const assert = __nccwpck_require__(4589)
 const { pipeline } = __nccwpck_require__(7075)
-const util = __nccwpck_require__(6976)
+const util = __nccwpck_require__(3440)
 const {
   RequestContentLengthMismatchError,
   RequestAbortedError,
   SocketError,
   InformationalError
-} = __nccwpck_require__(371)
+} = __nccwpck_require__(8707)
 const {
   kUrl,
   kReset,
@@ -6246,7 +6254,7 @@ const {
   kResume,
   kSize,
   kHTTPContext
-} = __nccwpck_require__(891)
+} = __nccwpck_require__(6443)
 
 const kOpenStreams = Symbol('open streams')
 
@@ -6605,7 +6613,7 @@ function writeH2 (client, request) {
   let contentLength = util.bodyLength(body)
 
   if (util.isFormDataLike(body)) {
-    extractBody ??= (__nccwpck_require__(3660).extractBody)
+    extractBody ??= (__nccwpck_require__(4492).extractBody)
 
     const [bodyStream, contentType] = extractBody(body)
     headers['content-type'] = contentType
@@ -6965,7 +6973,7 @@ module.exports = connectH2
 
 /***/ }),
 
-/***/ 1813:
+/***/ 3701:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
 // @ts-check
@@ -6975,16 +6983,16 @@ module.exports = connectH2
 const assert = __nccwpck_require__(4589)
 const net = __nccwpck_require__(7030)
 const http = __nccwpck_require__(7067)
-const util = __nccwpck_require__(6976)
-const { channels } = __nccwpck_require__(9038)
-const Request = __nccwpck_require__(4159)
-const DispatcherBase = __nccwpck_require__(7825)
+const util = __nccwpck_require__(3440)
+const { channels } = __nccwpck_require__(2414)
+const Request = __nccwpck_require__(4655)
+const DispatcherBase = __nccwpck_require__(1841)
 const {
   InvalidArgumentError,
   InformationalError,
   ClientDestroyedError
-} = __nccwpck_require__(371)
-const buildConnector = __nccwpck_require__(9632)
+} = __nccwpck_require__(8707)
+const buildConnector = __nccwpck_require__(9136)
 const {
   kUrl,
   kServerName,
@@ -7026,9 +7034,9 @@ const {
   kHTTPContext,
   kMaxConcurrentStreams,
   kResume
-} = __nccwpck_require__(891)
-const connectH1 = __nccwpck_require__(5501)
-const connectH2 = __nccwpck_require__(7268)
+} = __nccwpck_require__(6443)
+const connectH1 = __nccwpck_require__(637)
+const connectH2 = __nccwpck_require__(8788)
 let deprecatedInterceptorWarned = false
 
 const kClosedResolve = Symbol('kClosedResolve')
@@ -7335,7 +7343,7 @@ class Client extends DispatcherBase {
   }
 }
 
-const createRedirectInterceptor = __nccwpck_require__(8756)
+const createRedirectInterceptor = __nccwpck_require__(5092)
 
 function onError (client, err) {
   if (
@@ -7595,18 +7603,18 @@ module.exports = Client
 
 /***/ }),
 
-/***/ 7825:
+/***/ 1841:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
 
 
-const Dispatcher = __nccwpck_require__(8755)
+const Dispatcher = __nccwpck_require__(883)
 const {
   ClientDestroyedError,
   ClientClosedError,
   InvalidArgumentError
-} = __nccwpck_require__(371)
-const { kDestroy, kClose, kClosed, kDestroyed, kDispatch, kInterceptors } = __nccwpck_require__(891)
+} = __nccwpck_require__(8707)
+const { kDestroy, kClose, kClosed, kDestroyed, kDispatch, kInterceptors } = __nccwpck_require__(6443)
 
 const kOnDestroyed = Symbol('onDestroyed')
 const kOnClosed = Symbol('onClosed')
@@ -7801,7 +7809,7 @@ module.exports = DispatcherBase
 
 /***/ }),
 
-/***/ 8755:
+/***/ 883:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
 
@@ -7873,15 +7881,15 @@ module.exports = Dispatcher
 
 /***/ }),
 
-/***/ 4401:
+/***/ 3137:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
 
 
-const DispatcherBase = __nccwpck_require__(7825)
-const { kClose, kDestroy, kClosed, kDestroyed, kDispatch, kNoProxyAgent, kHttpProxyAgent, kHttpsProxyAgent } = __nccwpck_require__(891)
-const ProxyAgent = __nccwpck_require__(656)
-const Agent = __nccwpck_require__(3949)
+const DispatcherBase = __nccwpck_require__(1841)
+const { kClose, kDestroy, kClosed, kDestroyed, kDispatch, kNoProxyAgent, kHttpProxyAgent, kHttpsProxyAgent } = __nccwpck_require__(6443)
+const ProxyAgent = __nccwpck_require__(6672)
+const Agent = __nccwpck_require__(7405)
 
 const DEFAULT_PORTS = {
   'http:': 80,
@@ -8040,7 +8048,7 @@ module.exports = EnvHttpProxyAgent
 
 /***/ }),
 
-/***/ 6580:
+/***/ 4660:
 /***/ ((module) => {
 
 /* eslint-disable */
@@ -8164,15 +8172,15 @@ module.exports = class FixedQueue {
 
 /***/ }),
 
-/***/ 224:
+/***/ 2128:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
 
 
-const DispatcherBase = __nccwpck_require__(7825)
-const FixedQueue = __nccwpck_require__(6580)
-const { kConnected, kSize, kRunning, kPending, kQueued, kBusy, kFree, kUrl, kClose, kDestroy, kDispatch } = __nccwpck_require__(891)
-const PoolStats = __nccwpck_require__(6526)
+const DispatcherBase = __nccwpck_require__(1841)
+const FixedQueue = __nccwpck_require__(4660)
+const { kConnected, kSize, kRunning, kPending, kQueued, kBusy, kFree, kUrl, kClose, kDestroy, kDispatch } = __nccwpck_require__(6443)
+const PoolStats = __nccwpck_require__(3246)
 
 const kClients = Symbol('clients')
 const kNeedDrain = Symbol('needDrain')
@@ -8365,10 +8373,10 @@ module.exports = {
 
 /***/ }),
 
-/***/ 6526:
+/***/ 3246:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
-const { kFree, kConnected, kPending, kQueued, kRunning, kSize } = __nccwpck_require__(891)
+const { kFree, kConnected, kPending, kQueued, kRunning, kSize } = __nccwpck_require__(6443)
 const kPool = Symbol('pool')
 
 class PoolStats {
@@ -8406,7 +8414,7 @@ module.exports = PoolStats
 
 /***/ }),
 
-/***/ 9764:
+/***/ 628:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
 
@@ -8417,14 +8425,14 @@ const {
   kNeedDrain,
   kAddClient,
   kGetDispatcher
-} = __nccwpck_require__(224)
-const Client = __nccwpck_require__(1813)
+} = __nccwpck_require__(2128)
+const Client = __nccwpck_require__(3701)
 const {
   InvalidArgumentError
-} = __nccwpck_require__(371)
-const util = __nccwpck_require__(6976)
-const { kUrl, kInterceptors } = __nccwpck_require__(891)
-const buildConnector = __nccwpck_require__(9632)
+} = __nccwpck_require__(8707)
+const util = __nccwpck_require__(3440)
+const { kUrl, kInterceptors } = __nccwpck_require__(6443)
+const buildConnector = __nccwpck_require__(9136)
 
 const kOptions = Symbol('options')
 const kConnections = Symbol('connections')
@@ -8520,19 +8528,19 @@ module.exports = Pool
 
 /***/ }),
 
-/***/ 656:
+/***/ 6672:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
 
 
-const { kProxy, kClose, kDestroy, kDispatch, kInterceptors } = __nccwpck_require__(891)
+const { kProxy, kClose, kDestroy, kDispatch, kInterceptors } = __nccwpck_require__(6443)
 const { URL } = __nccwpck_require__(3136)
-const Agent = __nccwpck_require__(3949)
-const Pool = __nccwpck_require__(9764)
-const DispatcherBase = __nccwpck_require__(7825)
-const { InvalidArgumentError, RequestAbortedError, SecureProxyConnectionError } = __nccwpck_require__(371)
-const buildConnector = __nccwpck_require__(9632)
-const Client = __nccwpck_require__(1813)
+const Agent = __nccwpck_require__(7405)
+const Pool = __nccwpck_require__(628)
+const DispatcherBase = __nccwpck_require__(1841)
+const { InvalidArgumentError, RequestAbortedError, SecureProxyConnectionError } = __nccwpck_require__(8707)
+const buildConnector = __nccwpck_require__(9136)
+const Client = __nccwpck_require__(3701)
 
 const kAgent = Symbol('proxy agent')
 const kClient = Symbol('proxy client')
@@ -8801,13 +8809,13 @@ module.exports = ProxyAgent
 
 /***/ }),
 
-/***/ 2082:
+/***/ 50:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
 
 
-const Dispatcher = __nccwpck_require__(8755)
-const RetryHandler = __nccwpck_require__(6456)
+const Dispatcher = __nccwpck_require__(883)
+const RetryHandler = __nccwpck_require__(7816)
 
 class RetryAgent extends Dispatcher {
   #agent = null
@@ -8843,7 +8851,7 @@ module.exports = RetryAgent
 
 /***/ }),
 
-/***/ 8613:
+/***/ 2581:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
 
@@ -8851,8 +8859,8 @@ module.exports = RetryAgent
 // We include a version number for the Dispatcher API. In case of breaking changes,
 // this version number must be increased to avoid conflicts.
 const globalDispatcher = Symbol.for('undici.globalDispatcher.1')
-const { InvalidArgumentError } = __nccwpck_require__(371)
-const Agent = __nccwpck_require__(3949)
+const { InvalidArgumentError } = __nccwpck_require__(8707)
+const Agent = __nccwpck_require__(7405)
 
 if (getGlobalDispatcher() === undefined) {
   setGlobalDispatcher(new Agent())
@@ -8882,7 +8890,7 @@ module.exports = {
 
 /***/ }),
 
-/***/ 9115:
+/***/ 8155:
 /***/ ((module) => {
 
 
@@ -8933,15 +8941,15 @@ module.exports = class DecoratorHandler {
 
 /***/ }),
 
-/***/ 1570:
+/***/ 8754:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
 
 
-const util = __nccwpck_require__(6976)
-const { kBodyUsed } = __nccwpck_require__(891)
+const util = __nccwpck_require__(3440)
+const { kBodyUsed } = __nccwpck_require__(6443)
 const assert = __nccwpck_require__(4589)
-const { InvalidArgumentError } = __nccwpck_require__(371)
+const { InvalidArgumentError } = __nccwpck_require__(8707)
 const EE = __nccwpck_require__(8474)
 
 const redirectableStatusCodes = [300, 301, 302, 303, 307, 308]
@@ -9172,20 +9180,20 @@ module.exports = RedirectHandler
 
 /***/ }),
 
-/***/ 6456:
+/***/ 7816:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
 
 const assert = __nccwpck_require__(4589)
 
-const { kRetryHandlerDefaultRetry } = __nccwpck_require__(891)
-const { RequestRetryError } = __nccwpck_require__(371)
+const { kRetryHandlerDefaultRetry } = __nccwpck_require__(6443)
+const { RequestRetryError } = __nccwpck_require__(8707)
 const {
   isDisturbed,
   parseHeaders,
   parseRangeHeader,
   wrapRequestBody
-} = __nccwpck_require__(6976)
+} = __nccwpck_require__(3440)
 
 function calculateRetryAfterHeader (retryAfter) {
   const current = Date.now()
@@ -9267,6 +9275,7 @@ class RetryHandler {
     this.end = null
     this.etag = null
     this.resume = null
+    this.headersSent = false
 
     // Handle possible onConnect duplication
     this.handler.onConnect(reason => {
@@ -9277,6 +9286,20 @@ class RetryHandler {
         this.reason = reason
       }
     })
+  }
+
+  checkpointResponseEnd (headers, resume) {
+    if (this.end == null && this.opts.method !== 'HEAD') {
+      const contentLength = headers['content-length']
+      this.end = contentLength != null ? Number(contentLength) - 1 : null
+
+      assert(
+        this.end == null || Number.isFinite(this.end),
+        'invalid content-length'
+      )
+    }
+
+    this.resume = this.end != null ? resume : null
   }
 
   onRequestSent () {
@@ -9368,6 +9391,8 @@ class RetryHandler {
 
     if (statusCode >= 300) {
       if (this.retryOpts.statusCodes.includes(statusCode) === false) {
+        this.headersSent = true
+        this.checkpointResponseEnd(headers, resume)
         return this.handler.onHeaders(
           statusCode,
           rawHeaders,
@@ -9436,8 +9461,15 @@ class RetryHandler {
 
       const { start, size, end = size - 1 } = contentRange
 
-      assert(this.start === start, 'content-range mismatch')
-      assert(this.end == null || this.end === end, 'content-range mismatch')
+      if (this.start !== start || (this.end != null && this.end !== end)) {
+        this.abort(
+          new RequestRetryError('Content-Range mismatch', statusCode, {
+            headers,
+            data: { count: this.retryCount }
+          })
+        )
+        return false
+      }
 
       this.resume = resume
       return true
@@ -9449,6 +9481,7 @@ class RetryHandler {
         const range = parseRangeHeader(headers['content-range'])
 
         if (range == null) {
+          this.headersSent = true
           return this.handler.onHeaders(
             statusCode,
             rawHeaders,
@@ -9487,6 +9520,7 @@ class RetryHandler {
       )
 
       this.resume = resume
+      this.headersSent = true
       this.etag = headers.etag != null ? headers.etag : null
 
       // Weak etags are not useful for comparison nor cache
@@ -9526,7 +9560,7 @@ class RetryHandler {
   }
 
   onError (err) {
-    if (this.aborted || isDisturbed(this.opts.body)) {
+    if (this.aborted || isDisturbed(this.opts.body) || (this.headersSent && this.resume == null)) {
       return this.handler.onError(err)
     }
 
@@ -9587,14 +9621,14 @@ module.exports = RetryHandler
 
 /***/ }),
 
-/***/ 6251:
+/***/ 379:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
 
 const { isIP } = __nccwpck_require__(7030)
 const { lookup } = __nccwpck_require__(610)
-const DecoratorHandler = __nccwpck_require__(9115)
-const { InvalidArgumentError, InformationalError } = __nccwpck_require__(371)
+const DecoratorHandler = __nccwpck_require__(8155)
+const { InvalidArgumentError, InformationalError } = __nccwpck_require__(8707)
 const maxInt = Math.pow(2, 31) - 1
 
 class DNSInstance {
@@ -9969,14 +10003,14 @@ module.exports = interceptorOpts => {
 
 /***/ }),
 
-/***/ 4076:
+/***/ 8060:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
 
 
-const util = __nccwpck_require__(6976)
-const { InvalidArgumentError, RequestAbortedError } = __nccwpck_require__(371)
-const DecoratorHandler = __nccwpck_require__(9115)
+const util = __nccwpck_require__(3440)
+const { InvalidArgumentError, RequestAbortedError } = __nccwpck_require__(8707)
+const DecoratorHandler = __nccwpck_require__(8155)
 
 class DumpHandler extends DecoratorHandler {
   #maxSize = 1024 * 1024
@@ -10099,12 +10133,12 @@ module.exports = createDumpInterceptor
 
 /***/ }),
 
-/***/ 8756:
+/***/ 5092:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
 
 
-const RedirectHandler = __nccwpck_require__(1570)
+const RedirectHandler = __nccwpck_require__(8754)
 
 function createRedirectInterceptor ({ maxRedirections: defaultMaxRedirections }) {
   return (dispatch) => {
@@ -10127,11 +10161,11 @@ module.exports = createRedirectInterceptor
 
 /***/ }),
 
-/***/ 7098:
+/***/ 1514:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
 
-const RedirectHandler = __nccwpck_require__(1570)
+const RedirectHandler = __nccwpck_require__(8754)
 
 module.exports = opts => {
   const globalMaxRedirections = opts?.maxRedirections
@@ -10158,11 +10192,11 @@ module.exports = opts => {
 
 /***/ }),
 
-/***/ 4874:
+/***/ 2026:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
 
-const RetryHandler = __nccwpck_require__(6456)
+const RetryHandler = __nccwpck_require__(7816)
 
 module.exports = globalOpts => {
   return dispatch => {
@@ -10184,13 +10218,13 @@ module.exports = globalOpts => {
 
 /***/ }),
 
-/***/ 6440:
+/***/ 2824:
 /***/ ((__unused_webpack_module, exports, __nccwpck_require__) => {
 
 
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.SPECIAL_HEADERS = exports.HEADER_STATE = exports.MINOR = exports.MAJOR = exports.CONNECTION_TOKEN_CHARS = exports.HEADER_CHARS = exports.TOKEN = exports.STRICT_TOKEN = exports.HEX = exports.URL_CHAR = exports.STRICT_URL_CHAR = exports.USERINFO_CHARS = exports.MARK = exports.ALPHANUM = exports.NUM = exports.HEX_MAP = exports.NUM_MAP = exports.ALPHA = exports.FINISH = exports.H_METHOD_MAP = exports.METHOD_MAP = exports.METHODS_RTSP = exports.METHODS_ICE = exports.METHODS_HTTP = exports.METHODS = exports.LENIENT_FLAGS = exports.FLAGS = exports.TYPE = exports.ERROR = void 0;
-const utils_1 = __nccwpck_require__(8156);
+const utils_1 = __nccwpck_require__(172);
 // C headers
 var ERROR;
 (function (ERROR) {
@@ -10468,7 +10502,7 @@ exports.SPECIAL_HEADERS = {
 
 /***/ }),
 
-/***/ 1918:
+/***/ 3870:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
 
@@ -10480,7 +10514,7 @@ module.exports = Buffer.from('AGFzbQEAAAABJwdgAX8Bf2ADf39/AX9gAX8AYAJ/fwBgBH9/f3
 
 /***/ }),
 
-/***/ 6090:
+/***/ 3434:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
 
@@ -10492,7 +10526,7 @@ module.exports = Buffer.from('AGFzbQEAAAABJwdgAX8Bf2ADf39/AX9gAX8AYAJ/fwBgBH9/f3
 
 /***/ }),
 
-/***/ 8156:
+/***/ 172:
 /***/ ((__unused_webpack_module, exports) => {
 
 
@@ -10513,13 +10547,13 @@ exports.enumToMap = enumToMap;
 
 /***/ }),
 
-/***/ 8957:
+/***/ 7501:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
 
 
-const { kClients } = __nccwpck_require__(891)
-const Agent = __nccwpck_require__(3949)
+const { kClients } = __nccwpck_require__(6443)
+const Agent = __nccwpck_require__(7405)
 const {
   kAgent,
   kMockAgentSet,
@@ -10530,14 +10564,14 @@ const {
   kGetNetConnect,
   kOptions,
   kFactory
-} = __nccwpck_require__(1469)
-const MockClient = __nccwpck_require__(5157)
-const MockPool = __nccwpck_require__(2484)
-const { matchValue, buildMockOptions } = __nccwpck_require__(6501)
-const { InvalidArgumentError, UndiciError } = __nccwpck_require__(371)
-const Dispatcher = __nccwpck_require__(8755)
-const Pluralizer = __nccwpck_require__(809)
-const PendingInterceptorsFormatter = __nccwpck_require__(7198)
+} = __nccwpck_require__(1117)
+const MockClient = __nccwpck_require__(7365)
+const MockPool = __nccwpck_require__(4004)
+const { matchValue, buildMockOptions } = __nccwpck_require__(3397)
+const { InvalidArgumentError, UndiciError } = __nccwpck_require__(8707)
+const Dispatcher = __nccwpck_require__(883)
+const Pluralizer = __nccwpck_require__(1529)
+const PendingInterceptorsFormatter = __nccwpck_require__(6142)
 
 class MockAgent extends Dispatcher {
   constructor (opts) {
@@ -10680,14 +10714,14 @@ module.exports = MockAgent
 
 /***/ }),
 
-/***/ 5157:
+/***/ 7365:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
 
 
 const { promisify } = __nccwpck_require__(7975)
-const Client = __nccwpck_require__(1813)
-const { buildMockDispatch } = __nccwpck_require__(6501)
+const Client = __nccwpck_require__(3701)
+const { buildMockDispatch } = __nccwpck_require__(3397)
 const {
   kDispatches,
   kMockAgent,
@@ -10696,10 +10730,10 @@ const {
   kOrigin,
   kOriginalDispatch,
   kConnected
-} = __nccwpck_require__(1469)
-const { MockInterceptor } = __nccwpck_require__(5831)
-const Symbols = __nccwpck_require__(891)
-const { InvalidArgumentError } = __nccwpck_require__(371)
+} = __nccwpck_require__(1117)
+const { MockInterceptor } = __nccwpck_require__(1511)
+const Symbols = __nccwpck_require__(6443)
+const { InvalidArgumentError } = __nccwpck_require__(8707)
 
 /**
  * MockClient provides an API that extends the Client to influence the mockDispatches.
@@ -10746,12 +10780,12 @@ module.exports = MockClient
 
 /***/ }),
 
-/***/ 9229:
+/***/ 2429:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
 
 
-const { UndiciError } = __nccwpck_require__(371)
+const { UndiciError } = __nccwpck_require__(8707)
 
 const kMockNotMatchedError = Symbol.for('undici.error.UND_MOCK_ERR_MOCK_NOT_MATCHED')
 
@@ -10781,12 +10815,12 @@ module.exports = {
 
 /***/ }),
 
-/***/ 5831:
+/***/ 1511:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
 
 
-const { getResponseData, buildKey, addMockDispatch } = __nccwpck_require__(6501)
+const { getResponseData, buildKey, addMockDispatch } = __nccwpck_require__(3397)
 const {
   kDispatches,
   kDispatchKey,
@@ -10794,9 +10828,9 @@ const {
   kDefaultTrailers,
   kContentLength,
   kMockDispatch
-} = __nccwpck_require__(1469)
-const { InvalidArgumentError } = __nccwpck_require__(371)
-const { buildURL } = __nccwpck_require__(6976)
+} = __nccwpck_require__(1117)
+const { InvalidArgumentError } = __nccwpck_require__(8707)
+const { buildURL } = __nccwpck_require__(3440)
 
 /**
  * Defines the scope API for an interceptor reply
@@ -10995,14 +11029,14 @@ module.exports.MockScope = MockScope
 
 /***/ }),
 
-/***/ 2484:
+/***/ 4004:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
 
 
 const { promisify } = __nccwpck_require__(7975)
-const Pool = __nccwpck_require__(9764)
-const { buildMockDispatch } = __nccwpck_require__(6501)
+const Pool = __nccwpck_require__(628)
+const { buildMockDispatch } = __nccwpck_require__(3397)
 const {
   kDispatches,
   kMockAgent,
@@ -11011,10 +11045,10 @@ const {
   kOrigin,
   kOriginalDispatch,
   kConnected
-} = __nccwpck_require__(1469)
-const { MockInterceptor } = __nccwpck_require__(5831)
-const Symbols = __nccwpck_require__(891)
-const { InvalidArgumentError } = __nccwpck_require__(371)
+} = __nccwpck_require__(1117)
+const { MockInterceptor } = __nccwpck_require__(1511)
+const Symbols = __nccwpck_require__(6443)
+const { InvalidArgumentError } = __nccwpck_require__(8707)
 
 /**
  * MockPool provides an API that extends the Pool to influence the mockDispatches.
@@ -11061,7 +11095,7 @@ module.exports = MockPool
 
 /***/ }),
 
-/***/ 1469:
+/***/ 1117:
 /***/ ((module) => {
 
 
@@ -11091,20 +11125,20 @@ module.exports = {
 
 /***/ }),
 
-/***/ 6501:
+/***/ 3397:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
 
 
-const { MockNotMatchedError } = __nccwpck_require__(9229)
+const { MockNotMatchedError } = __nccwpck_require__(2429)
 const {
   kDispatches,
   kMockAgent,
   kOriginalDispatch,
   kOrigin,
   kGetNetConnect
-} = __nccwpck_require__(1469)
-const { buildURL } = __nccwpck_require__(6976)
+} = __nccwpck_require__(1117)
+const { buildURL } = __nccwpck_require__(3440)
 const { STATUS_CODES } = __nccwpck_require__(7067)
 const {
   types: {
@@ -11465,7 +11499,7 @@ module.exports = {
 
 /***/ }),
 
-/***/ 7198:
+/***/ 6142:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
 
@@ -11515,7 +11549,7 @@ module.exports = class PendingInterceptorsFormatter {
 
 /***/ }),
 
-/***/ 809:
+/***/ 1529:
 /***/ ((module) => {
 
 
@@ -11551,7 +11585,7 @@ module.exports = class Pluralizer {
 
 /***/ }),
 
-/***/ 7019:
+/***/ 6603:
 /***/ ((module) => {
 
 
@@ -11981,20 +12015,20 @@ module.exports = {
 
 /***/ }),
 
-/***/ 6034:
+/***/ 9634:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
 
 
-const { kConstruct } = __nccwpck_require__(589)
-const { urlEquals, getFieldValues } = __nccwpck_require__(4078)
-const { kEnumerableProperty, isDisturbed } = __nccwpck_require__(6976)
-const { webidl } = __nccwpck_require__(1365)
-const { Response, cloneResponse, fromInnerResponse } = __nccwpck_require__(5003)
-const { Request, fromInnerRequest } = __nccwpck_require__(703)
-const { kState } = __nccwpck_require__(2523)
-const { fetching } = __nccwpck_require__(9870)
-const { urlIsHttpHttpsScheme, createDeferredPromise, readAllBytes } = __nccwpck_require__(432)
+const { kConstruct } = __nccwpck_require__(109)
+const { urlEquals, getFieldValues } = __nccwpck_require__(6798)
+const { kEnumerableProperty, isDisturbed } = __nccwpck_require__(3440)
+const { webidl } = __nccwpck_require__(5893)
+const { Response, cloneResponse, fromInnerResponse } = __nccwpck_require__(9051)
+const { Request, fromInnerRequest } = __nccwpck_require__(9967)
+const { kState } = __nccwpck_require__(3627)
+const { fetching } = __nccwpck_require__(4398)
+const { urlIsHttpHttpsScheme, createDeferredPromise, readAllBytes } = __nccwpck_require__(3168)
 const assert = __nccwpck_require__(4589)
 
 /**
@@ -12847,15 +12881,15 @@ module.exports = {
 
 /***/ }),
 
-/***/ 6701:
+/***/ 3245:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
 
 
-const { kConstruct } = __nccwpck_require__(589)
-const { Cache } = __nccwpck_require__(6034)
-const { webidl } = __nccwpck_require__(1365)
-const { kEnumerableProperty } = __nccwpck_require__(6976)
+const { kConstruct } = __nccwpck_require__(109)
+const { Cache } = __nccwpck_require__(9634)
+const { webidl } = __nccwpck_require__(5893)
+const { kEnumerableProperty } = __nccwpck_require__(3440)
 
 class CacheStorage {
   /**
@@ -13006,26 +13040,26 @@ module.exports = {
 
 /***/ }),
 
-/***/ 589:
+/***/ 109:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
 
 
 module.exports = {
-  kConstruct: (__nccwpck_require__(891).kConstruct)
+  kConstruct: (__nccwpck_require__(6443).kConstruct)
 }
 
 
 /***/ }),
 
-/***/ 4078:
+/***/ 6798:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
 
 
 const assert = __nccwpck_require__(4589)
-const { URLSerializer } = __nccwpck_require__(1996)
-const { isValidHeaderName } = __nccwpck_require__(432)
+const { URLSerializer } = __nccwpck_require__(1900)
+const { isValidHeaderName } = __nccwpck_require__(3168)
 
 /**
  * @see https://url.spec.whatwg.org/#concept-url-equals
@@ -13070,7 +13104,7 @@ module.exports = {
 
 /***/ }),
 
-/***/ 4220:
+/***/ 1276:
 /***/ ((module) => {
 
 
@@ -13089,15 +13123,15 @@ module.exports = {
 
 /***/ }),
 
-/***/ 7461:
+/***/ 9061:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
 
 
-const { parseSetCookie } = __nccwpck_require__(9434)
-const { stringify } = __nccwpck_require__(6741)
-const { webidl } = __nccwpck_require__(1365)
-const { Headers } = __nccwpck_require__(6052)
+const { parseSetCookie } = __nccwpck_require__(1978)
+const { stringify } = __nccwpck_require__(7797)
+const { webidl } = __nccwpck_require__(5893)
+const { Headers } = __nccwpck_require__(660)
 
 /**
  * @typedef {Object} Cookie
@@ -13280,14 +13314,14 @@ module.exports = {
 
 /***/ }),
 
-/***/ 9434:
+/***/ 1978:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
 
 
-const { maxNameValuePairSize, maxAttributeValueSize } = __nccwpck_require__(4220)
-const { isCTLExcludingHtab } = __nccwpck_require__(6741)
-const { collectASequenceOfCodePointsFast } = __nccwpck_require__(1996)
+const { maxNameValuePairSize, maxAttributeValueSize } = __nccwpck_require__(1276)
+const { isCTLExcludingHtab } = __nccwpck_require__(7797)
+const { collectASequenceOfCodePointsFast } = __nccwpck_require__(1900)
 const assert = __nccwpck_require__(4589)
 
 /**
@@ -13597,7 +13631,7 @@ module.exports = {
 
 /***/ }),
 
-/***/ 6741:
+/***/ 7797:
 /***/ ((module) => {
 
 
@@ -13956,12 +13990,12 @@ module.exports = {
 
 /***/ }),
 
-/***/ 31:
+/***/ 4031:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
 
 const { Transform } = __nccwpck_require__(7075)
-const { isASCIINumber, isValidLastEventId } = __nccwpck_require__(59)
+const { isASCIINumber, isValidLastEventId } = __nccwpck_require__(4811)
 
 /**
  * @type {number[]} BOM
@@ -13983,6 +14017,49 @@ const COLON = 0x3A
  * @type {32} SPACE
  */
 const SPACE = 0x20
+
+const DATA = Buffer.from('data')
+const EVENT = Buffer.from('event')
+const ID = Buffer.from('id')
+const RETRY = Buffer.from('retry')
+
+function isASCIINumberBytes (buffer, start) {
+  if (start >= buffer.length) {
+    return false
+  }
+
+  for (let i = start; i < buffer.length; i++) {
+    if (buffer[i] < 0x30 || buffer[i] > 0x39) {
+      return false
+    }
+  }
+
+  return true
+}
+
+function isValidLastEventIdBytes (buffer, start) {
+  for (let i = start; i < buffer.length; i++) {
+    if (buffer[i] === 0x00) {
+      return false
+    }
+  }
+
+  return true
+}
+
+function isFieldName (line, length, field) {
+  if (length !== field.length) {
+    return false
+  }
+
+  for (let i = 0; i < length; i++) {
+    if (line[i] !== field[i]) {
+      return false
+    }
+  }
+
+  return true
+}
 
 /**
  * @typedef {object} EventSourceStreamEvent
@@ -14024,11 +14101,14 @@ class EventSourceStream extends Transform {
   eventEndCheck = false
 
   /**
-   * @type {Buffer}
+   * @type {Buffer[]}
    */
-  buffer = null
+  chunks = []
 
+  chunkIndex = 0
   pos = 0
+  lineChunkIndex = 0
+  linePos = 0
 
   event = {
     data: undefined,
@@ -14067,92 +14147,20 @@ class EventSourceStream extends Transform {
       return
     }
 
-    // Cache the chunk in the buffer, as the data might not be complete while
-    // processing it
-    // TODO: Investigate if there is a more performant way to handle
-    // incoming chunks
-    // see: https://github.com/nodejs/undici/issues/2630
-    if (this.buffer) {
-      this.buffer = Buffer.concat([this.buffer, chunk])
-    } else {
-      this.buffer = chunk
-    }
+    this.chunks.push(chunk)
 
     // Strip leading byte-order-mark if we opened the stream and started
     // the processing of the incoming data
     if (this.checkBOM) {
-      switch (this.buffer.length) {
-        case 1:
-          // Check if the first byte is the same as the first byte of the BOM
-          if (this.buffer[0] === BOM[0]) {
-            // If it is, we need to wait for more data
-            callback()
-            return
-          }
-          // Set the checkBOM flag to false as we don't need to check for the
-          // BOM anymore
-          this.checkBOM = false
-
-          // The buffer only contains one byte so we need to wait for more data
-          callback()
-          return
-        case 2:
-          // Check if the first two bytes are the same as the first two bytes
-          // of the BOM
-          if (
-            this.buffer[0] === BOM[0] &&
-            this.buffer[1] === BOM[1]
-          ) {
-            // If it is, we need to wait for more data, because the third byte
-            // is needed to determine if it is the BOM or not
-            callback()
-            return
-          }
-
-          // Set the checkBOM flag to false as we don't need to check for the
-          // BOM anymore
-          this.checkBOM = false
-          break
-        case 3:
-          // Check if the first three bytes are the same as the first three
-          // bytes of the BOM
-          if (
-            this.buffer[0] === BOM[0] &&
-            this.buffer[1] === BOM[1] &&
-            this.buffer[2] === BOM[2]
-          ) {
-            // If it is, we can drop the buffered data, as it is only the BOM
-            this.buffer = Buffer.alloc(0)
-            // Set the checkBOM flag to false as we don't need to check for the
-            // BOM anymore
-            this.checkBOM = false
-
-            // Await more data
-            callback()
-            return
-          }
-          // If it is not the BOM, we can start processing the data
-          this.checkBOM = false
-          break
-        default:
-          // The buffer is longer than 3 bytes, so we can drop the BOM if it is
-          // present
-          if (
-            this.buffer[0] === BOM[0] &&
-            this.buffer[1] === BOM[1] &&
-            this.buffer[2] === BOM[2]
-          ) {
-            // Remove the BOM from the buffer
-            this.buffer = this.buffer.subarray(3)
-          }
-
-          // Set the checkBOM flag to false as we don't need to check for the
-          this.checkBOM = false
-          break
+      if (this.handleBOM()) {
+        callback()
+        return
       }
     }
 
-    while (this.pos < this.buffer.length) {
+    while (this.hasCurrentByte()) {
+      const byte = this.currentByte()
+
       // If the previous line ended with an end-of-line, we need to check
       // if the next character is also an end-of-line.
       if (this.eventEndCheck) {
@@ -14165,10 +14173,9 @@ class EventSourceStream extends Transform {
         if (this.crlfCheck) {
           // If the current character is a line feed, we can remove it
           // from the buffer and reset the crlfCheck flag
-          if (this.buffer[this.pos] === LF) {
-            this.buffer = this.buffer.subarray(this.pos + 1)
-            this.pos = 0
+          if (byte === LF) {
             this.crlfCheck = false
+            this.consumeCurrentByte()
 
             // It is possible that the line feed is not the end of the
             // event. We need to check if the next character is an
@@ -14184,19 +14191,17 @@ class EventSourceStream extends Transform {
           this.crlfCheck = false
         }
 
-        if (this.buffer[this.pos] === LF || this.buffer[this.pos] === CR) {
+        if (byte === LF || byte === CR) {
           // If the current character is a carriage return, we need to
           // set the crlfCheck flag to true, as we need to check if the
           // next character is a line feed so we can remove it from the
           // buffer
-          if (this.buffer[this.pos] === CR) {
+          if (byte === CR) {
             this.crlfCheck = true
           }
 
-          this.buffer = this.buffer.subarray(this.pos + 1)
-          this.pos = 0
-          if (
-            this.event.data !== undefined || this.event.event || this.event.id || this.event.retry) {
+          this.consumeCurrentByte()
+          if (this.hasPendingEvent()) {
             this.processEvent(this.event)
           }
           this.clearEvent()
@@ -14210,22 +14215,18 @@ class EventSourceStream extends Transform {
 
       // If the current character is an end-of-line, we can process the
       // line
-      if (this.buffer[this.pos] === LF || this.buffer[this.pos] === CR) {
+      if (byte === LF || byte === CR) {
         // If the current character is a carriage return, we need to
         // set the crlfCheck flag to true, as we need to check if the
         // next character is a line feed
-        if (this.buffer[this.pos] === CR) {
+        if (byte === CR) {
           this.crlfCheck = true
         }
 
         // In any case, we can process the line as we reached an
         // end-of-line character
-        this.parseLine(this.buffer.subarray(0, this.pos), this.event)
-
-        // Remove the processed line from the buffer
-        this.buffer = this.buffer.subarray(this.pos + 1)
-        // Reset the position as we removed the processed line from the buffer
-        this.pos = 0
+        this.parseLine(this.readLine(), this.event)
+        this.consumeCurrentByte()
         // A line was processed and this could be the end of the event. We need
         // to check if the next line is empty to determine if the event is
         // finished.
@@ -14233,7 +14234,7 @@ class EventSourceStream extends Transform {
         continue
       }
 
-      this.pos++
+      this.advanceCursor()
     }
 
     callback()
@@ -14258,64 +14259,53 @@ class EventSourceStream extends Transform {
       return
     }
 
-    let field = ''
-    let value = ''
+    let fieldLength = line.length
+    let valueStart = line.length
 
     // If the line contains a U+003A COLON character (:)
     if (colonPosition !== -1) {
-      // Collect the characters on the line before the first U+003A COLON
-      // character (:), and let field be that string.
-      // TODO: Investigate if there is a more performant way to extract the
-      // field
-      // see: https://github.com/nodejs/undici/issues/2630
-      field = line.subarray(0, colonPosition).toString('utf8')
+      fieldLength = colonPosition
 
       // Collect the characters on the line after the first U+003A COLON
       // character (:), and let value be that string.
       // If value starts with a U+0020 SPACE character, remove it from value.
-      let valueStart = colonPosition + 1
+      valueStart = colonPosition + 1
       if (line[valueStart] === SPACE) {
         ++valueStart
       }
-      // TODO: Investigate if there is a more performant way to extract the
-      // value
-      // see: https://github.com/nodejs/undici/issues/2630
-      value = line.subarray(valueStart).toString('utf8')
-
-      // Otherwise, the string is not empty but does not contain a U+003A COLON
-      // character (:)
-    } else {
-      // Process the field using the steps described below, using the whole
-      // line as the field name, and the empty string as the field value.
-      field = line.toString('utf8')
-      value = ''
     }
 
-    // Modify the event with the field name and value. The value is also
-    // decoded as UTF-8
-    switch (field) {
-      case 'data':
-        if (event[field] === undefined) {
-          event[field] = value
-        } else {
-          event[field] += `\n${value}`
-        }
-        break
-      case 'retry':
-        if (isASCIINumber(value)) {
-          event[field] = value
-        }
-        break
-      case 'id':
-        if (isValidLastEventId(value)) {
-          event[field] = value
-        }
-        break
-      case 'event':
-        if (value.length > 0) {
-          event[field] = value
-        }
-        break
+    if (isFieldName(line, fieldLength, DATA)) {
+      const value = line.toString('utf8', valueStart)
+
+      if (event.data === undefined) {
+        event.data = value
+      } else {
+        event.data += `\n${value}`
+      }
+      return
+    }
+
+    if (isFieldName(line, fieldLength, RETRY)) {
+      if (isASCIINumberBytes(line, valueStart)) {
+        event.retry = line.toString('utf8', valueStart)
+      }
+      return
+    }
+
+    if (isFieldName(line, fieldLength, ID)) {
+      if (isValidLastEventIdBytes(line, valueStart)) {
+        event.id = line.toString('utf8', valueStart)
+      }
+      return
+    }
+
+    if (isFieldName(line, fieldLength, EVENT)) {
+      const value = line.toString('utf8', valueStart)
+
+      if (value.length > 0) {
+        event.event = value
+      }
     }
   }
 
@@ -14345,12 +14335,151 @@ class EventSourceStream extends Transform {
   }
 
   clearEvent () {
-    this.event = {
-      data: undefined,
-      event: undefined,
-      id: undefined,
-      retry: undefined
+    this.event.data = undefined
+    this.event.event = undefined
+    this.event.id = undefined
+    this.event.retry = undefined
+  }
+
+  hasPendingEvent () {
+    return this.event.data !== undefined ||
+      this.event.event !== undefined ||
+      this.event.id !== undefined ||
+      this.event.retry !== undefined
+  }
+
+  hasCurrentByte () {
+    return this.chunkIndex < this.chunks.length &&
+      this.pos < this.chunks[this.chunkIndex].length
+  }
+
+  currentByte () {
+    return this.chunks[this.chunkIndex][this.pos]
+  }
+
+  consumeCurrentByte () {
+    this.advanceCursor()
+    this.syncLineStartToCursor()
+  }
+
+  advanceCursor () {
+    this.pos++
+
+    while (this.chunkIndex < this.chunks.length && this.pos >= this.chunks[this.chunkIndex].length) {
+      this.chunkIndex++
+      this.pos = 0
     }
+  }
+
+  syncLineStartToCursor () {
+    this.lineChunkIndex = this.chunkIndex
+    this.linePos = this.pos
+    this.dropConsumedChunks()
+  }
+
+  dropConsumedChunks () {
+    while (this.lineChunkIndex > 0) {
+      this.chunks.shift()
+      this.lineChunkIndex--
+      this.chunkIndex--
+    }
+
+    if (this.chunkIndex === this.chunks.length) {
+      this.chunks.length = 0
+      this.chunkIndex = 0
+      this.pos = 0
+      this.lineChunkIndex = 0
+      this.linePos = 0
+    }
+  }
+
+  readLine () {
+    if (this.lineChunkIndex === this.chunkIndex) {
+      return this.chunks[this.chunkIndex].subarray(this.linePos, this.pos)
+    }
+
+    const chunks = []
+    let length = 0
+
+    for (let i = this.lineChunkIndex; i <= this.chunkIndex; i++) {
+      const chunk = this.chunks[i]
+      const start = i === this.lineChunkIndex ? this.linePos : 0
+      const end = i === this.chunkIndex ? this.pos : chunk.length
+      const slice = chunk.subarray(start, end)
+      length += slice.length
+      chunks.push(slice)
+    }
+
+    return Buffer.concat(chunks, length)
+  }
+
+  peekBufferedByte (offset) {
+    let chunkIndex = this.lineChunkIndex
+    let pos = this.linePos
+
+    while (chunkIndex < this.chunks.length) {
+      const chunk = this.chunks[chunkIndex]
+      const remaining = chunk.length - pos
+
+      if (offset < remaining) {
+        return chunk[pos + offset]
+      }
+
+      offset -= remaining
+      chunkIndex++
+      pos = 0
+    }
+  }
+
+  discardLeadingBytes (count) {
+    while (count > 0 && this.lineChunkIndex < this.chunks.length) {
+      const chunk = this.chunks[this.lineChunkIndex]
+      const remaining = chunk.length - this.linePos
+
+      if (count < remaining) {
+        this.linePos += count
+        count = 0
+      } else {
+        count -= remaining
+        this.lineChunkIndex++
+        this.linePos = 0
+      }
+    }
+
+    this.chunkIndex = this.lineChunkIndex
+    this.pos = this.linePos
+    this.dropConsumedChunks()
+  }
+
+  handleBOM () {
+    const first = this.peekBufferedByte(0)
+    const second = this.peekBufferedByte(1)
+    const third = this.peekBufferedByte(2)
+
+    if (second === undefined) {
+      if (first === BOM[0]) {
+        return true
+      }
+
+      this.checkBOM = false
+      return true
+    }
+
+    if (third === undefined) {
+      if (first === BOM[0] && second === BOM[1]) {
+        return true
+      }
+
+      this.checkBOM = false
+      return false
+    }
+
+    if (first === BOM[0] && second === BOM[1] && third === BOM[2]) {
+      this.discardLeadingBytes(3)
+    }
+
+    this.checkBOM = false
+    return !this.hasCurrentByte()
   }
 }
 
@@ -14361,22 +14490,22 @@ module.exports = {
 
 /***/ }),
 
-/***/ 9878:
+/***/ 1238:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
 
 
 const { pipeline } = __nccwpck_require__(7075)
-const { fetching } = __nccwpck_require__(9870)
-const { makeRequest } = __nccwpck_require__(703)
-const { webidl } = __nccwpck_require__(1365)
-const { EventSourceStream } = __nccwpck_require__(31)
-const { parseMIMEType } = __nccwpck_require__(1996)
-const { createFastMessageEvent } = __nccwpck_require__(3684)
-const { isNetworkError } = __nccwpck_require__(5003)
-const { delay } = __nccwpck_require__(59)
-const { kEnumerableProperty } = __nccwpck_require__(6976)
-const { environmentSettingsObject } = __nccwpck_require__(432)
+const { fetching } = __nccwpck_require__(4398)
+const { makeRequest } = __nccwpck_require__(9967)
+const { webidl } = __nccwpck_require__(5893)
+const { EventSourceStream } = __nccwpck_require__(4031)
+const { parseMIMEType } = __nccwpck_require__(1900)
+const { createFastMessageEvent } = __nccwpck_require__(5188)
+const { isNetworkError } = __nccwpck_require__(9051)
+const { delay } = __nccwpck_require__(4811)
+const { kEnumerableProperty } = __nccwpck_require__(3440)
+const { environmentSettingsObject } = __nccwpck_require__(3168)
 
 let experimentalWarned = false
 
@@ -14848,7 +14977,7 @@ module.exports = {
 
 /***/ }),
 
-/***/ 59:
+/***/ 4811:
 /***/ ((module) => {
 
 
@@ -14892,12 +15021,12 @@ module.exports = {
 
 /***/ }),
 
-/***/ 3660:
+/***/ 4492:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
 
 
-const util = __nccwpck_require__(6976)
+const util = __nccwpck_require__(3440)
 const {
   ReadableStreamFrom,
   isBlobLike,
@@ -14907,16 +15036,16 @@ const {
   fullyReadBody,
   extractMimeType,
   utf8DecodeBytes
-} = __nccwpck_require__(432)
-const { FormData } = __nccwpck_require__(1782)
-const { kState } = __nccwpck_require__(2523)
-const { webidl } = __nccwpck_require__(1365)
+} = __nccwpck_require__(3168)
+const { FormData } = __nccwpck_require__(5910)
+const { kState } = __nccwpck_require__(3627)
+const { webidl } = __nccwpck_require__(5893)
 const { Blob } = __nccwpck_require__(4573)
 const assert = __nccwpck_require__(4589)
 const { isErrored, isDisturbed } = __nccwpck_require__(7075)
 const { isArrayBuffer } = __nccwpck_require__(3429)
-const { serializeAMimeType } = __nccwpck_require__(1996)
-const { multipartFormDataParser } = __nccwpck_require__(2052)
+const { serializeAMimeType } = __nccwpck_require__(1900)
+const { multipartFormDataParser } = __nccwpck_require__(116)
 let random
 
 try {
@@ -15428,7 +15557,7 @@ module.exports = {
 
 /***/ }),
 
-/***/ 5167:
+/***/ 4495:
 /***/ ((module) => {
 
 
@@ -15559,7 +15688,7 @@ module.exports = {
 
 /***/ }),
 
-/***/ 1996:
+/***/ 1900:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
 
@@ -16310,12 +16439,12 @@ module.exports = {
 
 /***/ }),
 
-/***/ 8525:
+/***/ 6653:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
 
 
-const { kConnected, kSize } = __nccwpck_require__(891)
+const { kConnected, kSize } = __nccwpck_require__(6443)
 
 class CompatWeakRef {
   constructor (value) {
@@ -16363,14 +16492,14 @@ module.exports = function () {
 
 /***/ }),
 
-/***/ 9802:
+/***/ 7114:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
 
 
 const { Blob, File } = __nccwpck_require__(4573)
-const { kState } = __nccwpck_require__(2523)
-const { webidl } = __nccwpck_require__(1365)
+const { kState } = __nccwpck_require__(3627)
+const { webidl } = __nccwpck_require__(5893)
 
 // TODO(@KhafraDev): remove
 class FileLike {
@@ -16496,16 +16625,16 @@ module.exports = { FileLike, isFileLike }
 
 /***/ }),
 
-/***/ 2052:
+/***/ 116:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
 
 
-const { isUSVString, bufferToLowerCasedHeaderName } = __nccwpck_require__(6976)
-const { utf8DecodeBytes } = __nccwpck_require__(432)
-const { HTTP_TOKEN_CODEPOINTS, isomorphicDecode } = __nccwpck_require__(1996)
-const { isFileLike } = __nccwpck_require__(9802)
-const { makeEntry } = __nccwpck_require__(1782)
+const { isUSVString, bufferToLowerCasedHeaderName } = __nccwpck_require__(3440)
+const { utf8DecodeBytes } = __nccwpck_require__(3168)
+const { HTTP_TOKEN_CODEPOINTS, isomorphicDecode } = __nccwpck_require__(1900)
+const { isFileLike } = __nccwpck_require__(7114)
+const { makeEntry } = __nccwpck_require__(5910)
 const assert = __nccwpck_require__(4589)
 const { File: NodeFile } = __nccwpck_require__(4573)
 
@@ -16977,16 +17106,16 @@ module.exports = {
 
 /***/ }),
 
-/***/ 1782:
+/***/ 5910:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
 
 
-const { isBlobLike, iteratorMixin } = __nccwpck_require__(432)
-const { kState } = __nccwpck_require__(2523)
-const { kEnumerableProperty } = __nccwpck_require__(6976)
-const { FileLike, isFileLike } = __nccwpck_require__(9802)
-const { webidl } = __nccwpck_require__(1365)
+const { isBlobLike, iteratorMixin } = __nccwpck_require__(3168)
+const { kState } = __nccwpck_require__(3627)
+const { kEnumerableProperty } = __nccwpck_require__(3440)
+const { FileLike, isFileLike } = __nccwpck_require__(7114)
+const { webidl } = __nccwpck_require__(5893)
 const { File: NativeFile } = __nccwpck_require__(4573)
 const nodeUtil = __nccwpck_require__(7975)
 
@@ -17236,7 +17365,7 @@ module.exports = { FormData, makeEntry }
 
 /***/ }),
 
-/***/ 5843:
+/***/ 1059:
 /***/ ((module) => {
 
 
@@ -17283,21 +17412,21 @@ module.exports = {
 
 /***/ }),
 
-/***/ 6052:
+/***/ 660:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
 // https://github.com/Ethan-Arrowood/undici-fetch
 
 
 
-const { kConstruct } = __nccwpck_require__(891)
-const { kEnumerableProperty } = __nccwpck_require__(6976)
+const { kConstruct } = __nccwpck_require__(6443)
+const { kEnumerableProperty } = __nccwpck_require__(3440)
 const {
   iteratorMixin,
   isValidHeaderName,
   isValidHeaderValue
-} = __nccwpck_require__(432)
-const { webidl } = __nccwpck_require__(1365)
+} = __nccwpck_require__(3168)
+const { webidl } = __nccwpck_require__(5893)
 const assert = __nccwpck_require__(4589)
 const util = __nccwpck_require__(7975)
 
@@ -17977,7 +18106,7 @@ module.exports = {
 
 /***/ }),
 
-/***/ 9870:
+/***/ 4398:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
 // https://github.com/Ethan-Arrowood/undici-fetch
@@ -17990,9 +18119,9 @@ const {
   filterResponse,
   makeResponse,
   fromInnerResponse
-} = __nccwpck_require__(5003)
-const { HeadersList } = __nccwpck_require__(6052)
-const { Request, cloneRequest } = __nccwpck_require__(703)
+} = __nccwpck_require__(9051)
+const { HeadersList } = __nccwpck_require__(660)
+const { Request, cloneRequest } = __nccwpck_require__(9967)
 const zlib = __nccwpck_require__(8522)
 const {
   bytesMatch,
@@ -18028,23 +18157,23 @@ const {
   buildContentRange,
   createInflate,
   extractMimeType
-} = __nccwpck_require__(432)
-const { kState, kDispatcher } = __nccwpck_require__(2523)
+} = __nccwpck_require__(3168)
+const { kState, kDispatcher } = __nccwpck_require__(3627)
 const assert = __nccwpck_require__(4589)
-const { safelyExtractBody, extractBody } = __nccwpck_require__(3660)
+const { safelyExtractBody, extractBody } = __nccwpck_require__(4492)
 const {
   redirectStatusSet,
   nullBodyStatus,
   safeMethodsSet,
   requestBodyHeader,
   subresourceSet
-} = __nccwpck_require__(5167)
+} = __nccwpck_require__(4495)
 const EE = __nccwpck_require__(8474)
 const { Readable, pipeline, finished } = __nccwpck_require__(7075)
-const { addAbortListener, isErrored, isReadable, bufferToLowerCasedHeaderName } = __nccwpck_require__(6976)
-const { dataURLProcessor, serializeAMimeType, minimizeSupportedMimeType } = __nccwpck_require__(1996)
-const { getGlobalDispatcher } = __nccwpck_require__(8613)
-const { webidl } = __nccwpck_require__(1365)
+const { addAbortListener, isErrored, isReadable, bufferToLowerCasedHeaderName } = __nccwpck_require__(3440)
+const { dataURLProcessor, serializeAMimeType, minimizeSupportedMimeType } = __nccwpck_require__(1900)
+const { getGlobalDispatcher } = __nccwpck_require__(2581)
+const { webidl } = __nccwpck_require__(5893)
 const { STATUS_CODES } = __nccwpck_require__(7067)
 const GET_OR_HEAD = ['GET', 'HEAD']
 
@@ -20256,23 +20385,23 @@ module.exports = {
 
 /***/ }),
 
-/***/ 703:
+/***/ 9967:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
 /* globals AbortController */
 
 
 
-const { extractBody, mixinBody, cloneBody, bodyUnusable } = __nccwpck_require__(3660)
-const { Headers, fill: fillHeaders, HeadersList, setHeadersGuard, getHeadersGuard, setHeadersList, getHeadersList } = __nccwpck_require__(6052)
-const { FinalizationRegistry } = __nccwpck_require__(8525)()
-const util = __nccwpck_require__(6976)
+const { extractBody, mixinBody, cloneBody, bodyUnusable } = __nccwpck_require__(4492)
+const { Headers, fill: fillHeaders, HeadersList, setHeadersGuard, getHeadersGuard, setHeadersList, getHeadersList } = __nccwpck_require__(660)
+const { FinalizationRegistry } = __nccwpck_require__(6653)()
+const util = __nccwpck_require__(3440)
 const nodeUtil = __nccwpck_require__(7975)
 const {
   isValidHTTPToken,
   sameOrigin,
   environmentSettingsObject
-} = __nccwpck_require__(432)
+} = __nccwpck_require__(3168)
 const {
   forbiddenMethodsSet,
   corsSafeListedMethodsSet,
@@ -20282,12 +20411,12 @@ const {
   requestCredentials,
   requestCache,
   requestDuplex
-} = __nccwpck_require__(5167)
+} = __nccwpck_require__(4495)
 const { kEnumerableProperty, normalizedMethodRecordsBase, normalizedMethodRecords } = util
-const { kHeaders, kSignal, kState, kDispatcher } = __nccwpck_require__(2523)
-const { webidl } = __nccwpck_require__(1365)
-const { URLSerializer } = __nccwpck_require__(1996)
-const { kConstruct } = __nccwpck_require__(891)
+const { kHeaders, kSignal, kState, kDispatcher } = __nccwpck_require__(3627)
+const { webidl } = __nccwpck_require__(5893)
+const { URLSerializer } = __nccwpck_require__(1900)
+const { kConstruct } = __nccwpck_require__(6443)
 const assert = __nccwpck_require__(4589)
 const { getMaxListeners, setMaxListeners, getEventListeners, defaultMaxListeners } = __nccwpck_require__(8474)
 
@@ -21300,14 +21429,14 @@ module.exports = { Request, makeRequest, fromInnerRequest, cloneRequest }
 
 /***/ }),
 
-/***/ 5003:
+/***/ 9051:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
 
 
-const { Headers, HeadersList, fill, getHeadersGuard, setHeadersGuard, setHeadersList } = __nccwpck_require__(6052)
-const { extractBody, cloneBody, mixinBody, hasFinalizationRegistry, streamRegistry, bodyUnusable } = __nccwpck_require__(3660)
-const util = __nccwpck_require__(6976)
+const { Headers, HeadersList, fill, getHeadersGuard, setHeadersGuard, setHeadersList } = __nccwpck_require__(660)
+const { extractBody, cloneBody, mixinBody, hasFinalizationRegistry, streamRegistry, bodyUnusable } = __nccwpck_require__(4492)
+const util = __nccwpck_require__(3440)
 const nodeUtil = __nccwpck_require__(7975)
 const { kEnumerableProperty } = util
 const {
@@ -21319,16 +21448,16 @@ const {
   isErrorLike,
   isomorphicEncode,
   environmentSettingsObject: relevantRealm
-} = __nccwpck_require__(432)
+} = __nccwpck_require__(3168)
 const {
   redirectStatusSet,
   nullBodyStatus
-} = __nccwpck_require__(5167)
-const { kState, kHeaders } = __nccwpck_require__(2523)
-const { webidl } = __nccwpck_require__(1365)
-const { FormData } = __nccwpck_require__(1782)
-const { URLSerializer } = __nccwpck_require__(1996)
-const { kConstruct } = __nccwpck_require__(891)
+} = __nccwpck_require__(4495)
+const { kState, kHeaders } = __nccwpck_require__(3627)
+const { webidl } = __nccwpck_require__(5893)
+const { FormData } = __nccwpck_require__(5910)
+const { URLSerializer } = __nccwpck_require__(1900)
+const { kConstruct } = __nccwpck_require__(6443)
 const assert = __nccwpck_require__(4589)
 const { types } = __nccwpck_require__(7975)
 
@@ -21917,7 +22046,7 @@ module.exports = {
 
 /***/ }),
 
-/***/ 2523:
+/***/ 3627:
 /***/ ((module) => {
 
 
@@ -21933,21 +22062,21 @@ module.exports = {
 
 /***/ }),
 
-/***/ 432:
+/***/ 3168:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
 
 
 const { Transform } = __nccwpck_require__(7075)
 const zlib = __nccwpck_require__(8522)
-const { redirectStatusSet, referrerPolicySet: referrerPolicyTokens, badPortsSet } = __nccwpck_require__(5167)
-const { getGlobalOrigin } = __nccwpck_require__(5843)
-const { collectASequenceOfCodePoints, collectAnHTTPQuotedString, removeChars, parseMIMEType } = __nccwpck_require__(1996)
+const { redirectStatusSet, referrerPolicySet: referrerPolicyTokens, badPortsSet } = __nccwpck_require__(4495)
+const { getGlobalOrigin } = __nccwpck_require__(1059)
+const { collectASequenceOfCodePoints, collectAnHTTPQuotedString, removeChars, parseMIMEType } = __nccwpck_require__(1900)
 const { performance } = __nccwpck_require__(643)
-const { isBlobLike, ReadableStreamFrom, isValidHTTPToken, normalizedMethodRecordsBase } = __nccwpck_require__(6976)
+const { isBlobLike, ReadableStreamFrom, isValidHTTPToken, normalizedMethodRecordsBase } = __nccwpck_require__(3440)
 const assert = __nccwpck_require__(4589)
 const { isUint8Array } = __nccwpck_require__(3429)
-const { webidl } = __nccwpck_require__(1365)
+const { webidl } = __nccwpck_require__(5893)
 
 let supportedHashes = []
 
@@ -23572,14 +23701,14 @@ module.exports = {
 
 /***/ }),
 
-/***/ 1365:
+/***/ 5893:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
 
 
 const { types, inspect } = __nccwpck_require__(7975)
 const { markAsUncloneable } = __nccwpck_require__(5919)
-const { toUSVString } = __nccwpck_require__(6976)
+const { toUSVString } = __nccwpck_require__(3440)
 
 /** @type {import('../../../types/webidl').Webidl} */
 const webidl = {}
@@ -24274,7 +24403,7 @@ module.exports = {
 
 /***/ }),
 
-/***/ 5647:
+/***/ 2607:
 /***/ ((module) => {
 
 
@@ -24571,7 +24700,7 @@ module.exports = {
 
 /***/ }),
 
-/***/ 3203:
+/***/ 8355:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
 
@@ -24580,16 +24709,16 @@ const {
   staticPropertyDescriptors,
   readOperation,
   fireAProgressEvent
-} = __nccwpck_require__(6074)
+} = __nccwpck_require__(3610)
 const {
   kState,
   kError,
   kResult,
   kEvents,
   kAborted
-} = __nccwpck_require__(8673)
-const { webidl } = __nccwpck_require__(1365)
-const { kEnumerableProperty } = __nccwpck_require__(6976)
+} = __nccwpck_require__(961)
+const { webidl } = __nccwpck_require__(5893)
+const { kEnumerableProperty } = __nccwpck_require__(3440)
 
 class FileReader extends EventTarget {
   constructor () {
@@ -24922,12 +25051,12 @@ module.exports = {
 
 /***/ }),
 
-/***/ 6954:
+/***/ 8573:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
 
 
-const { webidl } = __nccwpck_require__(1365)
+const { webidl } = __nccwpck_require__(5893)
 
 const kState = Symbol('ProgressEvent state')
 
@@ -25007,7 +25136,7 @@ module.exports = {
 
 /***/ }),
 
-/***/ 8673:
+/***/ 961:
 /***/ ((module) => {
 
 
@@ -25024,7 +25153,7 @@ module.exports = {
 
 /***/ }),
 
-/***/ 6074:
+/***/ 3610:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
 
@@ -25035,10 +25164,10 @@ const {
   kResult,
   kAborted,
   kLastProgressEventFired
-} = __nccwpck_require__(8673)
-const { ProgressEvent } = __nccwpck_require__(6954)
-const { getEncoding } = __nccwpck_require__(5647)
-const { serializeAMimeType, parseMIMEType } = __nccwpck_require__(1996)
+} = __nccwpck_require__(961)
+const { ProgressEvent } = __nccwpck_require__(8573)
+const { getEncoding } = __nccwpck_require__(2607)
+const { serializeAMimeType, parseMIMEType } = __nccwpck_require__(1900)
 const { types } = __nccwpck_require__(7975)
 const { StringDecoder } = __nccwpck_require__(3193)
 const { btoa } = __nccwpck_require__(4573)
@@ -25422,27 +25551,27 @@ module.exports = {
 
 /***/ }),
 
-/***/ 5153:
+/***/ 6897:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
 
 
-const { uid, states, sentCloseFrameState, emptyBuffer, opcodes } = __nccwpck_require__(3600)
+const { uid, states, sentCloseFrameState, emptyBuffer, opcodes } = __nccwpck_require__(736)
 const {
   kReadyState,
   kSentClose,
   kByteParser,
   kReceivedClose,
   kResponse
-} = __nccwpck_require__(848)
-const { fireEvent, failWebsocketConnection, isClosing, isClosed, isEstablished, parseExtensions } = __nccwpck_require__(5313)
-const { channels } = __nccwpck_require__(9038)
-const { CloseEvent } = __nccwpck_require__(3684)
-const { makeRequest } = __nccwpck_require__(703)
-const { fetching } = __nccwpck_require__(9870)
-const { Headers, getHeadersList } = __nccwpck_require__(6052)
-const { getDecodeSplit } = __nccwpck_require__(432)
-const { WebsocketFrameSend } = __nccwpck_require__(6496)
+} = __nccwpck_require__(1216)
+const { fireEvent, failWebsocketConnection, isClosing, isClosed, isEstablished, parseExtensions } = __nccwpck_require__(8625)
+const { channels } = __nccwpck_require__(2414)
+const { CloseEvent } = __nccwpck_require__(5188)
+const { makeRequest } = __nccwpck_require__(9967)
+const { fetching } = __nccwpck_require__(4398)
+const { Headers, getHeadersList } = __nccwpck_require__(660)
+const { getDecodeSplit } = __nccwpck_require__(3168)
+const { WebsocketFrameSend } = __nccwpck_require__(3264)
 
 /** @type {import('crypto')} */
 let crypto
@@ -25619,7 +25748,7 @@ function establishWebSocketConnection (url, protocols, client, ws, onEstablish, 
         // is specified, the server needs to include the same field and one of
         // the selected subprotocol values in its response for the connection to
         // be established.
-        if (!requestProtocols.includes(secProtocol)) {
+        if (requestProtocols === null || !requestProtocols.includes(secProtocol)) {
           failWebsocketConnection(ws, 'Protocol was not set in the opening handshake.')
           return
         }
@@ -25800,7 +25929,7 @@ module.exports = {
 
 /***/ }),
 
-/***/ 3600:
+/***/ 736:
 /***/ ((module) => {
 
 
@@ -25873,14 +26002,14 @@ module.exports = {
 
 /***/ }),
 
-/***/ 3684:
+/***/ 5188:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
 
 
-const { webidl } = __nccwpck_require__(1365)
-const { kEnumerableProperty } = __nccwpck_require__(6976)
-const { kConstruct } = __nccwpck_require__(891)
+const { webidl } = __nccwpck_require__(5893)
+const { kEnumerableProperty } = __nccwpck_require__(3440)
+const { kConstruct } = __nccwpck_require__(6443)
 const { MessagePort } = __nccwpck_require__(5919)
 
 /**
@@ -26209,12 +26338,12 @@ module.exports = {
 
 /***/ }),
 
-/***/ 6496:
+/***/ 3264:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
 
 
-const { maxUnsigned16Bit } = __nccwpck_require__(3600)
+const { maxUnsigned16Bit } = __nccwpck_require__(736)
 
 const BUFFER_SIZE = 16386
 
@@ -26312,14 +26441,14 @@ module.exports = {
 
 /***/ }),
 
-/***/ 6970:
+/***/ 9469:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
 
 
 const { createInflateRaw, Z_DEFAULT_WINDOWBITS } = __nccwpck_require__(8522)
-const { isValidClientWindowBits } = __nccwpck_require__(5313)
-const { MessageSizeExceededError } = __nccwpck_require__(371)
+const { isValidClientWindowBits } = __nccwpck_require__(8625)
+const { MessageSizeExceededError } = __nccwpck_require__(8707)
 
 const tail = Buffer.from([0x00, 0x00, 0xff, 0xff])
 const kBuffer = Symbol('kBuffer')
@@ -26380,7 +26509,12 @@ class PerMessageDeflate {
 
         if (this.#maxPayloadSize > 0 && this.#inflate[kLength] > this.#maxPayloadSize) {
           callback(new MessageSizeExceededError())
+          // The inflater may still hold buffered input that can emit a late
+          // zlib error. Remove the data listener, then deterministically stop
+          // the stream so a subsequent 'error' cannot fire without a listener
+          // (which would terminate the process as an unhandled error event).
           this.#inflate.removeAllListeners()
+          this.#inflate.destroy()
           this.#inflate = null
           return
         }
@@ -26419,16 +26553,16 @@ module.exports = { PerMessageDeflate }
 
 /***/ }),
 
-/***/ 68:
+/***/ 1652:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
 
 
 const { Writable } = __nccwpck_require__(7075)
 const assert = __nccwpck_require__(4589)
-const { parserStates, opcodes, states, emptyBuffer, sentCloseFrameState } = __nccwpck_require__(3600)
-const { kReadyState, kSentClose, kResponse, kReceivedClose } = __nccwpck_require__(848)
-const { channels } = __nccwpck_require__(9038)
+const { parserStates, opcodes, states, emptyBuffer, sentCloseFrameState } = __nccwpck_require__(736)
+const { kReadyState, kSentClose, kResponse, kReceivedClose } = __nccwpck_require__(1216)
+const { channels } = __nccwpck_require__(2414)
 const {
   isValidStatusCode,
   isValidOpcode,
@@ -26438,11 +26572,11 @@ const {
   isControlFrame,
   isTextBinaryFrame,
   isContinuationFrame
-} = __nccwpck_require__(5313)
-const { WebsocketFrameSend } = __nccwpck_require__(6496)
-const { closeWebSocketConnection } = __nccwpck_require__(5153)
-const { PerMessageDeflate } = __nccwpck_require__(6970)
-const { MessageSizeExceededError } = __nccwpck_require__(371)
+} = __nccwpck_require__(8625)
+const { WebsocketFrameSend } = __nccwpck_require__(3264)
+const { closeWebSocketConnection } = __nccwpck_require__(6897)
+const { PerMessageDeflate } = __nccwpck_require__(9469)
+const { MessageSizeExceededError } = __nccwpck_require__(8707)
 
 function failWebsocketConnectionWithCode (ws, code, reason) {
   closeWebSocketConnection(ws, code, reason, Buffer.byteLength(reason))
@@ -26939,14 +27073,14 @@ module.exports = {
 
 /***/ }),
 
-/***/ 5756:
+/***/ 3900:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
 
 
-const { WebsocketFrameSend } = __nccwpck_require__(6496)
-const { opcodes, sendHints } = __nccwpck_require__(3600)
-const FixedQueue = __nccwpck_require__(6580)
+const { WebsocketFrameSend } = __nccwpck_require__(3264)
+const { opcodes, sendHints } = __nccwpck_require__(736)
+const FixedQueue = __nccwpck_require__(4660)
 
 /** @type {typeof Uint8Array} */
 const FastBuffer = Buffer[Symbol.species]
@@ -27050,7 +27184,7 @@ module.exports = { SendQueue }
 
 /***/ }),
 
-/***/ 848:
+/***/ 1216:
 /***/ ((module) => {
 
 
@@ -27069,16 +27203,16 @@ module.exports = {
 
 /***/ }),
 
-/***/ 5313:
+/***/ 8625:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
 
 
-const { kReadyState, kController, kResponse, kBinaryType, kWebSocketURL } = __nccwpck_require__(848)
-const { states, opcodes } = __nccwpck_require__(3600)
-const { ErrorEvent, createFastMessageEvent } = __nccwpck_require__(3684)
+const { kReadyState, kController, kResponse, kBinaryType, kWebSocketURL } = __nccwpck_require__(1216)
+const { states, opcodes } = __nccwpck_require__(736)
+const { ErrorEvent, createFastMessageEvent } = __nccwpck_require__(5188)
 const { isUtf8 } = __nccwpck_require__(4573)
-const { collectASequenceOfCodePointsFast, removeHTTPWhitespace } = __nccwpck_require__(1996)
+const { collectASequenceOfCodePointsFast, removeHTTPWhitespace } = __nccwpck_require__(1900)
 
 /* globals Blob */
 
@@ -27398,15 +27532,15 @@ module.exports = {
 
 /***/ }),
 
-/***/ 9390:
+/***/ 3726:
 /***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
 
 
 
-const { webidl } = __nccwpck_require__(1365)
-const { URLSerializer } = __nccwpck_require__(1996)
-const { environmentSettingsObject } = __nccwpck_require__(432)
-const { staticPropertyDescriptors, states, sentCloseFrameState, sendHints } = __nccwpck_require__(3600)
+const { webidl } = __nccwpck_require__(5893)
+const { URLSerializer } = __nccwpck_require__(1900)
+const { environmentSettingsObject } = __nccwpck_require__(3168)
+const { staticPropertyDescriptors, states, sentCloseFrameState, sendHints } = __nccwpck_require__(736)
 const {
   kWebSocketURL,
   kReadyState,
@@ -27415,21 +27549,21 @@ const {
   kResponse,
   kSentClose,
   kByteParser
-} = __nccwpck_require__(848)
+} = __nccwpck_require__(1216)
 const {
   isConnecting,
   isEstablished,
   isClosing,
   isValidSubprotocol,
   fireEvent
-} = __nccwpck_require__(5313)
-const { establishWebSocketConnection, closeWebSocketConnection } = __nccwpck_require__(5153)
-const { ByteParser } = __nccwpck_require__(68)
-const { kEnumerableProperty, isBlobLike } = __nccwpck_require__(6976)
-const { getGlobalDispatcher } = __nccwpck_require__(8613)
+} = __nccwpck_require__(8625)
+const { establishWebSocketConnection, closeWebSocketConnection } = __nccwpck_require__(6897)
+const { ByteParser } = __nccwpck_require__(1652)
+const { kEnumerableProperty, isBlobLike } = __nccwpck_require__(3440)
+const { getGlobalDispatcher } = __nccwpck_require__(2581)
 const { types } = __nccwpck_require__(7975)
-const { ErrorEvent, CloseEvent } = __nccwpck_require__(3684)
-const { SendQueue } = __nccwpck_require__(5756)
+const { ErrorEvent, CloseEvent } = __nccwpck_require__(5188)
+const { SendQueue } = __nccwpck_require__(3900)
 
 // https://websockets.spec.whatwg.org/#interface-definition
 class WebSocket extends EventTarget {
@@ -28295,7 +28429,7 @@ var __webpack_exports__ = {};
 
 ;// CONCATENATED MODULE: external "os"
 const external_os_namespaceObject = __WEBPACK_EXTERNAL_createRequire(import.meta.url)("os");
-;// CONCATENATED MODULE: ../action/node_modules/@actions/core/lib/utils.js
+;// CONCATENATED MODULE: ./node_modules/@actions/core/lib/utils.js
 // We use any as a valid input type
 /* eslint-disable @typescript-eslint/no-explicit-any */
 /**
@@ -28331,7 +28465,7 @@ function utils_toCommandProperties(annotationProperties) {
     };
 }
 //# sourceMappingURL=utils.js.map
-;// CONCATENATED MODULE: ../action/node_modules/@actions/core/lib/command.js
+;// CONCATENATED MODULE: ./node_modules/@actions/core/lib/command.js
 
 
 /**
@@ -28427,7 +28561,7 @@ function escapeProperty(s) {
 const external_crypto_namespaceObject = __WEBPACK_EXTERNAL_createRequire(import.meta.url)("crypto");
 ;// CONCATENATED MODULE: external "fs"
 const external_fs_namespaceObject = __WEBPACK_EXTERNAL_createRequire(import.meta.url)("fs");
-;// CONCATENATED MODULE: ../action/node_modules/@actions/core/lib/file-command.js
+;// CONCATENATED MODULE: ./node_modules/@actions/core/lib/file-command.js
 // For internal use, subject to change.
 // We use any as a valid input type
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -28470,7 +28604,7 @@ var external_http_namespaceObject = /*#__PURE__*/__nccwpck_require__.t(external_
 // EXTERNAL MODULE: external "https"
 var external_https_ = __nccwpck_require__(5692);
 var external_https_namespaceObject = /*#__PURE__*/__nccwpck_require__.t(external_https_, 2);
-;// CONCATENATED MODULE: ../action/node_modules/@actions/http-client/lib/proxy.js
+;// CONCATENATED MODULE: ./node_modules/@actions/http-client/lib/proxy.js
 function getProxyUrl(reqUrl) {
     const usingSsl = reqUrl.protocol === 'https:';
     if (checkBypass(reqUrl)) {
@@ -28561,11 +28695,11 @@ class DecodedURL extends URL {
     }
 }
 //# sourceMappingURL=proxy.js.map
-// EXTERNAL MODULE: ../action/node_modules/tunnel/index.js
-var tunnel = __nccwpck_require__(2946);
-// EXTERNAL MODULE: ../action/node_modules/undici/index.js
-var undici = __nccwpck_require__(592);
-;// CONCATENATED MODULE: ../action/node_modules/@actions/http-client/lib/index.js
+// EXTERNAL MODULE: ./node_modules/tunnel/index.js
+var tunnel = __nccwpck_require__(770);
+// EXTERNAL MODULE: ./node_modules/undici/index.js
+var undici = __nccwpck_require__(6752);
+;// CONCATENATED MODULE: ./node_modules/@actions/http-client/lib/index.js
 /* eslint-disable @typescript-eslint/no-explicit-any */
 var __awaiter = (undefined && undefined.__awaiter) || function (thisArg, _arguments, P, generator) {
     function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
@@ -29262,7 +29396,7 @@ class HttpClient {
 }
 const lowercaseKeys = (obj) => Object.keys(obj).reduce((c, k) => ((c[k.toLowerCase()] = obj[k]), c), {});
 //# sourceMappingURL=index.js.map
-;// CONCATENATED MODULE: ../action/node_modules/@actions/http-client/lib/auth.js
+;// CONCATENATED MODULE: ./node_modules/@actions/http-client/lib/auth.js
 var auth_awaiter = (undefined && undefined.__awaiter) || function (thisArg, _arguments, P, generator) {
     function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
     return new (P || (P = Promise))(function (resolve, reject) {
@@ -29338,7 +29472,7 @@ class PersonalAccessTokenCredentialHandler {
     }
 }
 //# sourceMappingURL=auth.js.map
-;// CONCATENATED MODULE: ../action/node_modules/@actions/core/lib/oidc-utils.js
+;// CONCATENATED MODULE: ./node_modules/@actions/core/lib/oidc-utils.js
 var oidc_utils_awaiter = (undefined && undefined.__awaiter) || function (thisArg, _arguments, P, generator) {
     function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
     return new (P || (P = Promise))(function (resolve, reject) {
@@ -29412,7 +29546,7 @@ class OidcClient {
     }
 }
 //# sourceMappingURL=oidc-utils.js.map
-;// CONCATENATED MODULE: ../action/node_modules/@actions/core/lib/summary.js
+;// CONCATENATED MODULE: ./node_modules/@actions/core/lib/summary.js
 var summary_awaiter = (undefined && undefined.__awaiter) || function (thisArg, _arguments, P, generator) {
     function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
     return new (P || (P = Promise))(function (resolve, reject) {
@@ -29693,7 +29827,7 @@ const _summary = new Summary();
 const markdownSummary = (/* unused pure expression or super */ null && (_summary));
 const summary = (/* unused pure expression or super */ null && (_summary));
 //# sourceMappingURL=summary.js.map
-;// CONCATENATED MODULE: ../action/node_modules/@actions/core/lib/path-utils.js
+;// CONCATENATED MODULE: ./node_modules/@actions/core/lib/path-utils.js
 
 /**
  * toPosixPath converts the given path to the posix form. On Windows, \\ will be
@@ -29735,7 +29869,7 @@ var external_events_ = __nccwpck_require__(4434);
 const external_child_process_namespaceObject = __WEBPACK_EXTERNAL_createRequire(import.meta.url)("child_process");
 // EXTERNAL MODULE: external "assert"
 var external_assert_ = __nccwpck_require__(2613);
-;// CONCATENATED MODULE: ../action/node_modules/@actions/io/lib/io-util.js
+;// CONCATENATED MODULE: ./node_modules/@actions/io/lib/io-util.js
 var io_util_awaiter = (undefined && undefined.__awaiter) || function (thisArg, _arguments, P, generator) {
     function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
     return new (P || (P = Promise))(function (resolve, reject) {
@@ -29915,7 +30049,7 @@ function getCmdPath() {
     return (_a = process.env['COMSPEC']) !== null && _a !== void 0 ? _a : `cmd.exe`;
 }
 //# sourceMappingURL=io-util.js.map
-;// CONCATENATED MODULE: ../action/node_modules/@actions/io/lib/io.js
+;// CONCATENATED MODULE: ./node_modules/@actions/io/lib/io.js
 var io_awaiter = (undefined && undefined.__awaiter) || function (thisArg, _arguments, P, generator) {
     function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
     return new (P || (P = Promise))(function (resolve, reject) {
@@ -30189,7 +30323,7 @@ function io_copyFile(srcFile, destFile, force) {
 //# sourceMappingURL=io.js.map
 ;// CONCATENATED MODULE: external "timers"
 const external_timers_namespaceObject = __WEBPACK_EXTERNAL_createRequire(import.meta.url)("timers");
-;// CONCATENATED MODULE: ../action/node_modules/@actions/exec/lib/toolrunner.js
+;// CONCATENATED MODULE: ./node_modules/@actions/exec/lib/toolrunner.js
 var toolrunner_awaiter = (undefined && undefined.__awaiter) || function (thisArg, _arguments, P, generator) {
     function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
     return new (P || (P = Promise))(function (resolve, reject) {
@@ -30777,7 +30911,7 @@ class ExecState extends external_events_.EventEmitter {
     }
 }
 //# sourceMappingURL=toolrunner.js.map
-;// CONCATENATED MODULE: ../action/node_modules/@actions/exec/lib/exec.js
+;// CONCATENATED MODULE: ./node_modules/@actions/exec/lib/exec.js
 var exec_awaiter = (undefined && undefined.__awaiter) || function (thisArg, _arguments, P, generator) {
     function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
     return new (P || (P = Promise))(function (resolve, reject) {
@@ -30857,7 +30991,7 @@ function getExecOutput(commandLine, args, options) {
     });
 }
 //# sourceMappingURL=exec.js.map
-;// CONCATENATED MODULE: ../action/node_modules/@actions/core/lib/platform.js
+;// CONCATENATED MODULE: ./node_modules/@actions/core/lib/platform.js
 var platform_awaiter = (undefined && undefined.__awaiter) || function (thisArg, _arguments, P, generator) {
     function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
     return new (P || (P = Promise))(function (resolve, reject) {
@@ -30922,7 +31056,7 @@ function getDetails() {
     });
 }
 //# sourceMappingURL=platform.js.map
-;// CONCATENATED MODULE: ../action/node_modules/@actions/core/lib/core.js
+;// CONCATENATED MODULE: ./node_modules/@actions/core/lib/core.js
 var core_awaiter = (undefined && undefined.__awaiter) || function (thisArg, _arguments, P, generator) {
     function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
     return new (P || (P = Promise))(function (resolve, reject) {
@@ -31602,7 +31736,43 @@ async function isForkPullRequest(eventPath, repository) {
     return headRepoFullName.toLowerCase() !== repository.toLowerCase()
 }
 
-;// CONCATENATED MODULE: ../action/node_modules/zod/v4/core/util.js
+;// CONCATENATED MODULE: ./src/job-summary.js
+
+
+
+
+/**
+ * @param {string} reason
+ * @returns {Promise<void>}
+ */
+async function appendUnrecordedSummary(reason) {
+    const summaryFile = getEnv("GITHUB_STEP_SUMMARY")
+    if (summaryFile === "") {
+        info("GITHUB_STEP_SUMMARY is not set; skipping unrecorded-job summary")
+        return
+    }
+
+    try {
+        await promises_namespaceObject.appendFile(summaryFile, `\n${renderUnrecordedSummary(reason)}\n`)
+    } catch (error) {
+        info(`job summary not written: ${getErrorMessage(error)}`)
+    }
+}
+
+/**
+ * @param {string} reason
+ * @returns {string}
+ */
+function renderUnrecordedSummary(reason) {
+    const escaped = reason
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replace(/[\\`*_[\]!]/g, "\\$&")
+    return ["**Execution Profile for this job · not recorded**", "", escaped].join("\n")
+}
+
+;// CONCATENATED MODULE: ./node_modules/zod/v4/core/util.js
 
 // functions
 function assertEqual(val) {
@@ -31634,18 +31804,23 @@ function jsonStringifyReplacer(_, value) {
         return value.toString();
     return value;
 }
+// the accessor lives on a shared prototype: an own accessor makes every box a dictionary-mode object (~360 B and a slow load per read against ~100 B and an inlined getter here)
+class Cached {
+    constructor(getter) {
+        this._getter = getter;
+        this._value = undefined;
+    }
+    get value() {
+        const getter = this._getter;
+        if (getter !== undefined) {
+            this._value = getter();
+            this._getter = undefined;
+        }
+        return this._value;
+    }
+}
 function cached(getter) {
-    const set = false;
-    return {
-        get value() {
-            if (!set) {
-                const value = getter();
-                Object.defineProperty(this, "value", { value });
-                return value;
-            }
-            throw new Error("cached value already set");
-        },
-    };
+    return new Cached(getter);
 }
 function nullish(input) {
     return input === null || input === undefined;
@@ -31699,6 +31874,71 @@ function util_assignProp(target, prop, value) {
         enumerable: true,
         configurable: true,
     });
+}
+/**
+ * Whichever object a def's `shape` currently answers from: the one the caller passed until the first read, the frozen copy after it.
+ *
+ * Its keys and descriptors read without invoking anything, which is what lets a discriminated union check its discriminator, and the cycle walk read a shape, without resolving a getter that references the schema being constructed. A def that answers `shape` from an accessor of its own has none.
+ */
+function rawShape(def) {
+    const desc = Object.getOwnPropertyDescriptor(def, "shape");
+    return desc?.get ? desc.get.raw : desc?.value;
+}
+// where a builder reads its source's keys and descriptors, resolving only a shape a def answers for itself. A shape resolves by object spread, so only its enumerable keys are ever part of it.
+function sourceShape(schema) {
+    return rawShape(schema._zod.def) ?? schema._zod.def.shape;
+}
+// a key whose value is not settled yet, self-caching so every read after the first gets the same one
+function deferProp(target, key, getter) {
+    Object.defineProperty(target, key, {
+        get() {
+            const value = getter();
+            util_assignProp(this, key, value);
+            return value;
+        },
+        enumerable: true,
+        configurable: true,
+    });
+}
+// Writes a settled key. A plain assignment is much cheaper than `defineProperty` and produces the same descriptor, but it runs whatever setter already answers to the key — an accessor this shape deferred, or an inherited one, which `__proto__` has on every object and prototype pollution can add for any name.
+function putProp(target, key, value) {
+    if (key in target)
+        util_assignProp(target, key, value);
+    else
+        target[key] = value;
+}
+/**
+ * Copies `keys` of `source`'s shape onto `target`, each value passed through `wrap`.
+ *
+ * A key the source has resolved is copied through now, so the derived shape states it outright and nothing has to resolve it to learn what it holds. A key the source still defers stays deferred, and reads back through the source's own `shape`, so it resolves once and both shapes get that one schema.
+ */
+function mirrorShape(target, source, keys, wrap) {
+    const raw = sourceShape(source);
+    for (const key of keys) {
+        const desc = Object.getOwnPropertyDescriptor(raw, key);
+        if (!desc.enumerable)
+            continue;
+        if (desc.get) {
+            deferProp(target, key, () => {
+                const value = source._zod.def.shape[key];
+                return wrap ? wrap(value, key) : value;
+            });
+        }
+        else
+            putProp(target, key, wrap ? wrap(desc.value, key) : desc.value);
+    }
+}
+// same, for a plain shape a caller passed rather than a schema's
+function mirrorProps(target, source) {
+    for (const key of Reflect.ownKeys(source)) {
+        const desc = Object.getOwnPropertyDescriptor(source, key);
+        if (!desc.enumerable)
+            continue;
+        if (desc.get)
+            deferProp(target, key, () => source[key]);
+        else
+            putProp(target, key, desc.value);
+    }
 }
 function mergeDefs(...defs) {
     const mergedDescriptors = {};
@@ -31951,24 +32191,23 @@ function pick(schema, mask) {
     if (hasChecks) {
         throw new Error(".pick() cannot be used on object schemas containing refinements");
     }
-    const def = mergeDefs(schema._zod.def, {
-        get shape() {
-            const newShape = {};
-            // `for...in` skips symbols, so a symbol in the mask would select nothing
-            for (const key of Reflect.ownKeys(mask)) {
-                if (!Object.prototype.hasOwnProperty.call(currDef.shape, key)) {
-                    throw new Error(`Unrecognized key: "${String(key)}"`);
-                }
-                if (!mask[key])
-                    continue;
-                util_assignProp(newShape, key, currDef.shape[key]);
-            }
-            util_assignProp(this, "shape", newShape); // self-caching
-            return newShape;
-        },
-        checks: [],
-    });
-    return clone(schema, def);
+    const newShape = {};
+    mirrorShape(newShape, schema, maskedKeys(schema, mask));
+    return clone(schema, mergeDefs(currDef, { shape: newShape, checks: [] }));
+}
+// the mask keys that select something, checked against the source's shape without resolving it
+function maskedKeys(schema, mask) {
+    const raw = sourceShape(schema);
+    const keys = [];
+    // `for...in` skips symbols, so a symbol in the mask would select nothing
+    for (const key of Reflect.ownKeys(mask)) {
+        if (!Object.getOwnPropertyDescriptor(raw, key)?.enumerable) {
+            throw new Error(`Unrecognized key: "${String(key)}"`);
+        }
+        if (mask[key])
+            keys.push(key);
+    }
+    return keys;
 }
 function omit(schema, mask) {
     const currDef = schema._zod.def;
@@ -31977,23 +32216,10 @@ function omit(schema, mask) {
     if (hasChecks) {
         throw new Error(".omit() cannot be used on object schemas containing refinements");
     }
-    const def = mergeDefs(schema._zod.def, {
-        get shape() {
-            const newShape = { ...schema._zod.def.shape };
-            for (const key of Reflect.ownKeys(mask)) {
-                if (!Object.prototype.hasOwnProperty.call(currDef.shape, key)) {
-                    throw new Error(`Unrecognized key: "${String(key)}"`);
-                }
-                if (!mask[key])
-                    continue;
-                delete newShape[key];
-            }
-            util_assignProp(this, "shape", newShape); // self-caching
-            return newShape;
-        },
-        checks: [],
-    });
-    return clone(schema, def);
+    const omitted = new Set(maskedKeys(schema, mask));
+    const newShape = {};
+    mirrorShape(newShape, schema, Reflect.ownKeys(sourceShape(schema)).filter((key) => !omitted.has(key)));
+    return clone(schema, mergeDefs(currDef, { shape: newShape, checks: [] }));
 }
 function extend(schema, shape) {
     if (!isPlainObject(shape)) {
@@ -32003,34 +32229,27 @@ function extend(schema, shape) {
     const hasChecks = checks && checks.length > 0;
     if (hasChecks) {
         // Only throw if new shape overlaps with existing shape. Use getOwnPropertyDescriptor to check key existence without accessing values
-        const existingShape = schema._zod.def.shape;
+        const existingShape = sourceShape(schema);
         for (const key of Reflect.ownKeys(shape)) {
             if (Object.getOwnPropertyDescriptor(existingShape, key) !== undefined) {
                 throw new Error("Cannot overwrite keys on object schemas containing refinements. Use `.safeExtend()` instead.");
             }
         }
     }
-    const def = mergeDefs(schema._zod.def, {
-        get shape() {
-            const _shape = { ...schema._zod.def.shape, ...shape };
-            util_assignProp(this, "shape", _shape); // self-caching
-            return _shape;
-        },
-    });
-    return clone(schema, def);
+    return clone(schema, mergeDefs(schema._zod.def, { shape: extended(schema, shape) }));
+}
+// the source's keys, then the caller's overlaid on top
+function extended(schema, shape) {
+    const newShape = {};
+    mirrorShape(newShape, schema, Reflect.ownKeys(sourceShape(schema)));
+    mirrorProps(newShape, shape);
+    return newShape;
 }
 function safeExtend(schema, shape) {
     if (!isPlainObject(shape)) {
         throw new Error("Invalid input to safeExtend: expected a plain object");
     }
-    const def = mergeDefs(schema._zod.def, {
-        get shape() {
-            const _shape = { ...schema._zod.def.shape, ...shape };
-            util_assignProp(this, "shape", _shape); // self-caching
-            return _shape;
-        },
-    });
-    return clone(schema, def);
+    return clone(schema, mergeDefs(schema._zod.def, { shape: extended(schema, shape) }));
 }
 function merge(a, b) {
     if (!b?._zod?.def) {
@@ -32039,12 +32258,11 @@ function merge(a, b) {
     if (a._zod.def.checks?.length) {
         throw new Error(".merge() cannot be used on object schemas containing refinements. Use .safeExtend() instead.");
     }
+    const newShape = {};
+    mirrorShape(newShape, a, Reflect.ownKeys(sourceShape(a)));
+    mirrorShape(newShape, b, Reflect.ownKeys(sourceShape(b)));
     const def = mergeDefs(a._zod.def, {
-        get shape() {
-            const _shape = { ...a._zod.def.shape, ...b._zod.def.shape };
-            util_assignProp(this, "shape", _shape); // self-caching
-            return _shape;
-        },
+        shape: newShape,
         get catchall() {
             return b._zod.def.catchall;
         },
@@ -32059,78 +32277,19 @@ function partial(Class, schema, mask, name = "partial") {
     if (hasChecks) {
         throw new Error(`.${name}() cannot be used on object schemas containing refinements`);
     }
-    const def = mergeDefs(schema._zod.def, {
-        get shape() {
-            const oldShape = schema._zod.def.shape;
-            const shape = { ...oldShape };
-            if (mask) {
-                for (const key of Reflect.ownKeys(mask)) {
-                    if (!Object.prototype.hasOwnProperty.call(oldShape, key)) {
-                        throw new Error(`Unrecognized key: "${String(key)}"`);
-                    }
-                    if (!mask[key])
-                        continue;
-                    // if (oldShape[key]!._zod.optin === "optional") continue;
-                    shape[key] = Class
-                        ? new Class({
-                            type: "optional",
-                            innerType: oldShape[key],
-                        })
-                        : oldShape[key];
-                }
-            }
-            else {
-                // the spread copies symbol keys; `for...in` would not reach them
-                for (const key of Reflect.ownKeys(oldShape)) {
-                    // if (oldShape[key]!._zod.optin === "optional") continue;
-                    shape[key] = Class
-                        ? new Class({
-                            type: "optional",
-                            innerType: oldShape[key],
-                        })
-                        : oldShape[key];
-                }
-            }
-            util_assignProp(this, "shape", shape); // self-caching
-            return shape;
-        },
-        checks: [],
-    });
-    return clone(schema, def);
+    const selected = mask ? new Set(maskedKeys(schema, mask)) : undefined;
+    const newShape = {};
+    mirrorShape(newShape, schema, Reflect.ownKeys(sourceShape(schema)), Class &&
+        ((value, key) => (selected && !selected.has(key) ? value : new Class({ type: "optional", innerType: value }))));
+    return clone(schema, mergeDefs(schema._zod.def, { shape: newShape, checks: [] }));
 }
 function required(Class, schema, mask) {
-    const def = mergeDefs(schema._zod.def, {
-        get shape() {
-            const oldShape = schema._zod.def.shape;
-            const shape = { ...oldShape };
-            if (mask) {
-                for (const key of Reflect.ownKeys(mask)) {
-                    if (!Object.prototype.hasOwnProperty.call(shape, key)) {
-                        throw new Error(`Unrecognized key: "${String(key)}"`);
-                    }
-                    if (!mask[key])
-                        continue;
-                    // overwrite with non-optional
-                    shape[key] = new Class({
-                        type: "nonoptional",
-                        innerType: oldShape[key],
-                    });
-                }
-            }
-            else {
-                for (const key of Reflect.ownKeys(oldShape)) {
-                    // overwrite with non-optional
-                    shape[key] = new Class({
-                        type: "nonoptional",
-                        innerType: oldShape[key],
-                    });
-                }
-            }
-            util_assignProp(this, "shape", shape); // self-caching
-            return shape;
-        },
-    });
-    return clone(schema, def);
+    const selected = mask ? new Set(maskedKeys(schema, mask)) : undefined;
+    const newShape = {};
+    mirrorShape(newShape, schema, Reflect.ownKeys(sourceShape(schema)), (value, key) => 
+    // overwrite with non-optional
+    selected && !selected.has(key) ? value : new Class({ type: "nonoptional", innerType: value }));
+    return clone(schema, mergeDefs(schema._zod.def, { shape: newShape }));
 }
 // invalid_type | too_big | too_small | invalid_format | not_multiple_of | unrecognized_keys | invalid_union | invalid_key | invalid_element | invalid_value | custom
 function aborted(x, startIndex = 0) {
@@ -32192,13 +32351,19 @@ function finalizeIssue(iss, ctx, config) {
             unwrapMessage(config.customError?.(iss)) ??
             unwrapMessage(config.localeError?.(iss)) ??
             "Invalid input");
-    const { inst: _inst, schema: _schema, continue: _continue, input: _input, ...rest } = iss;
-    rest.path ?? (rest.path = []);
-    rest.message = message;
-    if (ctx?.reportInput) {
-        rest.input = _input;
+    // an explicit own-key copy beats object rest with excluded keys, which v8 routes through a generic runtime call; Object.keys rather than for-in so an issue pushed with a prototype does not leak inherited keys, and an own __proto__ key is dropped rather than assigned through the setter
+    const full = {};
+    for (const k of Object.keys(iss)) {
+        if (k === "inst" || k === "schema" || k === "continue" || k === "input" || k === "__proto__")
+            continue;
+        full[k] = iss[k];
     }
-    return rest;
+    full.path ?? (full.path = []);
+    full.message = message;
+    if (ctx?.reportInput) {
+        full.input = iss.input;
+    }
+    return full;
 }
 function getSizableOrigin(input) {
     if (input instanceof Set)
@@ -32345,6 +32510,24 @@ function own(inst, key, value, enumerable = true) {
 function hide(inst, key, value) {
     return own(inst, key, value, false);
 }
+/** Adds members a table derives from the instance: each builds on first read and shadows as own data, and assignment shadows the same way, as when these were own properties. */
+function derived(computes, table) {
+    for (const key in computes) {
+        const compute = computes[key];
+        // an object literal's accessor is configurable and enumerable, and `members` copies the descriptor as written
+        Object.defineProperty(table, key, {
+            configurable: true,
+            enumerable: true,
+            get() {
+                return own(this, key, compute(this));
+            },
+            set(value) {
+                own(this, key, value);
+            },
+        });
+    }
+    return table;
+}
 function defineBound(proto, key, fn) {
     Object.defineProperty(proto, key, {
         configurable: true,
@@ -32450,7 +32633,7 @@ function constantCatch(value) {
     return fn;
 }
 
-;// CONCATENATED MODULE: ../action/node_modules/zod/v4/core/core.js
+;// CONCATENATED MODULE: ./node_modules/zod/v4/core/core.js
 var _a;
 
 /** A special constant with type `never` */
@@ -32511,7 +32694,7 @@ proto, params) {
                 _zodDesc.value = undefined;
             }
         }
-        if (inst._zod.traits.has(name)) {
+        else if (inst._zod.traits.has(name)) {
             return;
         }
         inst._zod.traits.add(name);
@@ -32593,7 +32776,8 @@ function config(newConfig) {
     return globalConfig;
 }
 
-;// CONCATENATED MODULE: ../action/node_modules/zod/v4/core/memoizer.js
+;// CONCATENATED MODULE: ./node_modules/zod/v4/core/memoizer.js
+
 class $ZodCyclicError extends Error {
     constructor() {
         super(`Cannot parse a reference cycle that closes through a transform`);
@@ -32603,32 +32787,62 @@ class $ZodCyclicError extends Error {
 /** Keyed off the context object every schema in one parse call already shares. */
 const STATE = "~memo";
 const NO_ISSUES = [];
+// a value a cycle can close through
+function isRef(value) {
+    return value !== null && typeof value === "object";
+}
 // Receivers prefix paths in place, so the cache and every hand-out need their own copies.
 function cloneIssues(issues) {
     return issues.map((iss) => (iss.path ? { ...iss, path: iss.path.slice() } : { ...iss }));
 }
 const recursive = /*@__PURE__*/ new WeakMap();
+/** What the walk established, in order of certainty: ordered so the strongest answer among children wins. */
+const NONE = 0;
+const ASSUMED = 1;
+const PROVEN = 2;
 /** Whether this schema's subtree contains a cycle, so one parse can re-enter it. */
-function isRecursive(inst, stack) {
+function isRecursive(inst, stack, resolve) {
     const cached = recursive.get(inst);
     if (cached !== undefined)
-        return cached;
+        return cached ? PROVEN : NONE;
     // Relative to the walk in progress, so not cached.
     if (stack.has(inst))
-        return true;
+        return PROVEN;
     stack.add(inst);
-    let result = false;
+    let result = NONE;
     const check = (child) => {
-        if (!result && child?._zod && isRecursive(child, stack))
-            result = true;
+        if (result !== PROVEN && child?._zod) {
+            const answer = isRecursive(child, stack, resolve);
+            if (answer > result)
+                result = answer;
+        }
+    };
+    // `Reflect.ownKeys` rather than `Object.keys`, so a cycle through a declared symbol key is still seen
+    const shape = (sh, spread) => {
+        let answer = NONE;
+        for (const key of Reflect.ownKeys(sh)) {
+            const desc = Object.getOwnPropertyDescriptor(sh, key);
+            // an object resolves its shape by spread, so a key it does not enumerate is never parsed; `z.properties` reads every own key and so keeps them all
+            if (spread && !desc.enumerable)
+                continue;
+            // resolving runs user code, and a factory mints a fresh subtree per read, so an edge the walk can't follow counts as a cycle
+            const child = desc.get ? ASSUMED : desc.value?._zod ? isRecursive(desc.value, stack, resolve) : NONE;
+            if (child > answer)
+                answer = child;
+        }
+        return answer;
+    };
+    const merge = (answer) => {
+        if (answer > result)
+            result = answer;
     };
     const def = inst._zod.def;
     const kind = def.type;
     switch (kind) {
         case "object": {
-            // `Reflect.ownKeys` rather than `Object.keys`, so a cycle through a declared symbol key is still seen
-            for (const key of Reflect.ownKeys(def.shape))
-                check(def.shape[key]);
+            const raw = rawShape(def);
+            // a def with no raw shape answers `shape` from an accessor of its own, and running that can mint a whole fresh subtree
+            merge(raw ? shape(raw, true) : ASSUMED);
             check(def.catchall);
             break;
         }
@@ -32675,10 +32889,13 @@ function isRecursive(inst, stack) {
             check(def.input);
             check(def.output);
             break;
-        // reading `_zod.innerType` resolves the getter once and caches it
-        case "lazy":
-            check(inst._zod.innerType);
+        // `$ZodLazy` caches its inner on the def, so a resolved edge is followed exactly
+        case "lazy": {
+            const inner = def._cachedInner ?? (resolve ? inst._zod.innerType : undefined);
+            // walked with resolution off: one hop sees past the deferral, and a lazy that yields only another unresolved lazy is generative, so it stops there
+            merge(inner ? isRecursive(inner, stack, false) : ASSUMED);
             break;
+        }
         // a leaf by choice: `parts` are regex fragments, not data positions
         case "template_literal":
         // leaves
@@ -32722,8 +32939,13 @@ function isRecursive(inst, stack) {
         }
     }
     stack.delete(inst);
-    recursive.set(inst, result);
-    return result;
+    return settle(inst, result);
+}
+/** An assumed answer must not outlive the resolution that settles it, so only a certain one is cached. */
+function settle(inst, answer) {
+    if (answer !== ASSUMED)
+        recursive.set(inst, answer === PROVEN);
+    return answer;
 }
 /**
  * Whether one parse can re-enter this schema, i.e. its subtree contains a cycle.
@@ -32732,12 +32954,13 @@ function isRecursive(inst, stack) {
  * generated fast path has no context to key on.
  */
 function isRecursiveSchema(inst) {
-    return isRecursive(inst, new Set());
+    // z.compile never parses, so nothing would ever resolve a lazy for it; it runs once and already treats a throw here as recursive
+    return isRecursive(inst, new Set(), true) !== NONE;
 }
 function bucketFor(state, inst) {
     let bucket = state.buckets.get(inst);
     if (!bucket) {
-        bucket = new Map();
+        bucket = new WeakMap();
         state.buckets.set(inst, bucket);
     }
     return bucket;
@@ -32776,7 +32999,8 @@ const memo = {
     attach(inst) {
         var _a;
         let isRecursiveInst;
-        // `bucket` memoized for one parse; a recursive schema is re-entered many times and its bucket never changes
+        let rechecked = false;
+        // a recursive schema is re-entered many times per parse and its bucket never changes
         let lastCtx;
         let lastBucket;
         // Wraps `parse` in a deferred so it sees the container's final parse. Core's own deferred copies `parse` into `run` when there are no checks, and it ran first, so `run` is patched to match; with checks, `run` reads `parse` dynamically.
@@ -32785,21 +33009,26 @@ const memo = {
             const base = inst._zod.parse;
             const wrapped = (payload, ctx) => {
                 if (isRecursiveInst === undefined) {
-                    isRecursiveInst = isRecursive(inst, new Set());
-                    if (!isRecursiveInst) {
+                    const walked = isRecursive(inst, new Set(), false);
+                    if (walked === NONE) {
                         // Nothing here can ever fire, so take it back out.
                         inst._zod.parse = base;
                         if (inst._zod.run === wrapped)
                             inst._zod.run = base;
                         return base(payload, ctx);
                     }
+                    // this parse resolves the deferred edges on its own path, so ask once more before latching
+                    if (walked === PROVEN || rechecked)
+                        isRecursiveInst = true;
+                    else
+                        rechecked = true;
                 }
                 const input = payload.value;
-                if (input === null || typeof input !== "object")
+                if (!isRef(input))
                     return base(payload, ctx);
                 let state = ctx[STATE];
                 if (!state) {
-                    state = { buckets: new Map(), backEdges: undefined };
+                    state = { buckets: new WeakMap(), backEdges: undefined };
                     ctx[STATE] = state;
                 }
                 let bucket;
@@ -32821,7 +33050,7 @@ const memo = {
                     else {
                         // Still being parsed: its own checks cover it, so skip them here.
                         payload.memo = true;
-                        state.backEdges ?? (state.backEdges = new Set());
+                        state.backEdges ?? (state.backEdges = new WeakSet());
                         state.backEdges.add(hit.value);
                     }
                     return payload;
@@ -32857,10 +33086,10 @@ function memoizer() {
 /** Whether this value is a node a back-edge resolved to before it finished. */
 function isBackEdge(ctx, value) {
     const backEdges = ctx[STATE]?.backEdges;
-    return backEdges !== undefined && value !== null && typeof value === "object" && backEdges.has(value);
+    return backEdges !== undefined && isRef(value) && backEdges.has(value);
 }
 
-;// CONCATENATED MODULE: ../action/node_modules/zod/v4/core/regexes.js
+;// CONCATENATED MODULE: ./node_modules/zod/v4/core/regexes.js
 
 /**
  * @deprecated CUID v1 is deprecated by its authors due to information leakage
@@ -32894,7 +33123,7 @@ const uuid4 = /*@__PURE__*/ (/* unused pure expression or super */ null && (uuid
 const uuid6 = /*@__PURE__*/ (/* unused pure expression or super */ null && (uuid(6)));
 const uuid7 = /*@__PURE__*/ (/* unused pure expression or super */ null && (uuid(7)));
 /** Practical email validation */
-const email = /^(?!\.)(?!.*\.\.)([A-Za-z0-9_'+\-\.]*)[A-Za-z0-9_+-]@([A-Za-z0-9][A-Za-z0-9\-]*\.)+[A-Za-z]{2,}$/;
+const email = /^(?:[A-Za-z0-9_'+\-]+\.)*[A-Za-z0-9_'+\-]*[A-Za-z0-9_+-]@(?:[A-Za-z0-9][A-Za-z0-9\-]*\.)+[A-Za-z]{2,}$/;
 /** Equivalent to the HTML5 input[type=email] validation implemented by browsers. Source: https://developer.mozilla.org/en-US/docs/Web/HTML/Element/input/email */
 const html5Email = /^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$/;
 /** The classic emailregex.com regex for RFC 5322-compliant emails */
@@ -32904,8 +33133,8 @@ const unicodeEmail = /^[^\s@"]{1,64}@[^\s@]{1,255}$/u;
 const idnEmail = (/* unused pure expression or super */ null && (unicodeEmail));
 const browserEmail = /^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$/;
 // from https://thekevinscott.com/emojis-in-javascript/#writing-a-regular-expression
-// Single character class, not an alternation: the two properties overlap (U+1F9B0-U+1F9B3), so `(A|B)+` backtracks exponentially on a failed match.
-const _emoji = `^[\\p{Extended_Pictographic}\\p{Emoji_Component}]+$`;
+// Single character class, not an alternation: the two properties overlap (U+1F9B0-U+1F9B3), so `(A|B)+` backtracks exponentially on a failed match. The leading lookahead then demands one anchor — a pictograph, a regional indicator, or the enclosing keycap — because `\p{Emoji_Component}` on its own covers ASCII digits, `#`, `*`, ZWJ, variation selectors and skin tone modifiers, none of which is an emoji without a base.
+const _emoji = `^(?=[\\s\\S]*[\\p{Extended_Pictographic}\\p{Regional_Indicator}\\u20E3])[\\p{Extended_Pictographic}\\p{Emoji_Component}]+$`;
 function emoji() {
     return new RegExp(_emoji, "u");
 }
@@ -32919,7 +33148,7 @@ const cidrv4 = /^((25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9][0-9]|[0-9])\.){3}(25[0-
 const cidrv6 = /^(([0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,7}:|([0-9a-fA-F]{1,4}:){1,6}:[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,5}(:[0-9a-fA-F]{1,4}){1,2}|([0-9a-fA-F]{1,4}:){1,4}(:[0-9a-fA-F]{1,4}){1,3}|([0-9a-fA-F]{1,4}:){1,3}(:[0-9a-fA-F]{1,4}){1,4}|([0-9a-fA-F]{1,4}:){1,2}(:[0-9a-fA-F]{1,4}){1,5}|[0-9a-fA-F]{1,4}:((:[0-9a-fA-F]{1,4}){1,6})|:((:[0-9a-fA-F]{1,4}){1,7}|:))\/(12[0-8]|1[01][0-9]|[1-9]?[0-9])$/;
 // https://stackoverflow.com/questions/7860392/determine-if-string-is-in-base64-using-javascript
 const base64 = /^$|^(?:[0-9a-zA-Z+/]{4})*(?:(?:[0-9a-zA-Z+/]{2}==)|(?:[0-9a-zA-Z+/]{3}=))?$/;
-const base64url = /^[A-Za-z0-9_-]*$/;
+const base64url = /^(?:[A-Za-z0-9_-]{4})*(?:[A-Za-z0-9_-]{2,3})?$/;
 // based on https://stackoverflow.com/questions/106179/regular-expression-to-match-dns-hostname-or-ip-address
 // export const hostname: RegExp = /^([a-zA-Z0-9-]+\.)*[a-zA-Z0-9-]+$/;
 const hostname = /^(?=.{1,253}\.?$)[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[-0-9a-zA-Z]{0,61}[0-9a-zA-Z])?)*\.?$/;
@@ -32929,6 +33158,10 @@ const httpProtocol = /^https?$/;
 const e164 = /^\+[1-9]\d{6,14}$/;
 // Credit card shape: 12–19 digits, optionally separated by single spaces or single hyphens. ISO/IEC 7812 caps the PAN at 19 digits; 12 is the shortest issued length (Maestro).
 const creditCard = /^\d(?:[ -]?\d){11,18}$/;
+// ISO 4217 alpha codes from the SIX list, regenerated by scripts/update-iso-4217.ts
+const currencyCode = /^(?:AED|AFN|ALL|AMD|AOA|ARS|AUD|AWG|AZN|BAM|BBD|BDT|BHD|BIF|BMD|BND|BOB|BOV|BRL|BSD|BTN|BWP|BYN|BZD|CAD|CDF|CHE|CHF|CHW|CLF|CLP|CNY|COP|COU|CRC|CUP|CVE|CZK|DJF|DKK|DOP|DZD|EGP|ERN|ETB|EUR|FJD|FKP|GBP|GEL|GHS|GIP|GMD|GNF|GTQ|GYD|HKD|HNL|HTG|HUF|IDR|ILS|INR|IQD|IRR|ISK|JMD|JOD|JPY|KES|KGS|KHR|KMF|KPW|KRW|KWD|KYD|KZT|LAK|LBP|LKR|LRD|LSL|LYD|MAD|MDL|MGA|MKD|MMK|MNT|MOP|MRU|MUR|MVR|MWK|MXN|MXV|MYR|MZN|NAD|NGN|NIO|NOK|NPR|NZD|OMR|PAB|PEN|PGK|PHP|PKR|PLN|PYG|QAR|RON|RSD|RUB|RWF|SAR|SBD|SCR|SDG|SEK|SGD|SHP|SLE|SOS|SRD|SSP|STN|SVC|SYP|SZL|THB|TJS|TMT|TND|TOP|TRY|TTD|TWD|TZS|UAH|UGX|USD|USN|UYI|UYU|UYW|UZS|VED|VES|VND|VUV|WST|XAD|XAF|XAG|XAU|XBA|XBB|XBC|XBD|XCD|XCG|XDR|XOF|XPD|XPF|XPT|XSU|XTS|XUA|XXX|YER|ZAR|ZMW|ZWG)$/;
+// iban electronic format: 2-letter country, check digits 02-98 (the only values `98 - remainder` can produce), 11-30 bban characters
+const iban = /^[A-Z]{2}(?!00|01|99)\d{2}[A-Z0-9]{11,30}$/;
 const dateSource = `(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))`;
 /** Anchors a pattern source. The interpolation lives here rather than at the call site because
  * esbuild will not drop a `@__PURE__` call whose own argument interpolates a variable, but it
@@ -32964,6 +33197,8 @@ function datetime(args) {
     const timeRegex = args.local ? `${qualified}|${timeSource({ precision: args.precision })}` : qualified;
     return new RegExp(`^${dateSource}T(?:${timeRegex})$`);
 }
+// the unbounded form of `string()` as a literal, so every plain string shares one instance instead of building its own
+const anyString = /^[\s\S]{0,}$/;
 const string = (params) => {
     const regex = params ? `[\\s\\S]{${params?.minimum ?? 0},${params?.maximum ?? ""}}` : `[\\s\\S]*`;
     return new RegExp(`^${regex}$`);
@@ -33012,7 +33247,7 @@ const sha512_hex = /^[0-9a-fA-F]{128}$/;
 const sha512_base64 = /*@__PURE__*/ (/* unused pure expression or super */ null && (fixedBase64(86, "==")));
 const sha512_base64url = /*@__PURE__*/ (/* unused pure expression or super */ null && (fixedBase64url(86)));
 
-;// CONCATENATED MODULE: ../action/node_modules/zod/v4/core/checks.js
+;// CONCATENATED MODULE: ./node_modules/zod/v4/core/checks.js
 // import { $ZodType } from "./schemas.js";
 
 
@@ -33041,16 +33276,6 @@ const numericOriginMap = {
 const $ZodCheckLessThan = /*@__PURE__*/ $constructor("$ZodCheckLessThan", (inst, def) => {
     $ZodCheck.init(inst, def);
     const origin = numericOriginMap[typeof def.value];
-    inst._zod.onattach.push((inst) => {
-        const bag = inst._zod.bag;
-        const curr = (def.inclusive ? bag.maximum : bag.exclusiveMaximum) ?? Number.POSITIVE_INFINITY;
-        if (def.value < curr) {
-            if (def.inclusive)
-                bag.maximum = def.value;
-            else
-                bag.exclusiveMaximum = def.value;
-        }
-    });
     inst._zod.check = (payload) => {
         if (def.inclusive ? payload.value <= def.value : payload.value < def.value) {
             return;
@@ -33069,16 +33294,6 @@ const $ZodCheckLessThan = /*@__PURE__*/ $constructor("$ZodCheckLessThan", (inst,
 const $ZodCheckGreaterThan = /*@__PURE__*/ $constructor("$ZodCheckGreaterThan", (inst, def) => {
     $ZodCheck.init(inst, def);
     const origin = numericOriginMap[typeof def.value];
-    inst._zod.onattach.push((inst) => {
-        const bag = inst._zod.bag;
-        const curr = (def.inclusive ? bag.minimum : bag.exclusiveMinimum) ?? Number.NEGATIVE_INFINITY;
-        if (def.value > curr) {
-            if (def.inclusive)
-                bag.minimum = def.value;
-            else
-                bag.exclusiveMinimum = def.value;
-        }
-    });
     inst._zod.check = (payload) => {
         if (def.inclusive ? payload.value >= def.value : payload.value > def.value) {
             return;
@@ -33097,10 +33312,6 @@ const $ZodCheckGreaterThan = /*@__PURE__*/ $constructor("$ZodCheckGreaterThan", 
 const $ZodCheckMultipleOf = 
 /*@__PURE__*/ $constructor("$ZodCheckMultipleOf", (inst, def) => {
     $ZodCheck.init(inst, def);
-    inst._zod.onattach.push((inst) => {
-        var _a;
-        (_a = inst._zod.bag).multipleOf ?? (_a.multipleOf = def.value);
-    });
     inst._zod.check = (payload) => {
         if (typeof payload.value !== typeof def.value)
             throw new Error("Cannot mix number and bigint in multiple_of check.");
@@ -33126,14 +33337,6 @@ const $ZodCheckNumberFormat = /*@__PURE__*/ $constructor("$ZodCheckNumberFormat"
     const isInt = def.format?.includes("int");
     const origin = isInt ? "int" : "number";
     const [minimum, maximum] = NUMBER_FORMAT_RANGES[def.format];
-    inst._zod.onattach.push((inst) => {
-        const bag = inst._zod.bag;
-        bag.format = def.format;
-        bag.minimum = minimum;
-        bag.maximum = maximum;
-        if (isInt)
-            bag.pattern = integer;
-    });
     inst._zod.check = (payload) => {
         const input = payload.value;
         if (isInt) {
@@ -33222,12 +33425,6 @@ const $ZodCheckNumberFormat = /*@__PURE__*/ $constructor("$ZodCheckNumberFormat"
 const $ZodCheckBigIntFormat = /*@__PURE__*/ (/* unused pure expression or super */ null && (core.$constructor("$ZodCheckBigIntFormat", (inst, def) => {
     $ZodCheck.init(inst, def); // no format checks
     const [minimum, maximum] = util.BIGINT_FORMAT_RANGES[def.format];
-    inst._zod.onattach.push((inst) => {
-        const bag = inst._zod.bag;
-        bag.format = def.format;
-        bag.minimum = minimum;
-        bag.maximum = maximum;
-    });
     inst._zod.check = (payload) => {
         const input = payload.value;
         if (input < minimum) {
@@ -33258,11 +33455,6 @@ const $ZodCheckMaxSize = /*@__PURE__*/ (/* unused pure expression or super */ nu
     var _a;
     $ZodCheck.init(inst, def);
     (_a = inst._zod.def).when ?? (_a.when = _whenHasSize);
-    inst._zod.onattach.push((inst) => {
-        const curr = (inst._zod.bag.maximum ?? Number.POSITIVE_INFINITY);
-        if (def.maximum < curr)
-            inst._zod.bag.maximum = def.maximum;
-    });
     inst._zod.check = (payload) => {
         const input = payload.value;
         const size = input.size;
@@ -33283,11 +33475,6 @@ const $ZodCheckMinSize = /*@__PURE__*/ (/* unused pure expression or super */ nu
     var _a;
     $ZodCheck.init(inst, def);
     (_a = inst._zod.def).when ?? (_a.when = _whenHasSize);
-    inst._zod.onattach.push((inst) => {
-        const curr = (inst._zod.bag.minimum ?? Number.NEGATIVE_INFINITY);
-        if (def.minimum > curr)
-            inst._zod.bag.minimum = def.minimum;
-    });
     inst._zod.check = (payload) => {
         const input = payload.value;
         const size = input.size;
@@ -33308,12 +33495,6 @@ const $ZodCheckSizeEquals = /*@__PURE__*/ (/* unused pure expression or super */
     var _a;
     $ZodCheck.init(inst, def);
     (_a = inst._zod.def).when ?? (_a.when = _whenHasSize);
-    inst._zod.onattach.push((inst) => {
-        const bag = inst._zod.bag;
-        bag.minimum = def.size;
-        bag.maximum = def.size;
-        bag.size = def.size;
-    });
     inst._zod.check = (payload) => {
         const input = payload.value;
         const size = input.size;
@@ -33335,11 +33516,6 @@ const $ZodCheckMaxLength = /*@__PURE__*/ $constructor("$ZodCheckMaxLength", (ins
     var _a;
     $ZodCheck.init(inst, def);
     (_a = inst._zod.def).when ?? (_a.when = _whenHasLength);
-    inst._zod.onattach.push((inst) => {
-        const curr = (inst._zod.bag.maximum ?? Number.POSITIVE_INFINITY);
-        if (def.maximum < curr)
-            inst._zod.bag.maximum = def.maximum;
-    });
     inst._zod.check = (payload) => {
         const input = payload.value;
         const units = input.length;
@@ -33363,11 +33539,6 @@ const $ZodCheckMinLength = /*@__PURE__*/ $constructor("$ZodCheckMinLength", (ins
     var _a;
     $ZodCheck.init(inst, def);
     (_a = inst._zod.def).when ?? (_a.when = _whenHasLength);
-    inst._zod.onattach.push((inst) => {
-        const curr = (inst._zod.bag.minimum ?? Number.NEGATIVE_INFINITY);
-        if (def.minimum > curr)
-            inst._zod.bag.minimum = def.minimum;
-    });
     inst._zod.check = (payload) => {
         const input = payload.value;
         const units = input.length;
@@ -33393,12 +33564,6 @@ const $ZodCheckLengthEquals = /*@__PURE__*/ $constructor("$ZodCheckLengthEquals"
     var _a;
     $ZodCheck.init(inst, def);
     (_a = inst._zod.def).when ?? (_a.when = _whenHasLength);
-    inst._zod.onattach.push((inst) => {
-        const bag = inst._zod.bag;
-        bag.minimum = def.length;
-        bag.maximum = def.length;
-        bag.length = def.length;
-    });
     inst._zod.check = (payload) => {
         const input = payload.value;
         const units = input.length;
@@ -33424,14 +33589,6 @@ const $ZodCheckLengthEquals = /*@__PURE__*/ $constructor("$ZodCheckLengthEquals"
 const $ZodCheckStringFormat = /*@__PURE__*/ $constructor("$ZodCheckStringFormat", (inst, def) => {
     var _a, _b;
     $ZodCheck.init(inst, def);
-    inst._zod.onattach.push((inst) => {
-        const bag = inst._zod.bag;
-        bag.format = def.format;
-        if (def.pattern) {
-            bag.patterns ?? (bag.patterns = new Set());
-            bag.patterns.add(def.pattern);
-        }
-    });
     if (def.pattern)
         (_a = inst._zod).check ?? (_a.check = (payload) => {
             def.pattern.lastIndex = 0;
@@ -33483,11 +33640,6 @@ const $ZodCheckIncludes = /*@__PURE__*/ $constructor("$ZodCheckIncludes", (inst,
     // (`{N,}`), not exactly `position` chars (`{N}`).
     const pattern = new RegExp(typeof def.position === "number" ? `^.{${def.position},}${escapedRegex}` : escapedRegex);
     def.pattern = pattern;
-    inst._zod.onattach.push((inst) => {
-        const bag = inst._zod.bag;
-        bag.patterns ?? (bag.patterns = new Set());
-        bag.patterns.add(pattern);
-    });
     inst._zod.check = (payload) => {
         if (payload.value.includes(def.includes, def.position))
             return;
@@ -33506,11 +33658,6 @@ const $ZodCheckStartsWith = /*@__PURE__*/ $constructor("$ZodCheckStartsWith", (i
     $ZodCheck.init(inst, def);
     const pattern = new RegExp(`^${escapeRegex(def.prefix)}.*`);
     def.pattern ?? (def.pattern = pattern);
-    inst._zod.onattach.push((inst) => {
-        const bag = inst._zod.bag;
-        bag.patterns ?? (bag.patterns = new Set());
-        bag.patterns.add(pattern);
-    });
     inst._zod.check = (payload) => {
         if (payload.value.startsWith(def.prefix))
             return;
@@ -33529,11 +33676,6 @@ const $ZodCheckEndsWith = /*@__PURE__*/ $constructor("$ZodCheckEndsWith", (inst,
     $ZodCheck.init(inst, def);
     const pattern = new RegExp(`.*${escapeRegex(def.suffix)}$`);
     def.pattern ?? (def.pattern = pattern);
-    inst._zod.onattach.push((inst) => {
-        const bag = inst._zod.bag;
-        bag.patterns ?? (bag.patterns = new Set());
-        bag.patterns.add(pattern);
-    });
     inst._zod.check = (payload) => {
         if (payload.value.endsWith(def.suffix))
             return;
@@ -33553,7 +33695,7 @@ const $ZodCheckEndsWith = /*@__PURE__*/ $constructor("$ZodCheckEndsWith", (inst,
 ///////////////////////////////////
 function handleCheckPropertyResult(result, payload, property) {
     if (result.issues.length) {
-        payload.issues.push(...util.prefixIssues(property, result.issues));
+        payload.issues.push(...prefixIssues(property, result.issues));
     }
 }
 const $ZodCheckProperty = /*@__PURE__*/ (/* unused pure expression or super */ null && (core.$constructor("$ZodCheckProperty", (inst, def) => {
@@ -33570,12 +33712,40 @@ const $ZodCheckProperty = /*@__PURE__*/ (/* unused pure expression or super */ n
         return;
     };
 })));
+const $ZodCheckProperties = /*@__PURE__*/ $constructor("$ZodCheckProperties", (inst, def) => {
+    $ZodCheck.init(inst, def);
+    hide(inst, Symbol.iterator, function* () {
+        yield inst;
+    });
+    // key and schema snapshotted together: reading one live and the other cached lets a later mutation of the caller's shape object pair a stale key with a missing schema
+    let entries;
+    inst._zod.check = (payload) => {
+        // the base schema already typed the value, so only a nullish one is rejected here: the properties read on a primitive too, matching z.property() on a string's length
+        if (payload.value == null) {
+            payload.issues.push({ expected: "object", code: "invalid_type", input: payload.value, inst });
+            return undefined;
+        }
+        entries ?? (entries = Reflect.ownKeys(def.shape).map((key) => [key, def.shape[key]]));
+        const input = payload.value;
+        let proms;
+        for (const [key, schema] of entries) {
+            const result = schema._zod.run({ value: input[key], issues: [] }, {});
+            if (result instanceof Promise) {
+                proms ?? (proms = []);
+                proms.push(result.then((result) => handleCheckPropertyResult(result, payload, key)));
+            }
+            else {
+                handleCheckPropertyResult(result, payload, key);
+            }
+        }
+        if (proms)
+            return Promise.all(proms).then(() => undefined);
+        return undefined;
+    };
+});
 const $ZodCheckMimeType = /*@__PURE__*/ (/* unused pure expression or super */ null && (core.$constructor("$ZodCheckMimeType", (inst, def) => {
     $ZodCheck.init(inst, def);
     const mimeSet = new Set(def.mime);
-    inst._zod.onattach.push((inst) => {
-        inst._zod.bag.mime = def.mime;
-    });
     inst._zod.check = (payload) => {
         if (mimeSet.has(payload.value.type))
             return;
@@ -33595,7 +33765,7 @@ const $ZodCheckOverwrite = /*@__PURE__*/ $constructor("$ZodCheckOverwrite", (ins
     };
 });
 
-;// CONCATENATED MODULE: ../action/node_modules/zod/v4/core/doc.js
+;// CONCATENATED MODULE: ./node_modules/zod/v4/core/doc.js
 class Doc {
     constructor(args = [], closed = {}) {
         this.content = [];
@@ -33603,10 +33773,15 @@ class Doc {
         this.args = args;
         this.closed = closed;
     }
+    // the compiler catches a child's throw and keeps writing into this doc, so the indent has to unwind with it
     indented(fn) {
         this.indent += 1;
-        fn(this);
-        this.indent -= 1;
+        try {
+            fn(this);
+        }
+        finally {
+            this.indent -= 1;
+        }
     }
     write(arg) {
         if (typeof arg === "function") {
@@ -33630,442 +33805,14 @@ class Doc {
     }
 }
 
-;// CONCATENATED MODULE: ../action/node_modules/zod/v4/core/errors.js
-
-
-/* Computing the message eagerly is expensive (pretty-printed JSON of all
- * issues), so defer it until first read. The accessor functions and
- * descriptors are shared across instances to keep error construction
- * cheap; the computed message is cached on the internals object. The
- * setter preserves plain assignment semantics for consumers that
- * overwrite `message`. */
-function _getMessage() {
-    const internals = this._zod;
-    internals.message ?? (internals.message = JSON.stringify(internals.def, jsonStringifyReplacer, 2));
-    return internals.message;
-}
-function _setMessage(value) {
-    this._zod.message = value;
-}
-const _messageDesc = {
-    get: _getMessage,
-    set: _setMessage,
-    enumerable: true,
-    configurable: true,
-};
-const errors_zodDesc = { value: undefined, enumerable: false };
-const _issuesDesc = { value: undefined, enumerable: false };
-/* Prototypes that already carry the lazy `toString`. Seeded with the
- * intrinsics so that `init` on a foreign object — it accepts any object —
- * can never install an accessor onto a prototype we do not own. */
-const _installedToString = /* @__PURE__ */ new WeakSet([Object.prototype, Error.prototype]);
-const initializer = (inst, def) => {
-    inst.name = "$ZodError";
-    errors_zodDesc.value = inst._zod;
-    Object.defineProperty(inst, "_zod", errors_zodDesc);
-    _issuesDesc.value = def;
-    Object.defineProperty(inst, "issues", _issuesDesc);
-    // Clear the shared slots; a retained `value` pins the last error's issues.
-    errors_zodDesc.value = undefined;
-    _issuesDesc.value = undefined;
-    Object.defineProperty(inst, "message", _messageDesc);
-    /* `toString` lives as a non-enumerable lazy getter on the shared
-     * prototype; on first access it caches a per-instance closure so
-     * detached usage still works. */
-    const proto = Object.getPrototypeOf(inst);
-    if (!_installedToString.has(proto)) {
-        _installedToString.add(proto);
-        Object.defineProperty(proto, "toString", {
-            configurable: true,
-            enumerable: false,
-            get() {
-                const value = () => this.message;
-                Object.defineProperty(this, "toString", { value, configurable: true, writable: true });
-                return value;
-            },
-            set(value) {
-                Object.defineProperty(this, "toString", { value, configurable: true, writable: true });
-            },
-        });
-    }
-};
-const $ZodError = $constructor("$ZodError", initializer);
-const $ZodRealError = $constructor("$ZodError", initializer, undefined, {
-    Parent: Error,
-});
-/** Get-or-create `obj[key]` as an own data property. A path segment naming an inherited member
- * ("toString", "constructor") would otherwise read through to the prototype, and assigning
- * "__proto__" would hit the setter instead of creating a key. */
-function node(obj, key, make) {
-    if (!Object.prototype.hasOwnProperty.call(obj, key)) {
-        if (key === "__proto__") {
-            Object.defineProperty(obj, key, { value: make(), writable: true, enumerable: true, configurable: true });
-        }
-        else {
-            obj[key] = make();
-        }
-    }
-    return obj[key];
-}
-function flattenError(error, mapper = (issue) => issue.message) {
-    const fieldErrors = {};
-    const formErrors = [];
-    for (const sub of error.issues) {
-        if (sub.path.length > 0) {
-            node(fieldErrors, sub.path[0], () => []).push(mapper(sub));
-        }
-        else {
-            formErrors.push(mapper(sub));
-        }
-    }
-    return { formErrors, fieldErrors };
-}
-function formatError(error, mapper = (issue) => issue.message) {
-    const fieldErrors = { _errors: [] };
-    const processError = (error, path = []) => {
-        for (const issue of error.issues) {
-            if (issue.code === "invalid_union" && issue.errors.length) {
-                issue.errors.map((issues) => processError({ issues }, [...path, ...issue.path]));
-            }
-            else if (issue.code === "invalid_key") {
-                processError({ issues: issue.issues }, [...path, ...issue.path]);
-            }
-            else if (issue.code === "invalid_element") {
-                processError({ issues: issue.issues }, [...path, ...issue.path]);
-            }
-            else {
-                const fullpath = [...path, ...issue.path];
-                if (fullpath.length === 0) {
-                    fieldErrors._errors.push(mapper(issue));
-                }
-                else {
-                    let curr = fieldErrors;
-                    let i = 0;
-                    while (i < fullpath.length) {
-                        const el = fullpath[i];
-                        const terminal = i === fullpath.length - 1;
-                        // `_errors` is reserved by this legacy format, so merge a matching path segment into the current node instead of treating its array as a child.
-                        if (el === "_errors") {
-                            if (terminal)
-                                curr._errors.push(mapper(issue));
-                            i++;
-                            continue;
-                        }
-                        // A path element may collide with an inherited property name such as
-                        // "__proto__" or "constructor". Truthiness checks read the prototype
-                        // (so no node is created, then ._errors.push throws), and bracket
-                        // assignment of "__proto__" hits the setter instead of creating an
-                        // own key. Guard the read with hasOwnProperty and create the node
-                        // with defineProperty so any path element becomes a real own key.
-                        if (!Object.prototype.hasOwnProperty.call(curr, el)) {
-                            Object.defineProperty(curr, el, {
-                                value: { _errors: [] },
-                                enumerable: true,
-                                writable: true,
-                                configurable: true,
-                            });
-                        }
-                        const node = curr[el];
-                        if (terminal) {
-                            node._errors.push(mapper(issue));
-                        }
-                        curr = node;
-                        i++;
-                    }
-                }
-            }
-        }
-    };
-    processError(error);
-    return fieldErrors;
-}
-function treeifyError(error, mapper = (issue) => issue.message) {
-    const result = { errors: [] };
-    const processError = (error, path = []) => {
-        var _a;
-        for (const issue of error.issues) {
-            if (issue.code === "invalid_union" && issue.errors.length) {
-                // regular union error
-                issue.errors.map((issues) => processError({ issues }, [...path, ...issue.path]));
-            }
-            else if (issue.code === "invalid_key") {
-                processError({ issues: issue.issues }, [...path, ...issue.path]);
-            }
-            else if (issue.code === "invalid_element") {
-                processError({ issues: issue.issues }, [...path, ...issue.path]);
-            }
-            else {
-                const fullpath = [...path, ...issue.path];
-                if (fullpath.length === 0) {
-                    result.errors.push(mapper(issue));
-                    continue;
-                }
-                let curr = result;
-                let i = 0;
-                while (i < fullpath.length) {
-                    const el = fullpath[i];
-                    const terminal = i === fullpath.length - 1;
-                    if (typeof el === "string") {
-                        curr.properties ?? (curr.properties = {});
-                        // el may collide with an inherited property name ("__proto__",
-                        // "constructor", ...); ??= reads the prototype so the node is never
-                        // created and curr.errors.push throws. Guard with hasOwnProperty and
-                        // create the node with defineProperty so "__proto__" becomes a real
-                        // own key rather than invoking the prototype setter.
-                        if (!Object.prototype.hasOwnProperty.call(curr.properties, el)) {
-                            Object.defineProperty(curr.properties, el, {
-                                value: { errors: [] },
-                                enumerable: true,
-                                writable: true,
-                                configurable: true,
-                            });
-                        }
-                        curr = curr.properties[el];
-                    }
-                    else {
-                        curr.items ?? (curr.items = []);
-                        (_a = curr.items)[el] ?? (_a[el] = { errors: [] });
-                        curr = curr.items[el];
-                    }
-                    if (terminal) {
-                        curr.errors.push(mapper(issue));
-                    }
-                    i++;
-                }
-            }
-        }
-    };
-    processError(error);
-    return result;
-}
-/** Format a ZodError as a human-readable string in the following form.
- *
- * From
- *
- * ```ts
- * ZodError {
- *   issues: [
- *     {
- *       expected: 'string',
- *       code: 'invalid_type',
- *       path: [ 'username' ],
- *       message: 'Invalid input: expected string'
- *     },
- *     {
- *       expected: 'number',
- *       code: 'invalid_type',
- *       path: [ 'favoriteNumbers', 1 ],
- *       message: 'Invalid input: expected number'
- *     }
- *   ];
- * }
- * ```
- *
- * to
- *
- * ```
- * username
- *   ✖ Expected number, received string at "username
- * favoriteNumbers[0]
- *   ✖ Invalid input: expected number
- * ```
- */
-function toDotPath(_path) {
-    const segs = [];
-    const path = _path.map((seg) => (typeof seg === "object" ? seg.key : seg));
-    for (const seg of path) {
-        if (typeof seg === "number")
-            segs.push(`[${seg}]`);
-        else if (typeof seg === "symbol")
-            segs.push(`[${JSON.stringify(String(seg))}]`);
-        else if (/[^\w$]/.test(seg))
-            segs.push(`[${JSON.stringify(seg)}]`);
-        else {
-            if (segs.length)
-                segs.push(".");
-            segs.push(seg);
-        }
-    }
-    return segs.join("");
-}
-function prettifyError(error) {
-    const lines = [];
-    // sort by path length
-    const issues = [...error.issues].sort((a, b) => (a.path ?? []).length - (b.path ?? []).length);
-    // Process each issue
-    for (const issue of issues) {
-        lines.push(`✖ ${issue.message}`);
-        if (issue.path?.length)
-            lines.push(`  → at ${toDotPath(issue.path)}`);
-    }
-    // Convert Map to formatted string
-    return lines.join("\n");
-}
-
-;// CONCATENATED MODULE: ../action/node_modules/zod/v4/core/parse.js
-
-
-
-// Always both keys, so the `_params` read site in `_parse` sees one object shape rather than two.
-function finalizeParams(callee, params) {
-    return { callee: params?.callee ?? callee, Err: params?.Err };
-}
-const _parse = (_Err) => {
-    const fn = (schema, value, _ctx, _params) => {
-        const ctx = _ctx ? { ..._ctx, async: false } : { async: false };
-        const result = schema._zod.run({ value, issues: [] }, ctx);
-        if (result instanceof Promise) {
-            throw new $ZodAsyncError();
-        }
-        if (result.issues.length) {
-            const e = new (_params?.Err ?? _Err)(result.issues.map((iss) => finalizeIssue(iss, ctx, config())));
-            captureStackTrace(e, _params?.callee ?? fn);
-            throw e;
-        }
-        return result.value;
-    };
-    return fn;
-};
-const parse_parse = /* @__PURE__*/ _parse($ZodRealError);
-const _parseAsync = (_Err) => {
-    const fn = async (schema, value, _ctx, params) => {
-        const ctx = _ctx ? { ..._ctx, async: true } : { async: true };
-        let result = schema._zod.run({ value, issues: [] }, ctx);
-        if (result instanceof Promise)
-            result = await result;
-        if (result.issues.length) {
-            const e = new (params?.Err ?? _Err)(result.issues.map((iss) => finalizeIssue(iss, ctx, config())));
-            captureStackTrace(e, params?.callee ?? fn);
-            throw e;
-        }
-        return result.value;
-    };
-    return fn;
-};
-const parse_parseAsync = /* @__PURE__*/ _parseAsync($ZodRealError);
-const _safeParse = (_Err) => (schema, value, _ctx) => {
-    const ctx = _ctx ? { ..._ctx, async: false } : { async: false };
-    const result = schema._zod.run({ value, issues: [] }, ctx);
-    if (result instanceof Promise) {
-        throw new $ZodAsyncError();
-    }
-    return result.issues.length
-        ? {
-            success: false,
-            error: new (_Err ?? $ZodError)(result.issues.map((iss) => finalizeIssue(iss, ctx, config()))),
-        }
-        : { success: true, data: result.value };
-};
-const safeParse = /* @__PURE__*/ _safeParse($ZodRealError);
-const _safeParseAsync = (_Err) => async (schema, value, _ctx) => {
-    const ctx = _ctx ? { ..._ctx, async: true } : { async: true };
-    let result = schema._zod.run({ value, issues: [] }, ctx);
-    if (result instanceof Promise)
-        result = await result;
-    return result.issues.length
-        ? {
-            success: false,
-            error: new _Err(result.issues.map((iss) => finalizeIssue(iss, ctx, config()))),
-        }
-        : { success: true, data: result.value };
-};
-const safeParseAsync = /* @__PURE__*/ _safeParseAsync($ZodRealError);
-// registry mirrors of the compiler's sentinels, so this module never imports the compiler
-const COMPILE_INVALID = /* @__PURE__ */ (/* unused pure expression or super */ null && (Symbol.for("zod.compile.invalid")));
-const COMPILE_FALLBACK = /* @__PURE__ */ (/* unused pure expression or super */ null && (Symbol.for("zod.compile.fallback")));
-// Deliberately tiny, because v8 will not inline a body carrying the fallback's object literals and throw. Everything that is not the compiled happy path lives in validateFallback, and that split is worth ~35% on a compiled schema.
-const validate = ((schema, value, _ctx) => {
-    const validator = schema._zod.bag.validator;
-    if (validator !== undefined && validator(value) !== COMPILE_INVALID)
-        return true;
-    return validateFallback(schema, value, _ctx);
-});
-function validateFallback(schema, value, _ctx) {
-    const ctx = _ctx ? { ..._ctx, async: false } : { async: false };
-    const fallbackRun = schema._zod.bag.fallbackRun;
-    let result;
-    if (fallbackRun) {
-        // skip nested fast paths on the fallback, so user callbacks keep the at-most-twice bound
-        ctx[COMPILE_FALLBACK] = true;
-        result = fallbackRun({ value, issues: [] }, ctx);
-    }
-    else {
-        result = schema._zod.run({ value, issues: [] }, ctx);
-    }
-    if (result instanceof Promise) {
-        throw new core.$ZodAsyncError();
-    }
-    return result.issues.length === 0;
-}
-// no fast path: the compiler keeps async parses on the runtime, because a promise-returning callback that is not declared async compiles to a throw
-const validateAsync = async (schema, value, _ctx) => {
-    const ctx = _ctx ? { ..._ctx, async: true } : { async: true };
-    let result = schema._zod.run({ value, issues: [] }, ctx);
-    if (result instanceof Promise)
-        result = await result;
-    return result.issues.length === 0;
-};
-const _encode = (_Err) => {
-    const parse = _parse(_Err);
-    const fn = (schema, value, _ctx, _params) => {
-        const ctx = _ctx ? { ..._ctx, direction: "backward" } : { direction: "backward" };
-        return parse(schema, value, ctx, finalizeParams(fn, _params));
-    };
-    return fn;
-};
-const encode = /* @__PURE__*/ _encode($ZodRealError);
-const _decode = (_Err) => {
-    const parse = _parse(_Err);
-    const fn = (schema, value, _ctx, _params) => {
-        return parse(schema, value, _ctx, finalizeParams(fn, _params));
-    };
-    return fn;
-};
-const decode = /* @__PURE__*/ _decode($ZodRealError);
-const _encodeAsync = (_Err) => {
-    const parseAsync = _parseAsync(_Err);
-    const fn = async (schema, value, _ctx, _params) => {
-        const ctx = _ctx ? { ..._ctx, direction: "backward" } : { direction: "backward" };
-        return (await parseAsync(schema, value, ctx, finalizeParams(fn, _params)));
-    };
-    return fn;
-};
-const encodeAsync = /* @__PURE__*/ _encodeAsync($ZodRealError);
-const _decodeAsync = (_Err) => {
-    const parseAsync = _parseAsync(_Err);
-    const fn = async (schema, value, _ctx, _params) => {
-        return await parseAsync(schema, value, _ctx, finalizeParams(fn, _params));
-    };
-    return fn;
-};
-const decodeAsync = /* @__PURE__*/ _decodeAsync($ZodRealError);
-const _safeEncode = (_Err) => (schema, value, _ctx) => {
-    const ctx = _ctx ? { ..._ctx, direction: "backward" } : { direction: "backward" };
-    return _safeParse(_Err)(schema, value, ctx);
-};
-const safeEncode = /* @__PURE__*/ _safeEncode($ZodRealError);
-const _safeDecode = (_Err) => (schema, value, _ctx) => {
-    return _safeParse(_Err)(schema, value, _ctx);
-};
-const safeDecode = /* @__PURE__*/ _safeDecode($ZodRealError);
-const _safeEncodeAsync = (_Err) => async (schema, value, _ctx) => {
-    const ctx = _ctx ? { ..._ctx, direction: "backward" } : { direction: "backward" };
-    return _safeParseAsync(_Err)(schema, value, ctx);
-};
-const safeEncodeAsync = /* @__PURE__*/ _safeEncodeAsync($ZodRealError);
-const _safeDecodeAsync = (_Err) => async (schema, value, _ctx) => {
-    return _safeParseAsync(_Err)(schema, value, _ctx);
-};
-const safeDecodeAsync = /* @__PURE__*/ _safeDecodeAsync($ZodRealError);
-
-;// CONCATENATED MODULE: ../action/node_modules/zod/v4/core/versions.js
+;// CONCATENATED MODULE: ./node_modules/zod/v4/core/versions.js
 const version = {
     major: 4,
-    minor: 5,
-    patch: 4,
+    minor: 6,
+    patch: 5,
 };
 
-;// CONCATENATED MODULE: ../action/node_modules/zod/v4/core/schemas.js
+;// CONCATENATED MODULE: ./node_modules/zod/v4/core/schemas.js
 
 
 
@@ -34196,16 +33943,24 @@ const $ZodType = /*@__PURE__*/ $constructor("$ZodType", (inst, def) => {
     },
 });
 /** The Standard Schema surface for `inst`. Shared so wrappers can extend it without forcing it. */
-const toStandardResult = (r) => r.success ? { value: r.data } : { issues: r.error?.issues };
+// a Standard Schema result only reports issues, so a failure finalizes them straight off the raw payload: no ZodError, and no lazy result to read through
+const toStandardResult = (r, ctx) => r.issues.length ? { issues: r.issues.map((iss) => finalizeIssue(iss, ctx, config())) } : { value: r.value };
+async function validateAsync(inst, value) {
+    const ctx = { async: true };
+    return toStandardResult((await inst._zod.run({ value, issues: [] }, ctx)), ctx);
+}
 function standardProps(inst) {
     return {
         validate: (value) => {
+            const ctx = { async: false };
             try {
-                return toStandardResult(safeParse(inst, value));
+                const r = inst._zod.run({ value, issues: [] }, ctx);
+                if (!(r instanceof Promise))
+                    return toStandardResult(r, ctx);
             }
-            catch (_) {
-                return safeParseAsync(inst, value).then(toStandardResult);
-            }
+            catch (_) { }
+            // async function so a synchronously throwing check rejects instead of escaping validate
+            return validateAsync(inst, value);
         },
         vendor: "zod",
         version: 1,
@@ -34214,7 +33969,8 @@ function standardProps(inst) {
 
 const $ZodString = /*@__PURE__*/ $constructor("$ZodString", (inst, def) => {
     $ZodType.init(inst, def);
-    inst._zod.pattern = [...(inst?._zod.bag?.patterns ?? [])].pop() ?? string(inst._zod.bag);
+    // a format's own pattern, else unbounded; a template literal derives the check-aware form itself
+    inst._zod.pattern = def.pattern ?? anyString;
     inst._zod.parse = (payload, _) => {
         if (def.coerce)
             try {
@@ -34268,15 +34024,37 @@ const $ZodEmail = /*@__PURE__*/ $constructor("$ZodEmail", (inst, def) => {
 });
 /** The `://` guard rejected the input before the URL constructor saw it. */
 const URL_BAD_FORMAT = 1;
-/** The URL constructor rejected the input. */
+/** The URL parser rejected the input. */
 const URL_UNPARSEABLE = 2;
-/** Parses a URL for `$ZodURL`, applying the one guard the URL constructor cannot express. Returns the parsed URL, or a code naming the stage that rejected it — the runtime needs that distinction to pick an issue note, and compiled code only needs to know it is not a URL. */
+function canParseURL(input) {
+    try {
+        if (typeof URL !== "undefined" && typeof URL.canParse === "function")
+            return URL.canParse(input);
+        new URL(input);
+        return true;
+    }
+    catch {
+        return false;
+    }
+}
+function validateURL(trimmed, def) {
+    if (!("normalize" in def) && !("hostname" in def) && !("protocol" in def)) {
+        return canParseURL(trimmed) || URL_UNPARSEABLE;
+    }
+    return parseURLObject(trimmed, def);
+}
+/** Parses a URL while preserving the non-normalizing HTTP guard. */
 function parseURLObject(trimmed, def) {
     // When normalize is off, require :// for http/https URLs. This prevents strings like "http:example.com" or "https:/path" from being silently accepted
     if (!def.normalize && def.protocol?.source === httpProtocol.source && !/^https?:\/\//i.test(trimmed)) {
         return URL_BAD_FORMAT;
     }
     try {
+        if (typeof URL !== "undefined") {
+            const URLStatic = URL;
+            if (typeof URLStatic.parse === "function")
+                return URLStatic.parse(trimmed) ?? URL_UNPARSEABLE;
+        }
         // @ts-ignore
         return new URL(trimmed);
     }
@@ -34303,7 +34081,7 @@ const $ZodURL = /*@__PURE__*/ $constructor("$ZodURL", (inst, def) => {
         try {
             // Trim whitespace from input
             const trimmed = payload.value.trim();
-            const url = parseURLObject(trimmed, def);
+            const url = validateURL(trimmed, def);
             if (url === URL_BAD_FORMAT) {
                 payload.issues.push({
                     code: "invalid_format",
@@ -34323,6 +34101,10 @@ const $ZodURL = /*@__PURE__*/ $constructor("$ZodURL", (inst, def) => {
                     inst,
                     continue: !def.abort,
                 });
+                return;
+            }
+            if (url === true) {
+                payload.value = stripTabAndNewline(trimmed);
                 return;
             }
             if (def.hostname && !urlHostnameOk(url, def.hostname)) {
@@ -34400,13 +34182,6 @@ const $ZodKSUID = /*@__PURE__*/ $constructor("$ZodKSUID", (inst, def) => {
 const $ZodISODateTime = /*@__PURE__*/ $constructor("$ZodISODateTime", (inst, def) => {
     def.pattern ?? (def.pattern = datetime(def));
     $ZodStringFormat.init(inst, def);
-    // these two drop the offset or seconds `date-time` requires — on the bag not the def, since `z.string().check(...)` lands the format on a different schema
-    if (def.local || def.precision === -1) {
-        inst._zod.bag.laxFormat = true;
-        inst._zod.onattach.push((s) => {
-            s._zod.bag.laxFormat = true;
-        });
-    }
 });
 const $ZodISODate = /*@__PURE__*/ $constructor("$ZodISODate", (inst, def) => {
     def.pattern ?? (def.pattern = date);
@@ -34423,26 +34198,17 @@ const $ZodISODuration = /*@__PURE__*/ $constructor("$ZodISODuration", (inst, def
 const $ZodIPv4 = /*@__PURE__*/ $constructor("$ZodIPv4", (inst, def) => {
     def.pattern ?? (def.pattern = ipv4);
     $ZodStringFormat.init(inst, def);
-    inst._zod.bag.format = `ipv4`;
 });
 /** An IPv6 address is written with hex digits, colons and dots, and nothing else. The guard is what makes the check below an IPv6 check: `new URL("http://[...]")` parses an authority, not an address, so `@` and `\` re-delimit it and `"::@1\\"` validates against the host `0.0.0.1`. The URL parser also deletes ASCII tab, LF and CR rather than failing, which is how `"::1\n"` validated as `::1`. */
 const ipv6Alphabet = /^[0-9a-fA-F:.]+$/;
 function isValidIPv6(value) {
     if (!ipv6Alphabet.test(value))
         return false;
-    try {
-        // @ts-ignore
-        new URL(`http://[${value}]`);
-        return true;
-    }
-    catch {
-        return false;
-    }
+    return canParseURL(`http://[${value}]`);
 }
 const $ZodIPv6 = /*@__PURE__*/ $constructor("$ZodIPv6", (inst, def) => {
     def.pattern ?? (def.pattern = ipv6);
     $ZodStringFormat.init(inst, def);
-    inst._zod.bag.format = `ipv6`;
     inst._zod.check = (payload) => {
         if (!isValidIPv6(payload.value)) {
             payload.issues.push({
@@ -34458,7 +34224,6 @@ const $ZodIPv6 = /*@__PURE__*/ $constructor("$ZodIPv6", (inst, def) => {
 const $ZodMAC = /*@__PURE__*/ (/* unused pure expression or super */ null && (core.$constructor("$ZodMAC", (inst, def) => {
     def.pattern ?? (def.pattern = regexes.mac(def.delimiter));
     $ZodStringFormat.init(inst, def);
-    inst._zod.bag.format = `mac`;
 })));
 const $ZodCIDRv4 = /*@__PURE__*/ $constructor("$ZodCIDRv4", (inst, def) => {
     def.pattern ?? (def.pattern = cidrv4);
@@ -34511,10 +34276,11 @@ function isValidBase64(data) {
         return false;
     }
 }
+// lax on purpose: the quantified regexes.base64 overflows the regex stack on multi-MB input and its leading ^$| alternation leaks through template-literal composition; isValidBase64 enforces length and padding
+const base64Charset = /^[0-9a-zA-Z+/]*={0,2}$/;
 const $ZodBase64 = /*@__PURE__*/ $constructor("$ZodBase64", (inst, def) => {
-    def.pattern ?? (def.pattern = base64);
+    def.pattern ?? (def.pattern = base64Charset);
     $ZodStringFormat.init(inst, def);
-    inst._zod.bag.contentEncoding = "base64";
     inst._zod.check = (payload) => {
         if (isValidBase64(payload.value))
             return;
@@ -34527,18 +34293,19 @@ const $ZodBase64 = /*@__PURE__*/ $constructor("$ZodBase64", (inst, def) => {
         });
     };
 });
-//////////////////////////////   ZodBase64   //////////////////////////////
+//////////////////////////////   ZodBase64URL   //////////////////////////////
+// lax on purpose: the quantified regexes.base64url overflows the regex stack on multi-MB input; isValidBase64 enforces length on the padded string
+const base64urlCharset = /^[A-Za-z0-9_-]*$/;
 function isValidBase64URL(data) {
-    if (!base64url.test(data))
+    if (!base64urlCharset.test(data))
         return false;
     const base64 = data.replace(/[-_]/g, (c) => (c === "-" ? "+" : "/"));
     const padded = base64.padEnd(Math.ceil(base64.length / 4) * 4, "=");
     return isValidBase64(padded);
 }
 const $ZodBase64URL = /*@__PURE__*/ $constructor("$ZodBase64URL", (inst, def) => {
-    def.pattern ?? (def.pattern = base64url);
+    def.pattern ?? (def.pattern = base64urlCharset);
     $ZodStringFormat.init(inst, def);
-    inst._zod.bag.contentEncoding = "base64url";
     inst._zod.check = (payload) => {
         if (isValidBase64URL(payload.value))
             return;
@@ -34563,7 +34330,7 @@ function isLuhnAlgo(digits) {
     let bit = 1;
     let sum = 0;
     while (length) {
-        const value = +digits[--length];
+        const value = digits.charCodeAt(--length) - 48;
         bit ^= 1;
         sum += bit ? [0, 2, 4, 6, 8, 1, 3, 5, 7, 9][value] : value;
     }
@@ -34584,6 +34351,42 @@ const $ZodCreditCard = /*@__PURE__*/ (/* unused pure expression or super */ null
         payload.issues.push({
             code: "invalid_format",
             format: "credit_card",
+            input: payload.value,
+            inst,
+            continue: !def.abort,
+        });
+    };
+})));
+//////////////////////////////   ZodIBAN   //////////////////////////////
+// iso 7064 mod 97-10 checksum without BigInt
+function isIso7064Mod97(iban) {
+    let remainder = 0;
+    const len = iban.length;
+    for (let i = 4; i < len; i++) {
+        const code = iban.charCodeAt(i);
+        remainder = (code >= 65 ? remainder * 100 + (code - 55) : remainder * 10 + (code - 48)) % 97;
+    }
+    for (let i = 0; i < 4; i++) {
+        const code = iban.charCodeAt(i);
+        remainder = (code >= 65 ? remainder * 100 + (code - 55) : remainder * 10 + (code - 48)) % 97;
+    }
+    return remainder === 1;
+}
+function isValidIBAN(input) {
+    if (!regexes.iban.test(input))
+        return false;
+    return isIso7064Mod97(input);
+}
+const $ZodIBAN = /*@__PURE__*/ (/* unused pure expression or super */ null && (core.$constructor("$ZodIBAN", (inst, def) => {
+    // shape only — checksum is not expressible as a pattern
+    def.pattern ?? (def.pattern = regexes.iban);
+    $ZodStringFormat.init(inst, def);
+    inst._zod.check = (payload) => {
+        if (isValidIBAN(payload.value))
+            return;
+        payload.issues.push({
+            code: "invalid_format",
+            format: "iban",
             input: payload.value,
             inst,
             continue: !def.abort,
@@ -34643,7 +34446,7 @@ const $ZodCustomStringFormat = /*@__PURE__*/ (/* unused pure expression or super
 })));
 const $ZodNumber = /*@__PURE__*/ $constructor("$ZodNumber", (inst, def) => {
     $ZodType.init(inst, def);
-    inst._zod.pattern = inst._zod.bag.pattern ?? number;
+    inst._zod.pattern = number;
     inst._zod.parse = (payload, _ctx) => {
         if (def.coerce)
             try {
@@ -34804,7 +34607,7 @@ const $ZodVoid = /*@__PURE__*/ (/* unused pure expression or super */ null && (c
         return payload;
     };
 })));
-const $ZodDate = /*@__PURE__*/ (/* unused pure expression or super */ null && (core.$constructor("$ZodDate", (inst, def) => {
+const $ZodDate = /*@__PURE__*/ $constructor("$ZodDate", (inst, def) => {
     $ZodType.init(inst, def);
     inst._zod.parse = (payload, _ctx) => {
         if (def.coerce) {
@@ -34827,7 +34630,7 @@ const $ZodDate = /*@__PURE__*/ (/* unused pure expression or super */ null && (c
         });
         return payload;
     };
-})));
+});
 function handleArrayResult(result, final, index) {
     if (result.issues.length) {
         final.issues.push(...prefixIssues(index, result.issues));
@@ -34851,6 +34654,7 @@ const $ZodArray = /*@__PURE__*/ $constructor("$ZodArray", (inst, def) => {
         }
         payload.value = memo ? memo.alloc(inst, payload, Array(input.length), ctx) : Array(input.length);
         const proms = [];
+        const abortEarly = ctx?.abortEarly;
         for (let i = 0; i < input.length; i++) {
             const item = input[i];
             const result = def.element._zod.run({
@@ -34862,6 +34666,9 @@ const $ZodArray = /*@__PURE__*/ $constructor("$ZodArray", (inst, def) => {
             }
             else {
                 handleArrayResult(result, payload, i);
+                // the element's payload is authoritative here, since handleArrayResult forwards every issue; an object's is not, because it drops a failed absent optional
+                if (abortEarly && result.issues.length !== 0 && aborted(result))
+                    break;
             }
         }
         if (proms.length) {
@@ -34896,7 +34703,7 @@ function handlePropertyResult(result, final, key, input, optin, optout) {
         return;
     }
     if (result.value === undefined) {
-        if (isPresent) {
+        if (isPresent || (optin === "defaulted" && !isOptionalOut)) {
             final.value[key] = undefined;
         }
     }
@@ -34928,14 +34735,21 @@ function normalizeDef(def) {
         optionalKeys: new Set(okeys),
     };
 }
-function handleCatchall(proms, input, payload, ctx, def, inst) {
+function handleCatchall(proms, input, payload, ctx, def, inst, abortEarly) {
     const unrecognized = [];
     const keySet = def.keySet;
     const _catchall = def.catchall._zod;
     const t = _catchall.def.type;
     const optin = _catchall.optin;
     const optout = _catchall.optout;
+    // starts at 0, not the current length: the shape phase already ran and may have aborted
+    let seen = 0;
     for (const key in input) {
+        if (abortEarly && payload.issues.length !== seen) {
+            if (aborted(payload, seen))
+                break;
+            seen = payload.issues.length;
+        }
         // Must precede the __proto__ branch: a declared key is not unrecognized, even though the shape loop deliberately strips __proto__ from the parsed output.
         if (keySet.has(key))
             continue;
@@ -34973,26 +34787,22 @@ function handleCatchall(proms, input, payload, ctx, def, inst) {
         return payload;
     });
 }
-// Whichever object a def's `shape` currently answers from: the one the caller passed until the first read, the frozen copy after it. Keyed by def, so a def rebuilt by a builder is simply absent rather than inheriting the source's. Read its keys with `Object.keys`, which does not invoke them — that is what lets a discriminated union check its discriminator without resolving an option whose getters reference the union being constructed.
-const propShapes = new WeakMap();
 const $ZodObject = /*@__PURE__*/ $constructor("$ZodObject", (inst, def) => {
     // requires cast because technically $ZodObject doesn't extend
     $ZodType.init(inst, def);
-    // const sh = def.shape;
     const desc = Object.getOwnPropertyDescriptor(def, "shape");
-    if (!desc?.get) {
-        const sh = def.shape;
-        propShapes.set(def, sh);
-        Object.defineProperty(def, "shape", {
-            get: () => {
-                const newSh = { ...sh };
-                Object.defineProperty(def, "shape", {
-                    value: newSh,
-                });
-                propShapes.set(def, newSh);
-                return newSh;
-            },
-        });
+    // a cloned def carries its source's accessor, which knows the shape it answers from; adopting that keeps the clone's keys readable without running it
+    const sh = desc?.get ? desc.get.raw : (def.shape ?? {});
+    if (sh) {
+        // Freezes the shape on first read, so its getters resolve once and every later read sees the same schemas.
+        const get = () => {
+            const newSh = { ...sh };
+            Object.defineProperty(def, "shape", { value: newSh });
+            get.raw = newSh;
+            return newSh;
+        };
+        get.raw = sh;
+        Object.defineProperty(def, "shape", { get });
     }
     const _normalized = cached(() => normalizeDef(def));
     defineLazyInternal(inst, "propValues", (zod) => {
@@ -35033,7 +34843,14 @@ const $ZodObject = /*@__PURE__*/ $constructor("$ZodObject", (inst, def) => {
         payload.value = memo ? memo.alloc(inst, payload, {}, ctx) : {};
         const proms = [];
         const shape = value.shape;
+        const abortEarly = ctx?.abortEarly;
+        let seen = payload.issues.length;
         for (const key of value.allKeys) {
+            if (abortEarly && payload.issues.length !== seen) {
+                if (aborted(payload, seen))
+                    break;
+                seen = payload.issues.length;
+            }
             if (key === "__proto__")
                 continue;
             const el = shape[key];
@@ -35050,7 +34867,7 @@ const $ZodObject = /*@__PURE__*/ $constructor("$ZodObject", (inst, def) => {
         if (!catchall) {
             return proms.length ? Promise.all(proms).then(() => payload) : payload;
         }
-        return handleCatchall(proms, input, payload, ctx, _normalized.value, inst);
+        return handleCatchall(proms, input, payload, ctx, _normalized.value, inst, abortEarly === true);
     };
 });
 const $ZodObjectJIT = /*@__PURE__*/ $constructor("$ZodObjectJIT", (inst, def) => {
@@ -35065,12 +34882,18 @@ const $ZodObjectJIT = /*@__PURE__*/ $constructor("$ZodObjectJIT", (inst, def) =>
         // a symbol has no source literal, so it is read as `syms[i]` off the closed-over scope
         const doc = new Doc(["payload", "ctx"], { shape, inst, memo, syms });
         const parseStr = (k) => `shape[${k}]._zod.run({ value: input[${k}], issues: [] }, ctx)`;
-        // Prefixes in place, like util.prefixIssues does for every interpreted path.
+        // prefixes in place, like util.prefixIssues. newResult must land before the early return: a catchall runs after this and would otherwise write onto the caller's input
         const prefixStr = (id, k) => `
+          let ${id}_ab = false;
           for (let i = 0; i < ${id}.issues.length; i++) {
             const iss = ${id}.issues[i];
             iss.path = iss.path ? [${k}, ...iss.path] : [${k}];
             payload.issues.push(iss);
+            if (iss.continue !== true) ${id}_ab = true;
+          }
+          if (${id}_ab && ctx && ctx.abortEarly) {
+            payload.value = newResult;
+            return payload;
           }`;
         doc.write(`const input = payload.value;`);
         const ids = Object.create(null);
@@ -35119,6 +34942,10 @@ const $ZodObjectJIT = /*@__PURE__*/ $constructor("$ZodObjectJIT", (inst, def) =>
             input: undefined,
             path: [${k}]
           });
+          if (ctx && ctx.abortEarly) {
+            payload.value = newResult;
+            return payload;
+          }
         }
 
         if (${id}_present) {
@@ -35131,16 +34958,17 @@ const $ZodObjectJIT = /*@__PURE__*/ $constructor("$ZodObjectJIT", (inst, def) =>
                 doc.write(`
         if (${id}.issues.length) {${prefixStr(id, k)}
         }
-        
-        if (${id}.value === undefined) {
-          if (${isPresent}) {
-            newResult[${k}] = undefined;
-          }
-        } else {
+      `);
+                if (optin === "defaulted") {
+                    doc.write(`newResult[${k}] = ${id}.value;`);
+                }
+                else {
+                    doc.write(`
+        if (${id}.value !== undefined || ${isPresent}) {
           newResult[${k}] = ${id}.value;
         }
-
       `);
+                }
             }
         }
         doc.write(`payload.value = newResult;`);
@@ -35174,7 +35002,7 @@ const $ZodObjectJIT = /*@__PURE__*/ $constructor("$ZodObjectJIT", (inst, def) =>
             payload = fastpass(payload, ctx);
             if (!catchall)
                 return payload;
-            return handleCatchall([], input, payload, ctx, value, inst);
+            return handleCatchall([], input, payload, ctx, value, inst, ctx?.abortEarly === true);
         }
         return superParse(payload, ctx);
     };
@@ -35311,22 +35139,38 @@ const $ZodXor = /*@__PURE__*/ (/* unused pure expression or super */ null && (co
         });
     };
 })));
-/** Returns the option of `union` whose discriminator claims `value`. */
+/** Returns the option whose discriminator claims `value`, or throws if ambiguous. */
 function getDiscriminatedOption(union, value) {
     const internals = union._zod;
     let map = internals.bag.optionsMap;
     if (!map) {
-        map = new Map();
-        const { options, discriminator } = internals.def;
-        for (const option of options) {
-            // First declaration wins, matching the order the parse path resolves a duplicate in.
-            for (const v of option._zod.propValues?.[discriminator] ?? [])
-                if (!map.has(v))
-                    map.set(v, option);
-        }
+        map = discriminatorMap(internals.def);
         internals.bag.optionsMap = map;
     }
-    return map.get(value);
+    const option = map.get(value);
+    if (option === null)
+        throw new Error(`Ambiguous discriminator value "${String(value)}"`);
+    return option;
+}
+function discriminatorMap(def) {
+    const map = new Map();
+    for (const option of def.options) {
+        const values = option._zod.propValues?.[def.discriminator];
+        if (!values || values.size === 0)
+            throw new Error(`Invalid discriminated union option at index "${def.options.indexOf(option)}"`);
+        for (const value of values) {
+            if (map.has(value)) {
+                if (value !== undefined)
+                    throw new Error(`Duplicate discriminator value "${String(value)}"`);
+                // keep the collision marked so a later member cannot reclaim it
+                map.set(value, null);
+            }
+            else {
+                map.set(value, option);
+            }
+        }
+    }
+    return map;
 }
 const $ZodDiscriminatedUnion = 
 /*@__PURE__*/
@@ -35336,10 +35180,13 @@ const $ZodDiscriminatedUnion =
     const _super = inst._zod.parse;
     util.defineLazyInternal(inst, "propValues", (zod) => {
         const propValues = {};
+        let undefinedCount = 0;
         for (const option of zod.def.options) {
             const pv = option._zod.propValues;
             if (!pv || Object.keys(pv).length === 0)
                 throw new Error(`Invalid discriminated union option at index "${zod.def.options.indexOf(option)}"`);
+            if (pv[zod.def.discriminator]?.has(undefined))
+                undefinedCount++;
             for (const [k, v] of Object.entries(pv)) {
                 if (!Object.prototype.hasOwnProperty.call(propValues, k)) {
                     util.assignProp(propValues, k, new Set());
@@ -35349,31 +35196,18 @@ const $ZodDiscriminatedUnion =
                 }
             }
         }
+        if (!zod.def.unionFallback && undefinedCount > 1)
+            propValues[zod.def.discriminator]?.delete(undefined);
         return propValues;
     });
-    // Checked now rather than in the lookup map below, so an option that lacks the discriminator fails at the `discriminatedUnion` call instead of on the first object parsed. Options whose shape cannot be enumerated without resolving it — pipes, lazies, and objects rebuilt by a builder such as `.extend()` — are left to the map.
+    // Checked now rather than in the lookup map below, so an option that lacks the discriminator fails at the `discriminatedUnion` call instead of on the first object parsed. Options whose shape cannot be enumerated without resolving it — pipes and lazies — are left to the map.
     def.options.forEach((option, i) => {
-        const propShape = propShapes.get(option._zod.def);
+        const propShape = util.rawShape(option._zod.def);
         if (propShape && !Object.prototype.hasOwnProperty.call(propShape, def.discriminator)) {
             throw new Error(`Invalid discriminated union option at index "${i}"`);
         }
     });
-    const disc = util.cached(() => {
-        const opts = def.options;
-        const map = new Map();
-        for (const o of opts) {
-            const values = o._zod.propValues?.[def.discriminator];
-            if (!values || values.size === 0)
-                throw new Error(`Invalid discriminated union option at index "${def.options.indexOf(o)}"`);
-            for (const v of values) {
-                if (map.has(v)) {
-                    throw new Error(`Duplicate discriminator value "${String(v)}"`);
-                }
-                map.set(v, o);
-            }
-        }
-        return map;
-    });
+    const disc = util.cached(() => discriminatorMap(def));
     inst._zod.parse = (payload, ctx) => {
         const input = payload.value;
         if (!util.isObject(input)) {
@@ -35385,8 +35219,10 @@ const $ZodDiscriminatedUnion =
             });
             return payload;
         }
-        const opt = disc.value.get(input?.[def.discriminator]);
-        if (opt) {
+        const value = input?.[def.discriminator];
+        const opt = disc.value.get(value);
+        // forward metadata cannot choose an encoder for an absent tag
+        if (opt && (value !== undefined || ctx.direction !== "backward")) {
             return opt._zod.run(payload, ctx);
         }
         // Fall back to union matching when the fast discriminator path fails:
@@ -35401,7 +35237,7 @@ const $ZodDiscriminatedUnion =
             errors: [],
             note: "No matching discriminator",
             discriminator: def.discriminator,
-            options: Array.from(disc.value.keys()),
+            options: Array.from(disc.value.keys()).filter((value) => disc.value.get(value) !== null),
             input,
             path: [def.discriminator],
             inst,
@@ -35574,6 +35410,9 @@ const $ZodTuple = /*@__PURE__*/ $constructor("$ZodTuple", (inst, def) => {
         }
         // Run every item in parallel, collecting results into an indexed array. The post-processing in `handleTupleResults` walks them in order so it can decide whether an absent optional-output error can truncate the tail or must be reported to preserve required output.
         const itemResults = new Array(items.length);
+        // only tracked when there is a rest loop to skip
+        const abortEarly = def.rest ? ctx?.abortEarly : undefined;
+        let itemAborted = false;
         for (let i = 0; i < items.length; i++) {
             const r = items[i]._zod.run({ value: input[i], issues: [] }, ctx);
             if (r instanceof Promise) {
@@ -35583,12 +35422,21 @@ const $ZodTuple = /*@__PURE__*/ $constructor("$ZodTuple", (inst, def) => {
             }
             else {
                 itemResults[i] = r;
+                if (abortEarly && !itemAborted && r.issues.length)
+                    itemAborted = aborted(r);
             }
         }
-        if (def.rest) {
+        // sound because rest is non-empty exactly when every fixed index is present, the one case handleTupleResults cannot discard an item's issues
+        if (def.rest && !itemAborted) {
             let i = items.length - 1;
             const rest = input.slice(items.length);
+            let seen = payload.issues.length;
             for (const el of rest) {
+                if (abortEarly && payload.issues.length !== seen) {
+                    if (aborted(payload, seen))
+                        break;
+                    seen = payload.issues.length;
+                }
                 i++;
                 const result = def.rest._zod.run({ value: el, issues: [] }, ctx);
                 if (result instanceof Promise) {
@@ -35670,6 +35518,7 @@ const $ZodRecord = /*@__PURE__*/ $constructor("$ZodRecord", (inst, def) => {
             });
             return payload;
         }
+        // no guard in either loop below: a record's invalid_key aborts but an enclosing intersection can reconcile it, so a stopped loop hides keys the sibling does not own and the intersection then rejects nothing
         const proms = [];
         const values = def.keyType._zod.values;
         if (values && !def.partial) {
@@ -35841,7 +35690,14 @@ const $ZodMap = /*@__PURE__*/ (/* unused pure expression or super */ null && (co
         }
         const proms = [];
         payload.value = memo ? memo.alloc(inst, payload, new Map(), ctx) : new Map();
+        const abortEarly = ctx?.abortEarly;
+        let seen = payload.issues.length;
         for (const [key, value] of input) {
+            if (abortEarly && payload.issues.length !== seen) {
+                if (util.aborted(payload, seen))
+                    break;
+                seen = payload.issues.length;
+            }
             const keyResult = def.keyType._zod.run({ value: key, issues: [] }, ctx);
             const valueResult = def.valueType._zod.run({ value: value, issues: [] }, ctx);
             if (keyResult instanceof Promise || valueResult instanceof Promise) {
@@ -35907,7 +35763,14 @@ const $ZodSet = /*@__PURE__*/ (/* unused pure expression or super */ null && (co
         }
         const proms = [];
         payload.value = memo ? memo.alloc(inst, payload, new Set(), ctx) : new Set();
+        const abortEarly = ctx?.abortEarly;
+        let seen = payload.issues.length;
         for (const item of input) {
+            if (abortEarly && payload.issues.length !== seen) {
+                if (util.aborted(payload, seen))
+                    break;
+                seen = payload.issues.length;
+            }
             const result = def.valueType._zod.run({ value: item, issues: [] }, ctx);
             if (result instanceof Promise) {
                 proms.push(result.then((result) => handleSetResult(result, payload)));
@@ -35931,9 +35794,11 @@ const $ZodEnum = /*@__PURE__*/ $constructor("$ZodEnum", (inst, def) => {
     const values = getEnumValues(def.entries);
     const valuesSet = new Set(values);
     inst._zod.values = valuesSet;
-    const patternValues = values.filter((k) => propertyKeyTypes.has(typeof k));
-    // unmatchable fallback, RE2-safe: an empty alternation would compile to /^()$/, which matches ""
-    inst._zod.pattern = new RegExp(patternValues.length ? `^(${patternValues.map((o) => escapeRegex(o.toString())).join("|")})$` : "^[^\\s\\S]$");
+    defineLazyInternal(inst, "pattern", (zod) => {
+        const patternValues = getEnumValues(zod.def.entries).filter((k) => propertyKeyTypes.has(typeof k));
+        // unmatchable fallback, RE2-safe: an empty alternation would compile to /^()$/, which matches ""
+        return new RegExp(patternValues.length ? `^(${patternValues.map((o) => escapeRegex(o.toString())).join("|")})$` : "^[^\\s\\S]$");
+    });
     inst._zod.parse = (payload, _ctx) => {
         const input = payload.value;
         if (valuesSet.has(input)) {
@@ -35952,12 +35817,15 @@ const $ZodLiteral = /*@__PURE__*/ (/* unused pure expression or super */ null &&
     $ZodType.init(inst, def);
     const values = new Set(def.values);
     inst._zod.values = values;
-    // unmatchable fallback, RE2-safe: an empty alternation would compile to /^()$/, which matches ""
-    inst._zod.pattern = new RegExp(def.values.length
-        ? `^(${def.values
-            .map((o) => (typeof o === "string" ? util.escapeRegex(o) : o ? util.escapeRegex(o.toString()) : String(o)))
-            .join("|")})$`
-        : "^[^\\s\\S]$");
+    util.defineLazyInternal(inst, "pattern", (zod) => {
+        const vals = zod.def.values;
+        // unmatchable fallback, RE2-safe: an empty alternation would compile to /^()$/, which matches ""
+        return new RegExp(vals.length
+            ? `^(${vals
+                .map((o) => typeof o === "string" ? util.escapeRegex(o) : o ? util.escapeRegex(o.toString()) : String(o))
+                .join("|")})$`
+            : "^[^\\s\\S]$");
+    });
     inst._zod.parse = (payload, _ctx) => {
         const input = payload.value;
         if (values.has(input)) {
@@ -36321,22 +36189,67 @@ function handleReadonlyResult(payload) {
         payload.value = Object.freeze(payload.value);
     return payload;
 }
+// a leaf's pattern source with its own checks folded in: the last pattern-carrying check wins, else length bounds narrow the catch-all, else an integer format narrows the number form. the fold lives here instead of on `_zod.pattern` so a bundle without template literals never pays for it
+function leafPattern(schema) {
+    const def = schema._zod.def;
+    let pattern = def.pattern;
+    let isInt = !!def.format?.includes("int");
+    let minimum;
+    let maximum;
+    for (const ch of def.checks ?? []) {
+        const d = ch._zod.def;
+        if (d.pattern)
+            pattern = d.pattern;
+        isInt || (isInt = !!d.format?.includes("int"));
+        const lo = d.minimum ?? d.length;
+        const hi = d.maximum ?? d.length;
+        if (lo !== undefined && (minimum === undefined || lo > minimum))
+            minimum = lo;
+        if (hi !== undefined && (maximum === undefined || hi < maximum))
+            maximum = hi;
+    }
+    if (pattern)
+        return pattern.source;
+    // an empty range matches nothing at runtime, and `{8,5}` is not a legal quantifier
+    if (minimum !== undefined && maximum !== undefined && minimum > maximum)
+        return "(?!)";
+    if (minimum !== undefined || maximum !== undefined)
+        return regexes.string({ minimum, maximum }).source;
+    const own = schema._zod.pattern;
+    return (isInt && own === regexes.number ? regexes.integer : own)?.source;
+}
+// a part's pattern source. a wrapper's pattern embeds its inner pattern's source verbatim, so the folded form is substituted in place without knowing the wrapper's own composition; a union's options are joined the way the union builds its own pattern
+function partPattern(schema) {
+    const def = schema._zod.def;
+    const own = schema._zod.pattern?.source;
+    // lazy resolves its inner on the internals, not the def
+    const inner = def.innerType ?? schema._zod.innerType;
+    if (inner) {
+        const before = inner._zod.pattern?.source;
+        const after = partPattern(inner);
+        if (own && before && after && after !== before) {
+            return own.replace(util.cleanRegex(before), () => util.cleanRegex(after));
+        }
+        return own;
+    }
+    if (def.options) {
+        const sources = def.options.map(partPattern);
+        if (sources.every(Boolean))
+            return `^(${sources.map((s) => util.cleanRegex(s)).join("|")})$`;
+    }
+    return leafPattern(schema);
+}
 const $ZodTemplateLiteral = /*@__PURE__*/ (/* unused pure expression or super */ null && (core.$constructor("$ZodTemplateLiteral", (inst, def) => {
     $ZodType.init(inst, def);
     const regexParts = [];
     for (const part of def.parts) {
         if (typeof part === "object" && part !== null) {
             // is Zod schema
-            if (!part._zod.pattern) {
-                // if (!source)
+            const source = partPattern(part);
+            if (!source) {
                 throw new Error(`Invalid template literal part, no pattern found: ${[...part._zod.traits].shift()}`);
             }
-            const source = part._zod.pattern instanceof RegExp ? part._zod.pattern.source : part._zod.pattern;
-            if (!source)
-                throw new Error(`Invalid template literal part: ${part._zod.traits}`);
-            const start = source.startsWith("^") ? 1 : 0;
-            const end = source.endsWith("$") ? source.length - 1 : source.length;
-            regexParts.push(source.slice(start, end));
+            regexParts.push(util.cleanRegex(source));
         }
         else if (part === null || util.primitiveTypes.has(typeof part)) {
             regexParts.push(util.escapeRegex(`${part}`));
@@ -36507,7 +36420,7 @@ function handleRefineResult(result, payload, input, inst) {
     }
 }
 
-;// CONCATENATED MODULE: ../action/node_modules/zod/v4/core/registries.js
+;// CONCATENATED MODULE: ./node_modules/zod/v4/core/registries.js
 var registries_a;
 const $output = /*@__PURE__*/ (/* unused pure expression or super */ null && (Symbol("ZodOutput")));
 const $input = /*@__PURE__*/ (/* unused pure expression or super */ null && (Symbol("ZodInput")));
@@ -36560,25 +36473,23 @@ function registry() {
 (registries_a = globalThis).__zod_globalRegistry ?? (registries_a.__zod_globalRegistry = registry());
 const globalRegistry = globalThis.__zod_globalRegistry;
 
-;// CONCATENATED MODULE: ../action/node_modules/zod/v4/core/api.js
+;// CONCATENATED MODULE: ./node_modules/zod/v4/core/api.js
 
 
 
 
+function snapshotChecks(def) {
+    if (def.checks)
+        def.checks = [...def.checks];
+    return def;
+}
 // @__NO_SIDE_EFFECTS__
 function _string(Class, params) {
-    return new Class({
-        type: "string",
-        ...normalizeParams(params),
-    });
+    return new Class(snapshotChecks({ type: "string", ...normalizeParams(params) }));
 }
 // @__NO_SIDE_EFFECTS__
 function _coercedString(Class, params) {
-    return new Class({
-        type: "string",
-        coerce: true,
-        ...util.normalizeParams(params),
-    });
+    return new Class(snapshotChecks({ type: "string", coerce: true, ...util.normalizeParams(params) }));
 }
 // @__NO_SIDE_EFFECTS__
 function _email(Class, params) {
@@ -36819,6 +36730,16 @@ function _creditCard(Class, params) {
     });
 }
 // @__NO_SIDE_EFFECTS__
+function _iban(Class, params) {
+    return new Class({
+        type: "string",
+        format: "iban",
+        check: "string_format",
+        abort: false,
+        ...util.normalizeParams(params),
+    });
+}
+// @__NO_SIDE_EFFECTS__
 function _jwt(Class, params) {
     return new Class({
         type: "string",
@@ -36877,20 +36798,11 @@ function _isoDuration(Class, params) {
 }
 // @__NO_SIDE_EFFECTS__
 function _number(Class, params) {
-    return new Class({
-        type: "number",
-        checks: [],
-        ...normalizeParams(params),
-    });
+    return new Class(snapshotChecks({ type: "number", checks: [], ...normalizeParams(params) }));
 }
 // @__NO_SIDE_EFFECTS__
 function _coercedNumber(Class, params) {
-    return new Class({
-        type: "number",
-        coerce: true,
-        checks: [],
-        ...util.normalizeParams(params),
-    });
+    return new Class(snapshotChecks({ type: "number", coerce: true, checks: [], ...util.normalizeParams(params) }));
 }
 // @__NO_SIDE_EFFECTS__
 function _int(Class, params) {
@@ -37237,8 +37149,12 @@ function _property(property, schema, params) {
     });
 }
 // @__NO_SIDE_EFFECTS__
-function _properties(shape) {
-    return Object.entries(shape).map(([property, schema]) => new checks.$ZodCheckProperty({ check: "property", property, schema }));
+function _properties(shape, params) {
+    return new $ZodCheckProperties({
+        check: "properties",
+        shape,
+        ...normalizeParams(params),
+    });
 }
 // @__NO_SIDE_EFFECTS__
 function _mime(types, params) {
@@ -37662,7 +37578,7 @@ function _stringFormat(Class, format, fnOrRegex, _params = {}) {
     return inst;
 }
 
-;// CONCATENATED MODULE: ../action/node_modules/zod/v4/core/to-json-schema.js
+;// CONCATENATED MODULE: ./node_modules/zod/v4/core/to-json-schema.js
 
 
 function assignProps(target, ...sources) {
@@ -37724,7 +37640,8 @@ function handleUnrepresentable(schema, ctx, json, params, message) {
     Object.assign(json, result);
     return true;
 }
-function to_json_schema_process(schema, ctx, _params = { path: [], schemaPath: [] }) {
+// never rename this back to `process`: bundler polyfills inject a top-level `const process` that a lexical declaration of the same name collides with (#6397)
+function to_json_schema_processSchema(schema, ctx, _params = { path: [], schemaPath: [] }) {
     var _a;
     const def = schema._zod.def;
     // check for schema in seens
@@ -37770,7 +37687,7 @@ function to_json_schema_process(schema, ctx, _params = { path: [], schemaPath: [
             // Also set ref if processor didn't (for inheritance)
             if (!result.ref)
                 result.ref = parent;
-            to_json_schema_process(parent, ctx, params);
+            to_json_schema_processSchema(parent, ctx, params);
             ctx.seen.get(parent).isParent = true;
         }
     }
@@ -37791,6 +37708,8 @@ function to_json_schema_process(schema, ctx, _params = { path: [], schemaPath: [
     const _result = ctx.seen.get(schema);
     return _result.schema;
 }
+/** @deprecated Renamed to `processSchema`. An export alias declares no binding, so it is safe to keep. */
+
 // Escape a reference token for use in a JSON Pointer fragment (RFC 6901): `~` becomes `~0` and `/` becomes `~1`. The `~` replacement must run first.
 function encodeJSONPointerSegment(segment) {
     return segment.replace(/~/g, "~0").replace(/\//g, "~1");
@@ -37907,8 +37826,6 @@ function to_json_schema_extractDefs(ctx, schema
         if (seen.count > 1) {
             if (ctx.reused === "ref") {
                 extractToDef(entry);
-                // biome-ignore lint:
-                continue;
             }
         }
     }
@@ -38302,22 +38219,116 @@ function isTransforming(_schema, _ctx) {
  */
 const createToJSONSchemaMethod = (schema, processors = {}) => (params) => {
     const ctx = to_json_schema_initializeContext({ ...params, processors });
-    to_json_schema_process(schema, ctx);
+    to_json_schema_processSchema(schema, ctx);
     to_json_schema_extractDefs(ctx, schema);
     return to_json_schema_finalize(ctx, schema);
 };
 const createStandardJSONSchemaMethod = (schema, io, processors = {}) => (params) => {
     const { libraryOptions, target } = params ?? {};
     const ctx = to_json_schema_initializeContext({ ...(libraryOptions ?? {}), target, io, processors });
-    to_json_schema_process(schema, ctx);
+    to_json_schema_processSchema(schema, ctx);
     to_json_schema_extractDefs(ctx, schema);
     return to_json_schema_finalize(ctx, schema);
 };
 
-;// CONCATENATED MODULE: ../action/node_modules/zod/v4/core/json-schema-processors.js
+;// CONCATENATED MODULE: ./node_modules/zod/v4/core/json-schema-processors.js
 
 
 
+
+const narrowMin = (agg, key, value) => {
+    if (agg[key] === undefined || value > agg[key])
+        agg[key] = value;
+};
+const narrowMax = (agg, key, value) => {
+    if (agg[key] === undefined || value < agg[key])
+        agg[key] = value;
+};
+const narrowBoth = (agg, value) => {
+    narrowMin(agg, "minimum", value);
+    narrowMax(agg, "maximum", value);
+};
+const addDivisor = (agg, value) => {
+    agg.multipleOf ?? (agg.multipleOf = []);
+    if (!agg.multipleOf.includes(value))
+        agg.multipleOf.push(value);
+};
+const addPattern = (agg, pattern) => {
+    agg.patterns ?? (agg.patterns = new Set());
+    agg.patterns.add(pattern);
+};
+const intersectMime = (agg, mime) => {
+    agg.mime = agg.mime ? agg.mime.filter((m) => mime.includes(m)) : [...mime];
+};
+// last-wins, matching the bag's historical write order; the flag keeps an integer format from being lost to a later float one
+const setFormat = (agg, format) => {
+    agg.format = format;
+    if (format.includes("int"))
+        agg.isInt = true;
+};
+const minContributor = (agg, def) => narrowMin(agg, "minimum", def.minimum);
+const maxContributor = (agg, def) => narrowMax(agg, "maximum", def.maximum);
+const formatContributor = (ranges) => (agg, def) => {
+    setFormat(agg, def.format);
+    const [minimum, maximum] = ranges[def.format];
+    narrowMin(agg, "minimum", minimum);
+    narrowMax(agg, "maximum", maximum);
+};
+const contributors = {
+    greater_than: (agg, def) => narrowMin(agg, def.inclusive ? "minimum" : "exclusiveMinimum", def.value),
+    less_than: (agg, def) => narrowMax(agg, def.inclusive ? "maximum" : "exclusiveMaximum", def.value),
+    multiple_of: (agg, def) => addDivisor(agg, def.value),
+    number_format: formatContributor(NUMBER_FORMAT_RANGES),
+    bigint_format: formatContributor(BIGINT_FORMAT_RANGES),
+    min_length: minContributor,
+    max_length: maxContributor,
+    length_equals: (agg, def) => narrowBoth(agg, def.length),
+    min_size: minContributor,
+    max_size: maxContributor,
+    size_equals: (agg, def) => narrowBoth(agg, def.size),
+    string_format: (agg, def) => {
+        setFormat(agg, def.format);
+        if (def.pattern)
+            addPattern(agg, def.pattern);
+        if (def.format === "base64" || def.format === "base64url")
+            agg.contentEncoding = def.format;
+        if (def.local || def.precision === -1)
+            agg.laxFormat = true;
+    },
+    mime_type: (agg, def) => intersectMime(agg, def.mime),
+};
+function aggregateChecks(schema) {
+    const agg = {};
+    const def = schema._zod.def;
+    // a format schema is its own first check, same rule as $ZodType init
+    const list = schema._zod.traits.has("$ZodCheck")
+        ? [schema, ...(def.checks ?? [])]
+        : (def.checks ?? []);
+    for (const ch of list)
+        contributors[ch._zod.def.check]?.(agg, ch._zod.def);
+    // reconcile with the bag so third-party onattach contributions still land; first-party residue is never tighter than the fold, so merging it back is idempotent for one and additive for the other
+    const bag = schema._zod.bag;
+    if (bag.minimum !== undefined)
+        narrowMin(agg, "minimum", bag.minimum);
+    if (bag.exclusiveMinimum !== undefined)
+        narrowMin(agg, "exclusiveMinimum", bag.exclusiveMinimum);
+    if (bag.maximum !== undefined)
+        narrowMax(agg, "maximum", bag.maximum);
+    if (bag.exclusiveMaximum !== undefined)
+        narrowMax(agg, "exclusiveMaximum", bag.exclusiveMaximum);
+    if (bag.multipleOf !== undefined)
+        addDivisor(agg, bag.multipleOf);
+    if (bag.format !== undefined) {
+        agg.format ?? (agg.format = bag.format);
+        if (bag.format.includes("int"))
+            agg.isInt = true;
+    }
+    if (bag.mime)
+        intersectMime(agg, bag.mime);
+    for (const pattern of bag.patterns ?? [])
+        addPattern(agg, pattern);
+    return agg;
+}
 const formatMap = {
     guid: "uuid",
     url: "uri",
@@ -38326,11 +38337,16 @@ const formatMap = {
     regex: "", // do not set
 };
 // ==================== SIMPLE TYPE PROCESSORS ====================
+// the runtime patterns are lax so parse paths never overflow the regex stack; the emitted schema swaps in the exact block forms, which zod itself never executes
+const exactPatterns = new Map([
+    [base64Charset, base64],
+    [base64urlCharset, base64url],
+]);
+const exactPattern = (p) => exactPatterns.get(p) ?? p;
 const stringProcessor = (schema, ctx, _json, _params) => {
     const json = _json;
     json.type = "string";
-    const { minimum, maximum, format, patterns, contentEncoding, laxFormat } = schema._zod
-        .bag;
+    const { minimum, maximum, format, patterns, contentEncoding, laxFormat } = aggregateChecks(schema);
     if (typeof minimum === "number")
         json.minLength = minimum;
     if (typeof maximum === "number")
@@ -38348,7 +38364,7 @@ const stringProcessor = (schema, ctx, _json, _params) => {
     if (contentEncoding)
         json.contentEncoding = contentEncoding;
     if (patterns && patterns.size > 0) {
-        const patternList = [...patterns];
+        const patternList = [...patterns].map(exactPattern);
         if (patternList.length === 1)
             json.pattern = patternList[0].source;
         else if (patternList.length > 1) {
@@ -38365,11 +38381,8 @@ const stringProcessor = (schema, ctx, _json, _params) => {
 };
 const numberProcessor = (schema, ctx, _json, params) => {
     const json = _json;
-    const { minimum, maximum, format, multipleOf, exclusiveMaximum, exclusiveMinimum } = schema._zod.bag;
-    if (typeof format === "string" && format.includes("int"))
-        json.type = "integer";
-    else
-        json.type = "number";
+    const { minimum, maximum, multipleOf, exclusiveMaximum, exclusiveMinimum, isInt } = aggregateChecks(schema);
+    json.type = isInt ? "integer" : "number";
     // when both minimum and exclusiveMinimum exist, pick the more restrictive one
     const exMin = typeof exclusiveMinimum === "number" && exclusiveMinimum >= (minimum ?? Number.NEGATIVE_INFINITY);
     const exMax = typeof exclusiveMaximum === "number" && exclusiveMaximum <= (maximum ?? Number.POSITIVE_INFINITY);
@@ -38398,12 +38411,21 @@ const numberProcessor = (schema, ctx, _json, params) => {
     else if (typeof maximum === "number") {
         json.maximum = maximum;
     }
-    if (typeof multipleOf === "number") {
+    if (multipleOf) {
         // JSON Schema requires a divisor strictly greater than zero, and a non-finite one does not survive JSON at all. A negative divisor accepts exactly what its absolute value accepts, so it still maps; zero, NaN and Infinity have no keyword form.
-        if (Number.isFinite(multipleOf) && multipleOf !== 0)
-            json.multipleOf = Math.abs(multipleOf);
-        else
-            handleUnrepresentable(schema, ctx, json, params, `A multipleOf divisor of ${multipleOf} cannot be represented in JSON Schema`);
+        const divisors = new Set();
+        for (const divisor of multipleOf) {
+            if (Number.isFinite(divisor) && divisor !== 0)
+                divisors.add(Math.abs(divisor));
+            else
+                handleUnrepresentable(schema, ctx, json, params, `A multipleOf divisor of ${divisor} cannot be represented in JSON Schema`);
+        }
+        // chained divisors are a conjunction the keyword cannot carry alone, so extras ride an allOf, same as stacked patterns
+        const [first, ...rest] = divisors;
+        if (first !== undefined)
+            json.multipleOf = first;
+        if (rest.length)
+            json.allOf = [...(json.allOf ?? []), ...rest.map((m) => ({ multipleOf: m }))];
     }
 };
 const booleanProcessor = (_schema, _ctx, json, _params) => {
@@ -38520,29 +38542,24 @@ const templateLiteralProcessor = (schema, _ctx, json, _params) => {
 };
 const fileProcessor = (schema, _ctx, json, _params) => {
     const _json = json;
-    const file = {
-        type: "string",
-        format: "binary",
-        contentEncoding: "binary",
-    };
-    const { minimum, maximum, mime } = schema._zod.bag;
+    _json.type = "string";
+    _json.format = "binary";
+    _json.contentEncoding = "binary";
+    const { minimum, maximum, mime } = aggregateChecks(schema);
     if (minimum !== undefined)
-        file.minLength = minimum;
+        _json.minLength = minimum;
     if (maximum !== undefined)
-        file.maxLength = maximum;
-    if (mime) {
-        if (mime.length === 1) {
-            file.contentMediaType = mime[0];
-            Object.assign(_json, file);
-        }
-        else {
-            Object.assign(_json, file); // shared props at root
-            _json.anyOf = mime.map((m) => ({ contentMediaType: m })); // only contentMediaType differs
-        }
-    }
-    else {
-        Object.assign(_json, file);
-    }
+        _json.maxLength = maximum;
+    if (!mime)
+        return;
+    // an empty intersection means the mime checks share no value, so nothing passes at runtime; `anyOf` must be non-empty, so the false schema is `not: {}`
+    if (mime.length === 0)
+        _json.not = {};
+    else if (mime.length === 1)
+        _json.contentMediaType = mime[0];
+    // only contentMediaType differs, so the shared props stay at the root
+    else
+        _json.anyOf = mime.map((m) => ({ contentMediaType: m }));
 };
 const successProcessor = (_schema, _ctx, json, _params) => {
     json.type = "boolean";
@@ -38566,13 +38583,13 @@ const setProcessor = (schema, ctx, json, params) => {
 const arrayProcessor = (schema, ctx, _json, params) => {
     const json = _json;
     const def = schema._zod.def;
-    const { minimum, maximum } = schema._zod.bag;
+    const { minimum, maximum } = aggregateChecks(schema);
     if (typeof minimum === "number")
         json.minItems = minimum;
     if (typeof maximum === "number")
         json.maxItems = maximum;
     json.type = "array";
-    json.items = to_json_schema_process(def.element, ctx, {
+    json.items = to_json_schema_processSchema(def.element, ctx, {
         ...params,
         path: [...params.path, "items"],
     });
@@ -38606,24 +38623,21 @@ const objectProcessor = (schema, ctx, _json, params) => {
     json.properties = {};
     for (const key in shape) {
         // assignProp so a __proto__ key becomes an own property instead of hitting the inherited setter on the plain {} we build into
-        util_assignProp(json.properties, key, to_json_schema_process(shape[key], ctx, {
+        util_assignProp(json.properties, key, to_json_schema_processSchema(shape[key], ctx, {
             ...params,
             path: [...params.path, "properties", key],
         }));
     }
     // required keys
-    const allKeys = new Set(Object.keys(shape));
-    const requiredKeys = new Set([...allKeys].filter((key) => {
+    const requiredKeys = [];
+    for (const key of Object.keys(shape)) {
         const field = def.shape[key];
-        if (ctx.io === "input") {
-            return inputOptin(field) === undefined;
+        if (ctx.io === "input" ? inputOptin(field) === undefined : field._zod.optout === undefined) {
+            requiredKeys.push(key);
         }
-        else {
-            return field._zod.optout === undefined;
-        }
-    }));
-    if (requiredKeys.size > 0) {
-        json.required = Array.from(requiredKeys);
+    }
+    if (requiredKeys.length > 0) {
+        json.required = requiredKeys;
     }
     // catchall
     if (def.catchall?._zod.def.type === "never") {
@@ -38636,7 +38650,7 @@ const objectProcessor = (schema, ctx, _json, params) => {
             json.additionalProperties = false;
     }
     else if (def.catchall) {
-        json.additionalProperties = to_json_schema_process(def.catchall, ctx, {
+        json.additionalProperties = to_json_schema_processSchema(def.catchall, ctx, {
             ...params,
             path: [...params.path, "additionalProperties"],
         });
@@ -38646,7 +38660,7 @@ const unionProcessor = (schema, ctx, json, params) => {
     const def = schema._zod.def;
     // Exclusive unions (inclusive === false) use oneOf (exactly one match) instead of anyOf (one or more matches). This includes both z.xor() and discriminated unions
     const isExclusive = def.inclusive === false;
-    const options = def.options.map((x, i) => to_json_schema_process(x, ctx, {
+    const options = def.options.map((x, i) => to_json_schema_processSchema(x, ctx, {
         ...params,
         path: [...params.path, isExclusive ? "oneOf" : "anyOf", i],
     }));
@@ -38659,11 +38673,11 @@ const unionProcessor = (schema, ctx, json, params) => {
 };
 const intersectionProcessor = (schema, ctx, json, params) => {
     const def = schema._zod.def;
-    const a = to_json_schema_process(def.left, ctx, {
+    const a = to_json_schema_processSchema(def.left, ctx, {
         ...params,
         path: [...params.path, "allOf", 0],
     });
-    const b = to_json_schema_process(def.right, ctx, {
+    const b = to_json_schema_processSchema(def.right, ctx, {
         ...params,
         path: [...params.path, "allOf", 1],
     });
@@ -38682,12 +38696,12 @@ const tupleProcessor = (schema, ctx, _json, params) => {
     json.type = "array";
     const prefixPath = ctx.target === "draft-2020-12" ? "prefixItems" : "items";
     const restPath = ctx.target === "draft-2020-12" ? "items" : ctx.target === "openapi-3.0" ? "items" : "additionalItems";
-    const prefixItems = def.items.map((x, i) => to_json_schema_process(x, ctx, {
+    const prefixItems = def.items.map((x, i) => to_json_schema_processSchema(x, ctx, {
         ...params,
         path: [...params.path, prefixPath, i],
     }));
     const rest = def.rest
-        ? to_json_schema_process(def.rest, ctx, {
+        ? to_json_schema_processSchema(def.rest, ctx, {
             ...params,
             path: [...params.path, restPath, ...(ctx.target === "openapi-3.0" ? [def.items.length] : [])],
         })
@@ -38741,7 +38755,7 @@ const tupleProcessor = (schema, ctx, _json, params) => {
             json.maxItems = maxItems;
     }
     // explicit user-defined length checks take precedence
-    const { minimum, maximum } = schema._zod.bag;
+    const { minimum, maximum } = aggregateChecks(schema);
     if (typeof minimum === "number")
         json.minItems = minimum;
     if (typeof maximum === "number")
@@ -38834,23 +38848,22 @@ const recordProcessor = (schema, ctx, _json, params) => {
     json.type = "object";
     // For looseRecord with regex patterns, use patternProperties. This correctly represents "only validate keys matching the pattern" semantics and composes well with allOf (intersections)
     const keyType = def.keyType;
-    const keyBag = keyType._zod.bag;
-    const patterns = keyBag?.patterns;
+    const patterns = aggregateChecks(keyType).patterns;
     if (def.mode === "loose" && patterns && patterns.size > 0) {
         // Use patternProperties for looseRecord with regex patterns
-        const valueSchema = to_json_schema_process(def.valueType, ctx, {
+        const valueSchema = to_json_schema_processSchema(def.valueType, ctx, {
             ...params,
             path: [...params.path, "patternProperties", "*"],
         });
         json.patternProperties = {};
         for (const pattern of patterns) {
-            util_assignProp(json.patternProperties, pattern.source, valueSchema);
+            util_assignProp(json.patternProperties, exactPattern(pattern).source, valueSchema);
         }
     }
     else {
         // Default behavior: use propertyNames + additionalProperties
         if (ctx.target === "draft-07" || ctx.target === "draft-2020-12") {
-            json.propertyNames = to_json_schema_process(def.keyType, ctx, {
+            json.propertyNames = to_json_schema_processSchema(def.keyType, ctx, {
                 ...params,
                 path: [...params.path, "propertyNames"],
             });
@@ -38862,7 +38875,7 @@ const recordProcessor = (schema, ctx, _json, params) => {
             }
             pending.push(schema);
         }
-        json.additionalProperties = to_json_schema_process(def.valueType, ctx, {
+        json.additionalProperties = to_json_schema_processSchema(def.valueType, ctx, {
             ...params,
             path: [...params.path, "additionalProperties"],
         });
@@ -38880,7 +38893,7 @@ const recordProcessor = (schema, ctx, _json, params) => {
 };
 const nullableProcessor = (schema, ctx, json, params) => {
     const def = schema._zod.def;
-    const inner = to_json_schema_process(def.innerType, ctx, params);
+    const inner = to_json_schema_processSchema(def.innerType, ctx, params);
     const seen = ctx.seen.get(schema);
     if (ctx.target === "openapi-3.0") {
         seen.ref = def.innerType;
@@ -38892,7 +38905,7 @@ const nullableProcessor = (schema, ctx, json, params) => {
 };
 const nonoptionalProcessor = (schema, ctx, _json, params) => {
     const def = schema._zod.def;
-    to_json_schema_process(def.innerType, ctx, params);
+    to_json_schema_processSchema(def.innerType, ctx, params);
     const seen = ctx.seen.get(schema);
     seen.ref = def.innerType;
 };
@@ -38915,7 +38928,7 @@ function serializeDefaultValue(value, schema, ctx, json, params) {
 }
 const defaultProcessor = (schema, ctx, json, params) => {
     const def = schema._zod.def;
-    to_json_schema_process(def.innerType, ctx, params);
+    to_json_schema_processSchema(def.innerType, ctx, params);
     const seen = ctx.seen.get(schema);
     seen.ref = def.innerType;
     const value = serializeDefaultValue(def.defaultValue, schema, ctx, json, params);
@@ -38924,7 +38937,7 @@ const defaultProcessor = (schema, ctx, json, params) => {
 };
 const prefaultProcessor = (schema, ctx, json, params) => {
     const def = schema._zod.def;
-    to_json_schema_process(def.innerType, ctx, params);
+    to_json_schema_processSchema(def.innerType, ctx, params);
     const seen = ctx.seen.get(schema);
     seen.ref = def.innerType;
     if (ctx.io !== "input")
@@ -38935,7 +38948,7 @@ const prefaultProcessor = (schema, ctx, json, params) => {
 };
 const catchProcessor = (schema, ctx, json, params) => {
     const def = schema._zod.def;
-    to_json_schema_process(def.innerType, ctx, params);
+    to_json_schema_processSchema(def.innerType, ctx, params);
     const seen = ctx.seen.get(schema);
     seen.ref = def.innerType;
     let catchValue;
@@ -38952,32 +38965,32 @@ const pipeProcessor = (schema, ctx, _json, params) => {
     const def = schema._zod.def;
     const inIsTransform = def.in._zod.traits.has("$ZodTransform");
     const innerType = ctx.io === "input" ? (inIsTransform ? def.out : def.in) : def.out;
-    to_json_schema_process(innerType, ctx, params);
+    to_json_schema_processSchema(innerType, ctx, params);
     const seen = ctx.seen.get(schema);
     seen.ref = innerType;
 };
 const readonlyProcessor = (schema, ctx, json, params) => {
     const def = schema._zod.def;
-    to_json_schema_process(def.innerType, ctx, params);
+    to_json_schema_processSchema(def.innerType, ctx, params);
     const seen = ctx.seen.get(schema);
     seen.ref = def.innerType;
     json.readOnly = true;
 };
 const promiseProcessor = (schema, ctx, _json, params) => {
     const def = schema._zod.def;
-    to_json_schema_process(def.innerType, ctx, params);
+    to_json_schema_processSchema(def.innerType, ctx, params);
     const seen = ctx.seen.get(schema);
     seen.ref = def.innerType;
 };
 const optionalProcessor = (schema, ctx, _json, params) => {
     const def = schema._zod.def;
-    to_json_schema_process(def.innerType, ctx, params);
+    to_json_schema_processSchema(def.innerType, ctx, params);
     const seen = ctx.seen.get(schema);
     seen.ref = def.innerType;
 };
 const lazyProcessor = (schema, ctx, _json, params) => {
     const innerType = schema._zod.innerType;
-    to_json_schema_process(innerType, ctx, params);
+    to_json_schema_processSchema(innerType, ctx, params);
     const seen = ctx.seen.get(schema);
     seen.ref = innerType;
 };
@@ -39032,7 +39045,7 @@ function toJSONSchema(input, params) {
         // First pass: process all schemas to build the seen map
         for (const entry of registry._idmap.entries()) {
             const [_, schema] = entry;
-            process(schema, ctx);
+            processSchema(schema, ctx);
         }
         const schemas = {};
         const external = {
@@ -39058,12 +39071,12 @@ function toJSONSchema(input, params) {
     }
     // Single schema case
     const ctx = initializeContext({ ...params, processors: allProcessors });
-    process(input, ctx);
+    processSchema(input, ctx);
     extractDefs(ctx, input);
     return finalize(ctx, input);
 }
 
-;// CONCATENATED MODULE: ../action/node_modules/zod/v4/locales/en.js
+;// CONCATENATED MODULE: ./node_modules/zod/v4/locales/en.js
 
 const en_error = () => {
     const Sizable = {
@@ -39104,7 +39117,9 @@ const en_error = () => {
         base64url: "base64url-encoded string",
         json_string: "JSON string",
         e164: "E.164 number",
+        currency_code: "currency code",
         credit_card: "credit card number",
+        iban: "IBAN",
         jwt: "JWT",
         template_literal: "input",
     };
@@ -39188,7 +39203,453 @@ const en_error = () => {
     };
 }
 
-;// CONCATENATED MODULE: ../action/node_modules/zod/v4/classic/errors.js
+;// CONCATENATED MODULE: ./node_modules/zod/v4/core/errors.js
+
+
+/* Computing the message eagerly is expensive (pretty-printed JSON of all
+ * issues), so defer it until first read. The accessor functions and
+ * descriptors are shared across instances to keep error construction
+ * cheap; the computed message is cached on the internals object. The
+ * setter preserves plain assignment semantics for consumers that
+ * overwrite `message`. */
+function _getMessage() {
+    const internals = this._zod;
+    internals.message ?? (internals.message = JSON.stringify(internals.def, jsonStringifyReplacer, 2));
+    return internals.message;
+}
+function _setMessage(value) {
+    this._zod.message = value;
+}
+const _messageDesc = {
+    get: _getMessage,
+    set: _setMessage,
+    enumerable: true,
+    configurable: true,
+};
+const _issuesDesc = { value: undefined, enumerable: false };
+/* Prototypes that already carry the lazy `toString`. Seeded with the
+ * intrinsics so that `init` on a foreign object — it accepts any object —
+ * can never install an accessor onto a prototype we do not own. */
+const _installedToString = /* @__PURE__ */ new WeakSet([Object.prototype, Error.prototype]);
+const initializer = (inst, def) => {
+    inst.name = "$ZodError";
+    // `_zod` is already non-enumerable: $constructor's init defined it with this same descriptor
+    _issuesDesc.value = def;
+    Object.defineProperty(inst, "issues", _issuesDesc);
+    // Clear the shared slot; a retained `value` pins the last error's issues.
+    _issuesDesc.value = undefined;
+    Object.defineProperty(inst, "message", _messageDesc);
+    /* `toString` lives as a non-enumerable lazy getter on the shared
+     * prototype; on first access it caches a per-instance closure so
+     * detached usage still works. */
+    const proto = Object.getPrototypeOf(inst);
+    if (!_installedToString.has(proto)) {
+        _installedToString.add(proto);
+        Object.defineProperty(proto, "toString", {
+            configurable: true,
+            enumerable: false,
+            get() {
+                const value = () => this.message;
+                Object.defineProperty(this, "toString", { value, configurable: true, writable: true });
+                return value;
+            },
+            set(value) {
+                Object.defineProperty(this, "toString", { value, configurable: true, writable: true });
+            },
+        });
+    }
+};
+const $ZodError = $constructor("$ZodError", initializer);
+const $ZodRealError = $constructor("$ZodError", initializer, undefined, {
+    Parent: Error,
+});
+/** Get-or-create `obj[key]` as an own data property. A path segment naming an inherited member
+ * ("toString", "constructor") would otherwise read through to the prototype, and assigning
+ * "__proto__" would hit the setter instead of creating a key. */
+function node(obj, key, make) {
+    if (!Object.prototype.hasOwnProperty.call(obj, key)) {
+        if (key === "__proto__") {
+            Object.defineProperty(obj, key, { value: make(), writable: true, enumerable: true, configurable: true });
+        }
+        else {
+            obj[key] = make();
+        }
+    }
+    return obj[key];
+}
+function flattenError(error, mapper = (issue) => issue.message) {
+    const fieldErrors = {};
+    const formErrors = [];
+    for (const sub of error.issues) {
+        if (sub.path.length > 0) {
+            node(fieldErrors, sub.path[0], () => []).push(mapper(sub));
+        }
+        else {
+            formErrors.push(mapper(sub));
+        }
+    }
+    return { formErrors, fieldErrors };
+}
+function formatError(error, mapper = (issue) => issue.message) {
+    const fieldErrors = { _errors: [] };
+    const processError = (error, path = []) => {
+        for (const issue of error.issues) {
+            if (issue.code === "invalid_union" && issue.errors.length) {
+                issue.errors.map((issues) => processError({ issues }, [...path, ...issue.path]));
+            }
+            else if (issue.code === "invalid_key") {
+                processError({ issues: issue.issues }, [...path, ...issue.path]);
+            }
+            else if (issue.code === "invalid_element") {
+                processError({ issues: issue.issues }, [...path, ...issue.path]);
+            }
+            else {
+                const fullpath = [...path, ...issue.path];
+                if (fullpath.length === 0) {
+                    fieldErrors._errors.push(mapper(issue));
+                }
+                else {
+                    let curr = fieldErrors;
+                    let i = 0;
+                    while (i < fullpath.length) {
+                        const el = fullpath[i];
+                        const terminal = i === fullpath.length - 1;
+                        // `_errors` is reserved by this legacy format, so merge a matching path segment into the current node instead of treating its array as a child.
+                        if (el === "_errors") {
+                            if (terminal)
+                                curr._errors.push(mapper(issue));
+                            i++;
+                            continue;
+                        }
+                        // A path element may collide with an inherited property name such as
+                        // "__proto__" or "constructor". Truthiness checks read the prototype
+                        // (so no node is created, then ._errors.push throws), and bracket
+                        // assignment of "__proto__" hits the setter instead of creating an
+                        // own key. Guard the read with hasOwnProperty and create the node
+                        // with defineProperty so any path element becomes a real own key.
+                        if (!Object.prototype.hasOwnProperty.call(curr, el)) {
+                            Object.defineProperty(curr, el, {
+                                value: { _errors: [] },
+                                enumerable: true,
+                                writable: true,
+                                configurable: true,
+                            });
+                        }
+                        const node = curr[el];
+                        if (terminal) {
+                            node._errors.push(mapper(issue));
+                        }
+                        curr = node;
+                        i++;
+                    }
+                }
+            }
+        }
+    };
+    processError(error);
+    return fieldErrors;
+}
+function treeifyError(error, mapper = (issue) => issue.message) {
+    const result = { errors: [] };
+    const processError = (error, path = []) => {
+        var _a;
+        for (const issue of error.issues) {
+            if (issue.code === "invalid_union" && issue.errors.length) {
+                // regular union error
+                issue.errors.map((issues) => processError({ issues }, [...path, ...issue.path]));
+            }
+            else if (issue.code === "invalid_key") {
+                processError({ issues: issue.issues }, [...path, ...issue.path]);
+            }
+            else if (issue.code === "invalid_element") {
+                processError({ issues: issue.issues }, [...path, ...issue.path]);
+            }
+            else {
+                const fullpath = [...path, ...issue.path];
+                if (fullpath.length === 0) {
+                    result.errors.push(mapper(issue));
+                    continue;
+                }
+                let curr = result;
+                let i = 0;
+                while (i < fullpath.length) {
+                    const el = fullpath[i];
+                    const terminal = i === fullpath.length - 1;
+                    if (typeof el === "string") {
+                        curr.properties ?? (curr.properties = {});
+                        // el may collide with an inherited property name ("__proto__",
+                        // "constructor", ...); ??= reads the prototype so the node is never
+                        // created and curr.errors.push throws. Guard with hasOwnProperty and
+                        // create the node with defineProperty so "__proto__" becomes a real
+                        // own key rather than invoking the prototype setter.
+                        if (!Object.prototype.hasOwnProperty.call(curr.properties, el)) {
+                            Object.defineProperty(curr.properties, el, {
+                                value: { errors: [] },
+                                enumerable: true,
+                                writable: true,
+                                configurable: true,
+                            });
+                        }
+                        curr = curr.properties[el];
+                    }
+                    else {
+                        curr.items ?? (curr.items = []);
+                        (_a = curr.items)[el] ?? (_a[el] = { errors: [] });
+                        curr = curr.items[el];
+                    }
+                    if (terminal) {
+                        curr.errors.push(mapper(issue));
+                    }
+                    i++;
+                }
+            }
+        }
+    };
+    processError(error);
+    return result;
+}
+/** Format a ZodError as a human-readable string in the following form.
+ *
+ * From
+ *
+ * ```ts
+ * ZodError {
+ *   issues: [
+ *     {
+ *       expected: 'string',
+ *       code: 'invalid_type',
+ *       path: [ 'username' ],
+ *       message: 'Invalid input: expected string'
+ *     },
+ *     {
+ *       expected: 'number',
+ *       code: 'invalid_type',
+ *       path: [ 'favoriteNumbers', 1 ],
+ *       message: 'Invalid input: expected number'
+ *     }
+ *   ];
+ * }
+ * ```
+ *
+ * to
+ *
+ * ```
+ * username
+ *   ✖ Expected number, received string at "username
+ * favoriteNumbers[0]
+ *   ✖ Invalid input: expected number
+ * ```
+ */
+function toDotPath(_path) {
+    const segs = [];
+    const path = _path.map((seg) => (typeof seg === "object" ? seg.key : seg));
+    for (const seg of path) {
+        if (typeof seg === "number")
+            segs.push(`[${seg}]`);
+        else if (typeof seg === "symbol")
+            segs.push(`[${JSON.stringify(String(seg))}]`);
+        else if (/[^\w$]/.test(seg))
+            segs.push(`[${JSON.stringify(seg)}]`);
+        else {
+            if (segs.length)
+                segs.push(".");
+            segs.push(seg);
+        }
+    }
+    return segs.join("");
+}
+function prettifyError(error) {
+    const lines = [];
+    // sort by path length
+    const issues = [...error.issues].sort((a, b) => (a.path ?? []).length - (b.path ?? []).length);
+    // Process each issue
+    for (const issue of issues) {
+        lines.push(`✖ ${issue.message}`);
+        if (issue.path?.length)
+            lines.push(`  → at ${toDotPath(issue.path)}`);
+    }
+    // Convert Map to formatted string
+    return lines.join("\n");
+}
+
+;// CONCATENATED MODULE: ./node_modules/zod/v4/core/parse.js
+
+
+
+// Always both keys, so the `_params` read site in `_parse` sees one object shape rather than two.
+function finalizeParams(callee, params) {
+    return { callee: params?.callee ?? callee, Err: params?.Err };
+}
+const _parse = (_Err) => {
+    const fn = (schema, value, _ctx, _params) => {
+        const ctx = _ctx ? { ..._ctx, async: false } : { async: false };
+        const result = schema._zod.run({ value, issues: [] }, ctx);
+        if (result instanceof Promise) {
+            throw new $ZodAsyncError();
+        }
+        if (result.issues.length) {
+            const e = new (_params?.Err ?? _Err)(result.issues.map((iss) => finalizeIssue(iss, ctx, config())));
+            captureStackTrace(e, _params?.callee ?? fn);
+            throw e;
+        }
+        return result.value;
+    };
+    return fn;
+};
+const parse_parse = /* @__PURE__*/ _parse($ZodRealError);
+const _parseAsync = (_Err) => {
+    const fn = async (schema, value, _ctx, params) => {
+        const ctx = _ctx ? { ..._ctx, async: true } : { async: true };
+        let result = schema._zod.run({ value, issues: [] }, ctx);
+        if (result instanceof Promise)
+            result = await result;
+        if (result.issues.length) {
+            const e = new (params?.Err ?? _Err)(result.issues.map((iss) => finalizeIssue(iss, ctx, config())));
+            captureStackTrace(e, params?.callee ?? fn);
+            throw e;
+        }
+        return result.value;
+    };
+    return fn;
+};
+const parse_parseAsync = /* @__PURE__*/ _parseAsync($ZodRealError);
+const _safeParse = (_Err) => (schema, value, _ctx) => {
+    const ctx = _ctx ? { ..._ctx, async: false } : { async: false };
+    const result = schema._zod.run({ value, issues: [] }, ctx);
+    if (result instanceof Promise) {
+        throw new $ZodAsyncError();
+    }
+    return result.issues.length ? failure(_Err, result.issues, ctx) : { success: true, data: result.value };
+};
+const safeParse = /* @__PURE__*/ _safeParse($ZodRealError);
+// the error is built on the first read of `error`: finalizing the issues and constructing the instance is most of a failing parse, and a caller that only branches on `success` never pays it. a getter in the literal keeps this small; the alternative, one shared accessor descriptor plus a hidden state slot, reads ~15% faster but costs ~75 B gzipped in every bundle
+function failure(Err, issues, ctx) {
+    let error;
+    return {
+        success: false,
+        get error() {
+            if (!error) {
+                error = new Err(issues.map((iss) => finalizeIssue(iss, ctx, config())));
+                // finalizeIssue drops `input`, so the built error holds nothing; keeping the raw issues past this point pins the parsed value for the life of the result
+                issues = undefined;
+                ctx = undefined;
+            }
+            return error;
+        },
+        set error(e) {
+            error = e;
+            // a replacement makes the getter's branch unreachable, so the captures have to go here too
+            issues = undefined;
+            ctx = undefined;
+        },
+    };
+}
+const _safeParseAsync = (_Err) => async (schema, value, _ctx) => {
+    const ctx = _ctx ? { ..._ctx, async: true } : { async: true };
+    let result = schema._zod.run({ value, issues: [] }, ctx);
+    if (result instanceof Promise)
+        result = await result;
+    return result.issues.length ? failure(_Err, result.issues, ctx) : { success: true, data: result.value };
+};
+const safeParseAsync = /* @__PURE__*/ _safeParseAsync($ZodRealError);
+// registry mirrors of the compiler's sentinels, so this module never imports the compiler
+const COMPILE_INVALID = /* @__PURE__ */ Symbol.for("zod.compile.invalid");
+const COMPILE_FALLBACK = /* @__PURE__ */ Symbol.for("zod.compile.fallback");
+// Deliberately tiny, because v8 will not inline a body carrying the fallback's object literals and throw. Everything that is not the compiled happy path lives in validateFallback, and that split is worth ~35% on a compiled schema.
+const validate = ((schema, value, _ctx) => {
+    const validator = schema._zod.bag.validator;
+    if (validator !== undefined) {
+        if (validator(value) !== COMPILE_INVALID)
+            return true;
+        // a definite sentinel means the runtime would reject, so skip the re-parse; a ctx can still change the answer
+        if (validator.definite === true && _ctx === undefined)
+            return false;
+    }
+    return validateFallback(schema, value, _ctx);
+});
+function validateFallback(schema, value, _ctx) {
+    const ctx = _ctx
+        ? { ..._ctx, async: false, abortEarly: true }
+        : { async: false, abortEarly: true };
+    const fallbackRun = schema._zod.bag.fallbackRun;
+    let result;
+    if (fallbackRun) {
+        // skip nested fast paths on the fallback, so user callbacks keep the at-most-twice bound
+        ctx[COMPILE_FALLBACK] = true;
+        result = fallbackRun({ value, issues: [] }, ctx);
+    }
+    else {
+        result = schema._zod.run({ value, issues: [] }, ctx);
+    }
+    if (result instanceof Promise) {
+        throw new $ZodAsyncError();
+    }
+    return result.issues.length === 0;
+}
+// no fast path: the compiler keeps async parses on the runtime, because a promise-returning callback that is not declared async compiles to a throw
+const parse_validateAsync = async (schema, value, _ctx) => {
+    const ctx = _ctx
+        ? { ..._ctx, async: true, abortEarly: true }
+        : { async: true, abortEarly: true };
+    let result = schema._zod.run({ value, issues: [] }, ctx);
+    if (result instanceof Promise)
+        result = await result;
+    return result.issues.length === 0;
+};
+const _encode = (_Err) => {
+    const parse = _parse(_Err);
+    const fn = (schema, value, _ctx, _params) => {
+        const ctx = _ctx ? { ..._ctx, direction: "backward" } : { direction: "backward" };
+        return parse(schema, value, ctx, finalizeParams(fn, _params));
+    };
+    return fn;
+};
+const encode = /* @__PURE__*/ _encode($ZodRealError);
+const _decode = (_Err) => {
+    const parse = _parse(_Err);
+    const fn = (schema, value, _ctx, _params) => {
+        return parse(schema, value, _ctx, finalizeParams(fn, _params));
+    };
+    return fn;
+};
+const decode = /* @__PURE__*/ _decode($ZodRealError);
+const _encodeAsync = (_Err) => {
+    const parseAsync = _parseAsync(_Err);
+    const fn = async (schema, value, _ctx, _params) => {
+        const ctx = _ctx ? { ..._ctx, direction: "backward" } : { direction: "backward" };
+        return (await parseAsync(schema, value, ctx, finalizeParams(fn, _params)));
+    };
+    return fn;
+};
+const encodeAsync = /* @__PURE__*/ _encodeAsync($ZodRealError);
+const _decodeAsync = (_Err) => {
+    const parseAsync = _parseAsync(_Err);
+    const fn = async (schema, value, _ctx, _params) => {
+        return await parseAsync(schema, value, _ctx, finalizeParams(fn, _params));
+    };
+    return fn;
+};
+const decodeAsync = /* @__PURE__*/ _decodeAsync($ZodRealError);
+const _safeEncode = (_Err) => (schema, value, _ctx) => {
+    const ctx = _ctx ? { ..._ctx, direction: "backward" } : { direction: "backward" };
+    return _safeParse(_Err)(schema, value, ctx);
+};
+const safeEncode = /* @__PURE__*/ _safeEncode($ZodRealError);
+const _safeDecode = (_Err) => (schema, value, _ctx) => {
+    return _safeParse(_Err)(schema, value, _ctx);
+};
+const safeDecode = /* @__PURE__*/ _safeDecode($ZodRealError);
+const _safeEncodeAsync = (_Err) => async (schema, value, _ctx) => {
+    const ctx = _ctx ? { ..._ctx, direction: "backward" } : { direction: "backward" };
+    return _safeParseAsync(_Err)(schema, value, ctx);
+};
+const safeEncodeAsync = /* @__PURE__*/ _safeEncodeAsync($ZodRealError);
+const _safeDecodeAsync = (_Err) => async (schema, value, _ctx) => {
+    return _safeParseAsync(_Err)(schema, value, _ctx);
+};
+const safeDecodeAsync = /* @__PURE__*/ _safeDecodeAsync($ZodRealError);
+
+;// CONCATENATED MODULE: ./node_modules/zod/v4/classic/errors.js
 
 
 
@@ -39247,7 +39708,7 @@ const ZodRealError = /*@__PURE__*/ $constructor("ZodError", errors_initializer, 
 // /** @deprecated Use `z.core.$ZodErrorMapCtx` instead. */
 // export type ErrorMapCtx = core.$ZodErrorMapCtx;
 
-;// CONCATENATED MODULE: ../action/node_modules/zod/v4/classic/parse.js
+;// CONCATENATED MODULE: ./node_modules/zod/v4/classic/parse.js
 
 
 const classic_parse_parse = /* @__PURE__ */ _parse(ZodRealError);
@@ -39265,7 +39726,8 @@ const parse_safeDecode = /* @__PURE__ */ _safeDecode(ZodRealError);
 const parse_safeEncodeAsync = /* @__PURE__ */ _safeEncodeAsync(ZodRealError);
 const parse_safeDecodeAsync = /* @__PURE__ */ _safeDecodeAsync(ZodRealError);
 
-;// CONCATENATED MODULE: ../action/node_modules/zod/v4/classic/schemas.js
+;// CONCATENATED MODULE: ./node_modules/zod/v4/classic/schemas.js
+
 
 
 
@@ -39417,6 +39879,12 @@ const ZodType = /*@__PURE__*/ $constructor("ZodType", (inst, def) => {
     set spa(value) {
         own(this, "spa", value);
     },
+    validate(data, params) {
+        return validate(this, data, params);
+    },
+    validateAsync(data, params) {
+        return parse_validateAsync(this, data, params);
+    },
     encode: function _encode(data, params) {
         return parse_encode(this, data, params, { callee: _encode });
     },
@@ -39458,10 +39926,11 @@ const _ZodString = /*@__PURE__*/ $constructor("_ZodString", (inst, def) => {
     $ZodString.init(inst, def);
     ZodType.init(inst, def);
     inst._zod.processJSONSchema = (ctx, json, params) => stringProcessor(inst, ctx, json, params);
-    const bag = inst._zod.bag;
-    inst.format = bag.format ?? null;
-    inst.minLength = bag.minimum ?? null;
-    inst.maxLength = bag.maximum ?? null;
+}, 
+/*@__PURE__*/ derived({
+    format: (inst) => aggregateChecks(inst).format ?? null,
+    minLength: (inst) => aggregateChecks(inst).minimum ?? null,
+    maxLength: (inst) => aggregateChecks(inst).maximum ?? null,
 }, {
     regex(...args) {
         return this.check(_regex(...args));
@@ -39508,7 +39977,7 @@ const _ZodString = /*@__PURE__*/ $constructor("_ZodString", (inst, def) => {
     slugify() {
         return this.check(_slugify());
     },
-});
+}));
 const ZodString = /*@__PURE__*/ $constructor("ZodString", (inst, def) => {
     $ZodString.init(inst, def);
     _ZodString.init(inst, def);
@@ -39660,8 +40129,8 @@ function url(params) {
 }
 function httpUrl(params) {
     return core._url(ZodURL, {
-        protocol: core.regexes.httpProtocol,
-        hostname: core.regexes.domain,
+        protocol: regexes.httpProtocol,
+        hostname: regexes.domain,
         ...util.normalizeParams(params),
     });
 }
@@ -39802,6 +40271,13 @@ const ZodCreditCard = /*@__PURE__*/ (/* unused pure expression or super */ null 
 function schemas_creditCard(params) {
     return core._creditCard(ZodCreditCard, params);
 }
+const ZodIBAN = /*@__PURE__*/ (/* unused pure expression or super */ null && (core.$constructor("ZodIBAN", (inst, def) => {
+    core.$ZodIBAN.init(inst, def);
+    ZodStringFormat.init(inst, def);
+})));
+function schemas_iban(params) {
+    return core._iban(ZodIBAN, params);
+}
 const ZodJWT = /*@__PURE__*/ $constructor("ZodJWT", (inst, def) => {
     // ZodStringFormat.init(inst, def);
     $ZodJWT.init(inst, def);
@@ -39819,10 +40295,13 @@ function stringFormat(format, fnOrRegex, _params = {}) {
     return core._stringFormat(ZodCustomStringFormat, format, fnOrRegex, _params);
 }
 function schemas_hostname(_params) {
-    return core._stringFormat(ZodCustomStringFormat, "hostname", core.regexes.hostname, _params);
+    return core._stringFormat(ZodCustomStringFormat, "hostname", regexes.hostname, _params);
 }
 function schemas_hex(_params) {
-    return core._stringFormat(ZodCustomStringFormat, "hex", core.regexes.hex, _params);
+    return core._stringFormat(ZodCustomStringFormat, "hex", regexes.hex, _params);
+}
+function schemas_currencyCode(_params) {
+    return core._stringFormat(ZodCustomStringFormat, "currency_code", regexes.currencyCode, _params);
 }
 function hash(alg, params) {
     const enc = params?.enc ?? "hex";
@@ -39836,14 +40315,22 @@ const ZodNumber = /*@__PURE__*/ $constructor("ZodNumber", (inst, def) => {
     $ZodNumber.init(inst, def);
     ZodType.init(inst, def);
     inst._zod.processJSONSchema = (ctx, json, params) => numberProcessor(inst, ctx, json, params);
-    const bag = inst._zod.bag;
-    inst.minValue =
-        Math.max(bag.minimum ?? Number.NEGATIVE_INFINITY, bag.exclusiveMinimum ?? Number.NEGATIVE_INFINITY) ?? null;
-    inst.maxValue =
-        Math.min(bag.maximum ?? Number.POSITIVE_INFINITY, bag.exclusiveMaximum ?? Number.POSITIVE_INFINITY) ?? null;
-    inst.isInt = (bag.format ?? "").includes("int") || Number.isSafeInteger(bag.multipleOf ?? 0.5);
     inst.isFinite = true;
-    inst.format = bag.format ?? null;
+}, 
+/*@__PURE__*/ derived({
+    minValue: (inst) => {
+        const { minimum, exclusiveMinimum } = aggregateChecks(inst);
+        return Math.max(minimum ?? Number.NEGATIVE_INFINITY, exclusiveMinimum ?? Number.NEGATIVE_INFINITY);
+    },
+    maxValue: (inst) => {
+        const { maximum, exclusiveMaximum } = aggregateChecks(inst);
+        return Math.min(maximum ?? Number.POSITIVE_INFINITY, exclusiveMaximum ?? Number.POSITIVE_INFINITY);
+    },
+    isInt: (inst) => {
+        const { isInt, multipleOf } = aggregateChecks(inst);
+        return !!isInt || !!multipleOf?.some(Number.isSafeInteger);
+    },
+    format: (inst) => aggregateChecks(inst).format ?? null,
 }, {
     gt(value, params) {
         return this.check(_gt(value, params));
@@ -39890,7 +40377,7 @@ const ZodNumber = /*@__PURE__*/ $constructor("ZodNumber", (inst, def) => {
     finite() {
         return this;
     },
-});
+}));
 function schemas_number(params) {
     return _number(ZodNumber, params);
 }
@@ -39925,10 +40412,11 @@ const ZodBigInt = /*@__PURE__*/ $constructor("ZodBigInt", (inst, def) => {
     $ZodBigInt.init(inst, def);
     ZodType.init(inst, def);
     inst._zod.processJSONSchema = (ctx, json, params) => bigintProcessor(inst, ctx, json, params);
-    const bag = inst._zod.bag;
-    inst.minValue = bag.minimum ?? null;
-    inst.maxValue = bag.maximum ?? null;
-    inst.format = bag.format ?? null;
+}, 
+/*@__PURE__*/ derived({
+    minValue: (inst) => aggregateChecks(inst).minimum ?? null,
+    maxValue: (inst) => aggregateChecks(inst).maximum ?? null,
+    format: (inst) => aggregateChecks(inst).format ?? null,
 }, {
     gte(value, params) {
         return this.check(_gte(value, params));
@@ -39963,7 +40451,7 @@ const ZodBigInt = /*@__PURE__*/ $constructor("ZodBigInt", (inst, def) => {
     multipleOf(value, params) {
         return this.check(_multipleOf(value, params));
     },
-});
+}));
 function schemas_bigint(params) {
     return core._bigint(ZodBigInt, params);
 }
@@ -40036,16 +40524,23 @@ function schemas_void(params) {
     return core._void(ZodVoid, params);
 }
 
-const ZodDate = /*@__PURE__*/ (/* unused pure expression or super */ null && (core.$constructor("ZodDate", (inst, def) => {
-    core.$ZodDate.init(inst, def);
+const ZodDate = /*@__PURE__*/ $constructor("ZodDate", (inst, def) => {
+    $ZodDate.init(inst, def);
     ZodType.init(inst, def);
-    inst._zod.processJSONSchema = (ctx, json, params) => processors.dateProcessor(inst, ctx, json, params);
-    inst.min = (value, params) => inst.check(checks.gte(value, params));
-    inst.max = (value, params) => inst.check(checks.lte(value, params));
-    const c = inst._zod.bag;
-    inst.minDate = c.minimum ? new Date(c.minimum) : null;
-    inst.maxDate = c.maximum ? new Date(c.maximum) : null;
-})));
+    inst._zod.processJSONSchema = (ctx, json, params) => dateProcessor(inst, ctx, json, params);
+    inst.min = (value, params) => inst.check(_gte(value, params));
+    inst.max = (value, params) => inst.check(_lte(value, params));
+}, 
+/*@__PURE__*/ derived({
+    minDate: (inst) => {
+        const { minimum } = aggregateChecks(inst);
+        return minimum ? new Date(minimum) : null;
+    },
+    maxDate: (inst) => {
+        const { maximum } = aggregateChecks(inst);
+        return maximum ? new Date(maximum) : null;
+    },
+}, {}));
 function schemas_date(params) {
     return core._date(ZodDate, params);
 }
@@ -40091,19 +40586,20 @@ const ZodObject = /*@__PURE__*/ $constructor("ZodObject", (inst, def) => {
         return schemas_enum(Object.keys(this._zod.def.shape));
     },
     catchall(catchall) {
-        return this.clone({ ...this._zod.def, catchall: catchall });
+        // `mergeDefs` rather than a spread: spreading reads `shape`, and resolving it can mint a whole fresh subtree
+        return this.clone(mergeDefs(this._zod.def, { catchall: catchall }));
     },
     passthrough() {
-        return this.clone({ ...this._zod.def, catchall: unknown() });
+        return this.clone(mergeDefs(this._zod.def, { catchall: unknown() }));
     },
     loose() {
-        return this.clone({ ...this._zod.def, catchall: unknown() });
+        return this.clone(mergeDefs(this._zod.def, { catchall: unknown() }));
     },
     strict() {
-        return this.clone({ ...this._zod.def, catchall: never() });
+        return this.clone(mergeDefs(this._zod.def, { catchall: never() }));
     },
     strip() {
-        return this.clone({ ...this._zod.def, catchall: undefined });
+        return this.clone(mergeDefs(this._zod.def, { catchall: undefined }));
     },
     extend(incoming) {
         return extend(this, incoming);
@@ -40331,7 +40827,8 @@ const ZodEnum = /*@__PURE__*/ $constructor("ZodEnum", (inst, def) => {
     ZodType.init(inst, def);
     inst._zod.processJSONSchema = (ctx, json, params) => enumProcessor(inst, ctx, json, params);
     inst.enum = def.entries;
-    inst.options = Object.values(def.entries);
+    // reuse the parsed value set so a numeric TS enum's reverse-mapping keys stay out
+    inst.options = [...inst._zod.values];
     const keys = new Set(Object.keys(def.entries));
     inst.extract = (values, params) => {
         const newEntries = {};
@@ -40713,8 +41210,16 @@ function superRefine(fn, params) {
 // Re-export describe and meta from core
 const schemas_describe = describe;
 const schemas_meta = meta;
+const ZodInstanceOf = /*@__PURE__*/ $constructor("ZodInstanceOf", (inst, def) => {
+    ZodCustom.init(inst, def);
+}, {
+    properties(shape, params) {
+        // asserts in place, so the narrowed output type is truthful without a wrapper
+        return this.check(_properties(shape, params));
+    },
+});
 function _instanceof(cls, params = {}) {
-    const inst = new ZodCustom({
+    const inst = new ZodInstanceOf({
         type: "custom",
         check: "custom",
         fn: (data) => data instanceof cls,
@@ -40758,7 +41263,7 @@ function preprocess(fn, schema) {
     });
 }
 
-;// CONCATENATED MODULE: ../action/node_modules/zod/v4/classic/iso.js
+;// CONCATENATED MODULE: ./node_modules/zod/v4/classic/iso.js
 
 
 
@@ -40954,12 +41459,22 @@ const API_ERROR_SCHEMA = object({
  */
 
 /**
+ * `sensorStatus`, `ebpfErrors`, `githubSteps` and `kernel` come from jibril's
+ * own readiness files (v2.17.0 and later) and explain a missing or partial
+ * capture. They carry jibril's shape as parsed, where null means the sensor
+ * reported no value; `ebpfErrors` is absent when the loader never reported
+ * counters at all, which is not the same as reporting zero.
+ * TODO(control-plane): /agent/stopped does not persist these four fields yet.
  * @typedef {object} AgentStoppedJibrilFields
  * @property {string=} activeState
  * @property {string=} result
  * @property {number=} execMainStatus
  * @property {AgentStopOutcome=} stopOutcome
  * @property {boolean=} forceStopped
+ * @property {import("../jibril-status.js").JibrilState | null=} sensorStatus
+ * @property {import("../jibril-status.js").JibrilEbpfErrors=} ebpfErrors
+ * @property {import("../jibril-status.js").JibrilSteps=} githubSteps
+ * @property {import("../jibril-status.js").JibrilKernel | null=} kernel
  */
 
 /**
@@ -40991,6 +41506,36 @@ const AGENT_STOP_REASON_SCHEMA = schemas_enum([
     "start_failed",
 ])
 
+// The sensor blocks mirror jibril's status files, validated here so a shape
+// this action does not expect never reaches the control plane.
+const SENSOR_STATUS_SCHEMA = schemas_enum(["disabled", "ok", "degraded"]).nullable()
+const COUNT_SCHEMA = schemas_number().int().nonnegative()
+
+const EBPF_ERRORS_SCHEMA = object({
+    load: COUNT_SCHEMA,
+    attach: COUNT_SCHEMA,
+    link: COUNT_SCHEMA,
+    attachFailures: array(object({ program: schemas_string(), error: schemas_string() })),
+})
+
+const GITHUB_STEPS_SCHEMA = object({
+    status: SENSOR_STATUS_SCHEMA,
+    source: schemas_enum(["none", "api", "local"]).nullable(),
+    count: COUNT_SCHEMA,
+    errors: array(schemas_string()),
+})
+
+const KERNEL_SCHEMA = object({
+    release: schemas_string(),
+    bpf: object({
+        btf: schemas_boolean(),
+        lsm: schemas_boolean(),
+        tracefs: schemas_boolean(),
+        cgroup2: schemas_boolean(),
+        lockdown: schemas_enum(["none", "integrity", "confidentiality", "unknown"]).nullable(),
+    }),
+})
+
 const AGENT_STOPPED_REQUEST_SCHEMA = object({
     reason: AGENT_STOP_REASON_SCHEMA,
     profileState: schemas_enum(["present", "missing", "empty", "invalid"]),
@@ -41002,6 +41547,10 @@ const AGENT_STOPPED_REQUEST_SCHEMA = object({
             execMainStatus: schemas_number().int().optional(),
             stopOutcome: schemas_enum(["completed", "timed_out"]).optional(),
             forceStopped: schemas_boolean().optional(),
+            sensorStatus: SENSOR_STATUS_SCHEMA.optional(),
+            ebpfErrors: EBPF_ERRORS_SCHEMA.optional(),
+            githubSteps: GITHUB_STEPS_SCHEMA.optional(),
+            kernel: KERNEL_SCHEMA.nullable().optional(),
         })
         .optional(),
 })
@@ -41686,6 +42235,416 @@ function renderStartFailureSummary(failure) {
     ].join("\n")
 }
 
+;// CONCATENATED MODULE: ./src/jibril-version.js
+/**
+ * @typedef {object} JibrilCoreVersion
+ * @property {number} major
+ * @property {number} minor
+ * @property {number} patch
+ */
+
+/**
+ * Compares a jibril release tag against a minimum version, so every
+ * version-gated feature reads as one line where it is used:
+ *
+ *     // jibril writes its readiness status files from v2.17.0 on.
+ *     if (versionAtLeast(version, 2, 17, 0)) {
+ *         // ...
+ *     }
+ *
+ * Prereleases sort with their core version, so v2.17.0-rc.5 satisfies
+ * (2, 17, 0). "latest" satisfies every minimum: it is whatever jibril
+ * released most recently, and a gate is only ever written for a version that
+ * is already out. Any other non-semver tag is older than every minimum, so
+ * daily builds (v0.0) and an unresolved version ("") leave gated features
+ * off rather than guessing.
+ * @param {string} tag - a release tag, or "latest"
+ * @param {number} major
+ * @param {number} minor
+ * @param {number} patch
+ * @returns {boolean}
+ */
+function versionAtLeast(tag, major, minor, patch) {
+    if (tag.trim().toLowerCase() === "latest") return true
+
+    const version = parseCoreVersion(tag)
+    if (version === null) return false
+
+    if (version.major !== major) return version.major > major
+    if (version.minor !== minor) return version.minor > minor
+    return version.patch >= patch
+}
+
+/**
+ * Ignores any prerelease or build suffix.
+ * @param {string} tag
+ * @returns {JibrilCoreVersion|null}
+ */
+function parseCoreVersion(tag) {
+    const match = /^v?(\d+)\.(\d+)\.(\d+)(?:[-+].*)?$/.exec(tag.trim())
+    if (match === null) return null
+
+    const [, major = "0", minor = "0", patch = "0"] = match
+    return { major: Number(major), minor: Number(minor), patch: Number(patch) }
+}
+
+;// CONCATENATED MODULE: ./src/jibril-status.js
+// Readiness status files written by jibril (v2.17.0 and later) under
+// /var/run/jibril. Both are written once, right before the sensor enters its
+// main event loop, so their presence is the first moment at which events are
+// being captured, and the snapshot they hold is complete from then on:
+//
+//   - ebpf.status.json   the eBPF layer: loader counters and failures
+//   - jibril.status.json the whole sensor: one block per feature
+//
+// Both share the same envelope, and jibril.status.json carries the identical
+// eBPF block under `features` plus `github` on a runner, so one parser reads
+// both. The shapes mirror jibril's `pkg/pkgs/runstatus`; only the fields this
+// action acts on are read.
+
+
+
+const JIBRIL_STATUS_DIR = "/var/run/jibril"
+const JIBRIL_EBPF_STATUS_FILE = `${JIBRIL_STATUS_DIR}/ebpf.status.json`
+const JIBRIL_RUN_STATUS_FILE = (/* unused pure expression or super */ null && (`${JIBRIL_STATUS_DIR}/jibril.status.json`))
+
+/**
+ * The health of the sensor, or of one of its features (runstatus.State).
+ * `disabled` is also the state of a feature that never ran.
+ * @typedef {"disabled" | "ok" | "degraded"} JibrilState
+ */
+
+/** @type {readonly JibrilState[]} */
+const STATES = ["disabled", "ok", "degraded"]
+
+/**
+ * Where jibril discovered the workflow steps (runstatus.Source*).
+ * @typedef {"none" | "api" | "local"} JibrilStepsSource
+ */
+
+/** @type {readonly JibrilStepsSource[]} */
+const STEPS_SOURCES = ["none", "api", "local"]
+
+/**
+ * The active kernel lockdown mode. jibril writes `unknown` itself when the
+ * host hides /sys/kernel/security/lockdown, which says nothing about whether
+ * lockdown is on.
+ * @typedef {"none" | "integrity" | "confidentiality" | "unknown"} JibrilLockdown
+ */
+
+/** @type {readonly JibrilLockdown[]} */
+const LOCKDOWN_MODES = ["none", "integrity", "confidentiality", "unknown"]
+
+/**
+ * A program the loader could not attach. The kernel hook it names is blind
+ * for the whole run.
+ * @typedef {object} JibrilAttachFailure
+ * @property {string} program
+ * @property {string} error
+ */
+
+/**
+ * Failures counted by the stage they happened in: `load` covers object load
+ * and map, program and ringbuf creation, `attach` covers bond creation and
+ * the attach call, `link` covers detach and destroy operations.
+ * @typedef {object} JibrilEbpfErrors
+ * @property {number} load
+ * @property {number} attach
+ * @property {number} link
+ * @property {JibrilAttachFailure[]} attachFailures - one entry per program behind the attach count
+ */
+
+/**
+ * `attached` counts successful attach calls including tail programs, which
+ * hold no link, so it is always greater than or equal to `liveLinks`.
+ * @typedef {object} JibrilEbpf
+ * @property {number} programs
+ * @property {number} attached
+ * @property {number} liveLinks
+ * @property {JibrilEbpfErrors} errors
+ */
+
+/**
+ * The outcome of the workflow step discovery. A degraded discovery costs the
+ * workflow-step attribution on events, nothing else.
+ * @typedef {object} JibrilSteps
+ * @property {JibrilState | null} status
+ * @property {JibrilStepsSource | null} source
+ * @property {number} count
+ * @property {string[]} errors
+ */
+
+/**
+ * What the kernel offered the loader, which is where most attach failures
+ * come from: BTF is what CO-RE, fentry and tp_btf programs need, the BPF LSM
+ * is what bpf_lsm programs attach to, tracefs carries the kprobe and
+ * tracepoint hooks, cgroup2 is the hierarchy cgroup_skb programs attach to,
+ * and lockdown in confidentiality mode blocks the kernel reads the programs
+ * are built around. A capability jibril could not probe reads as false,
+ * which is what unsupported means from the loader's side. `lsm` is reported
+ * but never blamed: hosted runners do not enable it.
+ * @typedef {object} JibrilKernelBpf
+ * @property {boolean} btf
+ * @property {boolean} lsm
+ * @property {boolean} tracefs
+ * @property {boolean} cgroup2
+ * @property {JibrilLockdown | null} lockdown
+ */
+
+/**
+ * @typedef {object} JibrilKernel
+ * @property {string} release
+ * @property {JibrilKernelBpf} bpf
+ */
+
+/**
+ * @typedef {object} JibrilStatus
+ * @property {JibrilState | null} status
+ * @property {string} readyAt
+ * @property {JibrilKernel | null} kernel
+ * @property {JibrilEbpf | null} ebpf - null until the loader reports its counters, so an early write never claims a clean load
+ * @property {JibrilSteps | null} githubSteps - null off a GitHub runner
+ */
+
+/**
+ * Parses either status file. Null covers every way the file can fail to say
+ * anything: not written yet, unreadable, or not holding a status object.
+ * @param {string} content
+ * @returns {JibrilStatus | null}
+ */
+function parseJibrilStatus(content) {
+    /** @type {unknown} */
+    let parsed
+    try {
+        parsed = JSON.parse(content)
+    } catch {
+        return null
+    }
+
+    const record = getOptionalRecord(parsed)
+    if (record === null || Array.isArray(parsed)) {
+        return null
+    }
+
+    const features = getOptionalRecord(record.features)
+    // ebpf.status.json keeps the block at the top level and always writes it;
+    // jibril.status.json nests the identical block under `features` and omits
+    // it until the loader has counters to report.
+    const ebpf = features === null ? record.ebpf : features.ebpf
+
+    return {
+        status: readEnum(STATES, record.status),
+        readyAt: getOptionalString(record.ready_at) ?? "",
+        kernel: readKernel(record.kernel),
+        ebpf: readEbpf(ebpf),
+        githubSteps: readGitHubSteps(features),
+    }
+}
+
+/**
+ * Names only the non-zero counters, so it is empty exactly when the loader
+ * reported no failure at all, which is also when jibril calls itself ok.
+ * @param {JibrilEbpfErrors} errors
+ * @returns {string}
+ */
+function formatEbpfErrors(errors) {
+    /** @type {string[]} */
+    const parts = []
+
+    if (errors.load > 0) parts.push(`load=${errors.load}`)
+    if (errors.attach > 0) parts.push(`attach=${errors.attach}`)
+    if (errors.link > 0) parts.push(`link=${errors.link}`)
+
+    return parts.join(", ")
+}
+
+/**
+ * @param {JibrilAttachFailure[]} failures
+ * @returns {string}
+ */
+function formatAttachFailures(failures) {
+    return failures.map(failure => `${failure.program}: ${failure.error}`).join("; ")
+}
+
+/**
+ * Names what this kernel did not offer the loader, and only what is unusual
+ * enough to explain a failure: hosted runners ship without the BPF LSM and
+ * under lockdown integrity, so neither is evidence of anything on its own.
+ * Empty when there is nothing to explain, which keeps a healthy run from
+ * ever blaming its kernel.
+ * @param {JibrilKernel | null} kernel
+ * @returns {string}
+ */
+function formatKernelGaps(kernel) {
+    if (kernel === null) return ""
+
+    /** @type {string[]} */
+    const gaps = []
+
+    if (!kernel.bpf.btf) gaps.push("no BTF")
+    if (!kernel.bpf.tracefs) gaps.push("no tracefs")
+    if (!kernel.bpf.cgroup2) gaps.push("no cgroup2")
+    if (kernel.bpf.lockdown === "confidentiality") {
+        gaps.push("lockdown confidentiality")
+    }
+
+    if (gaps.length === 0) return ""
+
+    return `kernel ${kernel.release} offers ${gaps.join(", ")}`
+}
+
+/**
+ * One log line describing what the sensor reported about itself.
+ * @param {JibrilStatus} status
+ * @returns {string}
+ */
+function formatJibrilStatusSummary(status) {
+    /** @type {string[]} */
+    const parts = [`status=${status.status ?? UNREPORTED}`]
+
+    if (status.readyAt !== "") parts.push(`ready_at=${status.readyAt}`)
+    if (status.kernel !== null) parts.push(`kernel=${status.kernel.release}`)
+
+    if (status.ebpf === null) {
+        parts.push(`ebpf=${UNREPORTED}`)
+    } else {
+        const { programs, attached, liveLinks, errors } = status.ebpf
+        parts.push(`ebpf programs=${programs}/attached=${attached}/live_links=${liveLinks}`)
+        parts.push(`ebpf errors=${formatEbpfErrors(errors) || "none"}`)
+    }
+
+    const steps = status.githubSteps
+    if (steps !== null) {
+        parts.push(
+            `github steps=${steps.status ?? UNREPORTED} (source=${steps.source ?? UNREPORTED}, count=${steps.count})`,
+        )
+    }
+
+    return parts.join(", ")
+}
+
+const UNREPORTED = "(unreported)"
+
+/**
+ * @param {unknown} value
+ * @returns {JibrilKernel | null}
+ */
+function readKernel(value) {
+    const record = getOptionalRecord(value)
+    if (record === null) return null
+
+    const bpf = getOptionalRecord(record.bpf)
+
+    return {
+        release: getOptionalString(record.release) ?? "",
+        bpf: {
+            btf: bpf?.btf === true,
+            lsm: bpf?.lsm === true,
+            tracefs: bpf?.tracefs === true,
+            cgroup2: bpf?.cgroup2 === true,
+            lockdown: readEnum(LOCKDOWN_MODES, bpf?.lockdown),
+        },
+    }
+}
+
+/**
+ * @param {unknown} value
+ * @returns {JibrilEbpf | null}
+ */
+function readEbpf(value) {
+    const record = getOptionalRecord(value)
+    if (record === null) return null
+
+    const errors = getOptionalRecord(record.errors)
+
+    return {
+        programs: readCount(record.programs),
+        attached: readCount(record.attached),
+        liveLinks: readCount(record.live_links),
+        errors: {
+            load: readCount(errors?.load),
+            attach: readCount(errors?.attach),
+            link: readCount(errors?.link),
+            attachFailures: readAttachFailures(errors?.attach_failures),
+        },
+    }
+}
+
+/**
+ * The github block is written whenever the job environment is there to
+ * report, and always carries a steps block; off a runner it is absent.
+ * @param {Record<string, unknown> | null} features
+ * @returns {JibrilSteps | null}
+ */
+function readGitHubSteps(features) {
+    const github = getOptionalRecord(features?.github)
+    const steps = getOptionalRecord(github?.steps)
+    if (steps === null) return null
+
+    return {
+        status: readEnum(STATES, steps.status),
+        source: readEnum(STEPS_SOURCES, steps.source),
+        count: readCount(steps.count),
+        errors: readStringList(steps.errors),
+    }
+}
+
+/**
+ * @param {unknown} value
+ * @returns {JibrilAttachFailure[]}
+ */
+function readAttachFailures(value) {
+    if (!Array.isArray(value)) return []
+
+    /** @type {JibrilAttachFailure[]} */
+    const failures = []
+    for (const entry of value) {
+        const record = getOptionalRecord(entry)
+        if (record === null) continue
+
+        failures.push({
+            program: getOptionalString(record.program) ?? "",
+            error: getOptionalString(record.error) ?? "",
+        })
+    }
+
+    return failures
+}
+
+/**
+ * Resolves one of a known set of values, so nothing downstream handles a
+ * free-form string. Null means jibril reported something outside the set,
+ * which is not a known value and must not be reported as one.
+ * @template {string} T
+ * @param {readonly T[]} members
+ * @param {unknown} value
+ * @returns {T | null}
+ */
+function readEnum(members, value) {
+    return members.find(member => member === value) ?? null
+}
+
+/**
+ * @param {unknown} value
+ * @returns {number}
+ */
+function readCount(value) {
+    const count = getOptionalNumber(value)
+    if (count === undefined || !Number.isFinite(count) || count < 0) return 0
+
+    return Math.trunc(count)
+}
+
+/**
+ * @param {unknown} value
+ * @returns {string[]}
+ */
+function readStringList(value) {
+    if (!Array.isArray(value)) return []
+
+    return value.filter(entry => typeof entry === "string" && entry.trim() !== "")
+}
+
 ;// CONCATENATED MODULE: ./src/action.js
 // This script installs jibril, calls the control-plane API to create the
 // agent and fetch network policy, and sets up Jibril as a systemd service.
@@ -41706,6 +42665,13 @@ function renderStartFailureSummary(failure) {
 
 
 
+
+
+
+
+/**
+ * @typedef {import("./jibril-status.js").JibrilStatus} JibrilStatus
+ */
 
 /**
  * @typedef {import("@actions/exec").ExecOptions} ExecOptions
@@ -41730,8 +42696,6 @@ const JIBRIL_RELEASES_URL = `https://github.com/${JIBRIL_RELEASES_REPO}/releases
 // Update both if the jibril release workflow ever changes them.
 const JIBRIL_ATTESTATION_PREDICATE = `https://github.com/${JIBRIL_RELEASES_REPO}/attestations/release/v1`
 const JIBRIL_SIGNER_WORKFLOW = `${JIBRIL_RELEASES_REPO}/.github/workflows/jibril-public-release.yml`
-/** @type {JibrilCoreVersion} */
-const JIBRIL_BUNDLE_MIN_VERSION = { major: 2, minor: 17, patch: 0 }
 const JIBRIL_BINARY = "jibril"
 const JIBRIL_CHECKSUMS = "jibril-checksums.txt"
 const JIBRIL_MANIFEST = "release.json"
@@ -41744,6 +42708,16 @@ const SIGSTORE_SUFFIX = ".sigstore.json"
 // value live and bounds its own wait to it.
 const JIBRIL_STOP_TIMEOUT_ENV = "GARNET_JIBRIL_STOP_TIMEOUT_SECONDS"
 const DEFAULT_JIBRIL_STOP_TIMEOUT_SECONDS = 1800
+// `systemctl start` returns once the unit is activating, not once the sensor
+// is attached, so the job's first steps could run before any event was
+// captured. From v2.17.0 on jibril writes its eBPF readiness file immediately
+// before entering the event loop, which turns that gap into something the
+// action can wait on instead of guess at.
+const JIBRIL_READY_TIMEOUT_SECONDS = 30
+// The poll interval, not the clock, is what bounds how precisely readiness
+// can be timed, so it is kept short enough for the reported figure to mean
+// something. Each tick costs two cheap root reads.
+const JIBRIL_READY_POLL_INTERVAL_MS = 200
 
 // This function is the main entry point for the script.
 // Returns true when Jibril started successfully, false otherwise.
@@ -41753,7 +42727,7 @@ async function run() {
     const startContext = { apiURL: "", agentToken: "" }
     try {
         // Get the variables from the environment.
-        const TOKEN = getEnv("GARNET_API_TOKEN")
+        const TOKEN = getEnv("GARNET_API_TOKEN").trim()
         const API = validateApiURL(getEnv("GARNET_API_URL", "https://api.garnet.ai"))
         startContext.apiURL = API
         let JIBRILVER = resolveJibrilVersion(getEnv("JIBRIL_VERSION", ""), getEnv("GITHUB_ACTION_REF", ""))
@@ -41769,6 +42743,7 @@ async function run() {
             // annotation, otherwise a credential-less run reads as a silent no-op.
             if (credentialSkip.skip) {
                 warning(credentialSkip.reason)
+                await appendUnrecordedSummary(credentialSkip.reason)
                 return false
             }
         }
@@ -41831,6 +42806,11 @@ async function run() {
 
         info(`API server: ${API}`)
         info(`Jibril Version: ${JIBRILVER}`)
+
+        // The post step gates its own version-dependent behavior on the exact
+        // sensor that ran, so it gets the resolved tag rather than a set of
+        // per-feature booleans decided here.
+        saveState("jibrilVersion", JIBRILVER)
 
         // Create a temporary directory for the script to use.
         tmpDir = await promises_namespaceObject.mkdtemp(external_node_path_namespaceObject.join(external_node_os_namespaceObject.tmpdir(), "garnet-"))
@@ -42110,6 +43090,11 @@ TimeoutStopSec=${stopTimeoutValue}
         }
 
         // Start Jibril service, but do not fail the workflow if the daemon crashes.
+        // The readiness wait times itself against this instant, so both `took`
+        // and the bound cover the whole gap the job is exposed for, the start
+        // call included. performance.now() is monotonic, so neither can be
+        // skewed by a wall-clock step mid-run.
+        const startedAt = performance.now()
         const returnCode = await execSudo(["systemctl", "start", "jibril.service"], {
             ignoreReturnCode: true,
         })
@@ -42118,18 +43103,38 @@ TimeoutStopSec=${stopTimeoutValue}
             return await discloseStartFailure(startContext, "the jibril service failed to start")
         }
 
-        // Give the daemon a moment to settle so an immediate crash is surfaced here.
-        await waitForDelay(5000)
+        // From v2.17.0 on jibril writes the readiness status files the poll
+        // below waits on; older sensors only get a settle window.
+        if (versionAtLeast(JIBRILVER, 2, 17, 0)) {
+            const readiness = await waitForJibrilReadiness(startedAt)
 
-        const { stdout: serviceState } = await execCapture("sudo", ["systemctl", "is-active", "jibril.service"], {
-            ignoreReturnCode: true,
-        })
+            if (readiness.state === "exited") {
+                return await discloseStartFailure(
+                    startContext,
+                    `the jibril service exited early with state '${readiness.serviceState || "unknown"}'`,
+                )
+            }
 
-        if (serviceState !== "active") {
-            return await discloseStartFailure(
-                startContext,
-                `the jibril service exited early with state '${serviceState || "unknown"}'`,
-            )
+            if (readiness.state === "not_ready") {
+                // The unit is still up, so monitoring may still come online;
+                // what is lost is the guarantee about this run's first steps.
+                warning(
+                    `Jibril did not report eBPF readiness within ${JIBRIL_READY_TIMEOUT_SECONDS}s ` +
+                        `(${JIBRIL_EBPF_STATUS_FILE} is missing or unreadable). ` +
+                        "Events from the start of this job may be missing.",
+                )
+            }
+        } else {
+            // Give the daemon a moment to settle so an immediate crash is surfaced here.
+            await waitForDelay(5000)
+
+            const serviceState = await readJibrilServiceState()
+            if (serviceState !== "active") {
+                return await discloseStartFailure(
+                    startContext,
+                    `the jibril service exited early with state '${serviceState || "unknown"}'`,
+                )
+            }
         }
 
         // Check Jibril service status.
@@ -42391,42 +43396,6 @@ function resolveJibrilVersion(inputVersion, actionRef) {
 }
 
 /**
- * @typedef {Object} JibrilCoreVersion
- * @prop {number} major
- * @prop {number} minor
- * @prop {number} patch
- */
-
-/**
- * Prereleases sort with their core version, so v2.17.0-rc.5 is bundled too.
- * Non-semver tags (daily builds) keep the bare binary.
- * @param {string} tag
- * @returns {boolean}
- */
-function usesBundledJibrilRelease(tag) {
-    const version = parseCoreVersion(tag)
-    if (version === null) return false
-
-    const { major, minor, patch } = JIBRIL_BUNDLE_MIN_VERSION
-    if (version.major !== major) return version.major > major
-    if (version.minor !== minor) return version.minor > minor
-    return version.patch >= patch
-}
-
-/**
- * Ignores any prerelease or build suffix.
- * @param {string} tag
- * @returns {JibrilCoreVersion|null}
- */
-function parseCoreVersion(tag) {
-    const match = /^v?(\d+)\.(\d+)\.(\d+)(?:[-+].*)?$/.exec(tag.trim())
-    if (match === null) return null
-
-    const [, major = "0", minor = "0", patch = "0"] = match
-    return { major: Number(major), minor: Number(minor), patch: Number(patch) }
-}
-
-/**
  * GitHub redirects /releases/latest to the tag page, so the tag comes from the
  * Location header with no body download.
  * @returns {Promise<string>}
@@ -42459,7 +43428,9 @@ async function downloadJibril(tag, tmpDir) {
     const releaseURL = `${JIBRIL_RELEASES_URL}/download/${tag}`
     const binaryPath = external_node_path_namespaceObject.join(tmpDir, JIBRIL_BINARY)
 
-    if (!usesBundledJibrilRelease(tag)) {
+    // From v2.17.0 on a release ships the signed bundle; older releases only
+    // offer the bare `jibril` asset.
+    if (!versionAtLeast(tag, 2, 17, 0)) {
         const binaryURL = `${releaseURL}/${JIBRIL_BINARY}`
         info(`Downloading jibril: ${binaryURL}`)
         await downloadFile(binaryURL, binaryPath)
@@ -42719,6 +43690,108 @@ function resolveStopTimeoutSeconds(overrideValue) {
     }
 
     return parsed > 0 ? parsed : 0
+}
+
+/**
+ * @typedef {object} JibrilReadiness
+ * @property {"ready" | "not_ready" | "exited"} state
+ * @property {string} serviceState - systemd's view, read only while readiness is still pending
+ */
+
+/**
+ * Waits until jibril reports that its eBPF layer is attached, which is the
+ * first instant at which the sensor is capturing events. Each poll also asks
+ * systemd whether the unit is still up, so a sensor that dies during startup
+ * is reported immediately instead of after the full bound.
+ * @param {number} startedAt - performance.now() reading taken before the `systemctl start` call
+ * @returns {Promise<JibrilReadiness>}
+ */
+async function waitForJibrilReadiness(startedAt) {
+    info(`Waiting up to ${JIBRIL_READY_TIMEOUT_SECONDS}s for Jibril to report eBPF readiness`)
+
+    const deadline = startedAt + JIBRIL_READY_TIMEOUT_SECONDS * 1000
+
+    for (;;) {
+        const status = parseJibrilStatus(await readRootFile(JIBRIL_EBPF_STATUS_FILE))
+        if (status !== null) {
+            reportJibrilReadiness(status, performance.now() - startedAt)
+            return { state: "ready", serviceState: "active" }
+        }
+
+        const serviceState = await readJibrilServiceState()
+        if (serviceState !== "active" && serviceState !== "activating") {
+            return { state: "exited", serviceState }
+        }
+
+        if (performance.now() >= deadline) {
+            return { state: "not_ready", serviceState }
+        }
+
+        await waitForDelay(JIBRIL_READY_POLL_INTERVAL_MS)
+    }
+}
+
+/**
+ * @param {JibrilStatus} status
+ * @param {number} elapsedMs - time from the start call to the sensor being ready
+ * @returns {void}
+ */
+function reportJibrilReadiness(status, elapsedMs) {
+    info(`Jibril eBPF readiness: took=${elapsedMs.toFixed(3)}ms, ${formatJibrilStatusSummary(status)}`)
+
+    // The readiness file always carries the eBPF block, and jibril reports
+    // itself degraded exactly when a stage failed, so the counters carry
+    // everything its status value would add.
+    const ebpf = status.ebpf
+    if (ebpf === null) {
+        return
+    }
+
+    const ebpfErrors = formatEbpfErrors(ebpf.errors)
+    if (ebpfErrors === "") {
+        return
+    }
+
+    // The kernel's gaps are where most attach failures come from, and it
+    // cannot change under a running sensor, so this is the place to say so.
+    const parts = [`Jibril attached with eBPF errors (${ebpfErrors})`]
+    const kernelGaps = formatKernelGaps(status.kernel)
+    if (kernelGaps !== "") {
+        parts.push(kernelGaps)
+    }
+    parts.push("some runtime events will be missing for this run")
+    warning(parts.join("; "))
+
+    const attachFailures = formatAttachFailures(ebpf.errors.attachFailures)
+    if (attachFailures !== "") {
+        info(`Jibril could not attach: ${attachFailures}`)
+    }
+}
+
+/**
+ * @returns {Promise<string>}
+ */
+async function readJibrilServiceState() {
+    const { stdout } = await execCapture("sudo", ["systemctl", "is-active", "jibril.service"], {
+        ignoreReturnCode: true,
+    })
+
+    return stdout
+}
+
+/**
+ * jibril writes its status files as root. An absent or unreadable file is a
+ * normal intermediate state while polling, so it reads as empty content.
+ * @param {string} filePath
+ * @returns {Promise<string>}
+ */
+async function readRootFile(filePath) {
+    try {
+        const { stdout } = await execCapture("sudo", ["cat", filePath], { ignoreReturnCode: true })
+        return stdout
+    } catch {
+        return ""
+    }
 }
 
 /**

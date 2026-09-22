@@ -12,6 +12,7 @@ import * as path from "node:path"
 import { pipeline } from "node:stream/promises"
 import { createGitHubContext, getProfileJobName, getWorkflowFilePath } from "./github-context.js"
 import { resolveCredentialSkip } from "./credential-less-run.js"
+import { appendUnrecordedSummary } from "./job-summary.js"
 import { ControlPlaneClient } from "./control-plane/client.js"
 import { getEnv, getErrorMessage, isSupportedArch, isSupportedPlatform, pathExists, waitForDelay } from "./shared.js"
 import { getGitHubIDToken, isMissingOIDCPermissionError, resolveOIDCAudience } from "./oidc.js"
@@ -24,6 +25,19 @@ import {
     truncateHead,
     truncateTail,
 } from "./start-failure.js"
+import { versionAtLeast } from "./jibril-version.js"
+import {
+    JIBRIL_EBPF_STATUS_FILE,
+    formatAttachFailures,
+    formatEbpfErrors,
+    formatJibrilStatusSummary,
+    formatKernelGaps,
+    parseJibrilStatus,
+} from "./jibril-status.js"
+
+/**
+ * @typedef {import("./jibril-status.js").JibrilStatus} JibrilStatus
+ */
 
 /**
  * @typedef {import("@actions/exec").ExecOptions} ExecOptions
@@ -48,8 +62,6 @@ const JIBRIL_RELEASES_URL = `https://github.com/${JIBRIL_RELEASES_REPO}/releases
 // Update both if the jibril release workflow ever changes them.
 const JIBRIL_ATTESTATION_PREDICATE = `https://github.com/${JIBRIL_RELEASES_REPO}/attestations/release/v1`
 const JIBRIL_SIGNER_WORKFLOW = `${JIBRIL_RELEASES_REPO}/.github/workflows/jibril-public-release.yml`
-/** @type {JibrilCoreVersion} */
-const JIBRIL_BUNDLE_MIN_VERSION = { major: 2, minor: 17, patch: 0 }
 const JIBRIL_BINARY = "jibril"
 const JIBRIL_CHECKSUMS = "jibril-checksums.txt"
 const JIBRIL_MANIFEST = "release.json"
@@ -62,6 +74,16 @@ const SIGSTORE_SUFFIX = ".sigstore.json"
 // value live and bounds its own wait to it.
 const JIBRIL_STOP_TIMEOUT_ENV = "GARNET_JIBRIL_STOP_TIMEOUT_SECONDS"
 const DEFAULT_JIBRIL_STOP_TIMEOUT_SECONDS = 1800
+// `systemctl start` returns once the unit is activating, not once the sensor
+// is attached, so the job's first steps could run before any event was
+// captured. From v2.17.0 on jibril writes its eBPF readiness file immediately
+// before entering the event loop, which turns that gap into something the
+// action can wait on instead of guess at.
+const JIBRIL_READY_TIMEOUT_SECONDS = 30
+// The poll interval, not the clock, is what bounds how precisely readiness
+// can be timed, so it is kept short enough for the reported figure to mean
+// something. Each tick costs two cheap root reads.
+const JIBRIL_READY_POLL_INTERVAL_MS = 200
 
 // This function is the main entry point for the script.
 // Returns true when Jibril started successfully, false otherwise.
@@ -71,7 +93,7 @@ export async function run() {
     const startContext = { apiURL: "", agentToken: "" }
     try {
         // Get the variables from the environment.
-        const TOKEN = getEnv("GARNET_API_TOKEN")
+        const TOKEN = getEnv("GARNET_API_TOKEN").trim()
         const API = validateApiURL(getEnv("GARNET_API_URL", "https://api.garnet.ai"))
         startContext.apiURL = API
         let JIBRILVER = resolveJibrilVersion(getEnv("JIBRIL_VERSION", ""), getEnv("GITHUB_ACTION_REF", ""))
@@ -87,6 +109,7 @@ export async function run() {
             // annotation, otherwise a credential-less run reads as a silent no-op.
             if (credentialSkip.skip) {
                 core.warning(credentialSkip.reason)
+                await appendUnrecordedSummary(credentialSkip.reason)
                 return false
             }
         }
@@ -149,6 +172,11 @@ export async function run() {
 
         core.info(`API server: ${API}`)
         core.info(`Jibril Version: ${JIBRILVER}`)
+
+        // The post step gates its own version-dependent behavior on the exact
+        // sensor that ran, so it gets the resolved tag rather than a set of
+        // per-feature booleans decided here.
+        core.saveState("jibrilVersion", JIBRILVER)
 
         // Create a temporary directory for the script to use.
         tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "garnet-"))
@@ -428,6 +456,11 @@ TimeoutStopSec=${stopTimeoutValue}
         }
 
         // Start Jibril service, but do not fail the workflow if the daemon crashes.
+        // The readiness wait times itself against this instant, so both `took`
+        // and the bound cover the whole gap the job is exposed for, the start
+        // call included. performance.now() is monotonic, so neither can be
+        // skewed by a wall-clock step mid-run.
+        const startedAt = performance.now()
         const returnCode = await execSudo(["systemctl", "start", "jibril.service"], {
             ignoreReturnCode: true,
         })
@@ -436,18 +469,38 @@ TimeoutStopSec=${stopTimeoutValue}
             return await discloseStartFailure(startContext, "the jibril service failed to start")
         }
 
-        // Give the daemon a moment to settle so an immediate crash is surfaced here.
-        await waitForDelay(5000)
+        // From v2.17.0 on jibril writes the readiness status files the poll
+        // below waits on; older sensors only get a settle window.
+        if (versionAtLeast(JIBRILVER, 2, 17, 0)) {
+            const readiness = await waitForJibrilReadiness(startedAt)
 
-        const { stdout: serviceState } = await execCapture("sudo", ["systemctl", "is-active", "jibril.service"], {
-            ignoreReturnCode: true,
-        })
+            if (readiness.state === "exited") {
+                return await discloseStartFailure(
+                    startContext,
+                    `the jibril service exited early with state '${readiness.serviceState || "unknown"}'`,
+                )
+            }
 
-        if (serviceState !== "active") {
-            return await discloseStartFailure(
-                startContext,
-                `the jibril service exited early with state '${serviceState || "unknown"}'`,
-            )
+            if (readiness.state === "not_ready") {
+                // The unit is still up, so monitoring may still come online;
+                // what is lost is the guarantee about this run's first steps.
+                core.warning(
+                    `Jibril did not report eBPF readiness within ${JIBRIL_READY_TIMEOUT_SECONDS}s ` +
+                        `(${JIBRIL_EBPF_STATUS_FILE} is missing or unreadable). ` +
+                        "Events from the start of this job may be missing.",
+                )
+            }
+        } else {
+            // Give the daemon a moment to settle so an immediate crash is surfaced here.
+            await waitForDelay(5000)
+
+            const serviceState = await readJibrilServiceState()
+            if (serviceState !== "active") {
+                return await discloseStartFailure(
+                    startContext,
+                    `the jibril service exited early with state '${serviceState || "unknown"}'`,
+                )
+            }
         }
 
         // Check Jibril service status.
@@ -709,42 +762,6 @@ export function resolveJibrilVersion(inputVersion, actionRef) {
 }
 
 /**
- * @typedef {Object} JibrilCoreVersion
- * @prop {number} major
- * @prop {number} minor
- * @prop {number} patch
- */
-
-/**
- * Prereleases sort with their core version, so v2.17.0-rc.5 is bundled too.
- * Non-semver tags (daily builds) keep the bare binary.
- * @param {string} tag
- * @returns {boolean}
- */
-export function usesBundledJibrilRelease(tag) {
-    const version = parseCoreVersion(tag)
-    if (version === null) return false
-
-    const { major, minor, patch } = JIBRIL_BUNDLE_MIN_VERSION
-    if (version.major !== major) return version.major > major
-    if (version.minor !== minor) return version.minor > minor
-    return version.patch >= patch
-}
-
-/**
- * Ignores any prerelease or build suffix.
- * @param {string} tag
- * @returns {JibrilCoreVersion|null}
- */
-function parseCoreVersion(tag) {
-    const match = /^v?(\d+)\.(\d+)\.(\d+)(?:[-+].*)?$/.exec(tag.trim())
-    if (match === null) return null
-
-    const [, major = "0", minor = "0", patch = "0"] = match
-    return { major: Number(major), minor: Number(minor), patch: Number(patch) }
-}
-
-/**
  * GitHub redirects /releases/latest to the tag page, so the tag comes from the
  * Location header with no body download.
  * @returns {Promise<string>}
@@ -777,7 +794,9 @@ async function downloadJibril(tag, tmpDir) {
     const releaseURL = `${JIBRIL_RELEASES_URL}/download/${tag}`
     const binaryPath = path.join(tmpDir, JIBRIL_BINARY)
 
-    if (!usesBundledJibrilRelease(tag)) {
+    // From v2.17.0 on a release ships the signed bundle; older releases only
+    // offer the bare `jibril` asset.
+    if (!versionAtLeast(tag, 2, 17, 0)) {
         const binaryURL = `${releaseURL}/${JIBRIL_BINARY}`
         core.info(`Downloading jibril: ${binaryURL}`)
         await downloadFile(binaryURL, binaryPath)
@@ -1037,6 +1056,108 @@ export function resolveStopTimeoutSeconds(overrideValue) {
     }
 
     return parsed > 0 ? parsed : 0
+}
+
+/**
+ * @typedef {object} JibrilReadiness
+ * @property {"ready" | "not_ready" | "exited"} state
+ * @property {string} serviceState - systemd's view, read only while readiness is still pending
+ */
+
+/**
+ * Waits until jibril reports that its eBPF layer is attached, which is the
+ * first instant at which the sensor is capturing events. Each poll also asks
+ * systemd whether the unit is still up, so a sensor that dies during startup
+ * is reported immediately instead of after the full bound.
+ * @param {number} startedAt - performance.now() reading taken before the `systemctl start` call
+ * @returns {Promise<JibrilReadiness>}
+ */
+async function waitForJibrilReadiness(startedAt) {
+    core.info(`Waiting up to ${JIBRIL_READY_TIMEOUT_SECONDS}s for Jibril to report eBPF readiness`)
+
+    const deadline = startedAt + JIBRIL_READY_TIMEOUT_SECONDS * 1000
+
+    for (;;) {
+        const status = parseJibrilStatus(await readRootFile(JIBRIL_EBPF_STATUS_FILE))
+        if (status !== null) {
+            reportJibrilReadiness(status, performance.now() - startedAt)
+            return { state: "ready", serviceState: "active" }
+        }
+
+        const serviceState = await readJibrilServiceState()
+        if (serviceState !== "active" && serviceState !== "activating") {
+            return { state: "exited", serviceState }
+        }
+
+        if (performance.now() >= deadline) {
+            return { state: "not_ready", serviceState }
+        }
+
+        await waitForDelay(JIBRIL_READY_POLL_INTERVAL_MS)
+    }
+}
+
+/**
+ * @param {JibrilStatus} status
+ * @param {number} elapsedMs - time from the start call to the sensor being ready
+ * @returns {void}
+ */
+function reportJibrilReadiness(status, elapsedMs) {
+    core.info(`Jibril eBPF readiness: took=${elapsedMs.toFixed(3)}ms, ${formatJibrilStatusSummary(status)}`)
+
+    // The readiness file always carries the eBPF block, and jibril reports
+    // itself degraded exactly when a stage failed, so the counters carry
+    // everything its status value would add.
+    const ebpf = status.ebpf
+    if (ebpf === null) {
+        return
+    }
+
+    const ebpfErrors = formatEbpfErrors(ebpf.errors)
+    if (ebpfErrors === "") {
+        return
+    }
+
+    // The kernel's gaps are where most attach failures come from, and it
+    // cannot change under a running sensor, so this is the place to say so.
+    const parts = [`Jibril attached with eBPF errors (${ebpfErrors})`]
+    const kernelGaps = formatKernelGaps(status.kernel)
+    if (kernelGaps !== "") {
+        parts.push(kernelGaps)
+    }
+    parts.push("some runtime events will be missing for this run")
+    core.warning(parts.join("; "))
+
+    const attachFailures = formatAttachFailures(ebpf.errors.attachFailures)
+    if (attachFailures !== "") {
+        core.info(`Jibril could not attach: ${attachFailures}`)
+    }
+}
+
+/**
+ * @returns {Promise<string>}
+ */
+async function readJibrilServiceState() {
+    const { stdout } = await execCapture("sudo", ["systemctl", "is-active", "jibril.service"], {
+        ignoreReturnCode: true,
+    })
+
+    return stdout
+}
+
+/**
+ * jibril writes its status files as root. An absent or unreadable file is a
+ * normal intermediate state while polling, so it reads as empty content.
+ * @param {string} filePath
+ * @returns {Promise<string>}
+ */
+async function readRootFile(filePath) {
+    try {
+        const { stdout } = await execCapture("sudo", ["cat", filePath], { ignoreReturnCode: true })
+        return stdout
+    } catch {
+        return ""
+    }
 }
 
 /**

@@ -21,7 +21,6 @@ jobs:
         uses: ./
         with:
           api_token: ${{ secrets.GARNET_API_TOKEN }}
-          jibril_version: "v0.0"
 
       - name: Update major tag and release
         env:

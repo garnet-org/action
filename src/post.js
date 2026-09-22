@@ -16,13 +16,22 @@ import { readJibrilUnitState } from "./jibril-unit-state.js"
 import { ControlPlaneClient } from "./control-plane/client.js"
 import { uploadJibrilArtifacts } from "./post-artifacts.js"
 import { buildReportLink, getDefaultJsonProfileFile, resolveAppBaseURL } from "./report-link.js"
-import { profilePermalink, renderPendingReview, renderStepSummary, summarizeProfile } from "./runtime-review.js"
+import { profilePermalink, renderStepSummary, summarizeProfile } from "./runtime-review.js"
+import { appendUnrecordedSummary } from "./job-summary.js"
 import { getGitHubIDToken, resolveOIDCAudience } from "./oidc.js"
 import { parseSystemdTimespanSeconds } from "./systemd-timespan.js"
 import { classifyProfileContent } from "./post-profile-state.js"
 import { classifyAgentStop, formatAgentStopDetail } from "./post-signal.js"
 import { resolveJobStatusFromGitHub } from "./github-job-status.js"
 import { resolveStopTimeoutFromSettings, resolveStopTimeoutFromUnit } from "./post-stop-timeout.js"
+import { versionAtLeast } from "./jibril-version.js"
+import {
+    JIBRIL_RUN_STATUS_FILE,
+    formatAttachFailures,
+    formatEbpfErrors,
+    formatJibrilStatusSummary,
+    parseJibrilStatus,
+} from "./jibril-status.js"
 
 /** @typedef {import("./post-profile-state.js").LoadedProfile} LoadedProfile */
 /** @typedef {import("./post-profile-state.js").ProfileResult} ProfileResult */
@@ -32,6 +41,7 @@ import { resolveStopTimeoutFromSettings, resolveStopTimeoutFromUnit } from "./po
 /** @typedef {import("./github-job-status.js").JobStatusResolution} JobStatusResolution */
 /** @typedef {import("./control-plane/types.js").AgentStoppedRequest} AgentStoppedRequest */
 /** @typedef {import("./control-plane/types.js").AgentStoppedJibrilFields} AgentStoppedJibrilFields */
+/** @typedef {import("./jibril-status.js").JibrilStatus} JibrilStatus */
 
 /**
  * Everything the post step observed about how the sensor stopped, from which
@@ -44,6 +54,7 @@ import { resolveStopTimeoutFromSettings, resolveStopTimeoutFromUnit } from "./po
  * @property {boolean} forceStopped
  * @property {number} stopTimeoutSeconds
  * @property {ProfileResult} profileResult
+ * @property {JibrilStatus | null} runStatus
  */
 
 const JSON_PROFILE_LABEL = "JSON profile"
@@ -161,6 +172,14 @@ async function run() {
         const unitStateAfterStop = await readJibrilUnitState()
         logJibrilUnitState("jibril service state", unitStateAfterStop)
 
+        // From v2.17.0 on jibril writes a status file before its event loop,
+        // and that startup snapshot still stands once the sensor has stopped.
+        // Older sensors write no file at all, so their silence says nothing.
+        let runStatus = null
+        if (versionAtLeast(core.getState("jibrilVersion"), 2, 17, 0)) {
+            runStatus = await reportJibrilRunStatus()
+        }
+
         // Upload jibril logs as artifacts when debug is enabled (only after service stops).
         // Get the debug state from the main.js.
         const debug = core.getState("debug")
@@ -192,6 +211,7 @@ async function run() {
                 forceStopped,
                 stopTimeoutSeconds,
                 profileResult,
+                runStatus,
             })
         }
 
@@ -267,6 +287,7 @@ async function reportAgentStop(observations) {
             forceStopped: observations.forceStopped,
             stopTimeoutSeconds: observations.stopTimeoutSeconds,
             profileState: observations.profileResult.state,
+            runStatus: observations.runStatus,
         }
 
         // The evidence detail already names the profile state; only a parse
@@ -323,6 +344,25 @@ function buildAgentStoppedRequest(evidence, jobStatus, parseDetail) {
         jibril.activeState = unitState.activeState
         jibril.result = unitState.result
         jibril.execMainStatus = unitState.execMainStatus
+    }
+
+    // What the sensor said about its own capture, so a missing or partial
+    // profile is explained instead of silent. The fields carry jibril's own
+    // shape, and an absent eBPF block stays absent: the loader never
+    // reported counters, which must not read as a clean load.
+    // TODO(control-plane): /agent/stopped must accept these jibril fields
+    // (sensorStatus, ebpfErrors, githubSteps, kernel); until it does they
+    // are only carried by `detail`.
+    const runStatus = evidence.runStatus
+    if (runStatus !== null) {
+        jibril.sensorStatus = runStatus.status
+        jibril.kernel = runStatus.kernel
+        if (runStatus.ebpf !== null) {
+            jibril.ebpfErrors = runStatus.ebpf.errors
+        }
+        if (runStatus.githubSteps !== null) {
+            jibril.githubSteps = runStatus.githubSteps
+        }
     }
 
     /** @type {AgentStoppedRequest} */
@@ -444,33 +484,25 @@ function resolveControlPlaneBaseURL() {
 }
 
 /**
- * Writes the Garnet Runtime Summary — the per-run full-detail tabular
- * record (v6.1 §8) — to the GitHub Step Summary, rendered from the RAW
- * parsed profile. When no profile was produced, the waiting-state body
- * (v6.1 §2) is written instead, markerless and with the explainer
- * collapsed.
  * @param {LoadedProfile | null} profile
  * @returns {Promise<void>}
  */
 async function appendRuntimeReviewSummary(profile) {
+    if (profile === null) {
+        await appendUnrecordedSummary(
+            "The job ended without a usable Execution Profile. No runtime evidence is available for this job.",
+        )
+        return
+    }
+
     const summaryFile = getEnv("GITHUB_STEP_SUMMARY")
     if (summaryFile === "") {
         core.warning("GITHUB_STEP_SUMMARY is not set, cannot write summary")
         return
     }
 
-    let content
-    if (profile === null) {
-        const sha = getEnv("GITHUB_SHA")
-        const repository = getEnv("GITHUB_REPOSITORY")
-        content = renderPendingReview({
-            sha,
-            commitUrl: repository !== "" && sha !== "" ? `https://github.com/${repository}/commit/${sha}` : "",
-        })
-    } else {
-        const preview = core.getState("preview") === "true"
-        content = renderStepSummary([profile.raw], { appUrl: resolveAppBaseURL(), preview })
-    }
+    const preview = core.getState("preview") === "true"
+    const content = renderStepSummary([profile.raw], { appUrl: resolveAppBaseURL(), preview })
 
     await fs.appendFile(summaryFile, `\n${content}\n`)
     core.info("Garnet Runtime Summary written to job summary")
@@ -529,6 +561,54 @@ async function waitForRootFile(filePath, deadlineMs) {
         }
         await waitForDelay(PROFILE_POLL_INTERVAL_MS)
     }
+}
+
+/**
+ * Reads and logs the sensor's own account of this run: the eBPF counters
+ * explain a thin profile, and a degraded steps block explains events
+ * attributed to the wrong workflow step, or to none.
+ * @returns {Promise<JibrilStatus | null>}
+ */
+async function reportJibrilRunStatus() {
+    const status = parseJibrilStatus(await readOptionalRootFile(JIBRIL_RUN_STATUS_FILE))
+    if (status === null) {
+        core.info(`jibril run status not reported: ${JIBRIL_RUN_STATUS_FILE} is missing or unreadable`)
+        return null
+    }
+
+    core.info(`jibril run status: ${formatJibrilStatusSummary(status)}`)
+
+    const ebpf = status.ebpf
+    if (ebpf === null) {
+        // jibril omits the block until the loader reports counters, so its
+        // absence means the eBPF layer never came up: nothing was captured.
+        core.warning("jibril reported no eBPF counters for this run; the sensor captured no runtime events")
+    } else {
+        const ebpfErrors = formatEbpfErrors(ebpf.errors)
+        if (ebpfErrors !== "") {
+            core.warning(
+                `jibril reported eBPF errors for this run (${ebpfErrors}); some runtime events were not captured`,
+            )
+            const attachFailures = formatAttachFailures(ebpf.errors.attachFailures)
+            if (attachFailures !== "") {
+                core.info(`jibril could not attach: ${attachFailures}`)
+            }
+        }
+    }
+
+    const steps = status.githubSteps
+    if (steps !== null && steps.status === "degraded") {
+        const parts = [
+            `jibril reported degraded workflow-step attribution (source=${steps.source}, steps=${steps.count})`,
+        ]
+        if (steps.errors.length > 0) {
+            parts.push(steps.errors.join("; "))
+        }
+        parts.push("events in the Runtime Review may be attributed to the wrong step")
+        core.warning(parts.join("; "))
+    }
+
+    return status
 }
 
 /**

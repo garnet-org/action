@@ -1,4 +1,8 @@
+import { formatEbpfErrors, formatKernelGaps } from "./jibril-status.js"
+
 /** @typedef {import("./post-profile-state.js").ProfileState} ProfileState */
+/** @typedef {import("./jibril-status.js").JibrilStatus} JibrilStatus */
+/** @typedef {import("./jibril-status.js").JibrilEbpf} JibrilEbpf */
 
 /**
  * @typedef {object} JibrilUnitState
@@ -16,6 +20,7 @@
  * @property {boolean} forceStopped
  * @property {number} stopTimeoutSeconds
  * @property {ProfileState} profileState
+ * @property {JibrilStatus | null} runStatus - what the sensor reported about its own capture, when it reports at all
  */
 
 /**
@@ -68,8 +73,66 @@ export function formatAgentStopDetail(evidence) {
     }
 
     parts.push(getProfileStateDetail(evidence.profileState))
+    parts.push(...getRunStatusDetails(evidence.runStatus))
 
     return parts.join("; ")
+}
+
+/**
+ * Only reports what the sensor itself flagged: a healthy status adds nothing
+ * the profile state does not already say.
+ * @param {JibrilStatus | null} runStatus
+ * @returns {string[]}
+ */
+function getRunStatusDetails(runStatus) {
+    if (runStatus === null) {
+        return []
+    }
+
+    /** @type {string[]} */
+    const parts = []
+
+    if (runStatus.status !== null && runStatus.status !== "ok") {
+        parts.push(`sensor status ${runStatus.status}`)
+    }
+
+    const ebpfDetail = getEbpfDetail(runStatus.ebpf)
+    if (ebpfDetail !== "") {
+        parts.push(ebpfDetail)
+
+        // The kernel's gaps only ever explain a failure; on their own they
+        // describe an ordinary host and must not be blamed for anything.
+        const kernelGaps = formatKernelGaps(runStatus.kernel)
+        if (kernelGaps !== "") {
+            parts.push(kernelGaps)
+        }
+    }
+
+    const steps = runStatus.githubSteps
+    if (steps !== null && steps.status !== "ok") {
+        parts.push(`github steps ${steps.status} (source=${steps.source}, count=${steps.count})`)
+    }
+
+    return parts
+}
+
+/**
+ * jibril omits the eBPF block until the loader reports counters, so its
+ * absence is the strongest explanation there is for an empty profile.
+ * @param {JibrilEbpf | null} ebpf
+ * @returns {string}
+ */
+function getEbpfDetail(ebpf) {
+    if (ebpf === null) {
+        return "ebpf counters never reported"
+    }
+
+    const errors = formatEbpfErrors(ebpf.errors)
+    if (errors === "") {
+        return ""
+    }
+
+    return `ebpf errors ${errors}`
 }
 
 /**
