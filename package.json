@@ -36,7 +36,7 @@
         "zod": "^4.6.5"
     },
     "devDependencies": {
-        "@types/node": "^26.6.1",
+        "@types/node": "^26.6.2",
         "@vercel/ncc": "^0.45.0",
         "typescript": "^7.0.2"
     },
