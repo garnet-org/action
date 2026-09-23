@@ -50,7 +50,7 @@ Get your API token at [app.garnet.ai](https://app.garnet.ai). Start with the Act
 
 ## What Garnet sees
 
-Garnet authenticates with the control plane via GitHub OIDC (preferred) or the API token you pass it — it never reads your other secrets and never writes to your repo.
+Garnet authenticates with the control plane with the API token you pass it, or with GitHub OIDC when you grant `id-token: write` and pass no token — it never reads your other secrets and never writes to your repo.
 
 - **Metadata, not contents** — an Execution Profile carries execution chains and outbound domains, IPs, ports, and protocols, not your source or your secrets.
 - **Observe-only** — Jibril reads syscall-level events. Every eBPF program is checked by the kernel verifier before it loads and runs sandboxed.
@@ -61,14 +61,14 @@ Garnet authenticates with the control plane via GitHub OIDC (preferred) or the A
 
 | Permission | Required | Why |
 | :--- | :--- | :--- |
-| `contents: read` | Yes | Access workflow context and repository metadata |
-| `id-token: write` | Recommended | Authenticate with the Garnet control plane via GitHub OIDC (preferred over `api_token`) |
+| `contents: read` | Yes | Lets the action read the workflow context and repository metadata of the job it is recording; it does not check out or read your source |
+| `id-token: write` | Only for OIDC | Lets the action mint a GitHub OIDC token when no `api_token` is passed. Not needed when you pass `api_token`. |
 
 ## Quickstart
 
 ### 1. Add the action to your workflow
 
-The preferred authentication method is GitHub OIDC — no secret to manage. Add `id-token: write` to your job permissions and omit `api_token`:
+**Already have a `GARNET_API_TOKEN`?** Keep it. Upgrading to this release changes no permissions: pass the token and the action uses it as-is, without requesting an OIDC token.
 
 ```yaml
 on:
@@ -82,28 +82,30 @@ jobs:
 
     permissions:
       contents: read
-      id-token: write
 
     steps:
       - name: Checkout (recommended)
         uses: actions/checkout@v6
 
       - uses: garnet-org/action@v2
+        with:
+          api_token: ${{ secrets.GARNET_API_TOKEN }}
 
       - name: Your existing steps
         run: npm test
 ```
 
-**API token:** If your environment does not support OIDC, create an API token at <https://app.garnet.ai>, store it as a repo secret named `GARNET_API_TOKEN`, and pass it explicitly. When `api_token` is set the action uses it as-is and does not request an OIDC token; `id-token: write` is not needed:
+Create the token at <https://app.garnet.ai> and store it as the repo secret `GARNET_API_TOKEN`.
+
+**No token (GitHub OIDC):** new setups can skip the secret. Grant `id-token: write` and omit `api_token`; the action mints a GitHub OIDC token and exchanges it with the control plane:
 
 ```yaml
     permissions:
       contents: read
+      id-token: write
 
     steps:
       - uses: garnet-org/action@v2
-        with:
-          api_token: ${{ secrets.GARNET_API_TOKEN }}
 ```
 
 If neither OIDC nor `api_token` is available, the action skips runtime recording with a warning and a Job Summary explanation. This includes fork and Dependabot runs without credentials. Your workflow continues.
@@ -111,17 +113,17 @@ If neither OIDC nor `api_token` is available, the action skips runtime recording
 > **Tip:** Major tags such as `@v2` track the latest `v2.x.x` release automatically. For maximum supply-chain safety, pin to a full commit SHA (Dependabot keeps SHA pins up to date):
 >
 > ```yaml
-> # Pinned to v2.2.0
-> - uses: garnet-org/action@3d47f4a9004f7356c980a0e8d420ef5984750e3c
+> # Pinned to v2.3.0
+> - uses: garnet-org/action@f9ed14ab54564073ec11bba8d62d6980e172d2a0
 > ```
 >
-> The canonical SHA of the latest release is always at [garnet.ai/pins](https://garnet.ai/pins). Dependabot bumps SHA pins automatically. Exact tags such as `garnet-org/action@v2.2.0` remain available.
+> The canonical SHA of the latest release is always at [garnet.ai/pins](https://garnet.ai/pins). Dependabot bumps SHA pins automatically. Exact tags such as `garnet-org/action@v2.3.0` remain available.
 
 ### 2. Install the companion GitHub App
 
 [Install Garnet Runtime Review](https://github.com/apps/garnet-runtime-review/installations/select_target) on the repos you want recorded, or from Settings → GitHub in [app.garnet.ai](https://app.garnet.ai).
 
-Review the permissions shown by GitHub during installation. The App receives GitHub webhooks and owns the Runtime Review comment across the recorded jobs on a commit. The Action does not need workflow `pull-requests: write` permission to deliver that comment.
+Since v2.3.0 the App is the only source of the PR comment: the action itself no longer posts or edits comments, so without the App installed you get the Job Summary and the dashboard profile but no PR comment. Review the permissions shown by GitHub during installation. The App receives GitHub webhooks and owns the single Runtime Review comment across the recorded jobs on a commit; it reads repository contents only to resolve the PR head commit for the comparison it shows. The Action does not need workflow `pull-requests: write` permission.
 
 ## Not using GitHub Actions?
 
