@@ -24,7 +24,7 @@ import { formatEbpfErrors, formatKernelGaps } from "./jibril-status.js"
  */
 
 /**
- * @typedef {"run_cancelled" | "crashed" | "flush_timeout" | "stopped_cleanly"} AgentStopReason
+ * @typedef {"run_cancelled" | "crashed" | "flush_timeout" | "stopped_cleanly" | "start_failed"} AgentStopReason
  */
 
 /**
