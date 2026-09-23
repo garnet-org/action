@@ -127,7 +127,7 @@ contents: read        # pull_request jobs run on a temporary merge commit; maps 
 metadata: read        # required by GitHub for every App
 ```
 
-The App never reads your source, cannot push, and cannot set a check or status.
+The App uses `contents: read` for one commit lookup only; it cannot push, and it cannot set a check or status.
 
 ## Not using GitHub Actions?
 
