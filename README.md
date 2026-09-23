@@ -118,7 +118,16 @@ When neither credential is available (typically fork `pull_request` and Dependab
 
 [Install Garnet Runtime Review](https://github.com/apps/garnet-runtime-review/installations/select_target) on the repos you want recorded, or from Settings → GitHub in [app.garnet.ai](https://app.garnet.ai).
 
-Since v2.3.0 the App is the only source of the pull request comment: the action no longer posts or edits comments. Without the App you still get the Job Summary and the Execution Profile in [app.garnet.ai](https://app.garnet.ai), but no comment on the PR. The App keeps one Runtime Review comment per pull request and updates it in place as each job's profile lands; its `contents` read access is used to resolve the pull request head for the comparison it shows.
+Since v2.3.0 the App is the only source of the pull request comment: the action no longer posts or edits comments. Without the App you still get the Job Summary and the Execution Profile in [app.garnet.ai](https://app.garnet.ai), but no comment on the PR. The App keeps one Runtime Review comment per pull request and updates it in place as each job's profile lands; It asks for four grants:
+
+```yaml
+pull-requests: write  # post and edit one Runtime Review comment per pull request
+actions: read         # know when the run's jobs finish, so the comment updates in place
+contents: read        # pull_request jobs run on a temporary merge commit; maps it back to your PR commit
+metadata: read        # required by GitHub for every App
+```
+
+The App never reads your source, cannot push, and cannot set a check or status.
 
 ## Not using GitHub Actions?
 
