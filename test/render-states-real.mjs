@@ -61,44 +61,6 @@ export function renderNoRecord(sha) {
     })
 }
 
-/**
- * Generated public Run Profile contract mockup — the selector + publication
- * policy this repository cannot positively exercise, rendered from the
- * machine-readable lock so the mockup can never drift from the contract.
- */
-export function renderPublicRunProfileMockup() {
-    const pub = CONTRACT_VOCAB.publicRunProfile
-    return [
-        "# Public Run Profile — v6.4.0 contract mockup (generated)",
-        "",
-        "Generated from the vocabulary lock by render-states-real.mjs — do not hand-edit.",
-        "",
-        "## Routes",
-        "",
-        `- Run index: \`${pub.runIndexRoute}\``,
-        `- Exact profile selector: \`${pub.profileSelectorRoute}\``,
-        `- \`?job=\`: ${pub.jobParam}`,
-        `- Selector miss: ${pub.selectorMiss}`,
-        "",
-        "## Publication policy (fail-closed, rechecked at request time)",
-        "",
-        `- Default: ${pub.policy.default}`,
-        `- Render: ${pub.policy.render}`,
-        `- Denied states: ${pub.policy.deniedStates.join(", ")}`,
-        `- ${pub.policy.nonOracular404}`,
-        `- ${pub.policy.noCdnCaching}`,
-        "",
-        "## Losslessness",
-        "",
-        `- ${pub.lossless}`,
-        "",
-        "## This repository",
-        "",
-        `- ${pub.privateTestbed}`,
-        "",
-        `> ${CONTRACT_VOCAB.copy.egressCentricScope}`,
-    ].join("\n")
-}
 
 async function main() {
     await rm(outDir, { recursive: true, force: true })
@@ -122,7 +84,6 @@ async function main() {
         "3-workload-egress.md": renderFromProfiles([worth]).body,
         "4-multi-job.md": renderFromProfiles(record).body,
         "5-raw-profile-no-selector.md": renderFromProfiles([normalV215]).body,
-        "6-public-run-profile.md": renderPublicRunProfileMockup(),
     }
 
     for (const [file, body] of Object.entries(states)) {

@@ -1,7 +1,5 @@
-import { parseProfileJson } from "./profile-comment.js"
+import { summarizeProfile } from "./runtime-review.js"
 import { getErrorMessage } from "./shared.js"
-
-/** @typedef {import("./profile-comment.js").NormalizedProfile} NormalizedProfile */
 
 /**
  * @typedef {object} RootFileStat
@@ -11,7 +9,6 @@ import { getErrorMessage } from "./shared.js"
 
 /**
  * @typedef {object} LoadedProfile
- * @property {NormalizedProfile} normalized
  * @property {unknown} raw
  */
 
@@ -57,15 +54,14 @@ export function classifyProfileContent(stat, content) {
     }
 
     try {
-        const normalized = parseProfileJson(content)
         const raw = JSON.parse(content)
+        if (summarizeProfile(raw) === null) {
+            throw new Error("Invalid profile JSON: not a profile object")
+        }
 
         return {
             state: "present",
-            profile: {
-                normalized,
-                raw,
-            },
+            profile: { raw },
             detail: "",
         }
     } catch (error) {

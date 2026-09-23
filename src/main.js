@@ -2,7 +2,7 @@ import * as core from "@actions/core"
 import * as os from "node:os"
 import { resolveStopTimeoutSeconds, run } from "./action.js"
 import { publishGarnetStatus } from "./garnet-status.js"
-import { buildReportLink } from "./profile-comment.js"
+import { buildReportLink } from "./report-link.js"
 import { firstNonEmptyString, getEnv, isSupportedArch, isSupportedPlatform } from "./shared.js"
 
 // This is the main entry point for the action. It is called by the GitHub Actions
@@ -42,7 +42,8 @@ async function main() {
         // Set inputs as environment variables for the action
         process.env.GARNET_API_TOKEN = core.getInput("api_token")
 
-        // Make the token available to both the main and post steps when provided.
+        // gh attestation verify reads GITHUB_TOKEN during binary verification;
+        // the post step reads the saved state to resolve the job status.
         if (githubToken !== "") {
             process.env.GITHUB_TOKEN = githubToken
         }
@@ -85,21 +86,18 @@ async function main() {
         if (jibrilStarted) {
             core.saveState("jibrilStarted", "true")
         } else {
-            // A job that fails silently is the failure mode this guards: the
-            // job stays green, so the single warning annotation is the only
-            // signal that nothing was recorded.
+            // run() already emitted the single warning; this records that the
+            // job ran unmonitored for the post step and for `garnet_status`.
             publishGarnetStatus("start_failed")
-            core.warning("Garnet did not attach to this job — nothing was recorded.")
         }
     } catch (err) {
         publishGarnetStatus("start_failed")
-        core.warning("Garnet did not attach to this job — nothing was recorded.")
         if (err instanceof Error) {
-            core.info(
+            core.warning(
                 `Garnet action encountered an unexpected error and will continue without runtime monitoring: ${err.message}`,
             )
         } else {
-            core.info(
+            core.warning(
                 `Garnet action encountered an unexpected error and will continue without runtime monitoring: ${String(err)}`,
             )
         }
