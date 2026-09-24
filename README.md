@@ -47,7 +47,7 @@ One workflow step. No code changes.
 
 - **Execution chains and destinations, not contents** — process names, the step they ran under when known, and outbound domains, IPs, ports and protocols. Not your source, not your secrets.
 - **Observe-only** — Jibril reads kernel events through eBPF programs checked by the kernel verifier. It does not block or modify anything.
-- **Scoped egress** — the action and Jibril talk to `api.garnet.ai` (or your `api_url`) and download the Jibril release from `github.com/garnet-org/jibril-releases` over HTTPS. The release is verified with `gh attestation verify` before it runs.
+- **Scoped egress** — the action and Jibril talk to `api.garnet.ai` (or your `api_url`) and download the Jibril release from `github.com/garnet-org/jibril-releases` over HTTPS. Releases from v2.17.0 (the default) ship as a signed bundle: checksums and manifest are verified, then `gh attestation verify` checks the signature; without `github_token` or the `gh` CLI that last step is skipped with a warning. Older releases are downloaded as a bare binary without verification.
 - **Ephemeral** — Jibril runs as a systemd service and is stopped in the post step; its config and credentials are removed from the runner before the job ends.
 
 ## Permissions
@@ -87,7 +87,7 @@ jobs:
           api_token: ${{ secrets.GARNET_API_TOKEN }}
 
       - name: Your existing steps
-        run: npm test
+        run: npm test  # placeholder: your existing build/test steps
 ```
 
 Create the token in [app.garnet.ai](https://app.garnet.ai) and store it as the repository secret `GARNET_API_TOKEN`.
@@ -177,7 +177,7 @@ The same record is appended to the job's Step Summary as the **Garnet Execution 
 Read the record for what it is: what Garnet recorded, not a statement that nothing else happened.
 
 - **Step attribution is best effort.** `(step: "…")` labels come from correlating process start times with the runner's step boundaries. Some chains land under the wrong step or under `(step: "<unknown>")`. Capture is unaffected; read those as *step unknown*, not as background activity and not as a gap in the record.
-- **Merge commit, not PR head.** On `pull_request` runs GitHub checks out the synthetic merge commit; the profile is recorded and labelled against that commit. The headline links the commit the workflow ran on.
+- **Merge commit, not PR head.** On `pull_request` runs GitHub checks out the synthetic merge commit. The action reports your PR head SHA to Garnet, but the comment headline and the public Execution Profile currently label the run by the commit the workflow ran on — the merge commit. Aligning them to the PR head is tracked in the control plane.
 - **Matrix jobs.** Jobs that share a name across a matrix can be aggregated under one fold and undercount destinations.
 - **No completeness claim.** The record states what was captured; it does not declare that every connection was captured.
 - **Post-step time.** Stopping the sensor waits for Jibril to flush its Execution Profile, bounded by `stop_timeout_seconds`. On busy jobs this has been measured at 1–3 minutes; lower the bound if post-step latency matters more than a complete flush.
