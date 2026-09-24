@@ -87,7 +87,9 @@ jobs:
           api_token: ${{ secrets.GARNET_API_TOKEN }}
 
       - name: Your existing steps
-        run: npm test  # placeholder: your existing build/test steps
+        run: |
+          npm ci
+          npm test
 ```
 
 Create the token in [app.garnet.ai](https://app.garnet.ai) and store it as the repository secret `GARNET_API_TOKEN`.
