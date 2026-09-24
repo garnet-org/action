@@ -6,31 +6,33 @@ import {
     firstNonEmptyString,
     getEnv,
     getErrorMessage,
-    getOptionalNumber,
-    getOptionalRecord,
-    getOptionalString,
     isSupportedArch,
     isSupportedPlatform,
     pathExists,
     waitForDelay,
 } from "./shared.js"
-import { getPullRequestNumberFromEvent } from "./github-event.js"
 import { getProfileJobName } from "./github-context.js"
+import { readJibrilUnitState } from "./jibril-unit-state.js"
 import { ControlPlaneClient } from "./control-plane/client.js"
 import { uploadJibrilArtifacts } from "./post-artifacts.js"
-import { buildReportLink, getDefaultJsonProfileFile, resolveAppBaseURL } from "./profile-comment.js"
-import { profilePermalink, renderPendingReview, renderStepSummary, summarizeProfile } from "./runtime-review.js"
-import { publishPullRequestComment } from "./pr-comment.js"
+import { buildReportLink, getDefaultJsonProfileFile, resolveAppBaseURL } from "./report-link.js"
+import { profilePermalink, renderStepSummary, summarizeProfile } from "./runtime-review.js"
+import { appendUnrecordedSummary } from "./job-summary.js"
 import { getGitHubIDToken, resolveOIDCAudience } from "./oidc.js"
-import { isCommentPermissionError } from "./pr-comment-error.js"
 import { parseSystemdTimespanSeconds } from "./systemd-timespan.js"
 import { classifyProfileContent } from "./post-profile-state.js"
 import { classifyAgentStop, formatAgentStopDetail } from "./post-signal.js"
 import { resolveJobStatusFromGitHub } from "./github-job-status.js"
 import { resolveStopTimeoutFromSettings, resolveStopTimeoutFromUnit } from "./post-stop-timeout.js"
+import { versionAtLeast } from "./jibril-version.js"
+import {
+    JIBRIL_RUN_STATUS_FILE,
+    formatAttachFailures,
+    formatEbpfErrors,
+    formatJibrilStatusSummary,
+    parseJibrilStatus,
+} from "./jibril-status.js"
 
-/** @typedef {import("./profile-comment.js").NormalizedProfile} NormalizedProfile */
-/** @typedef {import("./profile-comment.js").RenderOptions} RenderOptions */
 /** @typedef {import("./post-profile-state.js").LoadedProfile} LoadedProfile */
 /** @typedef {import("./post-profile-state.js").ProfileResult} ProfileResult */
 /** @typedef {import("./post-profile-state.js").RootFileStat} RootFileStat */
@@ -39,6 +41,7 @@ import { resolveStopTimeoutFromSettings, resolveStopTimeoutFromUnit } from "./po
 /** @typedef {import("./github-job-status.js").JobStatusResolution} JobStatusResolution */
 /** @typedef {import("./control-plane/types.js").AgentStoppedRequest} AgentStoppedRequest */
 /** @typedef {import("./control-plane/types.js").AgentStoppedJibrilFields} AgentStoppedJibrilFields */
+/** @typedef {import("./jibril-status.js").JibrilStatus} JibrilStatus */
 
 /**
  * Everything the post step observed about how the sensor stopped, from which
@@ -51,13 +54,7 @@ import { resolveStopTimeoutFromSettings, resolveStopTimeoutFromUnit } from "./po
  * @property {boolean} forceStopped
  * @property {number} stopTimeoutSeconds
  * @property {ProfileResult} profileResult
- */
-
-/**
- * @typedef {{
- *   statusCode?: number
- *   apiCode?: string
- * }} GitHubApiErrorDetails
+ * @property {JibrilStatus | null} runStatus
  */
 
 const JSON_PROFILE_LABEL = "JSON profile"
@@ -83,8 +80,8 @@ const STOP_TIMED_OUT_EXIT_CODE = 124
 // This is the post step for the action. It is called by the GitHub Actions
 // runtime. It stops the Jibril service so the daemon flushes all pending events
 // and writes the JSON profile before we read it. It then renders the Garnet
-// Runtime Summary (Step Summary) and publishes the Garnet Runtime Review PR
-// comment from the same Run Profile.
+// Runtime Summary (Step Summary) from the Run Profile. The Runtime Review PR
+// comment is published by the Garnet GitHub App, not by this action.
 
 async function run() {
     const platform = os.platform()
@@ -175,6 +172,14 @@ async function run() {
         const unitStateAfterStop = await readJibrilUnitState()
         logJibrilUnitState("jibril service state", unitStateAfterStop)
 
+        // From v2.17.0 on jibril writes a status file before its event loop,
+        // and that startup snapshot still stands once the sensor has stopped.
+        // Older sensors write no file at all, so their silence says nothing.
+        let runStatus = null
+        if (versionAtLeast(core.getState("jibrilVersion"), 2, 17, 0)) {
+            runStatus = await reportJibrilRunStatus()
+        }
+
         // Upload jibril logs as artifacts when debug is enabled (only after service stops).
         // Get the debug state from the main.js.
         const debug = core.getState("debug")
@@ -183,7 +188,6 @@ async function run() {
         }
 
         const profileResult = await readProfile(jsonProfilerFile, debug === "true")
-        const renderOptions = getRenderOptions()
 
         const profile = profileResult.profile
         if (profile !== null) {
@@ -207,13 +211,13 @@ async function run() {
                 forceStopped,
                 stopTimeoutSeconds,
                 profileResult,
+                runStatus,
             })
         }
 
-        await appendRuntimeReviewSummary(profile, renderOptions)
+        await appendRuntimeReviewSummary(profile)
         if (profile !== null) {
             logProfileReportLink(profile)
-            await publishProfilerComment(profile.normalized, renderOptions)
         }
     } catch (err) {
         // Never fail the job because of the Runtime Review step.
@@ -283,6 +287,7 @@ async function reportAgentStop(observations) {
             forceStopped: observations.forceStopped,
             stopTimeoutSeconds: observations.stopTimeoutSeconds,
             profileState: observations.profileResult.state,
+            runStatus: observations.runStatus,
         }
 
         // The evidence detail already names the profile state; only a parse
@@ -339,6 +344,25 @@ function buildAgentStoppedRequest(evidence, jobStatus, parseDetail) {
         jibril.activeState = unitState.activeState
         jibril.result = unitState.result
         jibril.execMainStatus = unitState.execMainStatus
+    }
+
+    // What the sensor said about its own capture, so a missing or partial
+    // profile is explained instead of silent. The fields carry jibril's own
+    // shape, and an absent eBPF block stays absent: the loader never
+    // reported counters, which must not read as a clean load.
+    // TODO(control-plane): /agent/stopped must accept these jibril fields
+    // (sensorStatus, ebpfErrors, githubSteps, kernel); until it does they
+    // are only carried by `detail`.
+    const runStatus = evidence.runStatus
+    if (runStatus !== null) {
+        jibril.sensorStatus = runStatus.status
+        jibril.kernel = runStatus.kernel
+        if (runStatus.ebpf !== null) {
+            jibril.ebpfErrors = runStatus.ebpf.errors
+        }
+        if (runStatus.githubSteps !== null) {
+            jibril.githubSteps = runStatus.githubSteps
+        }
     }
 
     /** @type {AgentStoppedRequest} */
@@ -416,7 +440,7 @@ async function resolveProfileEnvelopeID(agentID) {
         // The main step creates one agent per job, so the agent's profile
         // list for this run must resolve to exactly one envelope; anything
         // else is ambiguous and the render stays linkless.
-        const matches = page.items.filter((item) => item.runID === "" || item.runID === runID)
+        const matches = page.items.filter(item => item.runID === "" || item.runID === runID)
         const match = matches.length === 1 ? matches[0] : undefined
         if (match === undefined) {
             return ""
@@ -460,43 +484,25 @@ function resolveControlPlaneBaseURL() {
 }
 
 /**
- * Render options for this publish flow; the clock is pinned once so every
- * render in the flow produces identical bytes.
- * @returns {RenderOptions}
- */
-function getRenderOptions() {
-    return { renderedAt: new Date() }
-}
-
-/**
- * Writes the Garnet Runtime Summary — the per-run full-detail tabular
- * record (v6.1 §8) — to the GitHub Step Summary, rendered from the RAW
- * parsed profile. When no profile was produced, the waiting-state body
- * (v6.1 §2) is written instead, markerless and with the explainer
- * collapsed.
  * @param {LoadedProfile | null} profile
- * @param {RenderOptions} renderOptions
  * @returns {Promise<void>}
  */
-async function appendRuntimeReviewSummary(profile, renderOptions) {
+async function appendRuntimeReviewSummary(profile) {
+    if (profile === null) {
+        await appendUnrecordedSummary(
+            "The job ended without a usable Execution Profile. No runtime evidence is available for this job.",
+        )
+        return
+    }
+
     const summaryFile = getEnv("GITHUB_STEP_SUMMARY")
     if (summaryFile === "") {
         core.warning("GITHUB_STEP_SUMMARY is not set, cannot write summary")
         return
     }
 
-    let content
-    if (profile === null) {
-        const sha = getEnv("GITHUB_SHA")
-        const repository = getEnv("GITHUB_REPOSITORY")
-        content = renderPendingReview({
-            sha,
-            commitUrl: repository !== "" && sha !== "" ? `https://github.com/${repository}/commit/${sha}` : "",
-        })
-    } else {
-        const preview = core.getState("preview") === "true"
-        content = renderStepSummary([profile.raw], { appUrl: resolveAppBaseURL(), preview })
-    }
+    const preview = core.getState("preview") === "true"
+    const content = renderStepSummary([profile.raw], { appUrl: resolveAppBaseURL(), preview })
 
     await fs.appendFile(summaryFile, `\n${content}\n`)
     core.info("Garnet Runtime Summary written to job summary")
@@ -537,154 +543,6 @@ function logProfileReportLink(profile) {
 }
 
 /**
- * @param {NormalizedProfile} profile
- * @param {RenderOptions} renderOptions
- * @returns {Promise<void>}
- */
-async function publishProfilerComment(profile, renderOptions) {
-    const eventPath = getEnv("GITHUB_EVENT_PATH")
-    if (eventPath === "") {
-        core.info("github: GITHUB_EVENT_PATH is not set, skipping PR comment")
-        return
-    }
-
-    const repository = getEnv("GITHUB_REPOSITORY")
-    if (repository === "") {
-        core.warning("github: GITHUB_REPOSITORY is not set, skipping PR comment")
-        return
-    }
-
-    const token = firstNonEmptyString(core.getState("githubToken"), getEnv("GITHUB_TOKEN"))
-    if (token === "") {
-        core.warning("github: github_token is not set, skipping PR comment")
-        return
-    }
-
-    const pullRequestNumber = await getPullRequestNumberFromEvent(eventPath)
-    if (pullRequestNumber === null) {
-        core.info("github: workflow is not running for a pull request, skipping PR comment")
-        return
-    }
-
-    const runAttempt = parseRunAttempt(getEnv("GITHUB_RUN_ATTEMPT"))
-
-    try {
-        const result = await publishPullRequestComment({
-            repository,
-            pullRequestNumber,
-            token,
-            profile,
-            runAttempt,
-            renderOptions,
-        })
-        core.info(`github: PR comment ${result}`)
-    } catch (error) {
-        if (isCommentPermissionError(error)) {
-            core.info(
-                "github: PR comment skipped: the workflow token cannot comment on this pull request. " +
-                    "The Garnet GitHub App is the supported comment path and needs no workflow permissions: " +
-                    "https://github.com/apps/garnet-runtime-review/installations/select_target. " +
-                    "To publish from this action instead, grant this workflow `pull-requests: write`.",
-            )
-            return
-        }
-        core.warning(`github: failed to publish PR comment: ${formatPullRequestCommentPublishError(error)}`)
-    }
-}
-
-/**
- * @param {unknown} error
- * @returns {string}
- */
-function formatPullRequestCommentPublishError(error) {
-    const details = getGitHubApiErrorDetails(error)
-    const messageParts = [getErrorMessage(error)]
-
-    if (details.statusCode !== undefined) {
-        messageParts.push(`status=${details.statusCode}`)
-    }
-    if (details.apiCode !== undefined) {
-        messageParts.push(`api_code=${details.apiCode}`)
-    }
-
-    return messageParts.join("; ")
-}
-
-/**
- * @param {unknown} error
- * @returns {GitHubApiErrorDetails}
- */
-function getGitHubApiErrorDetails(error) {
-    const errorRecord = getOptionalRecord(error)
-    if (errorRecord === null) {
-        return {}
-    }
-
-    const details = {}
-
-    const statusCode = getOptionalNumber(errorRecord.status)
-    if (statusCode !== undefined) {
-        details.statusCode = statusCode
-    }
-
-    const response = getOptionalRecord(errorRecord.response)
-    if (response !== null) {
-        if (details.statusCode === undefined) {
-            const responseStatus = getOptionalNumber(response.status)
-            if (responseStatus !== undefined) {
-                details.statusCode = responseStatus
-            }
-        }
-
-        const responseData = getOptionalRecord(response.data)
-        if (responseData !== null) {
-            const directCode = getOptionalString(responseData.code)
-            if (directCode !== undefined) {
-                details.apiCode = directCode
-            } else {
-                const nestedCode = getApiCodeFromErrorList(responseData.errors)
-                if (nestedCode !== undefined) {
-                    details.apiCode = nestedCode
-                }
-            }
-        }
-    }
-
-    if (details.apiCode === undefined) {
-        const topLevelCode = getOptionalString(errorRecord.code)
-        if (topLevelCode !== undefined) {
-            details.apiCode = topLevelCode
-        }
-    }
-
-    return details
-}
-
-/**
- * @param {unknown} value
- * @returns {string | undefined}
- */
-function getApiCodeFromErrorList(value) {
-    if (!Array.isArray(value)) {
-        return undefined
-    }
-
-    for (const item of value) {
-        const record = getOptionalRecord(item)
-        if (record === null) {
-            continue
-        }
-
-        const code = getOptionalString(record.code)
-        if (code !== undefined) {
-            return code
-        }
-    }
-
-    return undefined
-}
-
-/**
  * Polls until the file exists with non-empty content or the deadline
  * passes. Returns true when the file appeared.
  * @param {string} filePath
@@ -706,33 +564,51 @@ async function waitForRootFile(filePath, deadlineMs) {
 }
 
 /**
- * Reads the jibril unit state for diagnostics and stop-reason classification.
- * @returns {Promise<JibrilUnitState | null>}
+ * Reads and logs the sensor's own account of this run: the eBPF counters
+ * explain a thin profile, and a degraded steps block explains events
+ * attributed to the wrong workflow step, or to none.
+ * @returns {Promise<JibrilStatus | null>}
  */
-async function readJibrilUnitState() {
-    try {
-        const result = await exec.getExecOutput(
-            "sudo",
-            ["systemctl", "show", "jibril.service", "-p", "ActiveState", "-p", "Result", "-p", "ExecMainStatus"],
-            {
-                silent: true,
-                ignoreReturnCode: true,
-            },
-        )
-        if (result.exitCode !== 0) {
-            return null
-        }
-
-        const properties = parseSystemctlProperties(result.stdout)
-        return {
-            activeState: properties.get("ActiveState") ?? "",
-            result: properties.get("Result") ?? "",
-            execMainStatus: parseExecMainStatus(properties.get("ExecMainStatus")),
-        }
-    } catch (error) {
-        core.info(`could not read jibril service state: ${getErrorMessage(error)}`)
+async function reportJibrilRunStatus() {
+    const status = parseJibrilStatus(await readOptionalRootFile(JIBRIL_RUN_STATUS_FILE))
+    if (status === null) {
+        core.info(`jibril run status not reported: ${JIBRIL_RUN_STATUS_FILE} is missing or unreadable`)
         return null
     }
+
+    core.info(`jibril run status: ${formatJibrilStatusSummary(status)}`)
+
+    const ebpf = status.ebpf
+    if (ebpf === null) {
+        // jibril omits the block until the loader reports counters, so its
+        // absence means the eBPF layer never came up: nothing was captured.
+        core.warning("jibril reported no eBPF counters for this run; the sensor captured no runtime events")
+    } else {
+        const ebpfErrors = formatEbpfErrors(ebpf.errors)
+        if (ebpfErrors !== "") {
+            core.warning(
+                `jibril reported eBPF errors for this run (${ebpfErrors}); some runtime events were not captured`,
+            )
+            const attachFailures = formatAttachFailures(ebpf.errors.attachFailures)
+            if (attachFailures !== "") {
+                core.info(`jibril could not attach: ${attachFailures}`)
+            }
+        }
+    }
+
+    const steps = status.githubSteps
+    if (steps !== null && steps.status === "degraded") {
+        const parts = [
+            `jibril reported degraded workflow-step attribution (source=${steps.source}, steps=${steps.count})`,
+        ]
+        if (steps.errors.length > 0) {
+            parts.push(steps.errors.join("; "))
+        }
+        parts.push("events in the Runtime Review may be attributed to the wrong step")
+        core.warning(parts.join("; "))
+    }
+
+    return status
 }
 
 /**
@@ -851,15 +727,6 @@ async function readOptionalRootFile(filePath) {
 }
 
 /**
- * @param {string} value
- * @returns {number}
- */
-function parseRunAttempt(value) {
-    const parsedValue = Number.parseInt(value, 10)
-    return Number.isSafeInteger(parsedValue) ? parsedValue : 1
-}
-
-/**
  * @param {string} filePath
  * @returns {Promise<string>}
  */
@@ -873,35 +740,6 @@ async function readRootFileContent(filePath) {
     }
 
     return result.stdout.trim()
-}
-
-/**
- * Parses the `key=value` lines printed by `systemctl show`.
- * @param {string} output
- * @returns {Map<string, string>}
- */
-function parseSystemctlProperties(output) {
-    /** @type {Map<string, string>} */
-    const properties = new Map()
-
-    for (const line of output.split("\n")) {
-        const separatorIndex = line.indexOf("=")
-        if (separatorIndex === -1) {
-            continue
-        }
-        properties.set(line.slice(0, separatorIndex).trim(), line.slice(separatorIndex + 1).trim())
-    }
-
-    return properties
-}
-
-/**
- * @param {string | undefined} value
- * @returns {number}
- */
-function parseExecMainStatus(value) {
-    const parsedValue = Number.parseInt(value ?? "", 10)
-    return Number.isSafeInteger(parsedValue) ? parsedValue : 0
 }
 
 run()

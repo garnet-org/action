@@ -1,6 +1,7 @@
 import assert from "node:assert/strict"
 import { test } from "node:test"
-import { resolveJibrilVersion, usesBundledJibrilRelease, JIBRIL_STABLE_VERSION } from "../src/action.js"
+import { resolveJibrilVersion, JIBRIL_STABLE_VERSION } from "../src/action.js"
+import { versionAtLeast } from "../src/jibril-version.js"
 
 test("explicit jibril_version input always wins", () => {
     assert.equal(resolveJibrilVersion("v2.12.0", "v2"), "v2.12.0")
@@ -37,18 +38,31 @@ test("no ref ever resolves to latest with an empty input", () => {
     }
 })
 
-test("the bundled tarball is used from v2.17.0 on, prereleases included", () => {
-    assert.equal(usesBundledJibrilRelease("v2.17.0"), true)
-    assert.equal(usesBundledJibrilRelease("2.17.0"), true)
-    assert.equal(usesBundledJibrilRelease("v2.17.0-rc.5"), true)
-    assert.equal(usesBundledJibrilRelease("v2.18.1"), true)
-    assert.equal(usesBundledJibrilRelease("v3.0.0"), true)
+test("the minimum itself and anything newer satisfy the gate", () => {
+    assert.equal(versionAtLeast("v2.17.0", 2, 17, 0), true)
+    assert.equal(versionAtLeast("2.17.0", 2, 17, 0), true)
+    assert.equal(versionAtLeast("  v2.17.0\n", 2, 17, 0), true)
+    assert.equal(versionAtLeast("v2.17.1", 2, 17, 0), true)
+    assert.equal(versionAtLeast("v2.18.0", 2, 17, 0), true)
+    assert.equal(versionAtLeast("v10.0.0", 9, 99, 99), true)
 })
 
-test("the bare binary is kept for older tags and non-semver tags", () => {
-    assert.equal(usesBundledJibrilRelease("v2.16.9"), false)
-    assert.equal(usesBundledJibrilRelease("v2.16.0"), false)
-    assert.equal(usesBundledJibrilRelease("v1.99.99"), false)
-    assert.equal(usesBundledJibrilRelease("v0.0"), false)
-    assert.equal(usesBundledJibrilRelease(""), false)
+test("anything older fails the gate, on any component", () => {
+    assert.equal(versionAtLeast("v2.16.9", 2, 17, 0), false)
+    assert.equal(versionAtLeast("v2.17.0", 2, 17, 1), false)
+    assert.equal(versionAtLeast("v1.99.99", 2, 17, 0), false)
+})
+
+test("prereleases sort with their core version", () => {
+    assert.equal(versionAtLeast("v2.17.0-rc.5", 2, 17, 0), true)
+    assert.equal(versionAtLeast("v2.17.0-rc.5", 2, 17, 1), false)
+})
+
+test("latest passes every gate, and any other non-semver tag fails it", () => {
+    assert.equal(versionAtLeast("latest", 99, 0, 0), true)
+    // Daily builds and an unresolved version must never turn a version-gated
+    // feature on by accident.
+    assert.equal(versionAtLeast("v0.0", 2, 17, 0), false)
+    assert.equal(versionAtLeast("", 2, 17, 0), false)
+    assert.equal(versionAtLeast("main", 2, 17, 0), false)
 })

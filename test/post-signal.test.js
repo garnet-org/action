@@ -15,6 +15,32 @@ function createEvidence(overrides = {}) {
         forceStopped: false,
         stopTimeoutSeconds: 1830,
         profileState: "missing",
+        runStatus: null,
+        ...overrides,
+    }
+}
+
+/**
+ * A healthy sensor on an ordinary runner: no BPF LSM in the active list, and
+ * that is not a finding.
+ * @param {Partial<import("../src/jibril-status.js").JibrilStatus>=} overrides
+ * @returns {import("../src/jibril-status.js").JibrilStatus}
+ */
+function createRunStatus(overrides = {}) {
+    return {
+        status: "ok",
+        readyAt: "2026-09-10T21:52:40Z",
+        kernel: {
+            release: "6.8.0-1014-aws",
+            bpf: { btf: true, lsm: false, tracefs: true, cgroup2: true, lockdown: "none" },
+        },
+        ebpf: {
+            programs: 12,
+            attached: 12,
+            liveLinks: 10,
+            errors: { load: 0, attach: 0, link: 0, attachFailures: [] },
+        },
+        githubSteps: { status: "ok", source: "api", count: 7, errors: [] },
         ...overrides,
     }
 }
@@ -51,4 +77,50 @@ test("formatAgentStopDetail: timeout + force stop + missing profile", () => {
     )
 
     assert.equal(detail, "stop timed out after 1830s; unit SIGKILLed; profile file missing")
+})
+
+test("formatAgentStopDetail: a healthy sensor adds nothing, and its kernel is not blamed", () => {
+    const detail = formatAgentStopDetail(createEvidence({ profileState: "empty", runStatus: createRunStatus() }))
+
+    assert.equal(detail, "stop completed; profile file empty")
+})
+
+test("formatAgentStopDetail: a degraded sensor explains the partial capture", () => {
+    const healthy = createRunStatus()
+    const detail = formatAgentStopDetail(
+        createEvidence({
+            profileState: "empty",
+            runStatus: createRunStatus({
+                status: "degraded",
+                ebpf: { ...healthy.ebpf, errors: { load: 1, attach: 0, link: 2, attachFailures: [] } },
+                githubSteps: { status: "degraded", source: "local", count: 3, errors: ["github api: 403"] },
+            }),
+        }),
+    )
+
+    assert.equal(
+        detail,
+        "stop completed; profile file empty; sensor status degraded; ebpf errors load=1, link=2; " +
+            "github steps degraded (source=local, count=3)",
+    )
+})
+
+test("formatAgentStopDetail: an eBPF block jibril never wrote points at the kernel", () => {
+    const detail = formatAgentStopDetail(
+        createEvidence({
+            profileState: "empty",
+            runStatus: createRunStatus({
+                ebpf: null,
+                kernel: {
+                    release: "6.8.0-1014-aws",
+                    bpf: { btf: false, lsm: true, tracefs: true, cgroup2: true, lockdown: "none" },
+                },
+            }),
+        }),
+    )
+
+    assert.equal(
+        detail,
+        "stop completed; profile file empty; ebpf counters never reported; kernel 6.8.0-1014-aws offers no BTF",
+    )
 })

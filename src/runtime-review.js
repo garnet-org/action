@@ -8,8 +8,8 @@
  * contract/vocab.json + docs/ux-contract.md; the testbed's v6.7.0 renderer
  * had not landed at vendoring time, so this implementation follows the
  * contract directly) with two mechanical changes: the CLI plumbing section
- * is dropped (the action drives the renderer from src/post.js and
- * src/profile-comment.js) and CONTRACT_VOCAB is imported from the vendored
+ * is dropped (the action drives the renderer from src/post.js) and
+ * CONTRACT_VOCAB is imported from the vendored
  * ./runtime-review-vocab.js instead of a filesystem read.
  *
  * Three projections of the same selected record set: the GitHub PR comment,
@@ -227,16 +227,6 @@ export const COMMENT_MARKER = "<!-- garnet-run-profile -->"
  */
 export const REFERENCE_MOCKUP_MARKER = "<!-- garnet-reference-renderer-mockup -->"
 
-/**
- * Markers emitted by the control-plane GitHub App comment (the AUTHORITATIVE
- * "Garnet Runtime Review"). When the App has commented, this standalone
- * Action fallback is suppressed.
- */
-export const CONTROL_PLANE_MARKERS = [
-  "garnet-control-plane-pr-comment:v1",
-  "garnet-control-plane-pending-pr-comment:v1",
-]
-
 /** Exact emitted vocabulary — byte-locked by contract/vocab.json. */
 export const VOCAB = {
   headlineLead: CONTRACT_VOCAB.copy.headlineLead,
@@ -338,15 +328,6 @@ export const escapeHtml = (value) =>
     .replace(/`{3,}/g, (m) => "ʼ".repeat(m.length))
     .replace(/[\r\n]+/g, " ")
     .trim()
-
-/**
- * Neutralize markdown link vectors in record-sourced text that renders as
- * plain (non-<code>) content: `](` can close a link label and `://` can
- * autolink. HTML entities render identically but never parse as markdown.
- * @param {string} value
- */
-export const neutralizeMarkdown = (value) =>
-  value.replaceAll("](", "]&#40;").replaceAll("://", "&#58;//")
 
 /**
  * Escape a value destined for INSIDE an HTML attribute.
@@ -600,10 +581,83 @@ export function edgeComparator(a, b) {
  */
 export function pullRequestURL(github) {
   const match = /^refs\/pull\/(\d+)\//.exec(String(github.ref || ""))
-  const repository = String(github.repository || "")
+  const repository = safeRepositorySlug(github.repository)
   if (match === null || repository === "") return ""
-  const server = String(github.server_url || "https://github.com").replace(/\/+$/, "")
+  const server = safeServerURL(github.server_url)
+  if (server === "") return ""
   return `${server}/${repository}/pull/${match[1]}`
+}
+
+// Record-derived values that land in Markdown/HTML link targets are
+// untrusted input: a forged profile could carry markup-breaking or
+// javascript: values. These normalizers fail closed to "" (the renderers
+// already degrade to unlinked text on empty URLs).
+
+/**
+ * A GitHub `owner/name` slug restricted to the characters GitHub allows;
+ * anything else returns "".
+ * @param {unknown} value
+ * @returns {string}
+ */
+export function safeRepositorySlug(value) {
+  const repository = String(value || "")
+  return /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(repository) ? repository : ""
+}
+
+/**
+ * A server base URL that parses as http(s) with no path, query, fragment,
+ * or credentials; anything else falls back to "".
+ * @param {unknown} value
+ * @returns {string}
+ */
+export function safeServerURL(value) {
+  const raw = String(value || "https://github.com").replace(/\/+$/, "")
+  let parsed
+  try {
+    parsed = new URL(raw)
+  } catch (_) {
+    return ""
+  }
+  const isHTTP = parsed.protocol === "https:" || parsed.protocol === "http:"
+  const isBare =
+    parsed.pathname === "/" &&
+    parsed.search === "" &&
+    parsed.hash === "" &&
+    parsed.username === "" &&
+    parsed.password === ""
+  return isHTTP && isBare ? raw : ""
+}
+
+/**
+ * The run URL derived from validated record fields; "" when any part is
+ * untrusted or missing.
+ * @param {Record<string, any>} github
+ * @returns {string}
+ */
+function buildRunURL(github) {
+  const repository = safeRepositorySlug(github.repository)
+  const server = safeServerURL(github.server_url)
+  const runID = String(github.run_id || "")
+  if (repository === "" || server === "" || !/^\d+$/.test(runID)) return ""
+  return `${server}/${repository}/actions/runs/${runID}`
+}
+
+/**
+ * An absolute http(s) URL for use as a link target; anything else
+ * (including javascript: and data: schemes) returns "".
+ * @param {unknown} value
+ * @returns {string}
+ */
+export function safeHTTPURL(value) {
+  const raw = String(value || "")
+  if (raw === "") return ""
+  let parsed
+  try {
+    parsed = new URL(raw)
+  } catch (_) {
+    return ""
+  }
+  return parsed.protocol === "https:" || parsed.protocol === "http:" ? raw : ""
 }
 
 /**
@@ -651,13 +705,10 @@ export function summarizeProfile(profile) {
   return {
     name: String(github.job || ""),
     workflow: String(github.workflow || ""),
-    repository: String(github.repository || ""),
+    repository: safeRepositorySlug(github.repository),
     sha: String(github.sha || ""),
     run_id: String(github.run_id || ""),
-    run_url:
-      github.run_id && github.repository
-        ? `${github.server_url || "https://github.com"}/${github.repository}/actions/runs/${github.run_id}`
-        : "",
+    run_url: buildRunURL(github),
     profile_id: String(envelope.id || envelope.profile_id || ""),
     uuid: String(p?.uuid || ""),
     timestamp: String(p?.timestamp || ""),
@@ -781,8 +832,8 @@ export function buildRunReview(input) {
       name: String(j.name || ""),
       workflow: String(j.workflow || ""),
       run_id: String(j.run_id || ""),
-      run_url: String(j.run_url || ""),
-      job_url: String(j.job_url || ""),
+      run_url: safeHTTPURL(j.run_url),
+      job_url: safeHTTPURL(j.job_url),
       profile_id: String(j.profile_id || ""),
       uuid: String(j.uuid || ""),
       timestamp: String(j.timestamp || ""),
@@ -959,25 +1010,6 @@ export function exportReviewModel(review) {
 export function profilePermalink(job, appUrl, utmMedium) {
   if (!job.run_id || !job.profile_id || !appUrl) return ""
   return `${appUrl}/public/runs/${encodeURIComponent(String(job.run_id))}?profile=${encodeURIComponent(String(job.profile_id))}&utm_source=github&utm_medium=${utmMedium}`
-}
-
-/**
- * Fail-closed publication decision, rechecked at request time. Default deny.
- * Renders only when backend-truth visibility is exactly "public" AND explicit
- * consent exists AND consent is not revoked AND an exact envelope Profile.ID
- * selector resolves. Missing, empty, wrong, or job-only selectors return 404
- * and never fall back to a run index/job/first profile. Every denied case
- * returns the same non-oracular 404 for HTML and JSON.
- * @param {{visibility?: string, consent?: boolean, revoked?: boolean,
- *          profileRequested?: boolean, selectorResolves?: boolean}} state
- * @returns {{status: 200|404, body: "render"|"not found"}}
- */
-export function publicationDecision(state = {}) {
-  const base =
-    state.visibility === "public" && state.consent === true && state.revoked !== true
-  const allowed =
-    base && state.profileRequested === true && state.selectorResolves === true
-  return allowed ? { status: 200, body: "render" } : { status: 404, body: "not found" }
 }
 
 // ---------------------------------------------------------------------------
@@ -2231,7 +2263,8 @@ function retentionOrder(edges) {
  */
 function commitRef(sha, commitUrl) {
   const sha7 = escapeCode(sha.slice(0, 7) || "unknown")
-  return commitUrl ? `[\`${sha7}\`](${commitUrl})` : `\`${sha7}\``
+  const url = safeHTTPURL(commitUrl)
+  return url !== "" ? `[\`${sha7}\`](${url})` : `\`${sha7}\``
 }
 
 /**
