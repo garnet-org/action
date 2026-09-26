@@ -51,7 +51,7 @@ jobs:
         run: |
           set -euo pipefail
           BRANCH="update-jibril-version/$VERSION"
-          CURRENT_SRC=$(sed -n 's/^const JIBRIL_STABLE_VERSION = "\(.*\)"$/\1/p' src/action.js)
+          CURRENT_SRC=$(sed -n 's/.*JIBRIL_STABLE_VERSION = "\([^"]*\)".*/\1/p' src/action.js)
           CURRENT_YAML=$(sed -n '/jibril_version:/,/default:/{ s/[[:space:]]*default: "\([^"]*\)".*/\1/p }' action.yaml)
           CURRENT_README=$(sed -n -E 's/.*`jibril_version`[^|]+\|[^|]+\| `([^`]*)`[^|]*\|.*/\1/p' README.md)
 
@@ -94,22 +94,38 @@ jobs:
           VERSION: ${{ steps.jibril.outputs.version }}
         run: |
           set -euo pipefail
-          sed -i -E 's/(`jibril_version`[^|]*\|[^|]*\| )`[^`]*`[^|]*/\1`'"$VERSION"'`             /' README.md
+          sed -i -E 's/(`jibril_version`[^|]*\|[^|]*\| )`[^`]*`/\1`'"$VERSION"'`/' README.md
+
+      # Belt and braces: if the edits above produced no actual change, stop here.
+      # Guarantees a no-op run can never open a whitespace-only PR, regardless of
+      # whether a version-extraction regex above has drifted out of sync.
+      - name: Verify the working tree actually changed
+        if: steps.check.outputs.skip == 'false'
+        id: diff
+        run: |
+          set -euo pipefail
+          if git diff --quiet -- src/action.js action.yaml README.md; then
+            echo "No effective change to src/action.js, action.yaml or README.md — skipping."
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            git --no-pager diff --stat -- src/action.js action.yaml README.md
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Setup Node
-        if: steps.check.outputs.skip == 'false'
+        if: steps.diff.outputs.changed == 'true'
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: "lts/*"
 
       - name: Rebuild dist/
-        if: steps.check.outputs.skip == 'false'
+        if: steps.diff.outputs.changed == 'true'
         run: |
           npm ci --include=dev
           npm run build
 
       - name: Generate GitHub App token
-        if: steps.check.outputs.skip == 'false'
+        if: steps.diff.outputs.changed == 'true'
         id: app-token
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
         with:
@@ -117,7 +133,7 @@ jobs:
           private-key: ${{ secrets.GARNET_CI_BOT_PRIVATE_KEY }}
 
       - name: Get bot user ID
-        if: steps.check.outputs.skip == 'false'
+        if: steps.diff.outputs.changed == 'true'
         id: bot-user
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
@@ -125,7 +141,7 @@ jobs:
           echo "id=$(gh api "/users/${{ steps.app-token.outputs.app-slug }}[bot]" --jq .id)" >> "$GITHUB_OUTPUT"
 
       - name: Open pull request
-        if: steps.check.outputs.skip == 'false'
+        if: steps.diff.outputs.changed == 'true'
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
           VERSION: ${{ steps.jibril.outputs.version }}
