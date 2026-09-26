@@ -6,6 +6,11 @@ import { join } from "node:path"
 import test from "node:test"
 
 test("post step writes terminal summaries for missing, empty and invalid profiles", async t => {
+    if (process.platform !== "linux" || process.arch !== "x64") {
+        t.skip("Linux/x64-only behavior: the post step exits early on unsupported platforms")
+        return
+    }
+
     const directory = await mkdtemp(join(tmpdir(), "garnet-terminal-"))
     t.after(() => rm(directory, { recursive: true, force: true }))
     for (const state of ["missing", "empty", "invalid"]) {
@@ -14,6 +19,7 @@ test("post step writes terminal summaries for missing, empty and invalid profile
             process.execPath,
             [
                 "--experimental-test-module-mocks",
+                "--disable-warning=ExperimentalWarning",
                 "--input-type=module",
                 "--eval",
                 `
@@ -21,7 +27,7 @@ test("post step writes terminal summaries for missing, empty and invalid profile
                 const state = ${JSON.stringify(state)}
                 let now = 0
                 Date.now = () => { now += 100000; return now }
-                mock.module("@actions/exec", { namedExports: {
+                mock.module("@actions/exec", { exports: {
                     exec: async () => 0,
                     getExecOutput: async (command, args) => {
                         if (args[0] === "stat") return {
@@ -66,12 +72,13 @@ test("setup failure is fail-open with a redacted terminal summary", async t => {
         process.execPath,
         [
             "--experimental-test-module-mocks",
+            "--disable-warning=ExperimentalWarning",
             "--input-type=module",
             "--eval",
             `
             import assert from "node:assert/strict"
             import { mock } from "node:test"
-            mock.module("@actions/exec", { namedExports: {
+            mock.module("@actions/exec", { exports: {
                 exec: async () => { throw new Error("no root execution expected") },
                 getExecOutput: async () => ({
                     exitCode: 0, stdout: "diagnostic fixture-sensitive-value", stderr: "",
