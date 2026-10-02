@@ -47,7 +47,7 @@ One workflow step. No code changes.
 
 - **Execution chains and destinations, not contents** — process names, the step they ran under when known, and outbound domains, IPs, ports and protocols. Not your source, not your secrets.
 - **Observe-only** — Jibril reads kernel events through eBPF programs checked by the kernel verifier. It does not block or modify anything.
-- **Scoped egress** — the action and Jibril talk to `api.garnet.ai` (or your `api_url`) and download the Jibril release from `github.com/garnet-org/jibril-releases` over HTTPS. The release bundle's checksums are verified and its signature is checked with `gh attestation verify` before Jibril runs.
+- **Scoped egress** — the action and Jibril talk to `api.garnet.ai` (or your `api_url`) and download the Jibril release from `github.com/garnet-org/jibril-releases` over HTTPS. The release bundle's checksums are verified and its signature is checked with `gh attestation verify` before Jibril runs when `github_token` and the `gh` CLI are available; otherwise the action warns and skips attestation verification.
 - **Ephemeral** — Jibril runs as a systemd service and is stopped in the post step; its config and credentials are removed from the runner before the job ends.
 
 ## Permissions
@@ -111,7 +111,7 @@ When neither credential is available (typically fork `pull_request` and Dependab
 >
 > ```yaml
 > # Pinned to v2.3.0
-> - uses: garnet-org/action@f9ed14ab54564073ec11bba8d62d6980e172d2a0
+> - uses: garnet-org/action@245ad6be82de3200c205109c8ca7ac816dc692ea
 > ```
 >
 > The SHA of the latest release is published at [garnet.ai/pins](https://garnet.ai/pins). Exact tags such as `garnet-org/action@v2.3.0` also work.
