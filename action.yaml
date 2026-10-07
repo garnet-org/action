@@ -10,8 +10,10 @@ inputs:
             Garnet API token from app.garnet.ai. Optional when the job has `id-token: write`
             (GitHub OIDC is the preferred authentication method). When set, the token is used
             as-is and no OIDC token is requested, so `id-token: write` is not needed.
-            If neither OIDC nor api_token is available, runtime recording is skipped with
-            a warning and a Job Summary explanation. The workflow continues.
+            If neither OIDC nor api_token is available, a pull request run — including one from a
+            fork, which GitHub denies both secrets and OIDC — is still recorded locally and uploaded
+            as a workflow artifact for the Garnet GitHub App to collect. On any other event runtime
+            recording is skipped with a warning and a Job Summary explanation. The workflow continues.
         required: false
     github_token:
         description: "GitHub token used to verify Jibril attestations and read workflow job status. Defaults to the built-in GITHUB_TOKEN."
