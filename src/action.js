@@ -84,6 +84,17 @@ const JIBRIL_READY_TIMEOUT_SECONDS = 30
 // can be timed, so it is kept short enough for the reported figure to mean
 // something. Each tick costs two cheap root reads.
 const JIBRIL_READY_POLL_INTERVAL_MS = 200
+// Undocumented, for CI only: takes a run that could authenticate down the
+// relay path instead, so the branch fork pull requests depend on can be
+// exercised from a branch that has credentials.
+const FORCE_RELAY_ENV = "GARNET_ACTION_FORCE_RUN_ARTIFACT"
+
+/**
+ * @returns {boolean}
+ */
+function isRelayForced() {
+    return getEnv(FORCE_RELAY_ENV, "false") === "true"
+}
 
 // This function is the main entry point for the script.
 // Returns true when Jibril started successfully, false otherwise.
@@ -102,8 +113,13 @@ export async function run() {
         // Relay mode records the job locally and hands the run to the Garnet
         // GitHub App through a workflow artifact, because no credential can
         // reach the control plane from here.
-        let relayMode = false
-        if (TOKEN === "") {
+        let relayMode = isRelayForced()
+        if (relayMode) {
+            core.warning(
+                `${FORCE_RELAY_ENV} is set: this run is recorded through the workflow artifact relay and is not ` +
+                    "registered with the control plane, exactly as a fork pull request would be.",
+            )
+        } else if (TOKEN === "") {
             const credentialMode = await resolveCredentialMode({
                 eventName: getEnv("GITHUB_EVENT_NAME"),
                 eventPath: getEnv("GITHUB_EVENT_PATH"),
