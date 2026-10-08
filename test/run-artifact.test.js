@@ -76,7 +76,14 @@ test("envelope: schema_version 1 over the exact bodies the authenticated path PO
     AGENT_STOPPED_REQUEST_SCHEMA.parse(envelope.stopped)
 })
 
-test("job index: a recorded leg wins; absent means a single job, whose index is 0", () => {
+test("envelope: an unknown leg index is omitted, never sent as 0", () => {
+    const envelope = buildRunArtifact({ agent: AGENT, jobIndex: null, profile: null, stopped: STOPPED })
+
+    assert.ok(envelope.agent.github_context !== undefined)
+    assert.ok(!("job_index" in envelope.agent.github_context), "0 would claim this job is matrix leg 0")
+})
+
+test("job index: read when jibril recorded one, null when it did not", () => {
     assert.equal(readProfileJobIndex({ scenarios: { github: { job_index: 4 } } }), 4)
     assert.equal(readProfileJobIndex({ scenarios: { github: { job_index: 0 } } }), 0)
 
@@ -88,14 +95,26 @@ test("job index: a recorded leg wins; absent means a single job, whose index is 
         { scenarios: { github: { job_index: "4" } } },
         { scenarios: { github: { job_index: -1 } } },
     ]) {
-        assert.equal(readProfileJobIndex(profile), 0, JSON.stringify(profile))
+        assert.equal(readProfileJobIndex(profile), null, JSON.stringify(profile))
     }
 })
 
-test("name: prefixed for the App, unique per matrix leg, and slugged", () => {
-    assert.equal(resolveRunArtifactName({ job: "test", jobIndex: 0 }), "garnet-run-test-0")
-    assert.equal(resolveRunArtifactName({ job: "test", jobIndex: 1 }), "garnet-run-test-1")
-    assert.equal(resolveRunArtifactName({ job: "build & test (ubuntu)", jobIndex: 2 }), "garnet-run-build-test-ubuntu-2")
+test("name: unique per job even when no leg index is recorded", () => {
+    // A collision costs a leg its whole envelope, so uniqueness cannot rest
+    // on the leg index: jibril does not always record one, and GITHUB_JOB is
+    // identical across every leg of a matrix.
+    const first = resolveRunArtifactName({ job: "relay", jobIndex: null, uniqueSuffix: "a1b2c3d4" })
+    const second = resolveRunArtifactName({ job: "relay", jobIndex: null, uniqueSuffix: "e5f6a7b8" })
+
+    assert.equal(first, "garnet-run-relay-a1b2c3d4")
+    assert.notEqual(first, second)
+})
+
+test("name: prefixed for the App, slugged, and carries the leg index when known", () => {
+    assert.equal(
+        resolveRunArtifactName({ job: "build & test (ubuntu)", jobIndex: 0, uniqueSuffix: "a1b2c3d4" }),
+        "garnet-run-build-test-ubuntu-0-a1b2c3d4",
+    )
 })
 
 test("oversized: the profile is dropped so the rest still produces a comment", () => {

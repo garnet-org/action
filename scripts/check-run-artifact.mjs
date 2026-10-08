@@ -3,7 +3,7 @@
 // one readable `garnet/run.json` envelope, and the fields the App verifies
 // against GitHub must match this run.
 //
-// Usage: node scripts/check-run-artifact.mjs <collected-dir>
+// Usage: node scripts/check-run-artifact.mjs <collected-dir> <expected-count>
 //
 // <collected-dir> holds one subdirectory per artifact, named after it.
 
@@ -54,9 +54,11 @@ function checkGitHubContext(artifactName, context) {
         )
     }
 
+    // Absent is tolerated, because jibril does not always record it. A
+    // fabricated one is not: 0 is a real matrix leg.
     check(
-        Number.isInteger(context.job_index) && Number(context.job_index) >= 0,
-        `${artifactName}: github_context.job_index must be a non-negative integer, got ${JSON.stringify(context.job_index)}`,
+        context.job_index === undefined || (Number.isInteger(context.job_index) && Number(context.job_index) >= 0),
+        `${artifactName}: github_context.job_index must be absent or a non-negative integer, got ${JSON.stringify(context.job_index)}`,
     )
 }
 
@@ -115,22 +117,28 @@ function checkEnvelope(artifactName, envelope) {
     )
 }
 
-const [collectedDir] = process.argv.slice(2)
-if (collectedDir === undefined) {
-    console.error("usage: node scripts/check-run-artifact.mjs <collected-dir>")
+const [collectedDir, expectedCount] = process.argv.slice(2)
+if (collectedDir === undefined || expectedCount === undefined) {
+    console.error("usage: node scripts/check-run-artifact.mjs <collected-dir> <expected-count>")
     process.exit(2)
 }
 
-const artifactNames = readdirSync(collectedDir).filter(name => statSync(join(collectedDir, name)).isDirectory())
-if (artifactNames.length === 0) {
-    console.error(`No garnet-run-* artifacts were collected from ${collectedDir}. The relay produced nothing.`)
-    process.exit(1)
-}
+const artifactNames = readdirSync(collectedDir)
+    .filter(name => statSync(join(collectedDir, name)).isDirectory())
+    .sort()
 
-/** @type {Set<unknown>} */
-const jobIndexes = new Set()
+// One envelope per relaying job. Fewer means a leg produced nothing, or two
+// legs collided on a name and one upload failed — which looks like success
+// in every job log but the one that lost.
+check(
+    artifactNames.length === Number(expectedCount),
+    `expected ${expectedCount} garnet-run-* artifacts, collected ${artifactNames.length}: ${artifactNames.join(", ")}`,
+)
 
-for (const artifactName of artifactNames.sort()) {
+/** @type {number[]} */
+const recordedJobIndexes = []
+
+for (const artifactName of artifactNames) {
     check(artifactName.startsWith("garnet-run-"), `${artifactName}: name must start with "garnet-run-"`)
 
     const entryPath = join(collectedDir, artifactName, "garnet", "run.json")
@@ -143,18 +151,22 @@ for (const artifactName of artifactNames.sort()) {
     }
 
     checkEnvelope(artifactName, envelope)
-    jobIndexes.add(envelope?.agent?.github_context?.job_index)
+
+    const jobIndex = envelope?.agent?.github_context?.job_index
+    if (jobIndex !== undefined) {
+        recordedJobIndexes.push(jobIndex)
+    }
 
     const hasProfile = envelope?.profile !== null && envelope?.profile !== undefined
     console.log(
-        `${artifactName}: job_index=${envelope?.agent?.github_context?.job_index} ` +
+        `${artifactName}: job_index=${jobIndex ?? "ABSENT"} ` +
             `profileState=${envelope?.stopped?.profileState} profile=${hasProfile ? "present" : "null"}`,
     )
 }
 
 check(
-    jobIndexes.size === artifactNames.length,
-    `matrix legs must not share a job_index: ${artifactNames.length} artifacts, ${jobIndexes.size} distinct indexes`,
+    new Set(recordedJobIndexes).size === recordedJobIndexes.length,
+    `matrix legs must not share a job_index, got [${recordedJobIndexes.join(", ")}]`,
 )
 
 if (failures.length > 0) {
@@ -163,6 +175,13 @@ if (failures.length > 0) {
         console.error(`  - ${failure}`)
     }
     process.exit(1)
+}
+
+if (recordedJobIndexes.length < artifactNames.length) {
+    console.warn(
+        `\nWarning: ${artifactNames.length - recordedJobIndexes.length} of ${artifactNames.length} envelopes carry ` +
+            "no job_index. The envelopes are valid, but the Runtime Review cannot tell matrix legs apart without it.",
+    )
 }
 
 console.log(`\nAll ${artifactNames.length} run artifact(s) are well-formed.`)

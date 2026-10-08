@@ -29,13 +29,23 @@ jobs:
         name: Relay (leg ${{ matrix.leg }})
         if: contains(github.event.pull_request.labels.*.name, 'run-artifact-relay')
         runs-on: ubuntu-24.04
+        outputs:
+            legs: ${{ steps.legs.outputs.count }}
         strategy:
             fail-fast: false
-            # Two legs, so the smoke test also proves each one produces its
-            # own artifact name and its own job_index.
+            # More than one leg, so the smoke test also proves each leg
+            # produces its own artifact rather than colliding with its
+            # siblings.
             matrix:
                 leg: [0, 1]
         steps:
+            # Every leg writes the same value, so the job output is this
+            # matrix's size however it is later resized.
+            - name: Record the matrix size
+              id: legs
+              shell: bash
+              run: echo "count=${{ strategy.job-total }}" >> "$GITHUB_OUTPUT"
+
             - name: Checkout
               uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -107,6 +117,16 @@ jobs:
                   echo "Artifacts carrying the garnet-run- prefix:"
                   cat artifacts.txt
 
+                  # Colliding names are the failure this test exists to
+                  # catch: unzipping both into collected/<name> would hide
+                  # it by overwriting, and the losing leg's upload already
+                  # failed back in its own job.
+                  duplicates=$(cut -d' ' -f2- artifacts.txt | sort | uniq -d)
+                  if [ -n "${duplicates}" ]; then
+                    echo "::error::Artifact names collided, so a leg's envelope was lost: ${duplicates}"
+                    exit 1
+                  fi
+
                   while read -r id name; do
                     [ -n "${id}" ] || continue
                     gh api "/repos/${GITHUB_REPOSITORY}/actions/artifacts/${id}/zip" > "${name}.zip"
@@ -118,4 +138,4 @@ jobs:
 
             - name: Validate the envelopes
               shell: bash
-              run: node scripts/check-run-artifact.mjs collected
+              run: node scripts/check-run-artifact.mjs collected "${{ needs.relay.outputs.legs }}"

@@ -2,6 +2,7 @@ import * as core from "@actions/core"
 import * as exec from "@actions/exec"
 import * as fs from "node:fs/promises"
 import * as os from "node:os"
+import { randomUUID } from "node:crypto"
 import {
     firstNonEmptyString,
     getEnv,
@@ -359,9 +360,7 @@ function readRelayAgent() {
 }
 
 /**
- * Hands this run to the Garnet GitHub App through a workflow artifact. The
- * leg index identifies the job: it is what makes the artifact name unique
- * within the run and keeps matrix legs on distinct identities downstream.
+ * Hands this run to the Garnet GitHub App through a workflow artifact.
  * @param {CreateAgentRequest} agent
  * @param {unknown} profile
  * @param {AgentStoppedRequest} stopped
@@ -369,7 +368,18 @@ function readRelayAgent() {
  */
 async function relayRunArtifact(agent, profile, stopped) {
     const jobIndex = readProfileJobIndex(profile)
-    const name = resolveRunArtifactName({ job: getProfileJobName(), jobIndex })
+    if (jobIndex === null) {
+        core.info(
+            "The Execution Profile records no matrix leg index, so the relayed run carries none. On a matrix " +
+                "job this means the Runtime Review cannot tell its legs apart.",
+        )
+    }
+
+    const name = resolveRunArtifactName({
+        job: getProfileJobName(),
+        jobIndex,
+        uniqueSuffix: randomUUID().slice(0, 8),
+    })
 
     await uploadRunArtifact(name, buildRunArtifact({ agent, jobIndex, profile, stopped }))
 }

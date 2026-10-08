@@ -17,7 +17,7 @@ import { getErrorMessage, getOptionalRecord } from "./shared.js"
 /**
  * @typedef {object} RunArtifactInput
  * @property {CreateAgentRequest} agent
- * @property {number} jobIndex
+ * @property {number | null} jobIndex
  * @property {unknown} profile - the parsed jibril JSON profile, or null
  * @property {AgentStoppedRequest} stopped
  */
@@ -25,7 +25,8 @@ import { getErrorMessage, getOptionalRecord } from "./shared.js"
 /**
  * @typedef {object} RunArtifactNameInput
  * @property {string} job
- * @property {number} jobIndex
+ * @property {number | null} jobIndex
+ * @property {string} uniqueSuffix
  */
 
 /**
@@ -44,31 +45,31 @@ const MAX_JOB_NAME_LENGTH = 64
 const MAX_UINT32 = 0xffffffff
 
 /**
- * The matrix leg index jibril recorded in the profile's github scenario.
- * jibril is the only source: GitHub exposes `strategy.job-index` to workflow
- * expressions but never to a running step.
+ * The matrix leg index jibril recorded in the profile's github scenario, or
+ * null when it recorded none. jibril is the only source: GitHub exposes
+ * `strategy.job-index` to workflow expressions but never to a running step.
  *
- * It marshals the field as `*uint32` with `omitempty` and leaves it nil for
- * a job that is not part of a matrix, which is a job whose only possible
- * index is 0 — so the default cannot collide with a real leg.
+ * Absent is reported as absent and never defaulted to 0. jibril leaves the
+ * field nil on matrix legs too, so a 0 here would claim "this is leg 0"
+ * about a job that may well be leg 3.
  * @param {unknown} profile
- * @returns {number}
+ * @returns {number | null}
  */
 export function readProfileJobIndex(profile) {
     const root = getOptionalRecord(profile)
     if (root === null) {
-        return 0
+        return null
     }
 
     const scenarios = getOptionalRecord(root.scenarios)
     const github = scenarios === null ? getOptionalRecord(root.github) : getOptionalRecord(scenarios.github)
     if (github === null) {
-        return 0
+        return null
     }
 
     const jobIndex = github.job_index
     if (typeof jobIndex !== "number" || !Number.isInteger(jobIndex) || jobIndex < 0 || jobIndex > MAX_UINT32) {
-        return 0
+        return null
     }
 
     return jobIndex
@@ -88,16 +89,21 @@ export function buildRunArtifact(input) {
 }
 
 /**
+ * Names the artifact. Only the prefix is parsed downstream, so the rest
+ * exists to keep the name unique within the run; a collision costs a leg its
+ * whole envelope, because the upload fails outright.
+ *
+ * `uniqueSuffix` carries that uniqueness on its own. The leg index cannot:
+ * jibril does not always record it, and GITHUB_JOB is identical across every
+ * leg of a matrix. It is still included when known, because a readable name
+ * is worth more than a tidy rule.
  * @param {RunArtifactNameInput} input
  * @returns {string}
  */
 export function resolveRunArtifactName(input) {
-    const job = toNameSlug(input.job)
-    if (job === "") {
-        return `${ARTIFACT_NAME_PREFIX}${input.jobIndex}`
-    }
+    const parts = [toNameSlug(input.job), input.jobIndex === null ? "" : String(input.jobIndex), input.uniqueSuffix]
 
-    return `${ARTIFACT_NAME_PREFIX}${job}-${input.jobIndex}`
+    return ARTIFACT_NAME_PREFIX + parts.filter(part => part !== "").join("-")
 }
 
 /**
@@ -172,13 +178,14 @@ export async function uploadRunArtifact(name, envelope) {
 
 /**
  * The main step builds the agent body before jibril runs, so the leg index
- * can only be filled in here.
+ * can only be filled in here. An unknown index is left out rather than
+ * guessed: the control plane treats 0 as a real leg.
  * @param {CreateAgentRequest} agent
- * @param {number} jobIndex
+ * @param {number | null} jobIndex
  * @returns {CreateAgentRequest}
  */
 function withJobIndex(agent, jobIndex) {
-    if (agent.github_context === undefined) {
+    if (agent.github_context === undefined || jobIndex === null) {
         return agent
     }
 
