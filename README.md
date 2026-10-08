@@ -206,7 +206,7 @@ Read the record for what it is: what Garnet recorded, not a statement that nothi
 | `github_token`      | No       | `${{ github.token }}`   | Used by `gh attestation verify` on the Jibril release and to read the job's status when no Execution Profile was produced. If unset, attestation verification is skipped with a warning. |
 | `api_url`           | No       | `https://api.garnet.ai` | Garnet API base URL (HTTPS)                    |
 | `jibril_version`    | No       | `v2.17.0`               | Jibril release tag (for example `v2.16.0`), `latest`, or empty to resolve from the action tag (`@v0` resolves to daily builds) |
-| `job_index`         | No       | —                       | **Strongly recommended on matrix jobs**: pass `${{ strategy.job-index }}`. GitHub resolves it in the workflow and exports it to no environment variable, so without it every leg of a matrix shares one identity and the Runtime Review reports a single leg. See [Matrix jobs](#matrix-jobs). |
+| `job_index`         | No       | —                       | **Strongly recommended on matrix jobs**: pass `${{ strategy.job-index }}`. Without it every leg of a matrix shares one identity and the Runtime Review reports a single leg. See [Matrix jobs](#matrix-jobs). |
 | `stop_timeout_seconds` | No    | `1800`                  | Seconds Jibril gets at shutdown to finish writing its Execution Profile. The post step waits this long plus a small grace, then force-stops the sensor. `0` or negative disables the bound. |
 | `debug`             | No       | `false`                 | Verbose logging; uploads Jibril logs as artifacts |
 | `preview`           | No       | `false`                 | Render the full-fidelity Step Summary record. Unstable shape; may change without a major version bump |
@@ -217,7 +217,7 @@ Read the record for what it is: what Garnet recorded, not a statement that nothi
 
 ### Matrix jobs
 
-GitHub gives every leg of a `strategy.matrix` job the same job name, and the one value that tells them apart — `strategy.job-index` — exists only as a workflow expression. The runner exports it to no environment variable, so the action cannot read it on its own. Pass it explicitly:
+GitHub gives every leg of a `strategy.matrix` job the same job name, and the one value that tells them apart — `strategy.job-index` — is available only as a workflow expression. Pass it to the action so each leg is recorded as its own:
 
 ```yaml
 jobs:
@@ -232,7 +232,7 @@ jobs:
                   job_index: ${{ strategy.job-index }}
 ```
 
-Without it, all legs record under one identity: the Runtime Review shows a single leg instead of every one, and comparison against the previous commit cannot line legs up. Leave the input unset on non-matrix jobs — it is omitted rather than defaulted, because `0` is a real leg index.
+Without it, all legs record under one identity: the Runtime Review shows a single leg instead of every one, and comparison against the previous commit cannot line legs up. Leave the input unset on non-matrix jobs.
 
 ---
 

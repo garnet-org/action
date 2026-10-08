@@ -53,18 +53,13 @@ jobs:
               shell: bash
               run: echo "GARNET_ACTION_FORCE_RUN_ARTIFACT=true" >> "$GITHUB_ENV"
 
-            # job_index is deliberately NOT passed here. The action declares
-            # `default: ${{ strategy.job-index }}`, and whether the strategy
-            # context resolves in action metadata is undocumented, so this
-            # matrix is the experiment: distinct indexes across legs means the
-            # default works and callers need not pass it.
-            #
-            # jibril_version is likewise left at the action's own default pin,
-            # since whether that release records the index it is handed is the
-            # other half of the question.
+            # jibril_version is deliberately left at the action's own default
+            # pin: whether that release records the job_index it is handed is
+            # exactly what this test needs to answer.
             - name: Run Garnet
               uses: ./
               with:
+                  job_index: ${{ strategy.job-index }}
                   debug: "true"
 
             # The same destinations the PR comment smoke tests reach for, so
