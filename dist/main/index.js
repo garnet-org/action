@@ -42791,13 +42791,6 @@ const JIBRIL_READY_POLL_INTERVAL_MS = 200
 // exercised from a branch that has credentials.
 const FORCE_RELAY_ENV = "GARNET_ACTION_FORCE_RUN_ARTIFACT"
 
-/**
- * @returns {boolean}
- */
-function isRelayForced() {
-    return getEnv(FORCE_RELAY_ENV, "false") === "true"
-}
-
 // This function is the main entry point for the script.
 // Returns true when Jibril started successfully, false otherwise.
 async function run() {
@@ -42815,7 +42808,7 @@ async function run() {
         // Relay mode records the job locally and hands the run to the Garnet
         // GitHub App through a workflow artifact, because no credential can
         // reach the control plane from here.
-        let relayMode = isRelayForced()
+        let relayMode = getEnv(FORCE_RELAY_ENV, "false") === "true"
         if (relayMode) {
             warning(
                 `${FORCE_RELAY_ENV} is set: this run is recorded through the workflow artifact relay and is not ` +

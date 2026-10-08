@@ -106,15 +106,7 @@ export function buildRunArtifact(input) {
  * @returns {string}
  */
 export function resolveRunArtifactName(input) {
-    const parts = [toNameSlug(input.job)]
-
-    if (input.jobIndex === null) {
-        parts.push(input.uniqueSuffix)
-    } else {
-        parts.push(String(input.jobIndex))
-    }
-
-    parts.push(`attempt-${input.runAttempt}`)
+    const parts = [toNameSlug(input.job), input.jobIndex ?? input.uniqueSuffix, `attempt-${input.runAttempt}`]
 
     return ARTIFACT_NAME_PREFIX + parts.filter(part => part !== "").join("-")
 }
@@ -134,12 +126,7 @@ export function serializeRunArtifact(envelope) {
     }
 
     /** @type {GitHubRunArtifact} */
-    const withoutProfile = {
-        schema_version: 1,
-        agent: envelope.agent,
-        profile: null,
-        stopped: withProfileOmitted(envelope.stopped, size),
-    }
+    const withoutProfile = { ...envelope, profile: null, stopped: withProfileOmitted(envelope.stopped, size) }
 
     return { content: JSON.stringify(withoutProfile), profileOmitted: true }
 }
@@ -161,18 +148,12 @@ export async function uploadRunArtifact(name, envelope) {
         )
     }
 
-    // mkdtemp, not a predictable path: a fixed /tmp name is a
-    // symlink-overwrite target.
-    /** @type {string} */
-    let stagingDir
+    let stagingDir = ""
     try {
+        // mkdtemp, not a predictable path: a fixed /tmp name is a
+        // symlink-overwrite target.
         stagingDir = await fs.mkdtemp(path.join(os.tmpdir(), "garnet-run-"))
-    } catch (error) {
-        core.warning(`Failed to stage the Garnet run artifact: ${getErrorMessage(error)}`)
-        return
-    }
 
-    try {
         const entryPath = path.join(stagingDir, ARTIFACT_ENTRY_PATH)
         await fs.mkdir(path.dirname(entryPath), { recursive: true })
         await fs.writeFile(entryPath, serialized.content)
@@ -185,7 +166,9 @@ export async function uploadRunArtifact(name, envelope) {
                 "No Runtime Review will be published for this job.",
         )
     } finally {
-        await fs.rm(stagingDir, { recursive: true, force: true })
+        if (stagingDir !== "") {
+            await fs.rm(stagingDir, { recursive: true, force: true })
+        }
     }
 }
 

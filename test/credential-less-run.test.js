@@ -89,32 +89,31 @@ async function withEnv(overlay, fn) {
 
 const NO_OIDC = { ACTIONS_ID_TOKEN_REQUEST_URL: undefined, ACTIONS_ID_TOKEN_REQUEST_TOKEN: undefined }
 
-test("fork + no credentials: relays instead of skipping, and says so", async () => {
-    const eventPath = await writeEventPayload(pullRequestPayload("outside/fork"))
+test("no credentials on a pull request: relays instead of skipping", async () => {
+    const fork = await writeEventPayload(pullRequestPayload("outside/fork"))
+    const sameRepo = await writeEventPayload(pullRequestPayload(REPOSITORY))
+
     await withEnv(NO_OIDC, async () => {
-        const decision = await resolveCredentialMode({
+        const forked = await resolveCredentialMode({
             eventName: "pull_request",
-            eventPath,
+            eventPath: fork,
             repository: REPOSITORY,
         })
-        assert.equal(decision.mode, "relay")
-        assert.match(decision.reason, /forked repository/)
-        assert.match(decision.reason, /workflow artifact/)
-    })
-    await rm(dirname(eventPath), { recursive: true, force: true })
-})
+        assert.equal(forked.mode, "relay")
+        assert.match(forked.reason, /forked repository/)
+        assert.match(forked.reason, /workflow artifact/)
 
-test("same-repo PR + no credentials: relays too — no fork check gates the run", async () => {
-    const eventPath = await writeEventPayload(pullRequestPayload(REPOSITORY))
-    await withEnv(NO_OIDC, async () => {
+        // The event alone decides; no fork check gates the run.
         for (const eventName of ["pull_request", "pull_request_target"]) {
-            const decision = await resolveCredentialMode({ eventName, eventPath, repository: REPOSITORY })
+            const decision = await resolveCredentialMode({ eventName, eventPath: sameRepo, repository: REPOSITORY })
             assert.equal(decision.mode, "relay")
             assert.doesNotMatch(decision.reason, /forked repository/)
             assertNamesBothCredentials(decision.reason)
         }
     })
-    await rm(dirname(eventPath), { recursive: true, force: true })
+
+    await rm(dirname(fork), { recursive: true, force: true })
+    await rm(dirname(sameRepo), { recursive: true, force: true })
 })
 
 test("push + no credentials: skips, because no artifact of a push is ever collected", async () => {

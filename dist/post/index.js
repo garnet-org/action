@@ -139367,15 +139367,7 @@ function buildRunArtifact(input) {
  * @returns {string}
  */
 function resolveRunArtifactName(input) {
-    const parts = [toNameSlug(input.job)]
-
-    if (input.jobIndex === null) {
-        parts.push(input.uniqueSuffix)
-    } else {
-        parts.push(String(input.jobIndex))
-    }
-
-    parts.push(`attempt-${input.runAttempt}`)
+    const parts = [toNameSlug(input.job), input.jobIndex ?? input.uniqueSuffix, `attempt-${input.runAttempt}`]
 
     return ARTIFACT_NAME_PREFIX + parts.filter(part => part !== "").join("-")
 }
@@ -139395,12 +139387,7 @@ function serializeRunArtifact(envelope) {
     }
 
     /** @type {GitHubRunArtifact} */
-    const withoutProfile = {
-        schema_version: 1,
-        agent: envelope.agent,
-        profile: null,
-        stopped: withProfileOmitted(envelope.stopped, size),
-    }
+    const withoutProfile = { ...envelope, profile: null, stopped: withProfileOmitted(envelope.stopped, size) }
 
     return { content: JSON.stringify(withoutProfile), profileOmitted: true }
 }
@@ -139422,18 +139409,12 @@ async function uploadRunArtifact(name, envelope) {
         )
     }
 
-    // mkdtemp, not a predictable path: a fixed /tmp name is a
-    // symlink-overwrite target.
-    /** @type {string} */
-    let stagingDir
+    let stagingDir = ""
     try {
+        // mkdtemp, not a predictable path: a fixed /tmp name is a
+        // symlink-overwrite target.
         stagingDir = await promises_.mkdtemp(external_node_path_.join(external_node_os_namespaceObject.tmpdir(), "garnet-run-"))
-    } catch (error) {
-        warning(`Failed to stage the Garnet run artifact: ${getErrorMessage(error)}`)
-        return
-    }
 
-    try {
         const entryPath = external_node_path_.join(stagingDir, ARTIFACT_ENTRY_PATH)
         await promises_.mkdir(external_node_path_.dirname(entryPath), { recursive: true })
         await promises_.writeFile(entryPath, serialized.content)
@@ -139446,7 +139427,9 @@ async function uploadRunArtifact(name, envelope) {
                 "No Runtime Review will be published for this job.",
         )
     } finally {
-        await promises_.rm(stagingDir, { recursive: true, force: true })
+        if (stagingDir !== "") {
+            await promises_.rm(stagingDir, { recursive: true, force: true })
+        }
     }
 }
 
@@ -154965,11 +154948,12 @@ async function run() {
 
         const profileResult = await readProfile(jsonProfilerFile, debug === "true")
 
+        const profile = profileResult.profile
+
         // Captured before the wrap below, which is a renderer concern: the
         // relay carries the profile exactly as jibril wrote it.
-        const relayProfile = profileResult.profile === null ? null : profileResult.profile.raw
+        const relayProfile = profile === null ? null : profile.raw
 
-        const profile = profileResult.profile
         if (profile !== null) {
             const envelopeID = await resolveProfileEnvelopeID(agentID)
             if (envelopeID !== "") {

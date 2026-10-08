@@ -192,11 +192,12 @@ async function run() {
 
         const profileResult = await readProfile(jsonProfilerFile, debug === "true")
 
+        const profile = profileResult.profile
+
         // Captured before the wrap below, which is a renderer concern: the
         // relay carries the profile exactly as jibril wrote it.
-        const relayProfile = profileResult.profile === null ? null : profileResult.profile.raw
+        const relayProfile = profile === null ? null : profile.raw
 
-        const profile = profileResult.profile
         if (profile !== null) {
             const envelopeID = await resolveProfileEnvelopeID(agentID)
             if (envelopeID !== "") {
