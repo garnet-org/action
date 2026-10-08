@@ -99,22 +99,30 @@ test("job index: read when jibril recorded one, null when it did not", () => {
     }
 })
 
-test("name: unique per job even when no leg index is recorded", () => {
-    // A collision costs a leg its whole envelope, so uniqueness cannot rest
-    // on the leg index: jibril does not always record one, and GITHUB_JOB is
-    // identical across every leg of a matrix.
-    const first = resolveRunArtifactName({ job: "relay", jobIndex: null, uniqueSuffix: "a1b2c3d4" })
-    const second = resolveRunArtifactName({ job: "relay", jobIndex: null, uniqueSuffix: "e5f6a7b8" })
+test("name: deterministic per job and attempt when the leg index is known", () => {
+    // A re-run's artifacts sit alongside the previous attempt's, and the
+    // only way to collapse the stale ones is by matching names, so the same
+    // job on the same attempt must always produce the same name.
+    const name = resolveRunArtifactName({
+        job: "build & test (ubuntu)",
+        jobIndex: 0,
+        runAttempt: "2",
+        uniqueSuffix: "a1b2c3d4",
+    })
 
-    assert.equal(first, "garnet-run-relay-a1b2c3d4")
-    assert.notEqual(first, second)
+    assert.equal(name, "garnet-run-build-test-ubuntu-0-attempt-2")
+    assert.notEqual(name, resolveRunArtifactName({ job: "build & test (ubuntu)", jobIndex: 1, runAttempt: "2", uniqueSuffix: "a1b2c3d4" }))
+    assert.notEqual(name, resolveRunArtifactName({ job: "build & test (ubuntu)", jobIndex: 0, runAttempt: "1", uniqueSuffix: "a1b2c3d4" }))
 })
 
-test("name: prefixed for the App, slugged, and carries the leg index when known", () => {
-    assert.equal(
-        resolveRunArtifactName({ job: "build & test (ubuntu)", jobIndex: 0, uniqueSuffix: "a1b2c3d4" }),
-        "garnet-run-build-test-ubuntu-0-a1b2c3d4",
-    )
+test("name: falls back to a unique suffix when no leg index was recorded", () => {
+    // Nothing else tells the legs of a matrix apart, and a collision costs
+    // the losing leg its whole envelope.
+    const first = resolveRunArtifactName({ job: "relay", jobIndex: null, runAttempt: "1", uniqueSuffix: "a1b2c3d4" })
+    const second = resolveRunArtifactName({ job: "relay", jobIndex: null, runAttempt: "1", uniqueSuffix: "e5f6a7b8" })
+
+    assert.equal(first, "garnet-run-relay-a1b2c3d4-attempt-1")
+    assert.notEqual(first, second)
 })
 
 test("oversized: the profile is dropped so the rest still produces a comment", () => {

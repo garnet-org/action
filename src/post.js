@@ -378,6 +378,7 @@ async function relayRunArtifact(agent, profile, stopped) {
     const name = resolveRunArtifactName({
         job: getProfileJobName(),
         jobIndex,
+        runAttempt: firstNonEmptyString(getEnv("GITHUB_RUN_ATTEMPT"), "1"),
         uniqueSuffix: randomUUID().slice(0, 8),
     })
 

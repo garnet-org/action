@@ -139287,6 +139287,7 @@ const client = new DefaultArtifactClient();
  * @typedef {object} RunArtifactNameInput
  * @property {string} job
  * @property {number | null} jobIndex
+ * @property {string} runAttempt
  * @property {string} uniqueSuffix
  */
 
@@ -139350,19 +139351,31 @@ function buildRunArtifact(input) {
 }
 
 /**
- * Names the artifact. Only the prefix is parsed downstream, so the rest
- * exists to keep the name unique within the run; a collision costs a leg its
- * whole envelope, because the upload fails outright.
+ * Names the artifact. Only the prefix is parsed downstream, so the rest has
+ * one job: no two uploads in a run may share a name, because the loser's
+ * upload fails outright and its envelope is gone.
  *
- * `uniqueSuffix` carries that uniqueness on its own. The leg index cannot:
- * jibril does not always record it, and GITHUB_JOB is identical across every
- * leg of a matrix. It is still included when known, because a readable name
- * is worth more than a tidy rule.
+ * `job` plus `jobIndex` plus `runAttempt` identifies a job uniquely, and a
+ * deterministic name is worth keeping: a re-run's artifacts live alongside
+ * the previous attempt's, and listing them can only collapse the stale ones
+ * by matching names.
+ *
+ * `uniqueSuffix` is the fallback for when jibril recorded no leg index,
+ * where nothing else distinguishes the legs of a matrix. It buys uniqueness
+ * at the cost of that collapsing, so it is used only when needed.
  * @param {RunArtifactNameInput} input
  * @returns {string}
  */
 function resolveRunArtifactName(input) {
-    const parts = [toNameSlug(input.job), input.jobIndex === null ? "" : String(input.jobIndex), input.uniqueSuffix]
+    const parts = [toNameSlug(input.job)]
+
+    if (input.jobIndex === null) {
+        parts.push(input.uniqueSuffix)
+    } else {
+        parts.push(String(input.jobIndex))
+    }
+
+    parts.push(`attempt-${input.runAttempt}`)
 
     return ARTIFACT_NAME_PREFIX + parts.filter(part => part !== "").join("-")
 }
@@ -155138,6 +155151,7 @@ async function relayRunArtifact(agent, profile, stopped) {
     const name = resolveRunArtifactName({
         job: getProfileJobName(),
         jobIndex,
+        runAttempt: firstNonEmptyString(shared_getEnv("GITHUB_RUN_ATTEMPT"), "1"),
         uniqueSuffix: (0,external_node_crypto_.randomUUID)().slice(0, 8),
     })
 
