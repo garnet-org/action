@@ -109,16 +109,19 @@ jobs:
                   set -euo pipefail
                   mkdir -p collected
 
-                  # Scoped to this attempt. A run's plain artifact list spans
-                  # every attempt, so on a re-run it would also return the
-                  # previous attempt's envelopes, which this run did not
-                  # produce and whose run_attempt no longer matches.
+                  # A run's artifact list spans every attempt and the
+                  # artifacts themselves carry no attempt number, so a re-run
+                  # would also return the previous attempt's envelopes. The
+                  # attempt suffix in the name is the only handle there is.
                   gh api --paginate \
-                    "/repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/attempts/${GITHUB_RUN_ATTEMPT}/artifacts" \
-                    --jq '.artifacts[] | select(.expired == false) | select(.name | startswith("garnet-run-")) | "\(.id) \(.name)"' \
+                    "/repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/artifacts" \
+                    --jq '.artifacts[]
+                          | select(.expired == false)
+                          | select(.name | startswith("garnet-run-") and endswith("-attempt-" + env.GITHUB_RUN_ATTEMPT))
+                          | "\(.id) \(.name)"' \
                     > artifacts.txt
 
-                  echo "Artifacts carrying the garnet-run- prefix:"
+                  echo "Artifacts from this attempt carrying the garnet-run- prefix:"
                   cat artifacts.txt
 
                   # Colliding names are the failure this test exists to
