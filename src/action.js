@@ -11,6 +11,7 @@ import * as os from "node:os"
 import * as path from "node:path"
 import { pipeline } from "node:stream/promises"
 import { createGitHubContext, getProfileJobName, getProfileSha, getWorkflowFilePath } from "./github-context.js"
+import { resolveJobIndexFromGitHub } from "./github-job-index.js"
 import { resolveCredentialMode } from "./credential-less-run.js"
 import { appendUnrecordedSummary } from "./job-summary.js"
 import { ControlPlaneClient } from "./control-plane/client.js"
@@ -341,7 +342,7 @@ export async function run() {
             agentToken: AGENT_TOKEN,
         })
 
-        const jobIndexLine = buildJobIndexLine(getEnv("GITHUB_STRATEGY_JOB_INDEX"))
+        const jobIndexLine = buildJobIndexLine(await resolveJobIndex())
 
         const jibrilDefault = `# Garnet API configuration
 GARNET_API_URL=${process.env.GARNET_API_URL}
@@ -593,11 +594,37 @@ export function buildGarnetCredentialLines(input) {
 }
 
 /**
- * The matrix leg line of /etc/default/jibril. GitHub resolves
- * `strategy.job-index` in the workflow and exports it to nothing, so this
- * value can only arrive through the `job_index` input. The line is omitted
- * rather than left empty when it does not, because 0 is a real leg and an
- * empty value must never be read as one.
+ * The `job_index` input when the caller passed one, else a best-effort
+ * reconstruction from the GitHub API. An empty string means the leg stays
+ * unidentified.
+ * @returns {Promise<string>}
+ */
+async function resolveJobIndex() {
+    const fromInput = getEnv("GITHUB_STRATEGY_JOB_INDEX")
+    if (fromInput !== "") {
+        return fromInput
+    }
+
+    const derived = await resolveJobIndexFromGitHub({
+        token: getEnv("GITHUB_TOKEN"),
+        repository: getEnv("GITHUB_REPOSITORY"),
+        runID: getEnv("GITHUB_RUN_ID"),
+        runAttempt: getEnv("GITHUB_RUN_ATTEMPT"),
+        runnerName: getEnv("RUNNER_NAME"),
+    })
+    if (derived === null) {
+        return ""
+    }
+
+    core.info(`Matrix leg index ${derived} recovered from the GitHub API; pass the job_index input to make it exact`)
+    return String(derived)
+}
+
+/**
+ * The matrix leg line of /etc/default/jibril. GitHub exports the leg index to
+ * no environment variable, so jibril can only learn it from here. The line is
+ * omitted rather than left empty when the index is unknown, because 0 is a
+ * real leg and an empty value must never be read as one.
  * @param {string} jobIndex
  * @returns {string}
  */
