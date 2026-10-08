@@ -80,7 +80,7 @@ function getProfileWorkflowName() {
  * accepts either.
  * @returns {Promise<string>}
  */
-async function getProfileSha() {
+export async function getProfileSha() {
   const eventPath = getEnv("GITHUB_EVENT_PATH")
   if (eventPath !== "") {
     const pullRequestHeadSha = await getPullRequestHeadShaFromEvent(eventPath)

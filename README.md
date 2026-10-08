@@ -189,6 +189,7 @@ Read the record for what it is: what Garnet recorded, not a statement that nothi
 - **No completeness claim.** The record states what was captured; it does not declare that every connection was captured.
 - **Post-step time.** Stopping the sensor waits for Jibril to flush its Execution Profile, bounded by `stop_timeout_seconds`. On busy jobs this has been measured at 1–3 minutes; lower the bound if post-step latency matters more than a complete flush.
 - **Comparison needs a recorded pair.** The diff view appears only when the previous recorded commit on the pull request has a profile for the same job; otherwise the fold shows the current record alone.
+- **Matrix legs need `job_index`.** GitHub gives every leg of a `strategy.matrix` job the same job name, so without the `job_index` input the legs are indistinguishable to Garnet. See [Matrix jobs](#matrix-jobs).
 
 ## Under the hood
 
@@ -205,6 +206,7 @@ Read the record for what it is: what Garnet recorded, not a statement that nothi
 | `github_token`      | No       | `${{ github.token }}`   | Used by `gh attestation verify` on the Jibril release and to read the job's status when no Execution Profile was produced. If unset, attestation verification is skipped with a warning. |
 | `api_url`           | No       | `https://api.garnet.ai` | Garnet API base URL (HTTPS)                    |
 | `jibril_version`    | No       | `v2.17.0`               | Jibril release tag (for example `v2.16.0`), `latest`, or empty to resolve from the action tag (`@v0` resolves to daily builds) |
+| `job_index`         | No       | —                       | **Strongly recommended on matrix jobs**: pass `${{ strategy.job-index }}`. GitHub resolves it in the workflow and exports it to no environment variable, so without it every leg of a matrix shares one identity and the Runtime Review reports a single leg. See [Matrix jobs](#matrix-jobs). |
 | `stop_timeout_seconds` | No    | `1800`                  | Seconds Jibril gets at shutdown to finish writing its Execution Profile. The post step waits this long plus a small grace, then force-stops the sensor. `0` or negative disables the bound. |
 | `debug`             | No       | `false`                 | Verbose logging; uploads Jibril logs as artifacts |
 | `preview`           | No       | `false`                 | Render the full-fidelity Step Summary record. Unstable shape; may change without a major version bump |
@@ -212,6 +214,25 @@ Read the record for what it is: what Garnet recorded, not a statement that nothi
 > **Fork PRs:** `pull_request` runs from forks get no repository secrets and no `id-token: write`. The action records the job locally anyway and uploads it as a `garnet-run-*` workflow artifact; the companion GitHub App collects it after the run and publishes the Runtime Review. Nothing leaves the runner from the job itself, and no credential is written to disk. The Review is published only if the App is installed on the repository. Managed network policies do not apply to these runs — policy enforcement needs the control plane.
 >
 > **Dependabot PRs:** Dependabot-triggered runs read `secrets.*` from the Dependabot secrets store, so an Actions-only `GARNET_API_TOKEN` resolves empty and the run falls back to the same artifact relay. To record them through the control plane directly, add the same token under the same name in **Settings → Secrets and variables → Dependabot**.
+
+### Matrix jobs
+
+GitHub gives every leg of a `strategy.matrix` job the same job name, and the one value that tells them apart — `strategy.job-index` — exists only as a workflow expression. The runner exports it to no environment variable, so the action cannot read it on its own. Pass it explicitly:
+
+```yaml
+jobs:
+    test:
+        strategy:
+            matrix:
+                node: [20, 22, 24]
+        runs-on: ubuntu-latest
+        steps:
+            - uses: garnet-org/garnet-action@v0
+              with:
+                  job_index: ${{ strategy.job-index }}
+```
+
+Without it, all legs record under one identity: the Runtime Review shows a single leg instead of every one, and comparison against the previous commit cannot line legs up. Leave the input unset on non-matrix jobs — it is omitted rather than defaulted, because `0` is a real leg index.
 
 ---
 

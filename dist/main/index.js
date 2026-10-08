@@ -43043,6 +43043,8 @@ async function run() {
             agentToken: AGENT_TOKEN,
         })
 
+        const jobIndexLine = buildJobIndexLine(getEnv("GITHUB_STRATEGY_JOB_INDEX"))
+
         const jibrilDefault = `# Garnet API configuration
 GARNET_API_URL=${process.env.GARNET_API_URL}
 ${garnetCredentialLines}GARNET_SAR=${getEnv("GARNET_SAR", "true")}
@@ -43072,12 +43074,14 @@ GITHUB_REPOSITORY_ID=${getEnv("GITHUB_REPOSITORY_ID")}
 GITHUB_REPOSITORY_OWNER_ID=${getEnv("GITHUB_REPOSITORY_OWNER_ID")}
 GITHUB_REPOSITORY_OWNER=${getEnv("GITHUB_REPOSITORY_OWNER")}
 GITHUB_REPOSITORY=${getEnv("GITHUB_REPOSITORY")}
+GITHUB_API_URL=${getEnv("GITHUB_API_URL")}
 GITHUB_RUN_ATTEMPT=${getEnv("GITHUB_RUN_ATTEMPT")}
 GITHUB_RUN_ID=${getEnv("GITHUB_RUN_ID")}
 GITHUB_RUN_NUMBER=${getEnv("GITHUB_RUN_NUMBER")}
 GITHUB_SERVER_URL=${getEnv("GITHUB_SERVER_URL")}
 GITHUB_SHA=${getEnv("GITHUB_SHA")}
-GITHUB_STEP_SUMMARY=${getEnv("GITHUB_STEP_SUMMARY")}
+GITHUB_HEAD_SHA=${await getProfileSha()}
+${jobIndexLine}GITHUB_STEP_SUMMARY=${getEnv("GITHUB_STEP_SUMMARY")}
 GITHUB_TOKEN=${getEnv("GITHUB_TOKEN")}
 GITHUB_TRIGGERING_ACTOR=${getEnv("GITHUB_TRIGGERING_ACTOR")}
 GITHUB_WORKFLOW_REF=${getEnv("GITHUB_WORKFLOW_REF")}
@@ -43095,11 +43099,9 @@ GITHUB_WORKSPACE=${getEnv("GITHUB_WORKSPACE")}
 
         // Verify default environment file (redacted for security).
         if (DEBUG === "true") {
-            try {
-                const defaultContent = await readFileSafe("/etc/default/jibril")
-                info("Default environment file:")
-                info(redactSensitive(defaultContent) ?? "No default environment file found")
-            } catch (_) {}
+            const defaultContent = await readRootFileSafe("/etc/default/jibril")
+            info("Default environment file:")
+            info(redactSensitive(defaultContent) ?? "No default environment file found")
         }
 
         info("Installing Jibril as a systemd service")
@@ -43290,6 +43292,23 @@ function buildGarnetCredentialLines(input) {
     }
 
     return `GARNET_API_TOKEN=${input.apiToken}\nGARNET_AGENT_TOKEN=${input.agentToken}\n`
+}
+
+/**
+ * The matrix leg line of /etc/default/jibril. GitHub resolves
+ * `strategy.job-index` in the workflow and exports it to nothing, so this
+ * value can only arrive through the `job_index` input. The line is omitted
+ * rather than left empty when it does not, because 0 is a real leg and an
+ * empty value must never be read as one.
+ * @param {string} jobIndex
+ * @returns {string}
+ */
+function buildJobIndexLine(jobIndex) {
+    if (!/^\d+$/.test(jobIndex)) {
+        return ""
+    }
+
+    return `GITHUB_STRATEGY_JOB_INDEX=${jobIndex}\n`
 }
 
 /**
@@ -43946,6 +43965,22 @@ async function execCapture(command, args, options = {}) {
 }
 
 /**
+ * Reads a file only root can open, such as the mode 600 /etc/default/jibril.
+ * Reading it as the runner user always fails with EACCES, which previously
+ * surfaced as "No default environment file found" for a file that was there.
+ * @param {string} filePath
+ * @returns {Promise<string | null>}
+ */
+async function readRootFileSafe(filePath) {
+    const result = await getExecOutput("sudo", ["cat", filePath], {
+        silent: true,
+        ignoreReturnCode: true,
+    })
+    if (result.exitCode !== 0) return null
+    return result.stdout.trim()
+}
+
+/**
  * This function executes a command with sudo.
  * @param {string[]} args
  * @param {ExecOptions=} options
@@ -44401,6 +44436,11 @@ async function main() {
         process.env.GARNET_API_URL = getInput("api_url")
         process.env.JIBRIL_VERSION = getInput("jibril_version")
         process.env.DEBUG = getInput("debug")
+
+        // Jibril runs as a systemd unit, so its environment is only what
+        // /etc/default/jibril contains. The main step forwards the matrix leg
+        // there under the name Jibril reads it by.
+        process.env.GITHUB_STRATEGY_JOB_INDEX = getInput("job_index")
 
         // Resolve the shutdown flush bound once, here at the boundary: the
         // main step writes it into the unit and the post step reuses the exact

@@ -13,7 +13,7 @@ import { join, dirname } from "node:path"
 import { fileURLToPath } from "node:url"
 import { promisify } from "node:util"
 import { resolveCredentialMode } from "../src/credential-less-run.js"
-import { buildGarnetCredentialLines } from "../src/action.js"
+import { buildGarnetCredentialLines, buildJobIndexLine } from "../src/action.js"
 
 const execFileAsync = promisify(execFile)
 const here = dirname(fileURLToPath(import.meta.url))
@@ -191,6 +191,12 @@ test("relay: no Garnet credential is written to disk, not even an empty one", ()
         buildGarnetCredentialLines({ relayMode: false, apiToken: "tok", agentToken: "agent" }),
         "GARNET_API_TOKEN=tok\nGARNET_AGENT_TOKEN=agent\n",
     )
+})
+
+test("matrix leg 0 is forwarded, an absent index writes no line at all", () => {
+    assert.equal(buildJobIndexLine("0"), "GITHUB_STRATEGY_JOB_INDEX=0\n")
+    assert.equal(buildJobIndexLine(""), "")
+    assert.equal(buildJobIndexLine("not-a-number"), "")
 })
 
 test("post step: no-ops cleanly when jibril never started", async function (t) {

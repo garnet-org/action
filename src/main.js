@@ -50,6 +50,11 @@ async function main() {
         process.env.JIBRIL_VERSION = core.getInput("jibril_version")
         process.env.DEBUG = core.getInput("debug")
 
+        // Jibril runs as a systemd unit, so its environment is only what
+        // /etc/default/jibril contains. The main step forwards the matrix leg
+        // there under the name Jibril reads it by.
+        process.env.GITHUB_STRATEGY_JOB_INDEX = core.getInput("job_index")
+
         // Resolve the shutdown flush bound once, here at the boundary: the
         // main step writes it into the unit and the post step reuses the exact
         // same number from state instead of re-deriving it. Zero means the

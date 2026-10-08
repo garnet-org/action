@@ -27,6 +27,19 @@ inputs:
         description: "Jibril version (for example v2.16.0, v0.0, or 'latest'); empty resolves from the action tag"
         required: false
         default: "v2.17.0"
+    job_index:
+        description: |
+            Index of this leg within a matrix job. Every leg of a `strategy.matrix` job shares one
+            job name, and GitHub resolves `strategy.job-index` in the workflow without exporting it
+            to any environment variable, so this input is the only way the leg index can reach the
+            sensor. Without it all legs share an identity: the Runtime Review reports one leg
+            instead of all of them, and leg-to-leg comparison across runs is unreliable.
+
+            The default resolves the expression for you, and is empty on non-matrix jobs. Matrix
+            jobs should still pass `${{ strategy.job-index }}` explicitly, since whether the
+            `strategy` context resolves in action metadata is not something GitHub documents.
+        required: false
+        default: ${{ strategy.job-index }}
     debug:
         description: "Enable debug mode"
         required: false
