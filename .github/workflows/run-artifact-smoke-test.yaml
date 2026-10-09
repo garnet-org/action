@@ -29,10 +29,6 @@ jobs:
         name: Relay (leg ${{ matrix.leg }})
         if: contains(github.event.pull_request.labels.*.name, 'run-artifact-relay')
         runs-on: ubuntu-24.04
-        permissions:
-            contents: read
-            # The action's job_index fallback lists this run's jobs.
-            actions: read
         outputs:
             legs: ${{ steps.legs.outputs.count }}
         strategy:
@@ -57,16 +53,13 @@ jobs:
               shell: bash
               run: echo "GARNET_ACTION_FORCE_RUN_ARTIFACT=true" >> "$GITHUB_ENV"
 
-            # job_index is deliberately NOT passed, so the run exercises the
-            # action's API fallback. Distinct indexes across the legs mean the
-            # reconstruction holds; ABSENT means callers must pass the input.
-            #
-            # jibril_version is likewise left at the action's own default pin,
-            # since whether that release records the index it is handed is the
-            # other half of the question.
+            # jibril_version is deliberately left at the action's own default
+            # pin: whether that release records the job_index it is handed is
+            # exactly what this test needs to answer.
             - name: Run Garnet
               uses: ./
               with:
+                  job_index: ${{ strategy.job-index }}
                   debug: "true"
 
             # The same destinations the PR comment smoke tests reach for, so

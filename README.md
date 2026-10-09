@@ -232,7 +232,7 @@ jobs:
                   job_index: ${{ strategy.job-index }}
 ```
 
-Without it, all legs record under one identity: the Runtime Review shows a single leg instead of every one, and comparison against the previous commit cannot line legs up. Leave the input unset on non-matrix jobs.
+Without it, all legs record under one identity: the Runtime Review shows a single leg instead of every one, and comparison against the previous commit cannot line legs up. Nothing is lost on the way out — on the artifact relay each leg still uploads under a distinct `garnet-run-*` name — but the legs arrive unlabelled and cannot be told apart. Leave the input unset on non-matrix jobs.
 
 ---
 
