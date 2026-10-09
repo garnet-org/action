@@ -1,12 +1,36 @@
 import { z } from "zod"
 
 /**
+ * One column of the control plane's `github_context` per field, so an
+ * unresolvable value is sent empty rather than omitted. `job_index` is the
+ * exception: leg 0 is a real leg, so only `undefined` means "unknown".
  * @typedef {{
  *   job: string
+ *   job_index?: number
  *   run_id: string
+ *   run_attempt: string
+ *   run_number: string
  *   workflow: string
+ *   workflow_ref: string
+ *   workflow_sha: string
  *   repository: string
  *   repository_id: string
+ *   repository_owner: string
+ *   repository_owner_id: string
+ *   sha: string
+ *   ref: string
+ *   ref_name: string
+ *   ref_type: string
+ *   ref_protected: boolean
+ *   event_name: string
+ *   action: string
+ *   actor: string
+ *   actor_id: string
+ *   triggering_actor: string
+ *   runner_os: string
+ *   runner_arch: string
+ *   server_url: string
+ *   workspace: string
  *   [key: string]: unknown
  * }} AgentGithubContext
  */
@@ -75,6 +99,9 @@ import { z } from "zod"
  * @property {GitHubRunClaims} github
  */
 
+// Only the fields the control plane keys the run on must carry a value;
+// rejecting an empty one here would fail agent creation over a column the
+// control plane is content to store blank.
 export const AGENT_GITHUB_CONTEXT_SCHEMA = z
     .object({
         job: z.string().min(1),
@@ -82,17 +109,27 @@ export const AGENT_GITHUB_CONTEXT_SCHEMA = z
         workflow: z.string().min(1),
         repository: z.string().min(1),
         repository_id: z.string().min(1),
-        action: z.string().min(1).optional(),
-        actor: z.string().min(1).optional(),
-        actor_id: z.string().min(1).optional(),
-        event_name: z.string().min(1).optional(),
-        ref: z.string().min(1).optional(),
-        ref_name: z.string().min(1).optional(),
+        job_index: z.number().int().nonnegative().optional(),
+        run_attempt: z.string().optional(),
+        run_number: z.string().optional(),
+        workflow_ref: z.string().optional(),
+        workflow_sha: z.string().optional(),
+        repository_owner: z.string().optional(),
+        repository_owner_id: z.string().optional(),
+        sha: z.string().optional(),
+        ref: z.string().optional(),
+        ref_name: z.string().optional(),
+        ref_type: z.string().optional(),
         ref_protected: z.boolean().optional(),
-        ref_type: z.string().min(1).optional(),
-        repository_owner: z.string().min(1).optional(),
-        repository_owner_id: z.string().min(1).optional(),
-        workflow_ref: z.string().min(1).optional(),
+        event_name: z.string().optional(),
+        action: z.string().optional(),
+        actor: z.string().optional(),
+        actor_id: z.string().optional(),
+        triggering_actor: z.string().optional(),
+        runner_os: z.string().optional(),
+        runner_arch: z.string().optional(),
+        server_url: z.string().optional(),
+        workspace: z.string().optional(),
     })
     .passthrough()
 
@@ -255,6 +292,18 @@ const KERNEL_SCHEMA = z.object({
         lockdown: z.enum(["none", "integrity", "confidentiality", "unknown"]).nullable(),
     }),
 })
+
+/**
+ * The whole run as a workflow artifact, for jobs that cannot reach the
+ * control plane themselves. The three members are the exact bodies the
+ * authenticated path POSTs, which is why `agent` is snake_case while
+ * `stopped` is camelCase.
+ * @typedef {object} GitHubRunArtifact
+ * @property {1} schema_version
+ * @property {CreateAgentRequest} agent
+ * @property {unknown} profile - the parsed jibril JSON profile, or null
+ * @property {AgentStoppedRequest} stopped
+ */
 
 export const AGENT_STOPPED_REQUEST_SCHEMA = z.object({
     reason: AGENT_STOP_REASON_SCHEMA,

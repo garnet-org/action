@@ -2,6 +2,7 @@ import * as core from "@actions/core"
 import * as exec from "@actions/exec"
 import * as fs from "node:fs/promises"
 import * as os from "node:os"
+import { randomUUID } from "node:crypto"
 import {
     firstNonEmptyString,
     getEnv,
@@ -12,6 +13,7 @@ import {
     waitForDelay,
 } from "./shared.js"
 import { getProfileJobName } from "./github-context.js"
+import { buildRunArtifact, readProfileJobIndex, resolveRunArtifactName, uploadRunArtifact } from "./run-artifact.js"
 import { readJibrilUnitState } from "./jibril-unit-state.js"
 import { ControlPlaneClient } from "./control-plane/client.js"
 import { uploadJibrilArtifacts } from "./post-artifacts.js"
@@ -41,6 +43,7 @@ import {
 /** @typedef {import("./github-job-status.js").JobStatusResolution} JobStatusResolution */
 /** @typedef {import("./control-plane/types.js").AgentStoppedRequest} AgentStoppedRequest */
 /** @typedef {import("./control-plane/types.js").AgentStoppedJibrilFields} AgentStoppedJibrilFields */
+/** @typedef {import("./control-plane/types.js").CreateAgentRequest} CreateAgentRequest */
 /** @typedef {import("./jibril-status.js").JibrilStatus} JibrilStatus */
 
 /**
@@ -190,6 +193,11 @@ async function run() {
         const profileResult = await readProfile(jsonProfilerFile, debug === "true")
 
         const profile = profileResult.profile
+
+        // Captured before the wrap below, which is a renderer concern: the
+        // relay carries the profile exactly as jibril wrote it.
+        const relayProfile = profile === null ? null : profile.raw
+
         if (profile !== null) {
             const envelopeID = await resolveProfileEnvelopeID(agentID)
             if (envelopeID !== "") {
@@ -200,19 +208,33 @@ async function run() {
             }
         }
 
+        /** @type {AgentStopObservations} */
+        const observations = {
+            agentToken,
+            unitStateBeforeStop,
+            unitStateAfterStop,
+            stopOutcome,
+            forceStopped,
+            stopTimeoutSeconds,
+            profileResult,
+            runStatus,
+        }
+
         // A run that produced no usable profile leaves the control plane's
-        // pending state unresolved, so the agent reports how it stopped.
-        if (profileResult.state !== "present" && agentToken !== "") {
-            await reportAgentStop({
-                agentToken,
-                unitStateBeforeStop,
-                unitStateAfterStop,
-                stopOutcome,
-                forceStopped,
-                stopTimeoutSeconds,
-                profileResult,
-                runStatus,
-            })
+        // pending state unresolved, so the agent reports how it stopped. The
+        // relay envelope carries the same signal, including on a clean run.
+        const relayAgent = readRelayAgent()
+        const stopReportNeeded = profileResult.state !== "present" && agentToken !== ""
+        if (stopReportNeeded || relayAgent !== null) {
+            const stopped = await buildAgentStopped(observations)
+
+            if (stopReportNeeded) {
+                await reportAgentStop(agentToken, stopped)
+            }
+
+            if (relayAgent !== null) {
+                await relayRunArtifact(relayAgent, relayProfile, stopped)
+            }
         }
 
         await appendRuntimeReviewSummary(profile)
@@ -268,39 +290,47 @@ async function readProfile(jsonProfilerFile, debug) {
 }
 
 /**
+ * @param {AgentStopObservations} observations
+ * @returns {Promise<AgentStoppedRequest>}
+ */
+async function buildAgentStopped(observations) {
+    const jobStatus = await resolveJobStatus()
+
+    /** @type {AgentStopEvidence} */
+    const evidence = {
+        jobStatus: jobStatus.status,
+        unitStateBeforeStop: observations.unitStateBeforeStop,
+        unitStateAfterStop: observations.unitStateAfterStop,
+        stopOutcome: observations.stopOutcome,
+        forceStopped: observations.forceStopped,
+        stopTimeoutSeconds: observations.stopTimeoutSeconds,
+        profileState: observations.profileResult.state,
+        runStatus: observations.runStatus,
+    }
+
+    // The evidence detail already names the profile state; only a parse
+    // failure carries extra information worth forwarding.
+    let parseDetail = ""
+    if (observations.profileResult.state === "invalid") {
+        parseDetail = observations.profileResult.detail
+    }
+
+    return buildAgentStoppedRequest(evidence, jobStatus, parseDetail)
+}
+
+/**
  * Reports to the control plane that this run's sensor stopped without leaving
  * a usable Run Profile, authenticated as the agent itself. Best-effort: every
  * failure is logged and swallowed so the job stays green.
- * @param {AgentStopObservations} observations
+ * @param {string} agentToken
+ * @param {AgentStoppedRequest} request
  * @returns {Promise<void>}
  */
-async function reportAgentStop(observations) {
+async function reportAgentStop(agentToken, request) {
     try {
-        const jobStatus = await resolveJobStatus()
-
-        /** @type {AgentStopEvidence} */
-        const evidence = {
-            jobStatus: jobStatus.status,
-            unitStateBeforeStop: observations.unitStateBeforeStop,
-            unitStateAfterStop: observations.unitStateAfterStop,
-            stopOutcome: observations.stopOutcome,
-            forceStopped: observations.forceStopped,
-            stopTimeoutSeconds: observations.stopTimeoutSeconds,
-            profileState: observations.profileResult.state,
-            runStatus: observations.runStatus,
-        }
-
-        // The evidence detail already names the profile state; only a parse
-        // failure carries extra information worth forwarding.
-        let parseDetail = ""
-        if (observations.profileResult.state === "invalid") {
-            parseDetail = observations.profileResult.detail
-        }
-
-        const request = buildAgentStoppedRequest(evidence, jobStatus, parseDetail)
         const client = new ControlPlaneClient({
             baseURL: resolveControlPlaneBaseURL(),
-            agentToken: observations.agentToken,
+            agentToken,
         })
 
         await client.reportAgentStopped(request)
@@ -308,6 +338,52 @@ async function reportAgentStop(observations) {
     } catch (error) {
         core.info(`control plane: agent stop report skipped: ${getErrorMessage(error)}`)
     }
+}
+
+/**
+ * The agent body the main step would have POSTed, when it ran in relay mode.
+ * Its presence in state is what marks this run as one the control plane can
+ * only learn about from a workflow artifact.
+ * @returns {CreateAgentRequest | null}
+ */
+function readRelayAgent() {
+    const saved = core.getState("relayAgent")
+    if (saved === "") {
+        return null
+    }
+
+    try {
+        return JSON.parse(saved)
+    } catch (error) {
+        core.warning(`Garnet run artifact skipped: the recorded agent is unreadable (${getErrorMessage(error)})`)
+        return null
+    }
+}
+
+/**
+ * Hands this run to the Garnet GitHub App through a workflow artifact.
+ * @param {CreateAgentRequest} agent
+ * @param {unknown} profile
+ * @param {AgentStoppedRequest} stopped
+ * @returns {Promise<void>}
+ */
+async function relayRunArtifact(agent, profile, stopped) {
+    const jobIndex = readProfileJobIndex(profile)
+    if (jobIndex === null) {
+        core.info(
+            "The Execution Profile records no matrix leg index, so the relayed run carries none. On a matrix " +
+                "job this means the Runtime Review cannot tell its legs apart.",
+        )
+    }
+
+    const name = resolveRunArtifactName({
+        job: getProfileJobName(),
+        jobIndex,
+        runAttempt: firstNonEmptyString(getEnv("GITHUB_RUN_ATTEMPT"), "1"),
+        uniqueSuffix: randomUUID().slice(0, 8),
+    })
+
+    await uploadRunArtifact(name, buildRunArtifact({ agent, jobIndex, profile, stopped }))
 }
 
 /**

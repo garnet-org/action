@@ -1,0 +1,149 @@
+name: Run Artifact Smoke Test
+
+# Exercises the workflow-artifact relay that fork pull requests depend on.
+#
+# Pull request only, gated on the 'run-artifact-relay' label: the relay
+# exists to put a Runtime Review on a pull request, so there has to be one to
+# comment into. GARNET_ACTION_FORCE_RUN_ARTIFACT takes the job down the relay
+# path even though this branch has credentials, so it behaves exactly as a
+# fork's would — no agent registration, no managed network policy, no
+# credential on disk — and the envelope is then collected the way the Garnet
+# GitHub App collects it.
+
+on:
+    pull_request:
+        branches:
+            - main
+        types:
+            - opened
+            - reopened
+            - synchronize
+            - labeled
+            - unlabeled
+
+permissions:
+    contents: read
+
+jobs:
+    relay:
+        name: Relay (leg ${{ matrix.leg }})
+        if: contains(github.event.pull_request.labels.*.name, 'run-artifact-relay')
+        runs-on: ubuntu-24.04
+        outputs:
+            legs: ${{ steps.legs.outputs.count }}
+        strategy:
+            fail-fast: false
+            # More than one leg, so the smoke test also proves each leg
+            # produces its own artifact rather than colliding with its
+            # siblings.
+            matrix:
+                leg: [0, 1]
+        steps:
+            # Every leg writes the same value, so the job output is this
+            # matrix's size however it is later resized.
+            - name: Record the matrix size
+              id: legs
+              shell: bash
+              run: echo "count=${{ strategy.job-total }}" >> "$GITHUB_OUTPUT"
+
+            - name: Checkout
+              uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+            - name: Force the run artifact relay
+              shell: bash
+              run: echo "GARNET_ACTION_FORCE_RUN_ARTIFACT=true" >> "$GITHUB_ENV"
+
+            # jibril_version is deliberately left at the action's own default
+            # pin: whether that release records the job_index it is handed is
+            # exactly what this test needs to answer.
+            - name: Run Garnet
+              uses: ./
+              with:
+                  job_index: ${{ strategy.job-index }}
+                  debug: "true"
+
+            # The same destinations the PR comment smoke tests reach for, so
+            # a relayed profile is comparable with a directly recorded one
+            # and carries something worth rendering.
+            - name: Attempt egress to known IPs
+              shell: bash
+              run: |
+                  set +e
+                  for ip in 203.0.113.1 203.0.113.2 198.51.100.5 198.51.100.10 198.51.100.11 172.86.88.188; do
+                    echo "Testing IP: ${ip}"
+                    curl --max-time 10 "http://${ip}" >/dev/null 2>&1 || true
+                  done
+
+            - name: Attempt egress to known domains
+              shell: bash
+              run: |
+                  set +e
+                  for domain in oastify.com chainstack.com browsermine.com webhook.site example.org pastebin.com; do
+                    echo "Testing domain: ${domain}"
+                    curl --max-time 10 "https://${domain}" >/dev/null 2>&1 || true
+                  done
+
+            - name: Create a file
+              run: touch testfile-relay-${{ matrix.leg }}.txt
+
+            - name: Execute zip command
+              run: zip testfile-relay-${{ matrix.leg }}.zip testfile-relay-${{ matrix.leg }}.txt
+
+    verify:
+        name: Verify collected artifacts
+        needs: relay
+        if: always() && needs.relay.result != 'skipped'
+        runs-on: ubuntu-24.04
+        permissions:
+            contents: read
+            # Listing and downloading this run's artifacts, as the App does.
+            actions: read
+        steps:
+            - name: Checkout
+              uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+            - name: Collect every garnet-run-* artifact
+              env:
+                  GH_TOKEN: ${{ github.token }}
+              shell: bash
+              run: |
+                  set -euo pipefail
+                  mkdir -p collected
+
+                  # A run's artifact list spans every attempt and the
+                  # artifacts themselves carry no attempt number, so a re-run
+                  # would also return the previous attempt's envelopes. The
+                  # attempt suffix in the name is the only handle there is.
+                  gh api --paginate \
+                    "/repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/artifacts" \
+                    --jq '.artifacts[]
+                          | select(.expired == false)
+                          | select(.name | startswith("garnet-run-") and endswith("-attempt-" + env.GITHUB_RUN_ATTEMPT))
+                          | "\(.id) \(.name)"' \
+                    > artifacts.txt
+
+                  echo "Artifacts from this attempt carrying the garnet-run- prefix:"
+                  cat artifacts.txt
+
+                  # Colliding names are the failure this test exists to
+                  # catch: unzipping both into collected/<name> would hide
+                  # it by overwriting, and the losing leg's upload already
+                  # failed back in its own job.
+                  duplicates=$(cut -d' ' -f2- artifacts.txt | sort | uniq -d)
+                  if [ -n "${duplicates}" ]; then
+                    echo "::error::Artifact names collided, so a leg's envelope was lost: ${duplicates}"
+                    exit 1
+                  fi
+
+                  while read -r id name; do
+                    [ -n "${id}" ] || continue
+                    gh api "/repos/${GITHUB_REPOSITORY}/actions/artifacts/${id}/zip" > "${name}.zip"
+                    unzip -o -q "${name}.zip" -d "collected/${name}"
+                  done < artifacts.txt
+
+                  echo "Collected tree:"
+                  find collected -type f
+
+            - name: Validate the envelopes
+              shell: bash
+              run: node scripts/check-run-artifact.mjs collected "${{ needs.relay.outputs.legs }}"

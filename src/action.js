@@ -10,8 +10,9 @@ import * as fs from "node:fs/promises"
 import * as os from "node:os"
 import * as path from "node:path"
 import { pipeline } from "node:stream/promises"
-import { createGitHubContext, getProfileJobName, getWorkflowFilePath } from "./github-context.js"
-import { resolveCredentialSkip } from "./credential-less-run.js"
+import { createGitHubContext, getProfileJobName, getProfileSha, getWorkflowFilePath } from "./github-context.js"
+
+import { resolveCredentialMode } from "./credential-less-run.js"
 import { appendUnrecordedSummary } from "./job-summary.js"
 import { ControlPlaneClient } from "./control-plane/client.js"
 import { getEnv, getErrorMessage, isSupportedArch, isSupportedPlatform, pathExists, waitForDelay } from "./shared.js"
@@ -84,6 +85,10 @@ const JIBRIL_READY_TIMEOUT_SECONDS = 30
 // can be timed, so it is kept short enough for the reported figure to mean
 // something. Each tick costs two cheap root reads.
 const JIBRIL_READY_POLL_INTERVAL_MS = 200
+// Undocumented, for CI only: takes a run that could authenticate down the
+// relay path instead, so the branch fork pull requests depend on can be
+// exercised from a branch that has credentials.
+const FORCE_RELAY_ENV = "GARNET_ACTION_FORCE_RUN_ARTIFACT"
 
 // This function is the main entry point for the script.
 // Returns true when Jibril started successfully, false otherwise.
@@ -99,25 +104,43 @@ export async function run() {
         let JIBRILVER = resolveJibrilVersion(getEnv("JIBRIL_VERSION", ""), getEnv("GITHUB_ACTION_REF", ""))
         const DEBUG = getEnv("DEBUG", "false")
 
-        if (TOKEN === "") {
-            const credentialSkip = await resolveCredentialSkip({
+        // Relay mode records the job locally and hands the run to the Garnet
+        // GitHub App through a workflow artifact, because no credential can
+        // reach the control plane from here.
+        let relayMode = getEnv(FORCE_RELAY_ENV, "false") === "true"
+        if (relayMode) {
+            core.warning(
+                `${FORCE_RELAY_ENV} is set: this run is recorded through the workflow artifact relay and is not ` +
+                    "registered with the control plane, exactly as a fork pull request would be.",
+            )
+        } else if (TOKEN === "") {
+            const credentialMode = await resolveCredentialMode({
                 eventName: getEnv("GITHUB_EVENT_NAME"),
                 eventPath: getEnv("GITHUB_EVENT_PATH"),
                 repository: getEnv("GITHUB_REPOSITORY"),
             })
             // A warning, not an info line: the skip has to be visible as a run
             // annotation, otherwise a credential-less run reads as a silent no-op.
-            if (credentialSkip.skip) {
-                core.warning(credentialSkip.reason)
-                await appendUnrecordedSummary(credentialSkip.reason)
+            if (credentialMode.mode === "skip") {
+                core.warning(credentialMode.reason)
+                await appendUnrecordedSummary(credentialMode.reason)
                 return false
+            }
+
+            relayMode = credentialMode.mode === "relay"
+            if (relayMode) {
+                core.info(credentialMode.reason)
             }
         }
 
-        const controlPlaneAuth = await resolveControlPlaneAuth({
-            apiURL: API,
-            apiToken: TOKEN,
-        })
+        /** @type {ControlPlaneAuth} */
+        let controlPlaneAuth = { projectToken: "", workflowToken: "", workflowTokenExpiresAt: "" }
+        if (!relayMode) {
+            controlPlaneAuth = await resolveControlPlaneAuth({
+                apiURL: API,
+                apiToken: TOKEN,
+            })
+        }
 
         // Prevent accidental leakage of tokens in logs.
         if (TOKEN !== "") {
@@ -190,9 +213,7 @@ export async function run() {
 
         // Create github context.
         core.info("Creating github context")
-        const githubContext = /** @type {import("./control-plane/types.js").AgentGithubContext} */ (
-            await createGitHubContext()
-        )
+        const githubContext = await createGitHubContext()
 
         // Resolve runtime values for agent creation.
         const VERSION = JIBRILVER
@@ -223,41 +244,49 @@ export async function run() {
             workflowToken: controlPlaneAuth.workflowToken,
         })
 
-        // Create agent.
-        core.info("Creating github agent")
+        /** @type {import("./control-plane/types.js").CreateAgentRequest} */
+        const createAgentInput = {
+            os: AGENT_OS,
+            arch: AGENT_ARCH,
+            hostname: HOSTNAME,
+            version: VERSION,
+            ip: RUNNER_IP,
+            machine_id: MACHINE_ID,
+            kind: "github",
+            github_context: githubContext,
+        }
+
+        if (skipProfileGitHubComment) {
+            createAgentInput.labels = {
+                "garnet.ai/skipProfileGitHubComment": "true",
+            }
+        }
 
         let AGENT_ID = ""
         let AGENT_TOKEN = ""
-        try {
-            /** @type {import("./control-plane/types.js").CreateAgentRequest} */
-            const createAgentInput = {
-                os: AGENT_OS,
-                arch: AGENT_ARCH,
-                hostname: HOSTNAME,
-                version: VERSION,
-                ip: RUNNER_IP,
-                machine_id: MACHINE_ID,
-                kind: "github",
-                github_context: githubContext,
-            }
+        if (relayMode) {
+            // The post step relays this exact body rather than rebuilding it
+            // from a second set of reads.
+            core.saveState("relayAgent", JSON.stringify(createAgentInput))
+            core.info("Skipping agent registration: this run is relayed through a workflow artifact")
+        } else {
+            core.info("Creating github agent")
 
-            if (skipProfileGitHubComment) {
-                createAgentInput.labels = {
-                    "garnet.ai/skipProfileGitHubComment": "true",
-                }
+            try {
+                const createdAgent = await controlPlaneClient.createAgent(createAgentInput)
+                AGENT_ID = createdAgent.id
+                AGENT_TOKEN = createdAgent.agent_token
+            } catch (error) {
+                throw new Error(`Failed to create agent: ${getErrorMessage(error)}`)
             }
-
-            const createdAgent = await controlPlaneClient.createAgent(createAgentInput)
-            AGENT_ID = createdAgent.id
-            AGENT_TOKEN = createdAgent.agent_token
-        } catch (error) {
-            throw new Error(`Failed to create agent: ${getErrorMessage(error)}`)
         }
 
         if (AGENT_TOKEN) core.setSecret(AGENT_TOKEN)
         startContext.agentToken = AGENT_TOKEN
 
-        core.info(`Created agent with ID: ${AGENT_ID}`)
+        if (AGENT_ID !== "") {
+            core.info(`Created agent with ID: ${AGENT_ID}`)
+        }
         core.setOutput("agent_id", AGENT_ID)
 
         // The post step resolves the run's profile envelope ID from this agent.
@@ -266,42 +295,37 @@ export async function run() {
         // The post step authenticates as this agent to report stop reasons.
         core.saveState("agentToken", AGENT_TOKEN)
 
-        // Get network policy
-        core.info("Getting network policy")
+        // A relay run has no control plane to fetch a managed policy from,
+        // and jibril starts fine without one.
+        let netpolicyPath = ""
+        if (!relayMode) {
+            const REPO_ID = getEnv("GITHUB_REPOSITORY")
+            const WORKFLOW = getEnv("GITHUB_WORKFLOW")
+            netpolicyPath = path.join(tmpDir, "netpolicy.yaml")
 
-        const REPO_ID = getEnv("GITHUB_REPOSITORY")
-        const WORKFLOW = getEnv("GITHUB_WORKFLOW")
+            core.info(`Fetching network policy for ${REPO_ID}/${WORKFLOW}...`)
+            try {
+                const networkPolicyYaml = await controlPlaneClient.mergedNetPoliciesAsYAML({
+                    repository_id: REPO_ID,
+                    workflow_name: WORKFLOW,
+                })
 
-        // Create the network policy path.
-        const NETPOLICY_PATH = path.join(tmpDir, "netpolicy.yaml")
+                validateNetworkPolicyYAML(networkPolicyYaml)
+                await fs.writeFile(netpolicyPath, networkPolicyYaml)
+            } catch (error) {
+                throw new Error(`Failed to fetch network policy: ${getErrorMessage(error)}`)
+            }
 
-        core.info(`Fetching network policy for ${REPO_ID}/${WORKFLOW}...`)
+            if (!(await pathExists(netpolicyPath))) {
+                throw new Error("Network policy file was not created")
+            }
 
-        // Fetch and save the network policy.
-        try {
-            const networkPolicyYaml = await controlPlaneClient.mergedNetPoliciesAsYAML({
-                repository_id: REPO_ID,
-                workflow_name: WORKFLOW,
-            })
-
-            validateNetworkPolicyYAML(networkPolicyYaml)
-            await fs.writeFile(NETPOLICY_PATH, networkPolicyYaml)
-        } catch (error) {
-            throw new Error(`Failed to fetch network policy: ${getErrorMessage(error)}`)
+            core.info(`Network policy saved to ${netpolicyPath}`)
+            if (DEBUG === "true") {
+                const content = await fs.readFile(netpolicyPath, "utf8")
+                core.info(content.split("\n").slice(0, 20).join("\n"))
+            }
         }
-
-        if (!(await pathExists(NETPOLICY_PATH))) {
-            throw new Error("Network policy file was not created")
-        }
-
-        // Save the network policy to the file system.
-        core.info(`Network policy saved to ${NETPOLICY_PATH}`)
-        if (DEBUG === "true") {
-            const content = await fs.readFile(NETPOLICY_PATH, "utf8")
-            core.info(content.split("\n").slice(0, 20).join("\n"))
-        }
-
-        core.info("Installing obtained network policy to /etc/jibril/netpolicy.yaml")
 
         // Set the environment variables for Jibril.
         process.env.GARNET_API_URL = API
@@ -312,11 +336,17 @@ export async function run() {
         // Create Jibril default environment file
         core.info("Creating Jibril default environment file")
 
+        const garnetCredentialLines = buildGarnetCredentialLines({
+            relayMode,
+            apiToken: TOKEN,
+            agentToken: AGENT_TOKEN,
+        })
+
+        const jobIndexLine = buildJobIndexLine(getEnv("GITHUB_STRATEGY_JOB_INDEX"))
+
         const jibrilDefault = `# Garnet API configuration
 GARNET_API_URL=${process.env.GARNET_API_URL}
-GARNET_API_TOKEN=${process.env.GARNET_API_TOKEN}
-GARNET_AGENT_TOKEN=${process.env.GARNET_AGENT_TOKEN}
-GARNET_SAR=${getEnv("GARNET_SAR", "true")}
+${garnetCredentialLines}GARNET_SAR=${getEnv("GARNET_SAR", "true")}
 # AI configuration
 AI_ENABLED=${getEnv("AI_ENABLED", "false")}
 AI_MODE=${getEnv("AI_MODE", "reason")}
@@ -343,12 +373,14 @@ GITHUB_REPOSITORY_ID=${getEnv("GITHUB_REPOSITORY_ID")}
 GITHUB_REPOSITORY_OWNER_ID=${getEnv("GITHUB_REPOSITORY_OWNER_ID")}
 GITHUB_REPOSITORY_OWNER=${getEnv("GITHUB_REPOSITORY_OWNER")}
 GITHUB_REPOSITORY=${getEnv("GITHUB_REPOSITORY")}
+GITHUB_API_URL=${getEnv("GITHUB_API_URL")}
 GITHUB_RUN_ATTEMPT=${getEnv("GITHUB_RUN_ATTEMPT")}
 GITHUB_RUN_ID=${getEnv("GITHUB_RUN_ID")}
 GITHUB_RUN_NUMBER=${getEnv("GITHUB_RUN_NUMBER")}
 GITHUB_SERVER_URL=${getEnv("GITHUB_SERVER_URL")}
 GITHUB_SHA=${getEnv("GITHUB_SHA")}
-GITHUB_STEP_SUMMARY=${getEnv("GITHUB_STEP_SUMMARY")}
+GITHUB_HEAD_SHA=${await getProfileSha()}
+${jobIndexLine}GITHUB_STEP_SUMMARY=${getEnv("GITHUB_STEP_SUMMARY")}
 GITHUB_TOKEN=${getEnv("GITHUB_TOKEN")}
 GITHUB_TRIGGERING_ACTOR=${getEnv("GITHUB_TRIGGERING_ACTOR")}
 GITHUB_WORKFLOW_REF=${getEnv("GITHUB_WORKFLOW_REF")}
@@ -366,11 +398,9 @@ GITHUB_WORKSPACE=${getEnv("GITHUB_WORKSPACE")}
 
         // Verify default environment file (redacted for security).
         if (DEBUG === "true") {
-            try {
-                const defaultContent = await readFileSafe("/etc/default/jibril")
-                core.info("Default environment file:")
-                core.info(redactSensitive(defaultContent) ?? "No default environment file found")
-            } catch (_) {}
+            const defaultContent = await readRootFileSafe("/etc/default/jibril")
+            core.info("Default environment file:")
+            core.info(redactSensitive(defaultContent) ?? "No default environment file found")
         }
 
         core.info("Installing Jibril as a systemd service")
@@ -425,20 +455,22 @@ TimeoutStopSec=${stopTimeoutValue}
             } catch (_) {}
         }
 
-        // Replace network policy with fetched one.
-        await execSudo(["cp", "-v", NETPOLICY_PATH, "/etc/jibril/netpolicy.yaml"])
+        if (netpolicyPath !== "") {
+            core.info("Installing obtained network policy to /etc/jibril/netpolicy.yaml")
+            await execSudo(["cp", "-v", netpolicyPath, "/etc/jibril/netpolicy.yaml"])
 
-        // Verify replaced network policy.
-        if (DEBUG === "true") {
-            try {
-                const replacedContent = await readFileSafe("/etc/jibril/netpolicy.yaml")
-                core.info("Replaced Jibril network policy:")
-                core.info(
-                    replacedContent
-                        ? replacedContent.split("\n").slice(0, 20).join("\n")
-                        : "No network policy file found",
-                )
-            } catch (_) {}
+            // Verify replaced network policy.
+            if (DEBUG === "true") {
+                try {
+                    const replacedContent = await readFileSafe("/etc/jibril/netpolicy.yaml")
+                    core.info("Replaced Jibril network policy:")
+                    core.info(
+                        replacedContent
+                            ? replacedContent.split("\n").slice(0, 20).join("\n")
+                            : "No network policy file found",
+                    )
+                } catch (_) {}
+            }
         }
 
         if (DEBUG === "true") {
@@ -535,6 +567,46 @@ TimeoutStopSec=${stopTimeoutValue}
             await fs.rm(tmpDir, { recursive: true, force: true })
         }
     }
+}
+
+/**
+ * @typedef {{
+ *   relayMode: boolean
+ *   apiToken: string
+ *   agentToken: string
+ * }} GarnetCredentialLinesInput
+ */
+
+/**
+ * The Garnet credential block of /etc/default/jibril (mode 600, removed in
+ * the post step). A relay run writes no credential line at all, not an
+ * empty one, so there is nothing to leak if the file outlives the job.
+ * GARNET_SAR keeps the sensor standalone either way.
+ * @param {GarnetCredentialLinesInput} input
+ * @returns {string}
+ */
+export function buildGarnetCredentialLines(input) {
+    if (input.relayMode) {
+        return ""
+    }
+
+    return `GARNET_API_TOKEN=${input.apiToken}\nGARNET_AGENT_TOKEN=${input.agentToken}\n`
+}
+
+/**
+ * The matrix leg line of /etc/default/jibril. GitHub exports the leg index to
+ * no environment variable, so jibril can only learn it from here. The line is
+ * omitted rather than left empty when the index is unknown, because 0 is a
+ * real leg and an empty value must never be read as one.
+ * @param {string} jobIndex
+ * @returns {string}
+ */
+export function buildJobIndexLine(jobIndex) {
+    if (!/^\d+$/.test(jobIndex)) {
+        return ""
+    }
+
+    return `GITHUB_STRATEGY_JOB_INDEX=${jobIndex}\n`
 }
 
 /**
@@ -1188,6 +1260,22 @@ async function execCapture(command, args, options = {}) {
         stdout: stdout.trim(),
         stderr: stderr.trim(),
     }
+}
+
+/**
+ * Reads a file only root can open, such as the mode 600 /etc/default/jibril.
+ * Reading it as the runner user always fails with EACCES, which previously
+ * surfaced as "No default environment file found" for a file that was there.
+ * @param {string} filePath
+ * @returns {Promise<string | null>}
+ */
+async function readRootFileSafe(filePath) {
+    const result = await exec.getExecOutput("sudo", ["cat", filePath], {
+        silent: true,
+        ignoreReturnCode: true,
+    })
+    if (result.exitCode !== 0) return null
+    return result.stdout.trim()
 }
 
 /**

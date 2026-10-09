@@ -3245,11 +3245,77 @@ class Request {
     }
   }
 
-  onUpgrade (statusCode, headers, socket) {
+  /**
+   * @param {number|null} statusCode
+   * @param {Buffer[]|null} headers
+   * @param {import('node:stream').Duplex} socket
+   * @param {string} [statusText]
+   */
+  onUpgrade (statusCode, headers, socket, statusText = '') {
+    this.onFinally()
+
     assert(!this.aborted)
     assert(!this.completed)
 
-    return this[kHandler].onUpgrade(statusCode, headers, socket)
+    if (statusCode !== null) {
+      this.#publishUpgradeHeaders(statusCode, headers, statusText)
+    }
+
+    const result = this[kHandler].onUpgrade(statusCode, headers, socket)
+
+    if (!this.aborted) {
+      this.completed = true
+      if (statusCode !== null) {
+        this.#publishUpgradeTrailers()
+      }
+    }
+
+    return result
+  }
+
+  /**
+   * @param {number} statusCode
+   * @param {import('node:http2').IncomingHttpHeaders} headers
+   * @param {(headers: import('node:http2').IncomingHttpHeaders) => Buffer[]} parseHeaders
+   * @param {string} [statusText]
+   */
+  onUpgradeResponse (statusCode, headers, parseHeaders, statusText = '') {
+    assert(!this.aborted)
+    assert(this.completed)
+
+    if (channels.headers.hasSubscribers) {
+      this.#publishUpgradeHeaders(statusCode, parseHeaders(headers), statusText)
+    }
+    this.#publishUpgradeTrailers()
+  }
+
+  /**
+   * @param {Error} error
+   */
+  onUpgradeError (error) {
+    assert(!this.aborted)
+    assert(this.completed)
+
+    if (channels.error.hasSubscribers) {
+      channels.error.publish({ request: this, error })
+    }
+  }
+
+  /**
+   * @param {number} statusCode
+   * @param {Buffer[]} headers
+   * @param {string} statusText
+   */
+  #publishUpgradeHeaders (statusCode, headers, statusText) {
+    if (channels.headers.hasSubscribers) {
+      channels.headers.publish({ request: this, response: { statusCode, headers, statusText } })
+    }
+  }
+
+  #publishUpgradeTrailers () {
+    if (channels.trailers.hasSubscribers) {
+      channels.trailers.publish({ request: this, trailers: [] })
+    }
   }
 
   onComplete (trailers) {
@@ -5148,7 +5214,7 @@ class Parser {
   }
 
   onUpgrade (head) {
-    const { upgrade, client, socket, headers, statusCode } = this
+    const { upgrade, client, socket, headers, statusCode, statusText } = this
 
     assert(upgrade)
     assert(client[kSocket] === socket)
@@ -5183,9 +5249,10 @@ class Parser {
     client.emit('disconnect', client[kUrl], [client], new InformationalError('upgrade'))
 
     try {
-      request.onUpgrade(statusCode, headers, socket)
-    } catch (err) {
-      util.destroy(socket, err)
+      request.onUpgrade(statusCode, headers, socket, statusText)
+    } catch (error) {
+      util.errorRequest(client, request, error)
+      util.destroy(socket, error)
     }
 
     client[kResume]()
@@ -5766,12 +5833,22 @@ function writeH1 (client, request) {
   const socket = client[kSocket]
   clearIdleSocketValidation(socket)
 
-  const abort = (err) => {
-    if (request.aborted || request.completed) {
+  /**
+   * @param {Error} [error]
+   */
+  const abort = (error) => {
+    if (request.aborted) {
       return
     }
 
-    util.errorRequest(client, request, err || new RequestAbortedError())
+    if (request.completed) {
+      if (request.upgrade || request.method === 'CONNECT') {
+        util.destroy(socket, new InformationalError('aborted'))
+      }
+      return
+    }
+
+    util.errorRequest(client, request, error || new RequestAbortedError())
 
     util.destroy(body)
     util.destroy(socket, new InformationalError('aborted'))
@@ -6228,6 +6305,7 @@ module.exports = connectH1
 
 
 const assert = __nccwpck_require__(4589)
+const { errorMonitor } = __nccwpck_require__(8474)
 const { pipeline } = __nccwpck_require__(7075)
 const util = __nccwpck_require__(3440)
 const {
@@ -6302,6 +6380,15 @@ function parseH2Headers (headers) {
   }
 
   return result
+}
+
+/**
+ * @param {import('node:http2').IncomingHttpHeaders} headers
+ * @returns {Buffer[]}
+ */
+function parseH2ResponseHeaders (headers) {
+  const { [HTTP2_HEADER_STATUS]: _statusCode, ...realHeaders } = headers
+  return parseH2Headers(realHeaders)
 }
 
 async function connectH2 (client, socket) {
@@ -6524,22 +6611,32 @@ function writeH2 (client, request) {
   headers[HTTP2_HEADER_AUTHORITY] = host || `${hostname}${port ? `:${port}` : ''}`
   headers[HTTP2_HEADER_METHOD] = method
 
-  const abort = (err) => {
-    if (request.aborted || request.completed) {
+  /**
+   * @param {Error} [error]
+   */
+  const abort = (error) => {
+    if (request.aborted) {
       return
     }
 
-    err = err || new RequestAbortedError()
+    if (request.completed) {
+      if (method === 'CONNECT' && stream != null) {
+        util.destroy(stream, error || new RequestAbortedError())
+      }
+      return
+    }
 
-    util.errorRequest(client, request, err)
+    error = error || new RequestAbortedError()
+
+    util.errorRequest(client, request, error)
 
     if (stream != null) {
-      util.destroy(stream, err)
+      util.destroy(stream, error)
     }
 
     // We do not destroy the socket as we can continue using the session
     // the stream get's destroyed and the session remains to create new streams
-    util.destroy(body, err)
+    util.destroy(body, error)
     client[kQueue][client[kRunningIdx]++] = null
     client[kResume]()
   }
@@ -6558,25 +6655,57 @@ function writeH2 (client, request) {
 
   if (method === 'CONNECT') {
     session.ref()
-    // We are already connected, streams are pending, first request
-    // will create a new stream. We trigger a request to create the stream and wait until
-    // `ready` event is triggered
     // We disabled endStream to allow the user to write to the stream
     stream = session.request(headers, { endStream: false, signal })
+    let upgradeResponseFinished = false
 
-    if (stream.id && !stream.pending) {
-      request.onUpgrade(null, null, stream)
-      ++session[kOpenStreams]
-      client[kQueue][client[kRunningIdx]++] = null
-    } else {
-      stream.once('ready', () => {
-        request.onUpgrade(null, null, stream)
-        ++session[kOpenStreams]
-        client[kQueue][client[kRunningIdx]++] = null
-      })
+    /**
+     * @param {import('node:http2').IncomingHttpHeaders} headers
+     */
+    const onResponse = (headers) => {
+      upgradeResponseFinished = true
+      stream.off(errorMonitor, onUpgradeError)
+      request.onUpgradeResponse(Number(headers[HTTP2_HEADER_STATUS]), headers, parseH2ResponseHeaders)
     }
 
+    /**
+     * @param {Error} error
+     */
+    const onUpgradeError = (error) => {
+      upgradeResponseFinished = true
+      stream.off('response', onResponse)
+      request.onUpgradeError(error)
+    }
+
+    const onReady = () => {
+      try {
+        request.onUpgrade(null, null, stream)
+      } catch (error) {
+        stream.off('response', onResponse)
+        abort(error)
+        return
+      }
+
+      if (request.aborted) {
+        return
+      }
+
+      stream.off('error', abort)
+      stream.once(errorMonitor, onUpgradeError)
+      client[kQueue][client[kRunningIdx]++] = null
+    }
+
+    stream.once('response', onResponse)
+    stream.once('error', abort)
+    ++session[kOpenStreams]
+    onReady()
+
     stream.once('close', () => {
+      if (!upgradeResponseFinished && request.completed) {
+        stream.off('response', onResponse)
+        stream.off(errorMonitor, onUpgradeError)
+        request.onUpgradeError(new InformationalError(`HTTP/2: "stream error" received - code ${stream.rstCode}`))
+      }
       session[kOpenStreams] -= 1
       if (session[kOpenStreams] === 0) session.unref()
     })
@@ -9390,7 +9519,10 @@ class RetryHandler {
     this.retryCount += 1
 
     if (statusCode >= 300) {
-      if (this.retryOpts.statusCodes.includes(statusCode) === false) {
+      // Only expose a response if no earlier attempt has reached the caller.
+      // Otherwise abort this attempt so the error settles the existing body
+      // instead of replacing it with a new response.
+      if (!this.headersSent && this.retryOpts.statusCodes.includes(statusCode) === false) {
         this.headersSent = true
         this.checkpointResponseEnd(headers, resume)
         return this.handler.onHeaders(
@@ -31533,6 +31665,8 @@ async function readGitHubEventPayload(eventPath) {
 
 
 
+/** @typedef {import("./control-plane/types.js").AgentGithubContext} AgentGithubContext */
+
 /**
  * @returns {string}
  */
@@ -31541,23 +31675,38 @@ function getProfileJobName() {
 }
 
 /**
- * @returns {Promise<Record<string, string>>}
+ * `job_index` is deliberately absent: GitHub never exposes the matrix leg
+ * index to a running step, so only jibril can resolve it, and it does so in
+ * the profile it writes.
+ * @returns {Promise<AgentGithubContext>}
  */
 async function createGitHubContext() {
   return {
     job: getProfileJobName(),
     run_id: getEnv("GITHUB_RUN_ID"),
+    run_attempt: getEnv("GITHUB_RUN_ATTEMPT"),
+    run_number: getEnv("GITHUB_RUN_NUMBER"),
     workflow: getProfileWorkflowName(),
+    workflow_ref: getEnv("GITHUB_WORKFLOW_REF"),
+    workflow_sha: getEnv("GITHUB_WORKFLOW_SHA"),
     repository: getEnv("GITHUB_REPOSITORY"),
     repository_id: getEnv("GITHUB_REPOSITORY_ID"),
     repository_owner: getEnv("GITHUB_REPOSITORY_OWNER"),
     repository_owner_id: getEnv("GITHUB_REPOSITORY_OWNER_ID"),
-    event_name: getEnv("GITHUB_EVENT_NAME"),
-    ref: getEnv("GITHUB_REF"),
     sha: await getProfileSha(),
+    ref: getEnv("GITHUB_REF"),
+    ref_name: getEnv("GITHUB_REF_NAME"),
+    ref_type: getEnv("GITHUB_REF_TYPE"),
+    ref_protected: getEnv("GITHUB_REF_PROTECTED") === "true",
+    event_name: getEnv("GITHUB_EVENT_NAME"),
+    action: getEnv("GITHUB_ACTION"),
     actor: getEnv("GITHUB_ACTOR"),
+    actor_id: getEnv("GITHUB_ACTOR_ID"),
+    triggering_actor: getEnv("GITHUB_TRIGGERING_ACTOR"),
     runner_os: getEnv("RUNNER_OS"),
     runner_arch: getEnv("RUNNER_ARCH"),
+    server_url: getEnv("GITHUB_SERVER_URL"),
+    workspace: getEnv("GITHUB_WORKSPACE"),
   }
 }
 
@@ -31590,6 +31739,9 @@ function getProfileWorkflowName() {
 }
 
 /**
+ * The head SHA is preferred over GITHUB_SHA, which on a `pull_request` event
+ * names the ephemeral merge commit no reviewer sees. The control plane
+ * accepts either.
  * @returns {Promise<string>}
  */
 async function getProfileSha() {
@@ -31612,10 +31764,18 @@ async function getProfileSha() {
 
 
 /**
+ * - `authenticated`: register with the control plane as usual.
+ * - `relay`: record locally and hand the run to the Garnet GitHub App
+ *   through a workflow artifact.
+ * - `skip`: nothing downstream would ever collect this run.
+ * @typedef {"authenticated" | "relay" | "skip"} CredentialMode
+ */
+
+/**
  * @typedef {{
- *   skip: boolean
+ *   mode: CredentialMode
  *   reason: string
- * }} CredentialSkipDecision
+ * }} CredentialDecision
  */
 
 /**
@@ -31629,40 +31789,39 @@ async function getProfileSha() {
 const REMEDIATION =
     "Grant 'id-token: write' to this job to authenticate with OIDC, or pass a Garnet API token to the 'api_token' input."
 
+// The relay exists to put a Runtime Review on a pull request; nothing
+// downstream reads an artifact belonging to a push or a schedule.
+const RELAY_EVENT_NAMES = new Set(["pull_request", "pull_request_target"])
+
 /**
- * Decides whether this run has no authentication mechanism at all and must
- * skip profiling. Callers invoke it only when the `api_token` input did not
- * resolve (empty), so the remaining question is whether the runtime granted
- * an OIDC ID-token endpoint.
- *
- * Detection never throws: the event payload only refines the wording, so an
- * unexpected shape or read error still yields a skip with the generic reason.
- *
+ * Decides how a run with no `api_token` proceeds. Never throws: the event
+ * payload only refines the wording, so an unexpected shape or a read error
+ * still yields a decision.
  * @param {CredentialSkipContext} context
- * @returns {Promise<CredentialSkipDecision>}
+ * @returns {Promise<CredentialDecision>}
  */
-async function resolveCredentialSkip(context) {
+async function resolveCredentialMode(context) {
     if (isOIDCAvailable()) {
-        return { skip: false, reason: "OIDC is available" }
+        return { mode: "authenticated", reason: "OIDC is available" }
     }
 
-    const fromFork =
-        context.eventName === "pull_request" && (await isForkPullRequest(context.eventPath, context.repository))
-
-    if (fromFork) {
+    if (RELAY_EVENT_NAMES.has(context.eventName)) {
+        const fromFork = await isForkPullRequest(context.eventPath, context.repository)
         return {
-            skip: true,
-            reason:
-                "Garnet skipped this Runtime Review because no authentication mechanism was available: the " +
-                "'api_token' input resolved empty and no OIDC ID token could be requested. For 'pull_request' " +
-                "runs from forked repositories, adding 'id-token: write' does not by itself make credentials " +
-                "available. Do not expose repository secrets to untrusted fork code. A maintainer can review " +
-                "the change and run recording in an authorized, trusted workflow. The job continues normally.",
+            mode: "relay",
+            reason: fromFork
+                ? "This pull request comes from a forked repository, which GitHub denies both repository secrets " +
+                  "and an OIDC ID token, so this job cannot authenticate with Garnet. Jibril still records the " +
+                  "job locally and the run is uploaded as a workflow artifact, which the Garnet GitHub App " +
+                  "collects with its own credentials after the workflow finishes."
+                : "No authentication mechanism was available: the 'api_token' input resolved empty and no OIDC " +
+                  "ID token could be requested. Jibril still records this job locally and the run is uploaded " +
+                  `as a workflow artifact for the Garnet GitHub App to collect. ${REMEDIATION}`,
         }
     }
 
     return {
-        skip: true,
+        mode: "skip",
         reason:
             "Garnet skipped this Runtime Review because no authentication mechanism was available: the " +
             "'api_token' input resolved empty and this job has no OIDC ID-token endpoint, which means " +
@@ -41276,12 +41435,36 @@ function iso_duration(params) {
 
 
 /**
+ * One column of the control plane's `github_context` per field, so an
+ * unresolvable value is sent empty rather than omitted. `job_index` is the
+ * exception: leg 0 is a real leg, so only `undefined` means "unknown".
  * @typedef {{
  *   job: string
+ *   job_index?: number
  *   run_id: string
+ *   run_attempt: string
+ *   run_number: string
  *   workflow: string
+ *   workflow_ref: string
+ *   workflow_sha: string
  *   repository: string
  *   repository_id: string
+ *   repository_owner: string
+ *   repository_owner_id: string
+ *   sha: string
+ *   ref: string
+ *   ref_name: string
+ *   ref_type: string
+ *   ref_protected: boolean
+ *   event_name: string
+ *   action: string
+ *   actor: string
+ *   actor_id: string
+ *   triggering_actor: string
+ *   runner_os: string
+ *   runner_arch: string
+ *   server_url: string
+ *   workspace: string
  *   [key: string]: unknown
  * }} AgentGithubContext
  */
@@ -41350,23 +41533,36 @@ function iso_duration(params) {
  * @property {GitHubRunClaims} github
  */
 
+// Only the fields the control plane keys the run on must carry a value;
+// rejecting an empty one here would fail agent creation over a column the
+// control plane is content to store blank.
 const AGENT_GITHUB_CONTEXT_SCHEMA = object({
         job: schemas_string().min(1),
         run_id: schemas_string().min(1),
         workflow: schemas_string().min(1),
         repository: schemas_string().min(1),
         repository_id: schemas_string().min(1),
-        action: schemas_string().min(1).optional(),
-        actor: schemas_string().min(1).optional(),
-        actor_id: schemas_string().min(1).optional(),
-        event_name: schemas_string().min(1).optional(),
-        ref: schemas_string().min(1).optional(),
-        ref_name: schemas_string().min(1).optional(),
+        job_index: schemas_number().int().nonnegative().optional(),
+        run_attempt: schemas_string().optional(),
+        run_number: schemas_string().optional(),
+        workflow_ref: schemas_string().optional(),
+        workflow_sha: schemas_string().optional(),
+        repository_owner: schemas_string().optional(),
+        repository_owner_id: schemas_string().optional(),
+        sha: schemas_string().optional(),
+        ref: schemas_string().optional(),
+        ref_name: schemas_string().optional(),
+        ref_type: schemas_string().optional(),
         ref_protected: schemas_boolean().optional(),
-        ref_type: schemas_string().min(1).optional(),
-        repository_owner: schemas_string().min(1).optional(),
-        repository_owner_id: schemas_string().min(1).optional(),
-        workflow_ref: schemas_string().min(1).optional(),
+        event_name: schemas_string().optional(),
+        action: schemas_string().optional(),
+        actor: schemas_string().optional(),
+        actor_id: schemas_string().optional(),
+        triggering_actor: schemas_string().optional(),
+        runner_os: schemas_string().optional(),
+        runner_arch: schemas_string().optional(),
+        server_url: schemas_string().optional(),
+        workspace: schemas_string().optional(),
     })
     .passthrough()
 
@@ -41527,6 +41723,18 @@ const KERNEL_SCHEMA = object({
         lockdown: schemas_enum(["none", "integrity", "confidentiality", "unknown"]).nullable(),
     }),
 })
+
+/**
+ * The whole run as a workflow artifact, for jobs that cannot reach the
+ * control plane themselves. The three members are the exact bodies the
+ * authenticated path POSTs, which is why `agent` is snake_case while
+ * `stopped` is camelCase.
+ * @typedef {object} GitHubRunArtifact
+ * @property {1} schema_version
+ * @property {CreateAgentRequest} agent
+ * @property {unknown} profile - the parsed jibril JSON profile, or null
+ * @property {AgentStoppedRequest} stopped
+ */
 
 const AGENT_STOPPED_REQUEST_SCHEMA = object({
     reason: AGENT_STOP_REASON_SCHEMA,
@@ -42661,6 +42869,7 @@ function readStringList(value) {
 
 
 
+
 /**
  * @typedef {import("./jibril-status.js").JibrilStatus} JibrilStatus
  */
@@ -42710,6 +42919,10 @@ const JIBRIL_READY_TIMEOUT_SECONDS = 30
 // can be timed, so it is kept short enough for the reported figure to mean
 // something. Each tick costs two cheap root reads.
 const JIBRIL_READY_POLL_INTERVAL_MS = 200
+// Undocumented, for CI only: takes a run that could authenticate down the
+// relay path instead, so the branch fork pull requests depend on can be
+// exercised from a branch that has credentials.
+const FORCE_RELAY_ENV = "GARNET_ACTION_FORCE_RUN_ARTIFACT"
 
 // This function is the main entry point for the script.
 // Returns true when Jibril started successfully, false otherwise.
@@ -42725,25 +42938,43 @@ async function run() {
         let JIBRILVER = resolveJibrilVersion(getEnv("JIBRIL_VERSION", ""), getEnv("GITHUB_ACTION_REF", ""))
         const DEBUG = getEnv("DEBUG", "false")
 
-        if (TOKEN === "") {
-            const credentialSkip = await resolveCredentialSkip({
+        // Relay mode records the job locally and hands the run to the Garnet
+        // GitHub App through a workflow artifact, because no credential can
+        // reach the control plane from here.
+        let relayMode = getEnv(FORCE_RELAY_ENV, "false") === "true"
+        if (relayMode) {
+            warning(
+                `${FORCE_RELAY_ENV} is set: this run is recorded through the workflow artifact relay and is not ` +
+                    "registered with the control plane, exactly as a fork pull request would be.",
+            )
+        } else if (TOKEN === "") {
+            const credentialMode = await resolveCredentialMode({
                 eventName: getEnv("GITHUB_EVENT_NAME"),
                 eventPath: getEnv("GITHUB_EVENT_PATH"),
                 repository: getEnv("GITHUB_REPOSITORY"),
             })
             // A warning, not an info line: the skip has to be visible as a run
             // annotation, otherwise a credential-less run reads as a silent no-op.
-            if (credentialSkip.skip) {
-                warning(credentialSkip.reason)
-                await appendUnrecordedSummary(credentialSkip.reason)
+            if (credentialMode.mode === "skip") {
+                warning(credentialMode.reason)
+                await appendUnrecordedSummary(credentialMode.reason)
                 return false
+            }
+
+            relayMode = credentialMode.mode === "relay"
+            if (relayMode) {
+                info(credentialMode.reason)
             }
         }
 
-        const controlPlaneAuth = await resolveControlPlaneAuth({
-            apiURL: API,
-            apiToken: TOKEN,
-        })
+        /** @type {ControlPlaneAuth} */
+        let controlPlaneAuth = { projectToken: "", workflowToken: "", workflowTokenExpiresAt: "" }
+        if (!relayMode) {
+            controlPlaneAuth = await resolveControlPlaneAuth({
+                apiURL: API,
+                apiToken: TOKEN,
+            })
+        }
 
         // Prevent accidental leakage of tokens in logs.
         if (TOKEN !== "") {
@@ -42816,9 +43047,7 @@ async function run() {
 
         // Create github context.
         info("Creating github context")
-        const githubContext = /** @type {import("./control-plane/types.js").AgentGithubContext} */ (
-            await createGitHubContext()
-        )
+        const githubContext = await createGitHubContext()
 
         // Resolve runtime values for agent creation.
         const VERSION = JIBRILVER
@@ -42849,41 +43078,49 @@ async function run() {
             workflowToken: controlPlaneAuth.workflowToken,
         })
 
-        // Create agent.
-        info("Creating github agent")
+        /** @type {import("./control-plane/types.js").CreateAgentRequest} */
+        const createAgentInput = {
+            os: AGENT_OS,
+            arch: AGENT_ARCH,
+            hostname: HOSTNAME,
+            version: VERSION,
+            ip: RUNNER_IP,
+            machine_id: MACHINE_ID,
+            kind: "github",
+            github_context: githubContext,
+        }
+
+        if (skipProfileGitHubComment) {
+            createAgentInput.labels = {
+                "garnet.ai/skipProfileGitHubComment": "true",
+            }
+        }
 
         let AGENT_ID = ""
         let AGENT_TOKEN = ""
-        try {
-            /** @type {import("./control-plane/types.js").CreateAgentRequest} */
-            const createAgentInput = {
-                os: AGENT_OS,
-                arch: AGENT_ARCH,
-                hostname: HOSTNAME,
-                version: VERSION,
-                ip: RUNNER_IP,
-                machine_id: MACHINE_ID,
-                kind: "github",
-                github_context: githubContext,
-            }
+        if (relayMode) {
+            // The post step relays this exact body rather than rebuilding it
+            // from a second set of reads.
+            saveState("relayAgent", JSON.stringify(createAgentInput))
+            info("Skipping agent registration: this run is relayed through a workflow artifact")
+        } else {
+            info("Creating github agent")
 
-            if (skipProfileGitHubComment) {
-                createAgentInput.labels = {
-                    "garnet.ai/skipProfileGitHubComment": "true",
-                }
+            try {
+                const createdAgent = await controlPlaneClient.createAgent(createAgentInput)
+                AGENT_ID = createdAgent.id
+                AGENT_TOKEN = createdAgent.agent_token
+            } catch (error) {
+                throw new Error(`Failed to create agent: ${getErrorMessage(error)}`)
             }
-
-            const createdAgent = await controlPlaneClient.createAgent(createAgentInput)
-            AGENT_ID = createdAgent.id
-            AGENT_TOKEN = createdAgent.agent_token
-        } catch (error) {
-            throw new Error(`Failed to create agent: ${getErrorMessage(error)}`)
         }
 
         if (AGENT_TOKEN) setSecret(AGENT_TOKEN)
         startContext.agentToken = AGENT_TOKEN
 
-        info(`Created agent with ID: ${AGENT_ID}`)
+        if (AGENT_ID !== "") {
+            info(`Created agent with ID: ${AGENT_ID}`)
+        }
         setOutput("agent_id", AGENT_ID)
 
         // The post step resolves the run's profile envelope ID from this agent.
@@ -42892,42 +43129,37 @@ async function run() {
         // The post step authenticates as this agent to report stop reasons.
         saveState("agentToken", AGENT_TOKEN)
 
-        // Get network policy
-        info("Getting network policy")
+        // A relay run has no control plane to fetch a managed policy from,
+        // and jibril starts fine without one.
+        let netpolicyPath = ""
+        if (!relayMode) {
+            const REPO_ID = getEnv("GITHUB_REPOSITORY")
+            const WORKFLOW = getEnv("GITHUB_WORKFLOW")
+            netpolicyPath = external_node_path_namespaceObject.join(tmpDir, "netpolicy.yaml")
 
-        const REPO_ID = getEnv("GITHUB_REPOSITORY")
-        const WORKFLOW = getEnv("GITHUB_WORKFLOW")
+            info(`Fetching network policy for ${REPO_ID}/${WORKFLOW}...`)
+            try {
+                const networkPolicyYaml = await controlPlaneClient.mergedNetPoliciesAsYAML({
+                    repository_id: REPO_ID,
+                    workflow_name: WORKFLOW,
+                })
 
-        // Create the network policy path.
-        const NETPOLICY_PATH = external_node_path_namespaceObject.join(tmpDir, "netpolicy.yaml")
+                validateNetworkPolicyYAML(networkPolicyYaml)
+                await promises_namespaceObject.writeFile(netpolicyPath, networkPolicyYaml)
+            } catch (error) {
+                throw new Error(`Failed to fetch network policy: ${getErrorMessage(error)}`)
+            }
 
-        info(`Fetching network policy for ${REPO_ID}/${WORKFLOW}...`)
+            if (!(await pathExists(netpolicyPath))) {
+                throw new Error("Network policy file was not created")
+            }
 
-        // Fetch and save the network policy.
-        try {
-            const networkPolicyYaml = await controlPlaneClient.mergedNetPoliciesAsYAML({
-                repository_id: REPO_ID,
-                workflow_name: WORKFLOW,
-            })
-
-            validateNetworkPolicyYAML(networkPolicyYaml)
-            await promises_namespaceObject.writeFile(NETPOLICY_PATH, networkPolicyYaml)
-        } catch (error) {
-            throw new Error(`Failed to fetch network policy: ${getErrorMessage(error)}`)
+            info(`Network policy saved to ${netpolicyPath}`)
+            if (DEBUG === "true") {
+                const content = await promises_namespaceObject.readFile(netpolicyPath, "utf8")
+                info(content.split("\n").slice(0, 20).join("\n"))
+            }
         }
-
-        if (!(await pathExists(NETPOLICY_PATH))) {
-            throw new Error("Network policy file was not created")
-        }
-
-        // Save the network policy to the file system.
-        info(`Network policy saved to ${NETPOLICY_PATH}`)
-        if (DEBUG === "true") {
-            const content = await promises_namespaceObject.readFile(NETPOLICY_PATH, "utf8")
-            info(content.split("\n").slice(0, 20).join("\n"))
-        }
-
-        info("Installing obtained network policy to /etc/jibril/netpolicy.yaml")
 
         // Set the environment variables for Jibril.
         process.env.GARNET_API_URL = API
@@ -42938,11 +43170,17 @@ async function run() {
         // Create Jibril default environment file
         info("Creating Jibril default environment file")
 
+        const garnetCredentialLines = buildGarnetCredentialLines({
+            relayMode,
+            apiToken: TOKEN,
+            agentToken: AGENT_TOKEN,
+        })
+
+        const jobIndexLine = buildJobIndexLine(getEnv("GITHUB_STRATEGY_JOB_INDEX"))
+
         const jibrilDefault = `# Garnet API configuration
 GARNET_API_URL=${process.env.GARNET_API_URL}
-GARNET_API_TOKEN=${process.env.GARNET_API_TOKEN}
-GARNET_AGENT_TOKEN=${process.env.GARNET_AGENT_TOKEN}
-GARNET_SAR=${getEnv("GARNET_SAR", "true")}
+${garnetCredentialLines}GARNET_SAR=${getEnv("GARNET_SAR", "true")}
 # AI configuration
 AI_ENABLED=${getEnv("AI_ENABLED", "false")}
 AI_MODE=${getEnv("AI_MODE", "reason")}
@@ -42969,12 +43207,14 @@ GITHUB_REPOSITORY_ID=${getEnv("GITHUB_REPOSITORY_ID")}
 GITHUB_REPOSITORY_OWNER_ID=${getEnv("GITHUB_REPOSITORY_OWNER_ID")}
 GITHUB_REPOSITORY_OWNER=${getEnv("GITHUB_REPOSITORY_OWNER")}
 GITHUB_REPOSITORY=${getEnv("GITHUB_REPOSITORY")}
+GITHUB_API_URL=${getEnv("GITHUB_API_URL")}
 GITHUB_RUN_ATTEMPT=${getEnv("GITHUB_RUN_ATTEMPT")}
 GITHUB_RUN_ID=${getEnv("GITHUB_RUN_ID")}
 GITHUB_RUN_NUMBER=${getEnv("GITHUB_RUN_NUMBER")}
 GITHUB_SERVER_URL=${getEnv("GITHUB_SERVER_URL")}
 GITHUB_SHA=${getEnv("GITHUB_SHA")}
-GITHUB_STEP_SUMMARY=${getEnv("GITHUB_STEP_SUMMARY")}
+GITHUB_HEAD_SHA=${await getProfileSha()}
+${jobIndexLine}GITHUB_STEP_SUMMARY=${getEnv("GITHUB_STEP_SUMMARY")}
 GITHUB_TOKEN=${getEnv("GITHUB_TOKEN")}
 GITHUB_TRIGGERING_ACTOR=${getEnv("GITHUB_TRIGGERING_ACTOR")}
 GITHUB_WORKFLOW_REF=${getEnv("GITHUB_WORKFLOW_REF")}
@@ -42992,11 +43232,9 @@ GITHUB_WORKSPACE=${getEnv("GITHUB_WORKSPACE")}
 
         // Verify default environment file (redacted for security).
         if (DEBUG === "true") {
-            try {
-                const defaultContent = await readFileSafe("/etc/default/jibril")
-                info("Default environment file:")
-                info(redactSensitive(defaultContent) ?? "No default environment file found")
-            } catch (_) {}
+            const defaultContent = await readRootFileSafe("/etc/default/jibril")
+            info("Default environment file:")
+            info(redactSensitive(defaultContent) ?? "No default environment file found")
         }
 
         info("Installing Jibril as a systemd service")
@@ -43051,20 +43289,22 @@ TimeoutStopSec=${stopTimeoutValue}
             } catch (_) {}
         }
 
-        // Replace network policy with fetched one.
-        await execSudo(["cp", "-v", NETPOLICY_PATH, "/etc/jibril/netpolicy.yaml"])
+        if (netpolicyPath !== "") {
+            info("Installing obtained network policy to /etc/jibril/netpolicy.yaml")
+            await execSudo(["cp", "-v", netpolicyPath, "/etc/jibril/netpolicy.yaml"])
 
-        // Verify replaced network policy.
-        if (DEBUG === "true") {
-            try {
-                const replacedContent = await readFileSafe("/etc/jibril/netpolicy.yaml")
-                info("Replaced Jibril network policy:")
-                info(
-                    replacedContent
-                        ? replacedContent.split("\n").slice(0, 20).join("\n")
-                        : "No network policy file found",
-                )
-            } catch (_) {}
+            // Verify replaced network policy.
+            if (DEBUG === "true") {
+                try {
+                    const replacedContent = await readFileSafe("/etc/jibril/netpolicy.yaml")
+                    info("Replaced Jibril network policy:")
+                    info(
+                        replacedContent
+                            ? replacedContent.split("\n").slice(0, 20).join("\n")
+                            : "No network policy file found",
+                    )
+                } catch (_) {}
+            }
         }
 
         if (DEBUG === "true") {
@@ -43161,6 +43401,46 @@ TimeoutStopSec=${stopTimeoutValue}
             await promises_namespaceObject.rm(tmpDir, { recursive: true, force: true })
         }
     }
+}
+
+/**
+ * @typedef {{
+ *   relayMode: boolean
+ *   apiToken: string
+ *   agentToken: string
+ * }} GarnetCredentialLinesInput
+ */
+
+/**
+ * The Garnet credential block of /etc/default/jibril (mode 600, removed in
+ * the post step). A relay run writes no credential line at all, not an
+ * empty one, so there is nothing to leak if the file outlives the job.
+ * GARNET_SAR keeps the sensor standalone either way.
+ * @param {GarnetCredentialLinesInput} input
+ * @returns {string}
+ */
+function buildGarnetCredentialLines(input) {
+    if (input.relayMode) {
+        return ""
+    }
+
+    return `GARNET_API_TOKEN=${input.apiToken}\nGARNET_AGENT_TOKEN=${input.agentToken}\n`
+}
+
+/**
+ * The matrix leg line of /etc/default/jibril. GitHub exports the leg index to
+ * no environment variable, so jibril can only learn it from here. The line is
+ * omitted rather than left empty when the index is unknown, because 0 is a
+ * real leg and an empty value must never be read as one.
+ * @param {string} jobIndex
+ * @returns {string}
+ */
+function buildJobIndexLine(jobIndex) {
+    if (!/^\d+$/.test(jobIndex)) {
+        return ""
+    }
+
+    return `GITHUB_STRATEGY_JOB_INDEX=${jobIndex}\n`
 }
 
 /**
@@ -43817,6 +44097,22 @@ async function execCapture(command, args, options = {}) {
 }
 
 /**
+ * Reads a file only root can open, such as the mode 600 /etc/default/jibril.
+ * Reading it as the runner user always fails with EACCES, which previously
+ * surfaced as "No default environment file found" for a file that was there.
+ * @param {string} filePath
+ * @returns {Promise<string | null>}
+ */
+async function readRootFileSafe(filePath) {
+    const result = await getExecOutput("sudo", ["cat", filePath], {
+        silent: true,
+        ignoreReturnCode: true,
+    })
+    if (result.exitCode !== 0) return null
+    return result.stdout.trim()
+}
+
+/**
  * This function executes a command with sudo.
  * @param {string[]} args
  * @param {ExecOptions=} options
@@ -44272,6 +44568,11 @@ async function main() {
         process.env.GARNET_API_URL = getInput("api_url")
         process.env.JIBRIL_VERSION = getInput("jibril_version")
         process.env.DEBUG = getInput("debug")
+
+        // Jibril runs as a systemd unit, so its environment is only what
+        // /etc/default/jibril contains. The main step forwards the matrix leg
+        // there under the name Jibril reads it by.
+        process.env.GITHUB_STRATEGY_JOB_INDEX = getInput("job_index")
 
         // Resolve the shutdown flush bound once, here at the boundary: the
         // main step writes it into the unit and the post step reuses the exact
