@@ -44440,6 +44440,10 @@ async function discloseStartFailure(context, reason) {
     await dumpJibrilLogs()
     await appendStartFailureSummary(failure)
 
+    // Written unconditionally so the relay path can include it in the
+    // envelope's stopped.detail even when there is no agent token.
+    saveState("startFailureReason", formatStartFailureDetail(failure))
+
     if (context.agentToken === "") {
         info("control plane: no agent registered for this job, start failure not reported")
         return false

@@ -20,6 +20,7 @@ import { getGitHubIDToken, isMissingOIDCPermissionError, resolveOIDCAudience } f
 import { readJibrilUnitState } from "./jibril-unit-state.js"
 import {
     buildStartFailedRequest,
+    formatStartFailureDetail,
     renderStartFailureSummary,
     START_FAILURE_EXCERPT_MAX_CHARS,
     START_FAILURE_REASON_MAX_CHARS,
@@ -1457,6 +1458,10 @@ async function discloseStartFailure(context, reason) {
 
     await dumpJibrilLogs()
     await appendStartFailureSummary(failure)
+
+    // Written unconditionally so the relay path can include it in the
+    // envelope's stopped.detail even when there is no agent token.
+    core.saveState("startFailureReason", formatStartFailureDetail(failure))
 
     if (context.agentToken === "") {
         core.info("control plane: no agent registered for this job, start failure not reported")
