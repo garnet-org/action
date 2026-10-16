@@ -116,8 +116,13 @@ async function run() {
             ignoreReturnCode: true,
         })
 
+        const relayAgent = readRelayAgent()
+
         if (!jibrilStarted) {
             core.info("Jibril did not start in the main step, skipping post-step runtime processing.")
+            if (relayAgent !== null) {
+                await relayRunArtifact(relayAgent, null, buildStartFailedStopped())
+            }
             return
         }
 
@@ -223,7 +228,6 @@ async function run() {
         // A run that produced no usable profile leaves the control plane's
         // pending state unresolved, so the agent reports how it stopped. The
         // relay envelope carries the same signal, including on a clean run.
-        const relayAgent = readRelayAgent()
         const stopReportNeeded = profileResult.state !== "present" && agentToken !== ""
         if (stopReportNeeded || relayAgent !== null) {
             const stopped = await buildAgentStopped(observations)
@@ -358,6 +362,25 @@ function readRelayAgent() {
         core.warning(`Garnet run artifact skipped: the recorded agent is unreadable (${getErrorMessage(error)})`)
         return null
     }
+}
+
+/**
+ * The stop signal for a relayed run whose sensor never started. There are no
+ * observations to classify, and the envelope still produces a correct Runtime
+ * Review: "the job crashed before Garnet recorded anything" is exactly the
+ * feedback a fork contributor needs.
+ * @returns {AgentStoppedRequest}
+ */
+function buildStartFailedStopped() {
+    /** @type {AgentStoppedRequest} */
+    const stopped = { reason: "start_failed", profileState: "missing" }
+
+    const detail = core.getState("startFailureReason")
+    if (detail !== "") {
+        stopped.detail = detail
+    }
+
+    return stopped
 }
 
 /**
