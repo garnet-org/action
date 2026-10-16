@@ -1,14 +1,15 @@
 name: Run Artifact Smoke Test
 
-# Exercises the workflow-artifact relay that fork pull requests depend on.
+# Exercises the workflow-artifact relay in two complementary modes:
 #
-# Pull request only, gated on the 'run-artifact-relay' label: the relay
-# exists to put a Runtime Review on a pull request, so there has to be one to
-# comment into. GARNET_ACTION_FORCE_RUN_ARTIFACT takes the job down the relay
-# path even though this branch has credentials, so it behaves exactly as a
-# fork's would — no agent registration, no managed network policy, no
-# credential on disk — and the envelope is then collected the way the Garnet
-# GitHub App collects it.
+# Fork PRs — triggered automatically. GitHub withholds secrets and the OIDC
+# token from fork pull_request runs, so the action enters relay mode on its
+# own. This is the real-world path being tested.
+#
+# Same-repo PRs — triggered by the 'run-artifact-relay' label. Credentials
+# ARE available, but GARNET_ACTION_FORCE_RUN_ARTIFACT overrides them so the
+# relay code path (artifact serialization, upload, envelope shape) is still
+# exercised without needing a fork.
 
 on:
     pull_request:
@@ -27,15 +28,16 @@ permissions:
 jobs:
     relay:
         name: Relay (leg ${{ matrix.leg }})
-        if: contains(github.event.pull_request.labels.*.name, 'run-artifact-relay')
+        if: |
+            github.event.pull_request.head.repo.fork ||
+            contains(github.event.pull_request.labels.*.name, 'run-artifact-relay')
         runs-on: ubuntu-24.04
         outputs:
             legs: ${{ steps.legs.outputs.count }}
         strategy:
             fail-fast: false
-            # More than one leg, so the smoke test also proves each leg
-            # produces its own artifact rather than colliding with its
-            # siblings.
+            # More than one leg so the test also proves each leg produces its
+            # own artifact rather than colliding with its sibling.
             matrix:
                 leg: [0, 1]
         steps:
@@ -49,13 +51,15 @@ jobs:
             - name: Checkout
               uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
+            # On same-repo PRs credentials are available, so force the relay
+            # path explicitly. On fork PRs this step is skipped: GitHub
+            # withholds secrets and the OIDC token, so relay mode triggers
+            # on its own.
             - name: Force the run artifact relay
+              if: "!github.event.pull_request.head.repo.fork"
               shell: bash
               run: echo "GARNET_ACTION_FORCE_RUN_ARTIFACT=true" >> "$GITHUB_ENV"
 
-            # jibril_version is deliberately left at the action's own default
-            # pin: whether that release records the job_index it is handed is
-            # exactly what this test needs to answer.
             - name: Run Garnet
               uses: ./
               with:
