@@ -1,1 +1,7 @@
-dist/* text eol=lf
+dist/** text eol=lf
+
+# dist/ holds the ncc bundles committed so GitHub can run the action as a
+# self-contained package. Marking them generated collapses them in GitHub diffs
+# and keeps Cursor Bugbot from counting them toward the PR size limit or pulling
+# them into review context.
+dist/** linguist-generated=true
