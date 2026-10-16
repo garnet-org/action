@@ -1,8 +1,8 @@
 /**
- * Gates for the credential-less no-op: a run with neither `api_token` nor an
- * OIDC ID-token grant skips profiling gracefully *and* says why, naming both
- * credentials. Runs that do have a credential path keep today's behavior, and
- * the post step no-ops cleanly when the main step never started jibril.
+ * Gates for a run with neither `api_token` nor an OIDC ID-token grant. A
+ * pull request is relayed through a workflow artifact and must not be
+ * skipped; every other event is skipped gracefully *and* says why, naming
+ * both credentials.
  */
 import test from "node:test"
 import assert from "node:assert/strict"
@@ -12,8 +12,8 @@ import { tmpdir } from "node:os"
 import { join, dirname } from "node:path"
 import { fileURLToPath } from "node:url"
 import { promisify } from "node:util"
-import { resolveCredentialSkip } from "../src/credential-less-run.js"
-import { run } from "../src/action.js"
+import { resolveCredentialMode } from "../src/credential-less-run.js"
+import { buildGarnetCredentialLines, buildJobIndexLine } from "../src/action.js"
 
 const execFileAsync = promisify(execFile)
 const here = dirname(fileURLToPath(import.meta.url))
@@ -87,61 +87,60 @@ async function withEnv(overlay, fn) {
     }
 }
 
-test("fork + no credentials: pull_request run from a fork skips and explains the fork case", async () => {
-    const eventPath = await writeEventPayload(pullRequestPayload("outside/fork"))
-    await withEnv({ ACTIONS_ID_TOKEN_REQUEST_URL: undefined, ACTIONS_ID_TOKEN_REQUEST_TOKEN: undefined }, async () => {
-        const decision = await resolveCredentialSkip({
+const NO_OIDC = { ACTIONS_ID_TOKEN_REQUEST_URL: undefined, ACTIONS_ID_TOKEN_REQUEST_TOKEN: undefined }
+
+test("no credentials on a pull request: relays instead of skipping", async () => {
+    const fork = await writeEventPayload(pullRequestPayload("outside/fork"))
+    const sameRepo = await writeEventPayload(pullRequestPayload(REPOSITORY))
+
+    await withEnv(NO_OIDC, async () => {
+        const forked = await resolveCredentialMode({
             eventName: "pull_request",
-            eventPath,
+            eventPath: fork,
             repository: REPOSITORY,
         })
-        assert.equal(decision.skip, true)
-        assert.match(decision.reason, /forked repositories/)
-        assert.match(decision.reason, /job continues normally/)
-        assertNamesBothCredentials(decision.reason)
+        assert.equal(forked.mode, "relay")
+        assert.match(forked.reason, /forked repository/)
+        assert.match(forked.reason, /workflow artifact/)
+
+        // The event alone decides; no fork check gates the run.
+        for (const eventName of ["pull_request", "pull_request_target"]) {
+            const decision = await resolveCredentialMode({ eventName, eventPath: sameRepo, repository: REPOSITORY })
+            assert.equal(decision.mode, "relay")
+            assert.doesNotMatch(decision.reason, /forked repository/)
+            assertNamesBothCredentials(decision.reason)
+        }
     })
-    await rm(dirname(eventPath), { recursive: true, force: true })
+
+    await rm(dirname(fork), { recursive: true, force: true })
+    await rm(dirname(sameRepo), { recursive: true, force: true })
 })
 
-test("api_token provided: behaves exactly as today (skip is never consulted)", async () => {
-    const source = await readFile(join(here, "..", "src", "action.js"), "utf8")
-    const gated = /if \(TOKEN === ""\) \{\s*\n\s*const credentialSkip = await resolveCredentialSkip\(/.test(source)
-    assert.ok(gated, "resolveCredentialSkip must only run when the api_token input resolved empty")
-})
-
-test("the skip is surfaced as a warning annotation, not an info line", async () => {
-    const source = await readFile(join(here, "..", "src", "action.js"), "utf8")
-    assert.match(source, /if \(credentialSkip\.skip\) \{\s*\n\s*core\.warning\(credentialSkip\.reason\)/)
-})
-
-test("same-repo + no credentials: skips with the generic reason", async () => {
-    const eventPath = await writeEventPayload(pullRequestPayload(REPOSITORY))
-    await withEnv({ ACTIONS_ID_TOKEN_REQUEST_URL: undefined, ACTIONS_ID_TOKEN_REQUEST_TOKEN: undefined }, async () => {
-        const decision = await resolveCredentialSkip({
-            eventName: "pull_request",
-            eventPath,
-            repository: REPOSITORY,
-        })
-        assert.equal(decision.skip, true)
-        assert.doesNotMatch(decision.reason, /forked repositories/)
-        assertNamesBothCredentials(decision.reason)
-    })
-    await rm(dirname(eventPath), { recursive: true, force: true })
-})
-
-test("push + no credentials: skips with the generic reason instead of erroring", async () => {
-    await withEnv({ ACTIONS_ID_TOKEN_REQUEST_URL: undefined, ACTIONS_ID_TOKEN_REQUEST_TOKEN: undefined }, async () => {
-        const decision = await resolveCredentialSkip({
+test("push + no credentials: skips, because no artifact of a push is ever collected", async () => {
+    await withEnv(NO_OIDC, async () => {
+        const decision = await resolveCredentialMode({
             eventName: "push",
             eventPath: "",
             repository: REPOSITORY,
         })
-        assert.equal(decision.skip, true)
+        assert.equal(decision.mode, "skip")
+        assert.match(decision.reason, /job continues normally/)
         assertNamesBothCredentials(decision.reason)
     })
 })
 
-test("OIDC grant: never skips (credential path exists)", async () => {
+test("api_token provided: behaves exactly as today (the mode is never consulted)", async () => {
+    const source = await readFile(join(here, "..", "src", "action.js"), "utf8")
+    const gated = /if \(TOKEN === ""\) \{\s*\n\s*const credentialMode = await resolveCredentialMode\(/.test(source)
+    assert.ok(gated, "resolveCredentialMode must only run when the api_token input resolved empty")
+})
+
+test("the skip is surfaced as a warning annotation, not an info line", async () => {
+    const source = await readFile(join(here, "..", "src", "action.js"), "utf8")
+    assert.match(source, /if \(credentialMode\.mode === "skip"\) \{\s*\n\s*core\.warning\(credentialMode\.reason\)/)
+})
+
+test("OIDC grant: always authenticated, never relayed", async () => {
     const eventPath = await writeEventPayload(pullRequestPayload("outside/fork"))
     await withEnv(
         {
@@ -150,71 +149,54 @@ test("OIDC grant: never skips (credential path exists)", async () => {
         },
         async () => {
             for (const eventName of ["pull_request", "pull_request_target", "push"]) {
-                const decision = await resolveCredentialSkip({
+                const decision = await resolveCredentialMode({
                     eventName,
                     eventPath,
                     repository: REPOSITORY,
                 })
-                assert.equal(decision.skip, false)
+                assert.equal(decision.mode, "authenticated")
             }
         },
     )
     await rm(dirname(eventPath), { recursive: true, force: true })
 })
 
-test("detection never throws: malformed payloads still skip with the generic reason", async () => {
-    await withEnv({ ACTIONS_ID_TOKEN_REQUEST_URL: undefined, ACTIONS_ID_TOKEN_REQUEST_TOKEN: undefined }, async () => {
-        const payloads = [
-            {},
-            { pull_request: null },
-            { pull_request: { head: {} } },
-            { pull_request: { head: { repo: { full_name: "" } } } },
-        ]
+test("detection never throws: malformed payloads still relay, with the generic reason", async () => {
+    await withEnv(NO_OIDC, async () => {
+        const payloads = [{}, { pull_request: null }, { pull_request: { head: { repo: { full_name: "" } } } }]
         for (const payload of payloads) {
             const eventPath = await writeEventPayload(payload)
-            const decision = await resolveCredentialSkip({
+            const decision = await resolveCredentialMode({
                 eventName: "pull_request",
                 eventPath,
                 repository: REPOSITORY,
             })
-            assert.equal(decision.skip, true)
-            assert.doesNotMatch(decision.reason, /forked repositories/)
+            assert.equal(decision.mode, "relay")
+            assert.doesNotMatch(decision.reason, /forked repository/)
             await rm(dirname(eventPath), { recursive: true, force: true })
         }
 
-        const missing = await resolveCredentialSkip({
+        const missing = await resolveCredentialMode({
             eventName: "pull_request",
             eventPath: "/nonexistent/event.json",
             repository: REPOSITORY,
         })
-        assert.equal(missing.skip, true)
-
-        const unreadable = await resolveCredentialSkip({
-            eventName: "pull_request",
-            eventPath: "",
-            repository: "",
-        })
-        assert.equal(unreadable.skip, true)
+        assert.equal(missing.mode, "relay")
     })
 })
 
-test("run(): fork + no credentials exits success without starting jibril", async () => {
-    const eventPath = await writeEventPayload(pullRequestPayload("outside/fork"))
-    await withEnv(
-        {
-            GARNET_API_TOKEN: "",
-            GITHUB_EVENT_NAME: "pull_request",
-            GITHUB_EVENT_PATH: eventPath,
-            GITHUB_REPOSITORY: REPOSITORY,
-            ACTIONS_ID_TOKEN_REQUEST_URL: undefined,
-            ACTIONS_ID_TOKEN_REQUEST_TOKEN: undefined,
-        },
-        async () => {
-            const started = await run()
-            assert.equal(started, false)
-        },
+test("relay: no Garnet credential is written to disk, not even an empty one", () => {
+    assert.equal(buildGarnetCredentialLines({ relayMode: true, apiToken: "tok", agentToken: "agent" }), "")
+    assert.equal(
+        buildGarnetCredentialLines({ relayMode: false, apiToken: "tok", agentToken: "agent" }),
+        "GARNET_API_TOKEN=tok\nGARNET_AGENT_TOKEN=agent\n",
     )
-    await rm(dirname(eventPath), { recursive: true, force: true })
+})
+
+test("matrix leg 0 is forwarded, an absent index writes no line at all", () => {
+    assert.equal(buildJobIndexLine("0"), "GITHUB_STRATEGY_JOB_INDEX=0\n")
+    assert.equal(buildJobIndexLine(""), "")
+    assert.equal(buildJobIndexLine("not-a-number"), "")
 })
 
 test("post step: no-ops cleanly when jibril never started", async function (t) {

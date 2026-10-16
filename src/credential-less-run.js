@@ -5,10 +5,18 @@ import * as fs from "node:fs/promises"
 import { getEnv, getOptionalRecord, getOptionalString } from "./shared.js"
 
 /**
+ * - `authenticated`: register with the control plane as usual.
+ * - `relay`: record locally and hand the run to the Garnet GitHub App
+ *   through a workflow artifact.
+ * - `skip`: nothing downstream would ever collect this run.
+ * @typedef {"authenticated" | "relay" | "skip"} CredentialMode
+ */
+
+/**
  * @typedef {{
- *   skip: boolean
+ *   mode: CredentialMode
  *   reason: string
- * }} CredentialSkipDecision
+ * }} CredentialDecision
  */
 
 /**
@@ -22,40 +30,39 @@ import { getEnv, getOptionalRecord, getOptionalString } from "./shared.js"
 const REMEDIATION =
     "Grant 'id-token: write' to this job to authenticate with OIDC, or pass a Garnet API token to the 'api_token' input."
 
+// The relay exists to put a Runtime Review on a pull request; nothing
+// downstream reads an artifact belonging to a push or a schedule.
+const RELAY_EVENT_NAMES = new Set(["pull_request", "pull_request_target"])
+
 /**
- * Decides whether this run has no authentication mechanism at all and must
- * skip profiling. Callers invoke it only when the `api_token` input did not
- * resolve (empty), so the remaining question is whether the runtime granted
- * an OIDC ID-token endpoint.
- *
- * Detection never throws: the event payload only refines the wording, so an
- * unexpected shape or read error still yields a skip with the generic reason.
- *
+ * Decides how a run with no `api_token` proceeds. Never throws: the event
+ * payload only refines the wording, so an unexpected shape or a read error
+ * still yields a decision.
  * @param {CredentialSkipContext} context
- * @returns {Promise<CredentialSkipDecision>}
+ * @returns {Promise<CredentialDecision>}
  */
-export async function resolveCredentialSkip(context) {
+export async function resolveCredentialMode(context) {
     if (isOIDCAvailable()) {
-        return { skip: false, reason: "OIDC is available" }
+        return { mode: "authenticated", reason: "OIDC is available" }
     }
 
-    const fromFork =
-        context.eventName === "pull_request" && (await isForkPullRequest(context.eventPath, context.repository))
-
-    if (fromFork) {
+    if (RELAY_EVENT_NAMES.has(context.eventName)) {
+        const fromFork = await isForkPullRequest(context.eventPath, context.repository)
         return {
-            skip: true,
-            reason:
-                "Garnet skipped this Runtime Review because no authentication mechanism was available: the " +
-                "'api_token' input resolved empty and no OIDC ID token could be requested. For 'pull_request' " +
-                "runs from forked repositories, adding 'id-token: write' does not by itself make credentials " +
-                "available. Do not expose repository secrets to untrusted fork code. A maintainer can review " +
-                "the change and run recording in an authorized, trusted workflow. The job continues normally.",
+            mode: "relay",
+            reason: fromFork
+                ? "This pull request comes from a forked repository, which GitHub denies both repository secrets " +
+                  "and an OIDC ID token, so this job cannot authenticate with Garnet. Jibril still records the " +
+                  "job locally and the run is uploaded as a workflow artifact, which the Garnet GitHub App " +
+                  "collects with its own credentials after the workflow finishes."
+                : "No authentication mechanism was available: the 'api_token' input resolved empty and no OIDC " +
+                  "ID token could be requested. Jibril still records this job locally and the run is uploaded " +
+                  `as a workflow artifact for the Garnet GitHub App to collect. ${REMEDIATION}`,
         }
     }
 
     return {
-        skip: true,
+        mode: "skip",
         reason:
             "Garnet skipped this Runtime Review because no authentication mechanism was available: the " +
             "'api_token' input resolved empty and this job has no OIDC ID-token endpoint, which means " +
