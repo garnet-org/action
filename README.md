@@ -179,6 +179,14 @@ Once a pull request has two recorded commits, the comment compares against the p
 
 The same record is appended to the job's Step Summary as the **Garnet Execution Summary** ([example run](https://github.com/garnet-labs/pnpm/actions/runs/35818535654)).
 
+## For coding agents
+
+Coding agents and review bots read the same record a human does. Nothing extra is recorded for them.
+
+- **Hosted MCP (public repositories, no token):** `https://garnet-runtime-review-mcp.vercel.app/mcp` — tools `get_runtime_review(repo, pr)` and `get_execution_profile(url)`. One line in Claude Code: `claude mcp add --transport http garnet-runtime-review https://garnet-runtime-review-mcp.vercel.app/mcp`; any client: `npx -y add-mcp https://garnet-runtime-review-mcp.vercel.app/mcp -g`.
+- **How agents read it:** the verdict (`changed`, `unchanged`, `recorded`, `undeterminable`) is bound to the pull request's head commit. `undeterminable` means unknown, never clean. Evidence never approves a pull request; the reviewer and repository policy decide. Contract and agent instructions: [docs.garnet.ai/consume](https://docs.garnet.ai/consume#coding-agents-and-the-mcp).
+- **Machine-readable surfaces:** every docs page has a Markdown twin (append `.md`), [docs.garnet.ai/llms.txt](https://docs.garnet.ai/llms.txt), the public report JSON described at [app.garnet.ai/llms.txt](https://app.garnet.ai/llms.txt), and the pinned release SHA at [garnet.ai/pins.txt](https://www.garnet.ai/pins.txt).
+
 ## Known limitations
 
 Read the record for what it is: what Garnet recorded, not a statement that nothing else happened.
