@@ -9,6 +9,7 @@ import * as os from "node:os"
 import * as path from "node:path"
 import { default as artifactClient } from "@actions/artifact"
 import { getErrorMessage, getOptionalRecord } from "./shared.js"
+import { annotateDeliveryFailure } from "./delivery-annotations.js"
 
 /** @typedef {import("./control-plane/types.js").CreateAgentRequest} CreateAgentRequest */
 /** @typedef {import("./control-plane/types.js").AgentStoppedRequest} AgentStoppedRequest */
@@ -142,10 +143,7 @@ export function serializeRunArtifact(envelope) {
 export async function uploadRunArtifact(name, envelope) {
     const serialized = serializeRunArtifact(envelope)
     if (serialized.profileOmitted) {
-        core.warning(
-            "The Execution Profile for this job is too large to relay through a workflow artifact and was " +
-                "dropped from the upload. The Runtime Review will report this job as unrecorded.",
-        )
+        annotateDeliveryFailure("profile_too_large", "")
     }
 
     let stagingDir = ""
@@ -161,10 +159,7 @@ export async function uploadRunArtifact(name, envelope) {
         await artifactClient.uploadArtifact(name, [entryPath], stagingDir)
         core.info(`Uploaded the Garnet run artifact '${name}'`)
     } catch (error) {
-        core.warning(
-            `Failed to upload the Garnet run artifact '${name}': ${getErrorMessage(error)}. ` +
-                "No Runtime Review will be published for this job.",
-        )
+        annotateDeliveryFailure("artifact_upload_failed", `artifact '${name}': ${getErrorMessage(error)}`)
     } finally {
         if (stagingDir !== "") {
             await fs.rm(stagingDir, { recursive: true, force: true })

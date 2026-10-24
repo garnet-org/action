@@ -27,6 +27,7 @@ import { classifyAgentStop, formatAgentStopDetail } from "./post-signal.js"
 import { resolveJobStatusFromGitHub } from "./github-job-status.js"
 import { resolveStopTimeoutFromSettings, resolveStopTimeoutFromUnit } from "./post-stop-timeout.js"
 import { versionAtLeast } from "./jibril-version.js"
+import { annotateDeliveryFailure } from "./delivery-annotations.js"
 import {
     JIBRIL_RUN_STATUS_FILE,
     formatAttachFailures,
@@ -165,10 +166,7 @@ async function run() {
         // and the file landing on disk.
         const appeared = await waitForRootFile(jsonProfilerFile, profileWaitSeconds * 1000)
         if (!appeared) {
-            core.info(
-                `${JSON_PROFILE_LABEL} was not written within the bounded wait; ` +
-                    "the Runtime Review below is rendered without this run's profile",
-            )
+            annotateDeliveryFailure("profile_not_written", `${JSON_PROFILE_LABEL} path: ${jsonProfilerFile}`)
         }
 
         let forceStopped = false
@@ -247,7 +245,7 @@ async function run() {
         }
     } catch (err) {
         // Never fail the job because of the Runtime Review step.
-        core.warning(`failed to write Runtime Review summary: ${getErrorMessage(err)}`)
+        annotateDeliveryFailure("summary_failed", `failed to write Runtime Review summary: ${getErrorMessage(err)}`)
     }
 }
 
@@ -275,16 +273,16 @@ async function readProfile(jsonProfilerFile, debug) {
                 core.info(`${JSON_PROFILE_LABEL} not found: ${jsonProfilerFile}`)
                 break
             case "empty":
-                core.info(`${JSON_PROFILE_LABEL} is empty: ${jsonProfilerFile}`)
+                annotateDeliveryFailure("profile_empty", `${JSON_PROFILE_LABEL} path: ${jsonProfilerFile}`)
                 break
             case "invalid":
-                core.warning(`failed to parse ${JSON_PROFILE_LABEL}: ${result.detail}`)
+                annotateDeliveryFailure("profile_invalid", result.detail)
                 break
         }
 
         return result
     } catch (error) {
-        core.warning(`failed to read ${JSON_PROFILE_LABEL}: ${getErrorMessage(error)}`)
+        annotateDeliveryFailure("profile_unreadable", getErrorMessage(error))
         return {
             state: "invalid",
             profile: null,
@@ -359,7 +357,7 @@ function readRelayAgent() {
     try {
         return JSON.parse(saved)
     } catch (error) {
-        core.warning(`Garnet run artifact skipped: the recorded agent is unreadable (${getErrorMessage(error)})`)
+        annotateDeliveryFailure("relay_agent_unreadable", getErrorMessage(error))
         return null
     }
 }

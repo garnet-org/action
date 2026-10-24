@@ -27,7 +27,7 @@ test("post step writes terminal summaries for missing, empty and invalid profile
                 const state = ${JSON.stringify(state)}
                 let now = 0
                 Date.now = () => { now += 100000; return now }
-                mock.module("@actions/exec", { exports: {
+                mock.module("@actions/exec", { namedExports: {
                     exec: async () => 0,
                     getExecOutput: async (command, args) => {
                         if (args[0] === "stat") return {
@@ -78,7 +78,7 @@ test("setup failure is fail-open with a redacted terminal summary", async t => {
             `
             import assert from "node:assert/strict"
             import { mock } from "node:test"
-            mock.module("@actions/exec", { exports: {
+            mock.module("@actions/exec", { namedExports: {
                 exec: async () => { throw new Error("no root execution expected") },
                 getExecOutput: async () => ({
                     exitCode: 0, stdout: "diagnostic fixture-sensitive-value", stderr: "",
