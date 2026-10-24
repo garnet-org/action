@@ -148554,11 +148554,83 @@ function redactStringArray(list) {
     }
 }
 
+;// CONCATENATED MODULE: ./src/delivery-annotations.js
+
+
+/** @typedef {"profile_not_written"|"profile_empty"|"profile_invalid"|"profile_unreadable"|"profile_too_large"|"artifact_upload_failed"|"relay_agent_unreadable"|"summary_failed"} DeliveryFailureCause */
+
+/**
+ * @typedef {object} DeliveryFailureAnnotation
+ * @property {string} title
+ * @property {string} message
+ */
+
+const NO_PROFILE_TITLE = "Garnet: Execution Profile not recorded"
+const NO_REVIEW_TITLE = "Garnet: no Runtime Review for this job"
+const SUMMARY_FAILED_TITLE = "Garnet: Runtime Review step error"
+
+/** @type {Readonly<Record<DeliveryFailureCause, DeliveryFailureAnnotation>>} */
+const DELIVERY_FAILURE_ANNOTATIONS = Object.freeze({
+    profile_not_written: Object.freeze({
+        title: NO_PROFILE_TITLE,
+        message:
+            "The Garnet sensor did not write this job's Execution Profile before the post step's wait ended, so the Runtime Review for this job has no runtime evidence. The job itself is not affected.",
+    }),
+    profile_empty: Object.freeze({
+        title: NO_PROFILE_TITLE,
+        message:
+            "The Garnet sensor wrote an empty Execution Profile for this job, so the Runtime Review for this job has no runtime evidence. The job itself is not affected.",
+    }),
+    profile_invalid: Object.freeze({
+        title: NO_PROFILE_TITLE,
+        message:
+            "The Garnet sensor wrote an Execution Profile for this job that could not be parsed, so the Runtime Review for this job has no runtime evidence. The job itself is not affected.",
+    }),
+    profile_unreadable: Object.freeze({
+        title: NO_PROFILE_TITLE,
+        message:
+            "The Execution Profile for this job could not be read, so the Runtime Review for this job has no runtime evidence. The job itself is not affected.",
+    }),
+    profile_too_large: Object.freeze({
+        title: NO_PROFILE_TITLE,
+        message:
+            "The Execution Profile for this job is too large to relay through a workflow artifact and was dropped, so the Runtime Review will report this job as unrecorded. The job itself is not affected.",
+    }),
+    artifact_upload_failed: Object.freeze({
+        title: NO_REVIEW_TITLE,
+        message:
+            "Uploading the Garnet run artifact failed, so no Runtime Review will be published for this job. The job itself is not affected.",
+    }),
+    relay_agent_unreadable: Object.freeze({
+        title: NO_REVIEW_TITLE,
+        message:
+            "The Garnet agent record saved by the main step could not be read, so the run artifact was skipped and no Runtime Review will be published for this job. The job itself is not affected.",
+    }),
+    summary_failed: Object.freeze({
+        title: SUMMARY_FAILED_TITLE,
+        message: "The Runtime Review step hit an unexpected error and did not finish. The job itself is not affected.",
+    }),
+})
+
+/**
+ * @param {DeliveryFailureCause} cause
+ * @param {string} detail
+ * @returns {void}
+ */
+function annotateDeliveryFailure(cause, detail) {
+    const annotation = DELIVERY_FAILURE_ANNOTATIONS[cause]
+    warning(annotation.message, { title: annotation.title })
+    if (detail !== "") {
+        info(`${annotation.title}: ${detail}`)
+    }
+}
+
 ;// CONCATENATED MODULE: ./src/run-artifact.js
 // A fork's pull request gets neither repository secrets nor an OIDC ID
 // token, so the job cannot reach the control plane at all. It can still
 // upload a workflow artifact, which the Garnet GitHub App collects
 // afterwards with its own credentials.
+
 
 
 
@@ -148700,10 +148772,7 @@ function serializeRunArtifact(envelope) {
 async function uploadRunArtifact(name, envelope) {
     const serialized = serializeRunArtifact(envelope)
     if (serialized.profileOmitted) {
-        warning(
-            "The Execution Profile for this job is too large to relay through a workflow artifact and was " +
-                "dropped from the upload. The Runtime Review will report this job as unrecorded.",
-        )
+        annotateDeliveryFailure("profile_too_large", "")
     }
 
     let stagingDir = ""
@@ -148719,10 +148788,7 @@ async function uploadRunArtifact(name, envelope) {
         await artifact.uploadArtifact(name, [entryPath], stagingDir)
         info(`Uploaded the Garnet run artifact '${name}'`)
     } catch (error) {
-        warning(
-            `Failed to upload the Garnet run artifact '${name}': ${getErrorMessage(error)}. ` +
-                "No Runtime Review will be published for this job.",
-        )
+        annotateDeliveryFailure("artifact_upload_failed", `artifact '${name}': ${getErrorMessage(error)}`)
     } finally {
         if (stagingDir !== "") {
             await promises_.rm(stagingDir, { recursive: true, force: true })
@@ -164092,6 +164158,7 @@ function parseCoreVersion(tag) {
 
 
 
+
 /** @typedef {import("./post-profile-state.js").LoadedProfile} LoadedProfile */
 /** @typedef {import("./post-profile-state.js").ProfileResult} ProfileResult */
 /** @typedef {import("./post-profile-state.js").RootFileStat} RootFileStat */
@@ -164222,10 +164289,7 @@ async function run() {
         // and the file landing on disk.
         const appeared = await waitForRootFile(jsonProfilerFile, profileWaitSeconds * 1000)
         if (!appeared) {
-            info(
-                `${JSON_PROFILE_LABEL} was not written within the bounded wait; ` +
-                    "the Runtime Review below is rendered without this run's profile",
-            )
+            annotateDeliveryFailure("profile_not_written", `${JSON_PROFILE_LABEL} path: ${jsonProfilerFile}`)
         }
 
         let forceStopped = false
@@ -164304,7 +164368,7 @@ async function run() {
         }
     } catch (err) {
         // Never fail the job because of the Runtime Review step.
-        warning(`failed to write Runtime Review summary: ${getErrorMessage(err)}`)
+        annotateDeliveryFailure("summary_failed", `failed to write Runtime Review summary: ${getErrorMessage(err)}`)
     }
 }
 
@@ -164333,16 +164397,16 @@ async function readProfile(jsonProfilerFile, debug) {
                 info(`${JSON_PROFILE_LABEL} not found: ${jsonProfilerFile}`)
                 break
             case "empty":
-                info(`${JSON_PROFILE_LABEL} is empty: ${jsonProfilerFile}`)
+                annotateDeliveryFailure("profile_empty", `${JSON_PROFILE_LABEL} path: ${jsonProfilerFile}`)
                 break
             case "invalid":
-                warning(`failed to parse ${JSON_PROFILE_LABEL}: ${result.detail}`)
+                annotateDeliveryFailure("profile_invalid", result.detail)
                 break
         }
 
         return result
     } catch (error) {
-        warning(`failed to read ${JSON_PROFILE_LABEL}: ${getErrorMessage(error)}`)
+        annotateDeliveryFailure("profile_unreadable", getErrorMessage(error))
         return {
             state: "invalid",
             profile: null,
@@ -164417,7 +164481,7 @@ function readRelayAgent() {
     try {
         return JSON.parse(saved)
     } catch (error) {
-        warning(`Garnet run artifact skipped: the recorded agent is unreadable (${getErrorMessage(error)})`)
+        annotateDeliveryFailure("relay_agent_unreadable", getErrorMessage(error))
         return null
     }
 }
