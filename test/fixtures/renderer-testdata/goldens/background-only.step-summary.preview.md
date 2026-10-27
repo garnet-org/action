@@ -30,10 +30,10 @@ Runner.Worker
 systemd
 └─ hosted-compute-
    └─ sudo
-      ├─ <strong>provjobd</strong> · pid&nbsp;9102
-      │  └─ ○ resultsstorageeus2.blob.core.windows.net
-      └─ <strong>provjobd</strong> · pid&nbsp;9103
-         └─ ○ glb-p4a577-public-internal.githubapp.com <em>(github infra)</em>
+      ├─ <strong>provjobd</strong> · pid&nbsp;9103
+      │  └─ ○ glb-p4a577-public-internal.githubapp.com <em>(github infra)</em>
+      └─ <strong>provjobd</strong> · pid&nbsp;9102
+         └─ ○ resultsstorageeus2.blob.core.windows.net
 </pre>
 </details>
 

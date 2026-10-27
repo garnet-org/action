@@ -27,22 +27,22 @@ Keyed by execution chain; repeated destination names within a chain are collapse
 <pre>
 Runner.Worker
 └─ bash
-   ├─ <strong>node</strong> · pid&nbsp;4001 <em>(step: &quot;Run api tests&quot;)</em>
-   │  └─ ○ kept.example.com
-   ├─ <strong>node</strong> · pid&nbsp;4002 <em>(step: &quot;Run api tests&quot;)</em>
-   │  └─ ○ fresh.example.net
+   ├─ <strong>node</strong> · pid&nbsp;4004 <em>(step: &quot;Run api tests&quot;)</em>
+   │  └─ ○ cache.internal.example
    ├─ <strong>node</strong> · pid&nbsp;4003 <em>(step: &quot;Run api tests&quot;)</em>
    │  └─ ○ flap-b.example.com
-   └─ <strong>node</strong> · pid&nbsp;4004 <em>(step: &quot;Run api tests&quot;)</em>
-      └─ ○ cache.internal.example
+   ├─ <strong>node</strong> · pid&nbsp;4002 <em>(step: &quot;Run api tests&quot;)</em>
+   │  └─ ○ fresh.example.net
+   └─ <strong>node</strong> · pid&nbsp;4001 <em>(step: &quot;Run api tests&quot;)</em>
+      └─ ○ kept.example.com
 
 systemd
-├─ <strong>hosted-compute-agent</strong> · pid&nbsp;1901
-│  └─ ○ telemetry.example
-└─ hosted-compute-agent
-   └─ sudo
-      └─ <strong>provjobd</strong> · pid&nbsp;1902
-         └─ ○ glb-2a3c35-public-internal.githubapp.com <em>(github infra)</em>
+├─ hosted-compute-agent
+│  └─ sudo
+│     └─ <strong>provjobd</strong> · pid&nbsp;1902
+│        └─ ○ glb-2a3c35-public-internal.githubapp.com <em>(github infra)</em>
+└─ <strong>hosted-compute-agent</strong> · pid&nbsp;1901
+   └─ ○ telemetry.example
 </pre>
 </details>
 
@@ -104,12 +104,12 @@ Runner.Worker
       └─ ○ registry.npmjs.org
 
 systemd
-├─ <strong>hosted-compute-agent</strong> · pid&nbsp;1912
-│  └─ ○ hosted-compute-watchdog-prod-iad-03.githubapp.com <em>(github infra)</em>
-└─ hosted-compute-agent
-   └─ sudo
-      └─ <strong>provjobd</strong> · pid&nbsp;1911
-         └─ ○ glb-2a3c35-public-internal.githubapp.com <em>(github infra)</em>
+├─ hosted-compute-agent
+│  └─ sudo
+│     └─ <strong>provjobd</strong> · pid&nbsp;1911
+│        └─ ○ glb-2a3c35-public-internal.githubapp.com <em>(github infra)</em>
+└─ <strong>hosted-compute-agent</strong> · pid&nbsp;1912
+   └─ ○ hosted-compute-watchdog-prod-iad-03.githubapp.com <em>(github infra)</em>
 </pre>
 </details>
 

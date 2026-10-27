@@ -29,8 +29,8 @@ Keyed by execution chain; repeated destination names within a chain are collapse
 Runner.Worker
 └─ bash
    └─ <strong>node</strong> · pid&nbsp;2384 <em>(step: &quot;Run workload&quot;)</em>
-      ├─ ○ registry.npmjs.org
-      └─ ○ localhost <em>(dns resolver)</em>
+      ├─ ○ localhost <em>(dns resolver)</em>
+      └─ ○ registry.npmjs.org
 
 systemd
 └─ hosted-compute-agent
@@ -103,8 +103,8 @@ Keyed by execution chain; repeated destination names within a chain are collapse
 Runner.Worker
 └─ bash
    └─ <strong>node</strong> · pid&nbsp;2371 <em>(step: &quot;Run workload&quot;)</em>
-      ├─ ○ registry.npmjs.org
-      └─ ○ localhost <em>(dns resolver)</em>
+      ├─ ○ localhost <em>(dns resolver)</em>
+      └─ ○ registry.npmjs.org
 
 systemd
 ├─ <strong>hosted-compute-agent</strong> · pid&nbsp;1878
@@ -112,8 +112,8 @@ systemd
 └─ hosted-compute-agent
    └─ sudo
       └─ <strong>provjobd</strong> · pid&nbsp;1893 <em>(ran from /tmp/…)</em>
-         ├─ ○ localhost <em>(dns resolver)</em>
-         └─ ○ hosted-compute-watchdog-prod-iad-01.githubapp <em>(github infra)</em>
+         ├─ ○ hosted-compute-watchdog-prod-iad-01.githubapp <em>(github infra)</em>
+         └─ ○ localhost <em>(dns resolver)</em>
 </pre>
 </details>
 
@@ -184,8 +184,8 @@ systemd
 └─ hosted-compute-agent
    └─ sudo
       └─ <strong>provjobd</strong> · pid&nbsp;1868 <em>(ran from /tmp/…)</em>
-         ├─ ○ localhost <em>(dns resolver)</em>
-         └─ ○ hosted-compute-watchdog-prod-iad-02.githubapp <em>(github infra)</em>
+         ├─ ○ hosted-compute-watchdog-prod-iad-02.githubapp <em>(github infra)</em>
+         └─ ○ localhost <em>(dns resolver)</em>
 </pre>
 </details>
 
@@ -254,8 +254,8 @@ systemd
 └─ hosted-compute-agent
    └─ sudo
       └─ <strong>provjobd</strong> · pid&nbsp;1893 <em>(ran from /tmp/…)</em>
-         ├─ ○ localhost <em>(dns resolver)</em>
-         └─ ○ hosted-compute-watchdog-prod-iad-02.githubapp <em>(github infra)</em>
+         ├─ ○ hosted-compute-watchdog-prod-iad-02.githubapp <em>(github infra)</em>
+         └─ ○ localhost <em>(dns resolver)</em>
 </pre>
 </details>
 
@@ -323,21 +323,21 @@ Keyed by execution chain; repeated destination names within a chain are collapse
 <pre>
 Runner.Worker
 └─ bash
-   ├─ <strong>node</strong> · pid&nbsp;2361 <em>(step: &quot;Run workload&quot;)</em>
-   │  ├─ ○ registry.npmjs.org
-   │  └─ ○ localhost <em>(dns resolver)</em>
-   └─ node
-      └─ dash
-         ├─ <strong>node</strong> · pid&nbsp;2384 <em>(step: &quot;Run workload&quot;)</em>
-         │  ├─ ○ registry.npmjs.org
-         │  ├─ ○ api.garnet.ai <em>(garnet sensor)</em>
-         │  ├─ ○ localhost <em>(dns resolver)</em>
-         │  └─ ○ github.com
-         └─ node
-            └─ dash
-               └─ <strong>curl</strong> · pid&nbsp;2396 <em>(step: &quot;Run workload&quot;)</em>
-                  ├─ ○ httpbin.org
-                  └─ ○ localhost <em>(dns resolver)</em>
+   ├─ node
+   │  └─ dash
+   │     ├─ <strong>node</strong> · pid&nbsp;2384 <em>(step: &quot;Run workload&quot;)</em>
+   │     │  ├─ ○ api.garnet.ai <em>(garnet sensor)</em>
+   │     │  ├─ ○ github.com
+   │     │  ├─ ○ localhost <em>(dns resolver)</em>
+   │     │  └─ ○ registry.npmjs.org
+   │     └─ node
+   │        └─ dash
+   │           └─ <strong>curl</strong> · pid&nbsp;2396 <em>(step: &quot;Run workload&quot;)</em>
+   │              ├─ ○ httpbin.org
+   │              └─ ○ localhost <em>(dns resolver)</em>
+   └─ <strong>node</strong> · pid&nbsp;2361 <em>(step: &quot;Run workload&quot;)</em>
+      ├─ ○ localhost <em>(dns resolver)</em>
+      └─ ○ registry.npmjs.org
 
 systemd
 ├─ <strong>hosted-compute-agent</strong> · pid&nbsp;1849
@@ -345,8 +345,8 @@ systemd
 └─ hosted-compute-agent
    └─ sudo
       └─ <strong>provjobd</strong> · pid&nbsp;1864 <em>(ran from /tmp/…)</em>
-         ├─ ○ localhost <em>(dns resolver)</em>
-         └─ ○ hosted-compute-watchdog-prod-iad-02.githubapp <em>(github infra)</em>
+         ├─ ○ hosted-compute-watchdog-prod-iad-02.githubapp <em>(github infra)</em>
+         └─ ○ localhost <em>(dns resolver)</em>
 </pre>
 </details>
 

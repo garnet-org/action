@@ -22,10 +22,10 @@ Keyed by execution chain; repeated destination names within a chain are collapse
 
 <pre>
 systemd
-├─ <strong>python3</strong> · pid&nbsp;5101
-│  └─ ○ 169.254.169.254 <em>(cloud metadata)</em>
-└─ <strong>walinuxagent</strong> · pid&nbsp;5102
-   └─ ○ 168.63.129.16
+├─ <strong>walinuxagent</strong> · pid&nbsp;5102
+│  └─ ○ 168.63.129.16
+└─ <strong>python3</strong> · pid&nbsp;5101
+   └─ ○ 169.254.169.254 <em>(cloud metadata)</em>
 </pre>
 </details>
 

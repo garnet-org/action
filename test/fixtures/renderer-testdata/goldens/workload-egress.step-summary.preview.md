@@ -27,15 +27,15 @@ Keyed by execution chain; repeated destination names within a chain are collapse
 <pre>
 Runner.Worker
 └─ bash
-   ├─ <strong>npm install</strong>
-   │  └─ ○ registry.npmjs.org
-   └─ npm test
-      └─ sh
-         └─ <strong>node</strong>
-            ├─ ○ registry.npmjs.org
-            ├─ ○ api.garnet.ai <em>(garnet sensor)</em>
-            ├─ ○ github.com
-            └─ ○ images.unsplash.com
+   ├─ npm test
+   │  └─ sh
+   │     └─ <strong>node</strong>
+   │        ├─ ○ api.garnet.ai <em>(garnet sensor)</em>
+   │        ├─ ○ github.com
+   │        ├─ ○ images.unsplash.com
+   │        └─ ○ registry.npmjs.org
+   └─ <strong>npm install</strong>
+      └─ ○ registry.npmjs.org
 </pre>
 </details>
 

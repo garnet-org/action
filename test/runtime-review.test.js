@@ -1264,6 +1264,28 @@ await test("gate: full recorded tree preserves PID-distinct destination associat
   )
 })
 
+await test("gate: full recorded tree preserves destination identity order", () => {
+  const tree =
+    renderStepSummary([worth], { appUrl: APP_URL }).match(
+      /<details><summary><sub>Full recorded tree<\/sub><\/summary>\n\n<pre>\n([\s\S]*?)\n<\/pre>/,
+    )?.[1] ?? ""
+  assert.notEqual(tree, "")
+  const expectedOrder = [
+    "npm test",
+    "○ api.garnet.ai",
+    "○ github.com",
+    "○ images.unsplash.com",
+    "○ registry.npmjs.org",
+    "npm install",
+  ]
+  let previousIndex = -1
+  for (const value of expectedOrder) {
+    const index = tree.indexOf(value)
+    assert.ok(index > previousIndex, `expected ${JSON.stringify(value)} after the preceding item`)
+    previousIndex = index
+  }
+})
+
 await test("gate: preview material is contained — default bytes carry none of it on any surface", () => {
   const previewMarkers = [
     "Recorded context preview",

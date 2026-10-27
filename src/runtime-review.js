@@ -1188,6 +1188,30 @@ export function addressNameMap(...edgeSets) {
 }
 
 /**
+ * Compare normalized destination identities.
+ * @param {ReviewEdge} a
+ * @param {ReviewEdge} b
+ * @param {Map<string, string>} names
+ */
+function compareDestinationIdentities(a, b, names) {
+  const identityA = destinationIdentity(a, names)
+  const identityB = destinationIdentity(b, names)
+  if (identityA < identityB) return -1
+  if (identityA > identityB) return 1
+  return 0
+}
+
+/**
+ * Compare by normalized destination identity, then deterministic edge order.
+ * @param {ReviewEdge} a
+ * @param {ReviewEdge} b
+ * @param {Map<string, string>} names
+ */
+function destinationIdentityComparator(a, b, names) {
+  return compareDestinationIdentities(a, b, names) || edgeComparator(a, b)
+}
+
+/**
  * One representative edge per destination identity, named edges preferred.
  * @param {ReviewEdge[]} edges
  * @param {Map<string, string>} [names]
@@ -1203,11 +1227,7 @@ function dedupeDestinationEdges(edges, names = addressNameMap(edges)) {
     const currentNamed = current?.remote_names.some((name) => name !== "")
     if (!current || (named && !currentNamed)) representatives.set(key, edge)
   }
-  return [...representatives.values()].sort((a, b) => {
-    const ka = destinationIdentity(a, names)
-    const kb = destinationIdentity(b, names)
-    return ka < kb ? -1 : ka > kb ? 1 : edgeComparator(a, b)
-  })
+  return [...representatives.values()].sort((a, b) => destinationIdentityComparator(a, b, names))
 }
 
 /**
@@ -1285,11 +1305,13 @@ function addAssociationToTree(root, edge, pidKeyedTerminals = false) {
 }
 
 /**
- * Sort PID-keyed siblings numerically within each process-name group.
+ * Sort PID-keyed siblings by destination identity, then numeric PID, within
+ * each process-name group.
  * @param {TreeNode} node
+ * @param {Map<string, string>} names
  */
-function orderPidNodes(node) {
-  for (const child of node.children) orderPidNodes(child)
+function orderPidNodes(node, names) {
+  for (const child of node.children) orderPidNodes(child, names)
   /** @type {Map<string, number[]>} */
   const pidIndexes = new Map()
   /** @type {Map<string, TreeNode[]>} */
@@ -1312,6 +1334,12 @@ function orderPidNodes(node) {
   }
   for (const [name, nodes] of pidNodes) {
     nodes.sort((a, b) => {
+      const edgeA = a.associations[0]
+      const edgeB = b.associations[0]
+      if (edgeA !== undefined && edgeB !== undefined) {
+        const identityOrder = compareDestinationIdentities(edgeA, edgeB, names)
+        if (identityOrder !== 0) return identityOrder
+      }
       const difference = Number(a.terminalPid) - Number(b.terminalPid)
       if (Number.isFinite(difference) && difference !== 0) return difference
       return a.terminalPid < b.terminalPid ? -1 : a.terminalPid > b.terminalPid ? 1 : 0
@@ -1332,12 +1360,13 @@ function orderPidNodes(node) {
  */
 function treeForAssociations(edges, { dedupe = true } = {}) {
   const root = makeTreeNode()
+  const names = addressNameMap(edges)
   const orderedEdges = dedupe
-    ? dedupeDestinationEdges(edges)
-    : [...edges].sort(edgeComparator)
+    ? dedupeDestinationEdges(edges, names)
+    : [...edges].sort((a, b) => destinationIdentityComparator(a, b, names))
   for (const edge of orderedEdges) addAssociationToTree(root, edge, !dedupe)
   coalescePrefixTerminalNodes(root)
-  if (!dedupe) orderPidNodes(root)
+  if (!dedupe) orderPidNodes(root, names)
   return root
 }
 

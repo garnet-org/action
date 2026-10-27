@@ -24,8 +24,8 @@ Keyed by execution chain; repeated destination names within a chain are collapse
 Runner.Worker
 └─ bash
    ├─ <strong>node</strong> · pid&nbsp;5001 <em>(step: &quot;Run tests&quot;)</em>
-   │  ├─ ○ kept.example.com
-   │  └─ ○ fresh.example.net
+   │  ├─ ○ fresh.example.net
+   │  └─ ○ kept.example.com
    └─ python3
       └─ <strong>pip</strong> · pid&nbsp;5002 <em>(step: &quot;Install tools&quot;)</em>
          └─ ○ pypi.example.org

@@ -24,14 +24,14 @@ Keyed by execution chain; repeated destination names within a chain are collapse
 <pre>
 Runner.Worker
 └─ npm
-   ├─ <strong>node</strong> · pid&nbsp;9001 <em>(step: &quot;Install&quot;)</em>
-   │  └─ ○ registry.npmjs.org
-   └─ node
-      └─ sh
-         └─ <strong>bun</strong> · pid&nbsp;9107 <em>(step: &quot;Install&quot;)</em>
-            ├─ ○ api.github.com
-            ├─ ○ 169.254.169.254 <em>(cloud metadata)</em>
-            └─ ○ release-assets.githubusercontent.com
+   ├─ node
+   │  └─ sh
+   │     └─ <strong>bun</strong> · pid&nbsp;9107 <em>(step: &quot;Install&quot;)</em>
+   │        ├─ ○ 169.254.169.254 <em>(cloud metadata)</em>
+   │        ├─ ○ api.github.com
+   │        └─ ○ release-assets.githubusercontent.com
+   └─ <strong>node</strong> · pid&nbsp;9001 <em>(step: &quot;Install&quot;)</em>
+      └─ ○ registry.npmjs.org
 
 systemd
 └─ hosted-compute-agent
