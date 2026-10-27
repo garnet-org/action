@@ -24,17 +24,16 @@ Keyed by execution chain; repeated destination names within a chain are collapse
 <pre>
 Runner.Worker
 └─ bash
-   ├─ <strong>node</strong> · pid&nbsp;5001 <em>(step: &quot;Build&quot;)</em>
-   │  └─ ○ registry.npmjs.org
-   └─ <strong>node</strong> · pid&nbsp;5002 <em>(step: &quot;Build&quot;)</em>
-      └─ ○ storage.googleapis.com
+   └─ <strong>node</strong> <em>(step: &quot;Build&quot;)</em>
+      ├─ ○ registry.npmjs.org · pid&nbsp;5001
+      └─ ○ storage.googleapis.com · pid&nbsp;5002
 
 systemd
 └─ hosted-compute-
    └─ sudo
-      └─ <strong>provjobd</strong> · pid&nbsp;5003
-         ├─ ○ 140.82.114.23
-         └─ ○ 140.82.114.24
+      └─ <strong>provjobd</strong>
+         ├─ ○ 140.82.114.23 · pid&nbsp;5003
+         └─ ○ 140.82.114.24 · pid&nbsp;5003
 </pre>
 </details>
 

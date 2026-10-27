@@ -23,12 +23,12 @@ Keyed by execution chain; repeated destination names within a chain are collapse
 <pre>
 Runner.Worker
 └─ bash
-   ├─ <strong>node</strong> · pid&nbsp;5001 <em>(step: &quot;Run tests&quot;)</em>
-   │  ├─ ○ fresh.example.net
-   │  └─ ○ kept.example.com
+   ├─ <strong>node</strong> <em>(step: &quot;Run tests&quot;)</em>
+   │  ├─ ○ fresh.example.net · pid&nbsp;5001
+   │  └─ ○ kept.example.com · pid&nbsp;5001
    └─ python3
-      └─ <strong>pip</strong> · pid&nbsp;5002 <em>(step: &quot;Install tools&quot;)</em>
-         └─ ○ pypi.example.org
+      └─ <strong>pip</strong> <em>(step: &quot;Install tools&quot;)</em>
+         └─ ○ pypi.example.org · pid&nbsp;5002
 </pre>
 </details>
 

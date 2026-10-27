@@ -22,10 +22,10 @@ Keyed by execution chain; repeated destination names within a chain are collapse
 
 <pre>
 systemd
-├─ <strong>walinuxagent</strong> · pid&nbsp;5102
-│  └─ ○ 168.63.129.16
-└─ <strong>python3</strong> · pid&nbsp;5101
-   └─ ○ 169.254.169.254 <em>(cloud metadata)</em>
+├─ <strong>walinuxagent</strong>
+│  └─ ○ 168.63.129.16 · pid&nbsp;5102
+└─ <strong>python3</strong>
+   └─ ○ 169.254.169.254 <em>(cloud metadata)</em> · pid&nbsp;5101
 </pre>
 </details>
 
@@ -78,12 +78,12 @@ Keyed by execution chain; repeated destination names within a chain are collapse
 <pre>
 Runner.Worker
 └─ bash
-   └─ <strong>bun</strong> · pid&nbsp;5002 <em>(step: &quot;Run integration tests&quot;)</em>
-      └─ ○ 169.254.169.254 <em>(cloud metadata)</em>
+   └─ <strong>bun</strong> <em>(step: &quot;Run integration tests&quot;)</em>
+      └─ ○ 169.254.169.254 <em>(cloud metadata)</em> · pid&nbsp;5002
 
 systemd
-└─ <strong>node</strong> · pid&nbsp;5001 <em>(step: &quot;Publish artifacts&quot;)</em>
-   └─ ○ artifacts.example.net
+└─ <strong>node</strong> <em>(step: &quot;Publish artifacts&quot;)</em>
+   └─ ○ artifacts.example.net · pid&nbsp;5001
 </pre>
 </details>
 

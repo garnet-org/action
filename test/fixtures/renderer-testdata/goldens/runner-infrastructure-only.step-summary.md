@@ -23,12 +23,11 @@ Keyed by execution chain; repeated destination names within a chain are collapse
 
 <pre>
 systemd
-├─ <strong>hosted-compute-agent</strong> · pid&nbsp;2002
-│  └─ ○ hosted-compute-watchdog-prod-iad-01.githubapp <em>(github infra)</em>
-└─ hosted-compute-agent
-   └─ sudo
-      └─ <strong>provjobd</strong> · pid&nbsp;2001
-         └─ ○ localhost <em>(dns resolver)</em>
+└─ <strong>hosted-compute-agent</strong>
+   ├─ sudo
+   │  └─ <strong>provjobd</strong>
+   │     └─ ○ localhost <em>(dns resolver)</em> · pid&nbsp;2001
+   └─ ○ hosted-compute-watchdog-prod-iad-01.githubapp <em>(github infra)</em> · pid&nbsp;2002
 </pre>
 </details>
 

@@ -202,7 +202,6 @@ export { CONTRACT_VOCAB }
  *   children: TreeNode[]
  *   childByKey: Map<string, TreeNode>
  *   associations: ReviewEdge[]
- *   terminalPid: string
  *   pids: Set<string>
  *   processes: Set<string>
  *   steps: Set<string>
@@ -1202,13 +1201,25 @@ function compareDestinationIdentities(a, b, names) {
 }
 
 /**
+ * Compare numeric PIDs, then deterministic edge order.
+ * @param {ReviewEdge} a
+ * @param {ReviewEdge} b
+ */
+function pidThenEdgeComparator(a, b) {
+  const difference = Number(a.pid) - Number(b.pid)
+  if (Number.isFinite(difference) && difference !== 0) return difference
+  return edgeComparator(a, b)
+}
+
+/**
  * Compare by normalized destination identity, then deterministic edge order.
  * @param {ReviewEdge} a
  * @param {ReviewEdge} b
  * @param {Map<string, string>} names
+ * @param {(a: ReviewEdge, b: ReviewEdge) => number} [tieBreaker]
  */
-function destinationIdentityComparator(a, b, names) {
-  return compareDestinationIdentities(a, b, names) || edgeComparator(a, b)
+function destinationIdentityComparator(a, b, names, tieBreaker = edgeComparator) {
+  return compareDestinationIdentities(a, b, names) || tieBreaker(a, b)
 }
 
 /**
@@ -1252,13 +1263,11 @@ export function commentEdges(edges) {
 
 /**
  * @param {string} [name]
- * @param {string} [terminalPid]
  * @returns {TreeNode}
  */
-function makeTreeNode(name = "", terminalPid = "") {
+function makeTreeNode(name = "") {
   return {
     name,
-    terminalPid,
     children: [],
     childByKey: new Map(),
     associations: [],
@@ -1270,26 +1279,19 @@ function makeTreeNode(name = "", terminalPid = "") {
 }
 
 /**
- * Add one destination association to a shared-prefix lineage tree. PID-keyed
- * terminal nodes are exclusive to lossless trees; comment nodes stay
- * name-keyed.
+ * Add one destination association to a shared-prefix lineage tree.
  * @param {TreeNode} root
  * @param {ReviewEdge} edge
- * @param {boolean} [pidKeyedTerminals]
  */
-function addAssociationToTree(root, edge, pidKeyedTerminals = false) {
+function addAssociationToTree(root, edge) {
   const path = commentTreePath(edge)
   let node = root
   path.forEach((name, index) => {
     const terminal = index === path.length - 1
-    const terminalPid =
-      terminal && pidKeyedTerminals && edge.pid !== "" && edge.pid !== "0"
-        ? edge.pid
-        : ""
-    const key = terminalPid === "" ? JSON.stringify([name]) : JSON.stringify([name, terminalPid])
+    const key = JSON.stringify([name])
     let child = node.childByKey.get(key)
     if (!child) {
-      child = makeTreeNode(name, terminalPid)
+      child = makeTreeNode(name)
       node.childByKey.set(key, child)
       node.children.push(child)
     }
@@ -1305,55 +1307,6 @@ function addAssociationToTree(root, edge, pidKeyedTerminals = false) {
 }
 
 /**
- * Sort PID-keyed siblings by destination identity, then numeric PID, within
- * each process-name group.
- * @param {TreeNode} node
- * @param {Map<string, string>} names
- */
-function orderPidNodes(node, names) {
-  for (const child of node.children) orderPidNodes(child, names)
-  /** @type {Map<string, number[]>} */
-  const pidIndexes = new Map()
-  /** @type {Map<string, TreeNode[]>} */
-  const pidNodes = new Map()
-  for (let index = 0; index < node.children.length; index += 1) {
-    const child = node.children[index]
-    if (child === undefined || child.terminalPid === "") continue
-    let indexes = pidIndexes.get(child.name)
-    if (indexes === undefined) {
-      indexes = []
-      pidIndexes.set(child.name, indexes)
-    }
-    indexes.push(index)
-    let nodes = pidNodes.get(child.name)
-    if (nodes === undefined) {
-      nodes = []
-      pidNodes.set(child.name, nodes)
-    }
-    nodes.push(child)
-  }
-  for (const [name, nodes] of pidNodes) {
-    nodes.sort((a, b) => {
-      const edgeA = a.associations[0]
-      const edgeB = b.associations[0]
-      if (edgeA !== undefined && edgeB !== undefined) {
-        const identityOrder = compareDestinationIdentities(edgeA, edgeB, names)
-        if (identityOrder !== 0) return identityOrder
-      }
-      const difference = Number(a.terminalPid) - Number(b.terminalPid)
-      if (Number.isFinite(difference) && difference !== 0) return difference
-      return a.terminalPid < b.terminalPid ? -1 : a.terminalPid > b.terminalPid ? 1 : 0
-    })
-    const indexes = pidIndexes.get(name)
-    if (indexes === undefined) continue
-    indexes.forEach((index, position) => {
-      const child = nodes[position]
-      if (child !== undefined) node.children[index] = child
-    })
-  }
-}
-
-/**
  * @param {ReviewEdge[]} edges
  * @param {{ dedupe?: boolean }} [options]
  * @returns {TreeNode}
@@ -1361,12 +1314,10 @@ function orderPidNodes(node, names) {
 function treeForAssociations(edges, { dedupe = true } = {}) {
   const root = makeTreeNode()
   const names = addressNameMap(edges)
-  const orderedEdges = dedupe
-    ? dedupeDestinationEdges(edges, names)
-    : [...edges].sort((a, b) => destinationIdentityComparator(a, b, names))
-  for (const edge of orderedEdges) addAssociationToTree(root, edge, !dedupe)
+  const representativeEdges = dedupeDestinationEdges(edges, names)
+  for (const edge of representativeEdges) addAssociationToTree(root, edge)
   coalescePrefixTerminalNodes(root)
-  if (!dedupe) orderPidNodes(root, names)
+  if (!dedupe) attachLosslessAssociations(root, edges, names)
   return root
 }
 
@@ -1380,6 +1331,62 @@ function mergeTreeNode(target, source) {
   for (const process of source.processes) target.processes.add(process)
   for (const step of source.steps) target.steps.add(step)
   for (const executable of source.executables) target.executables.add(executable)
+}
+
+/**
+ * Map each representative destination identity to its rendered process node.
+ * @param {TreeNode} node
+ * @param {Map<string, string>} names
+ * @param {Map<string, TreeNode>} nodesByIdentity
+ */
+function collectAssociationNodes(node, names, nodesByIdentity) {
+  for (const edge of node.associations) {
+    nodesByIdentity.set(destinationIdentity(edge, names), node)
+  }
+  for (const child of node.children) collectAssociationNodes(child, names, nodesByIdentity)
+}
+
+/**
+ * Find an existing process node for the edge's recorded path.
+ * @param {TreeNode} root
+ * @param {ReviewEdge} edge
+ * @returns {TreeNode | undefined}
+ */
+function findTreeNodeForPath(root, edge) {
+  let node = root
+  for (const name of commentTreePath(edge)) {
+    const child = node.children.find((candidate) => candidate.name === name)
+    if (child === undefined) return undefined
+    node = child
+  }
+  return node
+}
+
+/**
+ * Add all associations as leaves without introducing another process path.
+ * @param {TreeNode} root
+ * @param {ReviewEdge[]} edges
+ * @param {Map<string, string>} names
+ */
+function attachLosslessAssociations(root, edges, names) {
+  /** @type {Map<string, TreeNode>} */
+  const nodesByIdentity = new Map()
+  collectAssociationNodes(root, names, nodesByIdentity)
+  /** @type {Map<TreeNode, ReviewEdge[]>} */
+  const associationsByNode = new Map()
+  const orderedEdges = [...edges].sort((a, b) =>
+    destinationIdentityComparator(a, b, names, pidThenEdgeComparator),
+  )
+  for (const edge of orderedEdges) {
+    const identity = destinationIdentity(edge, names)
+    const representativeNode = nodesByIdentity.get(identity)
+    if (representativeNode === undefined) throw new Error("destination identity missing from shared-prefix tree")
+    const node = findTreeNodeForPath(root, edge) ?? representativeNode
+    const associations = associationsByNode.get(node) || []
+    associations.push(edge)
+    associationsByNode.set(node, associations)
+  }
+  for (const [node, associations] of associationsByNode) node.associations = associations
 }
 
 /**
@@ -1400,7 +1407,7 @@ function coalescePrefixTerminalNodes(node) {
     const branch = group.find((child) => child.children.length > 0)
     if (!branch) continue
     for (const child of group) {
-      if (child !== branch && child.children.length === 0 && child.terminalPid === "") {
+      if (child !== branch && child.children.length === 0) {
         mergeTreeNode(branch, child)
       }
     }
@@ -1408,7 +1415,7 @@ function coalescePrefixTerminalNodes(node) {
   node.children = node.children.filter((child) => {
     const group = grouped.get(child.name) || []
     const branch = group.find((candidate) => candidate.children.length > 0)
-    return !branch || child === branch || child.children.length > 0 || child.terminalPid !== ""
+    return !branch || child === branch || child.children.length > 0
   })
 }
 
@@ -1432,10 +1439,8 @@ function processNodeLine(node, { steps = true, inheritedSteps = new Set() } = {}
   // Bold marks the process that acted: an observed action sits directly
   // beneath it. Decoration only; the terminal itself carries the fact.
   const body = node.associations.length > 0 ? `<strong>${escaped}</strong>` : escaped
-  const pid = node.terminalPid !== "" ? ` · pid&nbsp;${escapeHtml(node.terminalPid)}` : ""
-  // PID + command identity is Step Summary-only; the comment tree shows
-  // process names alone. A real recorded step renders as a bracket
-  // annotation — additive context that never determines structure.
+  // A real recorded step renders as a bracket annotation — additive context
+  // that never determines structure.
   const step = steps
     ? annotatedStepNames(node, inheritedSteps)
         .map((name) => ` <em>(step: &quot;${escapeHtml(truncateMiddle(name))}&quot;)</em>`)
@@ -1443,7 +1448,7 @@ function processNodeLine(node, { steps = true, inheritedSteps = new Set() } = {}
     : ""
   const provenance = ranFromNote(node.executables)
   const ranFrom = provenance !== "" ? ` ${renderNote(provenance)}` : ""
-  return `${body}${pid}${step}${ranFrom}`
+  return `${body}${step}${ranFrom}`
 }
 
 /**
@@ -1547,8 +1552,9 @@ export function ranFromNote(executables) {
  * @param {ReviewEdge} edge
  * @param {boolean} detections
  * @param {boolean} [defang]
+ * @param {boolean} [leafPids]
  */
-function destinationLeafLine(edge, detections, defang = true) {
+function destinationLeafLine(edge, detections, defang = true, leafPids = false) {
   // Observed actions render as shaped terminals — `○ <destination>` for
   // network; box-drawing characters carry structure, geometric terminals
   // carry evidence.
@@ -1557,16 +1563,35 @@ function destinationLeafLine(edge, detections, defang = true) {
     : escapeHtml(truncateMiddle(edgePrimaryDestination(edge)))
   const parts = [VOCAB.terminalNetwork, display]
   for (const note of edgeNotes(edge, { detections })) parts.push(renderNote(note))
-  return parts.join(" ")
+  const pid = leafPids && edge.pid !== "" && edge.pid !== "0"
+    ? ` · pid&nbsp;${escapeHtml(edge.pid)}`
+    : ""
+  return `${parts.join(" ")}${pid}`
 }
+
+/**
+ * @typedef {{
+ *   destinations: boolean
+ *   steps?: boolean
+ *   detections?: boolean
+ *   defang?: boolean
+ *   leafPids?: boolean
+ *   inheritedSteps?: Set<string>
+ * }} TreeRenderOptions
+ */
 
 /**
  * @param {TreeNode} node
  * @param {string} prefix
  * @param {string[]} lines
- * @param {{ destinations: boolean, steps?: boolean, detections?: boolean, defang?: boolean, inheritedSteps?: Set<string> }} options
+ * @param {TreeRenderOptions} options
  */
-function renderTreeChildren(node, prefix, lines, { destinations, steps = true, detections = false, defang = true, inheritedSteps = new Set() }) {
+function renderTreeChildren(
+  node,
+  prefix,
+  lines,
+  { destinations, steps = true, detections = false, defang = true, leafPids = false, inheritedSteps = new Set() },
+) {
   /** @type {({ kind: "process", child: TreeNode } | { kind: "destination", edge: ReviewEdge })[]} */
   const entries = [
     ...node.children.map((child) => ({ kind: /** @type {"process"} */ ("process"), child })),
@@ -1585,10 +1610,11 @@ function renderTreeChildren(node, prefix, lines, { destinations, steps = true, d
         steps,
         detections,
         defang,
+        leafPids,
         inheritedSteps: inheritSteps(entry.child, inheritedSteps),
       })
     } else {
-      lines.push(`${prefix}${branch}${destinationLeafLine(entry.edge, detections, defang)}`)
+      lines.push(`${prefix}${branch}${destinationLeafLine(entry.edge, detections, defang, leafPids)}`)
     }
   })
 }
@@ -1605,7 +1631,8 @@ function renderTreeChildren(node, prefix, lines, { destinations, steps = true, d
 export function renderJobTree(job, edges = job.edges, opts = {}) {
   /** @type {string[]} */
   const lines = []
-  const root = treeForAssociations(edges, { dedupe: opts.dedupe ?? true })
+  const dedupe = opts.dedupe ?? true
+  const root = treeForAssociations(edges, { dedupe })
   // One block holds every recorded root; independent recorded ancestry
   // roots are separated by one blank line — whitespace means independent
   // recorded roots in the same job, never another category.
@@ -1616,6 +1643,7 @@ export function renderJobTree(job, edges = job.edges, opts = {}) {
       destinations: true,
       steps: true,
       defang: opts.defang !== false,
+      leafPids: !dedupe,
       inheritedSteps: inheritSteps(child, new Set()),
     })
   })

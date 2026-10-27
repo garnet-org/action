@@ -24,20 +24,19 @@ Keyed by execution chain; repeated destination names within a chain are collapse
 <pre>
 Runner.Worker
 └─ npm
-   ├─ node
-   │  └─ sh
-   │     └─ <strong>bun</strong> · pid&nbsp;9107 <em>(step: &quot;Install&quot;)</em>
-   │        ├─ ○ 169.254.169.254 <em>(cloud metadata)</em>
-   │        ├─ ○ api.github.com
-   │        └─ ○ release-assets.githubusercontent.com
-   └─ <strong>node</strong> · pid&nbsp;9001 <em>(step: &quot;Install&quot;)</em>
-      └─ ○ registry.npmjs.org
+   └─ <strong>node</strong> <em>(step: &quot;Install&quot;)</em>
+      ├─ sh
+      │  └─ <strong>bun</strong>
+      │     ├─ ○ 169.254.169.254 <em>(cloud metadata)</em> · pid&nbsp;9107
+      │     ├─ ○ api.github.com · pid&nbsp;9107
+      │     └─ ○ release-assets.githubusercontent.com · pid&nbsp;9107
+      └─ ○ registry.npmjs.org · pid&nbsp;9001
 
 systemd
 └─ hosted-compute-agent
    └─ sudo
-      └─ <strong>provjobd</strong> · pid&nbsp;412
-         └─ ○ resultsstorageeus2.blob.core.windows.net
+      └─ <strong>provjobd</strong>
+         └─ ○ resultsstorageeus2.blob.core.windows.net · pid&nbsp;412
 </pre>
 </details>
 

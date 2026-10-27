@@ -24,16 +24,15 @@ Keyed by execution chain; repeated destination names within a chain are collapse
 <pre>
 Runner.Worker
 └─ npm
-   └─ <strong>node</strong> · pid&nbsp;9101 <em>(step: &quot;Install&quot;)</em>
-      └─ ○ registry.npmjs.org
+   └─ <strong>node</strong> <em>(step: &quot;Install&quot;)</em>
+      └─ ○ registry.npmjs.org · pid&nbsp;9101
 
 systemd
 └─ hosted-compute-
    └─ sudo
-      ├─ <strong>provjobd</strong> · pid&nbsp;9103
-      │  └─ ○ glb-p4a577-public-internal.githubapp.com <em>(github infra)</em>
-      └─ <strong>provjobd</strong> · pid&nbsp;9102
-         └─ ○ resultsstorageeus2.blob.core.windows.net
+      └─ <strong>provjobd</strong>
+         ├─ ○ glb-p4a577-public-internal.githubapp.com <em>(github infra)</em> · pid&nbsp;9103
+         └─ ○ resultsstorageeus2.blob.core.windows.net · pid&nbsp;9102
 </pre>
 </details>
 

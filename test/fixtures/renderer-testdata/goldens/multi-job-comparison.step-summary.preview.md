@@ -27,22 +27,18 @@ Keyed by execution chain; repeated destination names within a chain are collapse
 <pre>
 Runner.Worker
 └─ bash
-   ├─ <strong>node</strong> · pid&nbsp;4004 <em>(step: &quot;Run api tests&quot;)</em>
-   │  └─ ○ cache.internal.example
-   ├─ <strong>node</strong> · pid&nbsp;4003 <em>(step: &quot;Run api tests&quot;)</em>
-   │  └─ ○ flap-b.example.com
-   ├─ <strong>node</strong> · pid&nbsp;4002 <em>(step: &quot;Run api tests&quot;)</em>
-   │  └─ ○ fresh.example.net
-   └─ <strong>node</strong> · pid&nbsp;4001 <em>(step: &quot;Run api tests&quot;)</em>
-      └─ ○ kept.example.com
+   └─ <strong>node</strong> <em>(step: &quot;Run api tests&quot;)</em>
+      ├─ ○ cache.internal.example · pid&nbsp;4004
+      ├─ ○ flap-b.example.com · pid&nbsp;4003
+      ├─ ○ fresh.example.net · pid&nbsp;4002
+      └─ ○ kept.example.com · pid&nbsp;4001
 
 systemd
-├─ hosted-compute-agent
-│  └─ sudo
-│     └─ <strong>provjobd</strong> · pid&nbsp;1902
-│        └─ ○ glb-2a3c35-public-internal.githubapp.com <em>(github infra)</em>
-└─ <strong>hosted-compute-agent</strong> · pid&nbsp;1901
-   └─ ○ telemetry.example
+└─ <strong>hosted-compute-agent</strong>
+   ├─ sudo
+   │  └─ <strong>provjobd</strong>
+   │     └─ ○ glb-2a3c35-public-internal.githubapp.com <em>(github infra)</em> · pid&nbsp;1902
+   └─ ○ telemetry.example · pid&nbsp;1901
 </pre>
 </details>
 
@@ -100,16 +96,15 @@ Keyed by execution chain; repeated destination names within a chain are collapse
 <pre>
 Runner.Worker
 └─ bash
-   └─ <strong>node</strong> · pid&nbsp;4101 <em>(step: &quot;Install dependencies&quot;)</em>
-      └─ ○ registry.npmjs.org
+   └─ <strong>node</strong> <em>(step: &quot;Install dependencies&quot;)</em>
+      └─ ○ registry.npmjs.org · pid&nbsp;4101
 
 systemd
-├─ hosted-compute-agent
-│  └─ sudo
-│     └─ <strong>provjobd</strong> · pid&nbsp;1911
-│        └─ ○ glb-2a3c35-public-internal.githubapp.com <em>(github infra)</em>
-└─ <strong>hosted-compute-agent</strong> · pid&nbsp;1912
-   └─ ○ hosted-compute-watchdog-prod-iad-03.githubapp.com <em>(github infra)</em>
+└─ <strong>hosted-compute-agent</strong>
+   ├─ sudo
+   │  └─ <strong>provjobd</strong>
+   │     └─ ○ glb-2a3c35-public-internal.githubapp.com <em>(github infra)</em> · pid&nbsp;1911
+   └─ ○ hosted-compute-watchdog-prod-iad-03.githubapp.com <em>(github infra)</em> · pid&nbsp;1912
 </pre>
 </details>
 
@@ -162,12 +157,11 @@ Keyed by execution chain; repeated destination names within a chain are collapse
 
 <pre>
 systemd
-├─ <strong>hosted-compute-agent</strong> · pid&nbsp;1922
-│  └─ ○ hosted-compute-watchdog-prod-iad-02.githubapp.com <em>(github infra)</em>
-└─ hosted-compute-agent
-   └─ sudo
-      └─ <strong>provjobd</strong> · pid&nbsp;1921
-         └─ ○ localhost <em>(dns resolver)</em>
+└─ <strong>hosted-compute-agent</strong>
+   ├─ sudo
+   │  └─ <strong>provjobd</strong>
+   │     └─ ○ localhost <em>(dns resolver)</em> · pid&nbsp;1921
+   └─ ○ hosted-compute-watchdog-prod-iad-02.githubapp.com <em>(github infra)</em> · pid&nbsp;1922
 </pre>
 </details>
 

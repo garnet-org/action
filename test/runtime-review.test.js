@@ -1191,27 +1191,22 @@ await test("gate: full recorded tree preserves PID-distinct destination associat
     commentTree.split("\n").filter((line) => line.includes("○ registry.npmjs[.]org")).length,
     1,
   )
+  assert.ok(!commentTree.includes("pid&nbsp;"))
 
   const summaryTree =
     renderStepSummary([profile]).match(
       /<details><summary><sub>Full recorded tree<\/sub><\/summary>\n\n<pre>\n([\s\S]*?)\n<\/pre>/,
     )?.[1] ?? ""
   assert.notEqual(summaryTree, "")
-  assert.ok(
-    summaryTree.includes(
-      '<strong>node</strong> · pid&nbsp;101 <em>(step: &quot;Run tests&quot;)</em>',
-    ),
-  )
-  assert.ok(
-    summaryTree.includes(
-      '<strong>node</strong> · pid&nbsp;202 <em>(step: &quot;Run tests&quot;)</em>',
-    ),
-  )
-  assert.ok(summaryTree.indexOf("pid&nbsp;101") < summaryTree.indexOf("pid&nbsp;202"))
-  assert.equal(
-    summaryTree.split("\n").filter((line) => line.includes("○ registry.npmjs.org")).length,
-    job.edges.length,
-  )
+  const summaryLeaves = summaryTree
+    .split("\n")
+    .filter((line) => line.includes("○ registry.npmjs.org"))
+    .map((line) => line.slice(line.indexOf("○")))
+  assert.deepEqual(summaryLeaves, [
+    "○ registry.npmjs.org · pid&nbsp;101",
+    "○ registry.npmjs.org · pid&nbsp;202",
+  ])
+  assert.equal(summaryLeaves.length, job.edges.length)
 
   const numericProfile = structuredClone(profile)
   const peer = numericProfile.network.egress.peers[0]
@@ -1226,41 +1221,34 @@ await test("gate: full recorded tree preserves PID-distinct destination associat
     defang: false,
     dedupe: false,
   })
-  const processLines = numericTree
+  const numericLeaves = numericTree
     .split("\n")
-    .filter((line) => line.includes("<strong>node</strong>"))
-  const pidLines = processLines.filter((line) => line.includes("pid&nbsp;"))
-  assert.ok(pidLines[0]?.includes("pid&nbsp;2"))
-  assert.ok(pidLines[1]?.includes("pid&nbsp;10"))
-  assert.ok(
-    processLines.some((line) =>
-      line.includes('<strong>node</strong> <em>(step: &quot;Run tests&quot;)'),
-    ),
-  )
+    .filter((line) => line.includes("○ registry.npmjs.org"))
+    .map((line) => line.slice(line.indexOf("○")))
+  assert.deepEqual(numericLeaves, [
+    "○ registry.npmjs.org",
+    "○ registry.npmjs.org · pid&nbsp;2",
+    "○ registry.npmjs.org · pid&nbsp;10",
+  ])
   assert.ok(!numericTree.includes("pid&nbsp;0"))
 
-  const nameOrderProfile = structuredClone(profile)
-  const nameOrderPeer = nameOrderProfile.network.egress.peers[0]
-  if (!nameOrderPeer) throw new Error("expected a profile peer")
-  const nameOrderTree = nameOrderPeer.proc_trees[0]
-  if (!nameOrderTree) throw new Error("expected a recorded process tree")
-  nameOrderPeer.proc_trees.push({
-    ...nameOrderTree,
-    pid: 900,
-    process: "git",
-    executable: "/usr/bin/git",
-    ancestry: ["systemd", "bash", "git"],
-  })
-  const nameOrderedJob = summarizeProfile(nameOrderProfile)
-  const nameOrderedTree = renderJobTree(nameOrderedJob, nameOrderedJob.edges, {
+  const notedProfile = structuredClone(profile)
+  const notedPeer = notedProfile.network.egress.peers[0]
+  if (!notedPeer) throw new Error("expected a profile peer")
+  notedPeer.remote_address = "127.0.0.1"
+  notedPeer.remote_names = []
+  notedPeer.remote_ports = ["53 (dns)"]
+  const notedJob = summarizeProfile(notedProfile)
+  const notedTree = renderJobTree(notedJob, notedJob.edges, {
     defang: false,
     dedupe: false,
   })
-  const gitLineIndex = nameOrderedTree.indexOf("<strong>git</strong> · pid&nbsp;900")
-  const nodeLineIndex = nameOrderedTree.indexOf("<strong>node</strong> · pid&nbsp;101")
   assert.ok(
-    gitLineIndex !== -1 && nodeLineIndex !== -1 && gitLineIndex < nodeLineIndex,
-    "PID ordering must preserve canonical sibling process-name order",
+    notedTree
+      .split("\n")
+      .some((line) =>
+        line.includes("○ 127.0.0.1 <em>(dns resolver)</em> · pid&nbsp;101"),
+      ),
   )
 })
 

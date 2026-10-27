@@ -28,15 +28,10 @@ Keyed by execution chain; repeated destination names within a chain are collapse
 <pre>
 Runner.Worker
 └─ bash
-   └─ <strong>node</strong> · pid&nbsp;2384 <em>(step: &quot;Run workload&quot;)</em>
-      ├─ ○ localhost <em>(dns resolver)</em>
-      └─ ○ registry.npmjs.org
-
-systemd
-└─ hosted-compute-agent
-   └─ sudo
-      └─ <strong>provjobd</strong> · pid&nbsp;1867 <em>(ran from /tmp/…)</em>
-         └─ ○ localhost <em>(dns resolver)</em>
+   └─ <strong>node</strong> <em>(step: &quot;Run workload&quot;)</em>
+      ├─ ○ localhost <em>(dns resolver)</em> · pid&nbsp;1867
+      ├─ ○ localhost <em>(dns resolver)</em> · pid&nbsp;2384
+      └─ ○ registry.npmjs.org · pid&nbsp;2384
 </pre>
 </details>
 
@@ -102,18 +97,17 @@ Keyed by execution chain; repeated destination names within a chain are collapse
 <pre>
 Runner.Worker
 └─ bash
-   └─ <strong>node</strong> · pid&nbsp;2371 <em>(step: &quot;Run workload&quot;)</em>
-      ├─ ○ localhost <em>(dns resolver)</em>
-      └─ ○ registry.npmjs.org
+   └─ <strong>node</strong> <em>(step: &quot;Run workload&quot;)</em>
+      ├─ ○ localhost <em>(dns resolver)</em> · pid&nbsp;2371
+      └─ ○ registry.npmjs.org · pid&nbsp;2371
 
 systemd
-├─ <strong>hosted-compute-agent</strong> · pid&nbsp;1878
-│  └─ ○ 140.82.112.23
-└─ hosted-compute-agent
-   └─ sudo
-      └─ <strong>provjobd</strong> · pid&nbsp;1893 <em>(ran from /tmp/…)</em>
-         ├─ ○ hosted-compute-watchdog-prod-iad-01.githubapp <em>(github infra)</em>
-         └─ ○ localhost <em>(dns resolver)</em>
+└─ <strong>hosted-compute-agent</strong>
+   ├─ sudo
+   │  └─ <strong>provjobd</strong> <em>(ran from /tmp/…)</em>
+   │     ├─ ○ hosted-compute-watchdog-prod-iad-01.githubapp <em>(github infra)</em> · pid&nbsp;1893
+   │     └─ ○ localhost <em>(dns resolver)</em> · pid&nbsp;1893
+   └─ ○ 140.82.112.23 · pid&nbsp;1878
 </pre>
 </details>
 
@@ -179,13 +173,12 @@ Keyed by execution chain; repeated destination names within a chain are collapse
 
 <pre>
 systemd
-├─ <strong>hosted-compute-agent</strong> · pid&nbsp;1854
-│  └─ ○ 140.82.113.24
-└─ hosted-compute-agent
-   └─ sudo
-      └─ <strong>provjobd</strong> · pid&nbsp;1868 <em>(ran from /tmp/…)</em>
-         ├─ ○ hosted-compute-watchdog-prod-iad-02.githubapp <em>(github infra)</em>
-         └─ ○ localhost <em>(dns resolver)</em>
+└─ <strong>hosted-compute-agent</strong>
+   ├─ sudo
+   │  └─ <strong>provjobd</strong> <em>(ran from /tmp/…)</em>
+   │     ├─ ○ hosted-compute-watchdog-prod-iad-02.githubapp <em>(github infra)</em> · pid&nbsp;1868
+   │     └─ ○ localhost <em>(dns resolver)</em> · pid&nbsp;1868
+   └─ ○ 140.82.113.24 · pid&nbsp;1854
 </pre>
 </details>
 
@@ -249,13 +242,12 @@ Keyed by execution chain; repeated destination names within a chain are collapse
 
 <pre>
 systemd
-├─ <strong>hosted-compute-agent</strong> · pid&nbsp;1878
-│  └─ ○ 140.82.114.24
-└─ hosted-compute-agent
-   └─ sudo
-      └─ <strong>provjobd</strong> · pid&nbsp;1893 <em>(ran from /tmp/…)</em>
-         ├─ ○ hosted-compute-watchdog-prod-iad-02.githubapp <em>(github infra)</em>
-         └─ ○ localhost <em>(dns resolver)</em>
+└─ <strong>hosted-compute-agent</strong>
+   ├─ sudo
+   │  └─ <strong>provjobd</strong> <em>(ran from /tmp/…)</em>
+   │     ├─ ○ hosted-compute-watchdog-prod-iad-02.githubapp <em>(github infra)</em> · pid&nbsp;1893
+   │     └─ ○ localhost <em>(dns resolver)</em> · pid&nbsp;1893
+   └─ ○ 140.82.114.24 · pid&nbsp;1878
 </pre>
 </details>
 
@@ -323,30 +315,27 @@ Keyed by execution chain; repeated destination names within a chain are collapse
 <pre>
 Runner.Worker
 └─ bash
-   ├─ node
-   │  └─ dash
-   │     ├─ <strong>node</strong> · pid&nbsp;2384 <em>(step: &quot;Run workload&quot;)</em>
-   │     │  ├─ ○ api.garnet.ai <em>(garnet sensor)</em>
-   │     │  ├─ ○ github.com
-   │     │  ├─ ○ localhost <em>(dns resolver)</em>
-   │     │  └─ ○ registry.npmjs.org
-   │     └─ node
-   │        └─ dash
-   │           └─ <strong>curl</strong> · pid&nbsp;2396 <em>(step: &quot;Run workload&quot;)</em>
-   │              ├─ ○ httpbin.org
-   │              └─ ○ localhost <em>(dns resolver)</em>
-   └─ <strong>node</strong> · pid&nbsp;2361 <em>(step: &quot;Run workload&quot;)</em>
-      ├─ ○ localhost <em>(dns resolver)</em>
-      └─ ○ registry.npmjs.org
+   └─ <strong>node</strong> <em>(step: &quot;Run workload&quot;)</em>
+      ├─ dash
+      │  └─ <strong>node</strong>
+      │     ├─ dash
+      │     │  └─ <strong>curl</strong>
+      │     │     ├─ ○ httpbin.org · pid&nbsp;2396
+      │     │     └─ ○ localhost <em>(dns resolver)</em> · pid&nbsp;2396
+      │     ├─ ○ api.garnet.ai <em>(garnet sensor)</em> · pid&nbsp;2384
+      │     ├─ ○ github.com · pid&nbsp;2384
+      │     ├─ ○ localhost <em>(dns resolver)</em> · pid&nbsp;2384
+      │     └─ ○ registry.npmjs.org · pid&nbsp;2384
+      ├─ ○ localhost <em>(dns resolver)</em> · pid&nbsp;2361
+      └─ ○ registry.npmjs.org · pid&nbsp;2361
 
 systemd
-├─ <strong>hosted-compute-agent</strong> · pid&nbsp;1849
-│  └─ ○ 140.82.113.23
-└─ hosted-compute-agent
-   └─ sudo
-      └─ <strong>provjobd</strong> · pid&nbsp;1864 <em>(ran from /tmp/…)</em>
-         ├─ ○ hosted-compute-watchdog-prod-iad-02.githubapp <em>(github infra)</em>
-         └─ ○ localhost <em>(dns resolver)</em>
+└─ <strong>hosted-compute-agent</strong>
+   ├─ sudo
+   │  └─ <strong>provjobd</strong> <em>(ran from /tmp/…)</em>
+   │     ├─ ○ hosted-compute-watchdog-prod-iad-02.githubapp <em>(github infra)</em> · pid&nbsp;1864
+   │     └─ ○ localhost <em>(dns resolver)</em> · pid&nbsp;1864
+   └─ ○ 140.82.113.23 · pid&nbsp;1849
 </pre>
 </details>
 
