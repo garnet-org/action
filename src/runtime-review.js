@@ -1147,6 +1147,11 @@ function edgePrimaryDestination(edge) {
   )
 }
 
+// A recorded remote name can be a CDN alias (a crates host recorded as its
+// fastly edge name) rather than the name the workload queried. Do not
+// canonicalize it here: the record carries no deterministic signal until the
+// sensor records the DNS question name per flow (jibril
+// pkg/services/baseline netflows.go processFlow / normalizeFlowNames).
 /**
  * Normalize a destination identity with names learned from both sides of a
  * comparison. A bare address therefore joins the named identity recorded by
