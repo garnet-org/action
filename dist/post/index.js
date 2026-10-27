@@ -159448,6 +159448,7 @@ const GITHUB_META_IP_RANGES = {
  *   children: TreeNode[]
  *   childByKey: Map<string, TreeNode>
  *   associations: ReviewEdge[]
+ *   terminalPid: string
  *   pids: Set<string>
  *   processes: Set<string>
  *   steps: Set<string>
@@ -160472,11 +160473,13 @@ function commentEdges(edges) {
 
 /**
  * @param {string} [name]
+ * @param {string} [terminalPid]
  * @returns {TreeNode}
  */
-function makeTreeNode(name = "") {
+function makeTreeNode(name = "", terminalPid = "") {
   return {
     name,
+    terminalPid,
     children: [],
     childByKey: new Map(),
     associations: [],
@@ -160488,22 +160491,26 @@ function makeTreeNode(name = "") {
 }
 
 /**
- * Add one destination association to a shared-prefix lineage tree. Nodes
- * are keyed by recorded process name along the lineage path; PID-distinct
- * capture stays in the evidence register (the comment tree renders one row
- * per destination identity).
+ * Add one destination association to a shared-prefix lineage tree. PID-keyed
+ * terminal nodes are exclusive to lossless trees; comment nodes stay
+ * name-keyed.
  * @param {TreeNode} root
  * @param {ReviewEdge} edge
+ * @param {boolean} [pidKeyedTerminals]
  */
-function addAssociationToTree(root, edge) {
+function addAssociationToTree(root, edge, pidKeyedTerminals = false) {
   const path = commentTreePath(edge)
   let node = root
   path.forEach((name, index) => {
     const terminal = index === path.length - 1
-    const key = JSON.stringify([name])
+    const terminalPid =
+      terminal && pidKeyedTerminals && edge.pid !== "" && edge.pid !== "0"
+        ? edge.pid
+        : ""
+    const key = terminalPid === "" ? JSON.stringify([name]) : JSON.stringify([name, terminalPid])
     let child = node.childByKey.get(key)
     if (!child) {
-      child = makeTreeNode(name)
+      child = makeTreeNode(name, terminalPid)
       node.childByKey.set(key, child)
       node.children.push(child)
     }
@@ -160519,13 +160526,59 @@ function addAssociationToTree(root, edge) {
 }
 
 /**
+ * Sort PID-keyed siblings numerically within each process-name group.
+ * @param {TreeNode} node
+ */
+function orderPidNodes(node) {
+  for (const child of node.children) orderPidNodes(child)
+  /** @type {Map<string, number[]>} */
+  const pidIndexes = new Map()
+  /** @type {Map<string, TreeNode[]>} */
+  const pidNodes = new Map()
+  for (let index = 0; index < node.children.length; index += 1) {
+    const child = node.children[index]
+    if (child === undefined || child.terminalPid === "") continue
+    let indexes = pidIndexes.get(child.name)
+    if (indexes === undefined) {
+      indexes = []
+      pidIndexes.set(child.name, indexes)
+    }
+    indexes.push(index)
+    let nodes = pidNodes.get(child.name)
+    if (nodes === undefined) {
+      nodes = []
+      pidNodes.set(child.name, nodes)
+    }
+    nodes.push(child)
+  }
+  for (const [name, nodes] of pidNodes) {
+    nodes.sort((a, b) => {
+      const difference = Number(a.terminalPid) - Number(b.terminalPid)
+      if (Number.isFinite(difference) && difference !== 0) return difference
+      return a.terminalPid < b.terminalPid ? -1 : a.terminalPid > b.terminalPid ? 1 : 0
+    })
+    const indexes = pidIndexes.get(name)
+    if (indexes === undefined) continue
+    indexes.forEach((index, position) => {
+      const child = nodes[position]
+      if (child !== undefined) node.children[index] = child
+    })
+  }
+}
+
+/**
  * @param {ReviewEdge[]} edges
+ * @param {{ dedupe?: boolean }} [options]
  * @returns {TreeNode}
  */
-function treeForAssociations(edges) {
+function treeForAssociations(edges, { dedupe = true } = {}) {
   const root = makeTreeNode()
-  for (const edge of dedupeDestinationEdges(edges)) addAssociationToTree(root, edge)
+  const orderedEdges = dedupe
+    ? dedupeDestinationEdges(edges)
+    : [...edges].sort(edgeComparator)
+  for (const edge of orderedEdges) addAssociationToTree(root, edge, !dedupe)
   coalescePrefixTerminalNodes(root)
+  if (!dedupe) orderPidNodes(root)
   return root
 }
 
@@ -160559,13 +160612,15 @@ function coalescePrefixTerminalNodes(node) {
     const branch = group.find((child) => child.children.length > 0)
     if (!branch) continue
     for (const child of group) {
-      if (child !== branch && child.children.length === 0) mergeTreeNode(branch, child)
+      if (child !== branch && child.children.length === 0 && child.terminalPid === "") {
+        mergeTreeNode(branch, child)
+      }
     }
   }
   node.children = node.children.filter((child) => {
     const group = grouped.get(child.name) || []
     const branch = group.find((candidate) => candidate.children.length > 0)
-    return !branch || child === branch || child.children.length > 0
+    return !branch || child === branch || child.children.length > 0 || child.terminalPid !== ""
   })
 }
 
@@ -160589,6 +160644,7 @@ function processNodeLine(node, { steps = true, inheritedSteps = new Set() } = {}
   // Bold marks the process that acted: an observed action sits directly
   // beneath it. Decoration only; the terminal itself carries the fact.
   const body = node.associations.length > 0 ? `<strong>${escaped}</strong>` : escaped
+  const pid = node.terminalPid !== "" ? ` · pid&nbsp;${escapeHtml(node.terminalPid)}` : ""
   // PID + command identity is Step Summary-only; the comment tree shows
   // process names alone. A real recorded step renders as a bracket
   // annotation — additive context that never determines structure.
@@ -160599,7 +160655,7 @@ function processNodeLine(node, { steps = true, inheritedSteps = new Set() } = {}
     : ""
   const provenance = ranFromNote(node.executables)
   const ranFrom = provenance !== "" ? ` ${renderNote(provenance)}` : ""
-  return `${body}${step}${ranFrom}`
+  return `${body}${pid}${step}${ranFrom}`
 }
 
 /**
@@ -160749,17 +160805,19 @@ function renderTreeChildren(node, prefix, lines, { destinations, steps = true, d
   })
 }
 
+/** @typedef {{ defang?: boolean, dedupe?: boolean }} RenderJobTreeOptions */
+
 /**
  * Render a job's lossless shared-prefix lineage tree. Destination leaves stay
  * attached to the terminal recorded process; no ×N grouping or trust labels.
  * @param {ReviewJob} job
  * @param {ReviewEdge[]} [edges]
- * @param {{ defang?: boolean }} [opts]
+ * @param {RenderJobTreeOptions} [opts]
  */
 function renderJobTree(job, edges = job.edges, opts = {}) {
   /** @type {string[]} */
   const lines = []
-  const root = treeForAssociations(edges)
+  const root = treeForAssociations(edges, { dedupe: opts.dedupe ?? true })
   // One block holds every recorded root; independent recorded ancestry
   // roots are separated by one blank line — whitespace means independent
   // recorded roots in the same job, never another category.
@@ -162522,7 +162580,7 @@ function renderProfileSummary(job, appUrl, keptDestinations, previewAssertions) 
     lines.push("<details><summary><sub>Full recorded tree</sub></summary>")
     lines.push("")
     lines.push("<pre>")
-    lines.push(renderJobTree(job, job.edges, { defang: false }))
+    lines.push(renderJobTree(job, job.edges, { defang: false, dedupe: false }))
     lines.push("</pre>")
     lines.push("</details>")
     lines.push("")

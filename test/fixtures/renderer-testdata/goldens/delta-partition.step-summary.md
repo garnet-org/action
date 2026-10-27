@@ -25,16 +25,18 @@ Keyed by execution chain; repeated destination names within a chain are collapse
 <pre>
 Runner.Worker
 └─ npm
-   └─ <strong>node</strong> <em>(step: &quot;Install&quot;)</em>
-      ├─ ○ evil-mirror.example.com
-      └─ ○ registry.npmjs.org
+   ├─ <strong>node</strong> · pid&nbsp;9001 <em>(step: &quot;Install&quot;)</em>
+   │  └─ ○ registry.npmjs.org
+   └─ <strong>node</strong> · pid&nbsp;9002 <em>(step: &quot;Install&quot;)</em>
+      └─ ○ evil-mirror.example.com
 
 systemd
 └─ hosted-compute-
    └─ sudo
-      └─ <strong>provjobd</strong>
-         ├─ ○ glb-p4a577-public-internal.githubapp.com <em>(github infra)</em>
-         └─ ○ resultsstorageeus2.blob.core.windows.net
+      ├─ <strong>provjobd</strong> · pid&nbsp;9003
+      │  └─ ○ resultsstorageeus2.blob.core.windows.net
+      └─ <strong>provjobd</strong> · pid&nbsp;9004
+         └─ ○ glb-p4a577-public-internal.githubapp.com <em>(github infra)</em>
 </pre>
 </details>
 

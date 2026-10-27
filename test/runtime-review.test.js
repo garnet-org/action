@@ -1124,7 +1124,7 @@ await test("gate: step summary full-tree fold — collapsed by default, absolute
   assert.ok(EDGE_SUMMARY.includes("<details><summary><sub>Full recorded tree</sub></summary>"))
   assert.ok(!EDGE_SUMMARY.includes("<details open"))
   const job = summarizeProfile(edgeCaseEnvelope)
-  const tree = renderJobTree(job, job.edges, { defang: false })
+  const tree = renderJobTree(job, job.edges, { defang: false, dedupe: false })
   assert.ok(EDGE_SUMMARY.includes(tree))
   // Step Summary stays canonical — no defanged hostnames in the fold.
   assert.ok(!tree.includes("[.]"))
@@ -1134,6 +1134,134 @@ await test("gate: step summary full-tree fold — collapsed by default, absolute
   const fold = EDGE_SUMMARY.slice(foldStart, foldEnd)
   assert.ok(!/^[+−-] /m.test(fold.replace(/<[^>]+>/g, "")))
   assert.ok(!fold.includes("no longer recorded"))
+})
+
+await test("gate: full recorded tree preserves PID-distinct destination associations", () => {
+  const profile = {
+    uuid: "pid-distinct-tree",
+    timestamp: "2026-10-27T00:00:00Z",
+    scenarios: {
+      github: {
+        job: "test",
+        workflow: "CI",
+        repository: REPO,
+        run_id: "1",
+        sha: "abc",
+        action: "Run tests",
+      },
+    },
+    network: {
+      egress: {
+        peers: [
+          {
+            remote_address: "104.16.0.34",
+            remote_names: ["registry.npmjs.org"],
+            remote_ports: ["443 (https)"],
+            protocol: "TCP",
+            result: "pass",
+            detections: ["flow"],
+            proc_trees: [
+              {
+                pid: 101,
+                process: "node",
+                executable: "/usr/bin/node",
+                github_step: "Run tests",
+                ancestry: ["systemd", "bash", "node"],
+              },
+              {
+                pid: 202,
+                process: "node",
+                executable: "/usr/bin/node",
+                github_step: "Run tests",
+                ancestry: ["systemd", "bash", "node"],
+              },
+            ],
+          },
+        ],
+      },
+    },
+  }
+  const job = summarizeProfile(profile)
+  const defaultTree = renderJobTree(job, job.edges)
+  const commentTree =
+    renderRunReview(reviewFor([profile])).match(/<pre>\n([\s\S]*?)\n<\/pre>/)?.[1] ?? ""
+  assert.notEqual(commentTree, "")
+  assert.equal(commentTree, defaultTree)
+  assert.equal(
+    commentTree.split("\n").filter((line) => line.includes("○ registry.npmjs[.]org")).length,
+    1,
+  )
+
+  const summaryTree =
+    renderStepSummary([profile]).match(
+      /<details><summary><sub>Full recorded tree<\/sub><\/summary>\n\n<pre>\n([\s\S]*?)\n<\/pre>/,
+    )?.[1] ?? ""
+  assert.notEqual(summaryTree, "")
+  assert.ok(
+    summaryTree.includes(
+      '<strong>node</strong> · pid&nbsp;101 <em>(step: &quot;Run tests&quot;)</em>',
+    ),
+  )
+  assert.ok(
+    summaryTree.includes(
+      '<strong>node</strong> · pid&nbsp;202 <em>(step: &quot;Run tests&quot;)</em>',
+    ),
+  )
+  assert.ok(summaryTree.indexOf("pid&nbsp;101") < summaryTree.indexOf("pid&nbsp;202"))
+  assert.equal(
+    summaryTree.split("\n").filter((line) => line.includes("○ registry.npmjs.org")).length,
+    job.edges.length,
+  )
+
+  const numericProfile = structuredClone(profile)
+  const peer = numericProfile.network.egress.peers[0]
+  if (!peer) throw new Error("expected a profile peer")
+  const [firstTree, secondTree] = peer.proc_trees
+  if (!firstTree || !secondTree) throw new Error("expected two recorded process trees")
+  firstTree.pid = 10
+  secondTree.pid = 2
+  peer.proc_trees.push({ ...firstTree, pid: 0 })
+  const numericJob = summarizeProfile(numericProfile)
+  const numericTree = renderJobTree(numericJob, numericJob.edges, {
+    defang: false,
+    dedupe: false,
+  })
+  const processLines = numericTree
+    .split("\n")
+    .filter((line) => line.includes("<strong>node</strong>"))
+  const pidLines = processLines.filter((line) => line.includes("pid&nbsp;"))
+  assert.ok(pidLines[0]?.includes("pid&nbsp;2"))
+  assert.ok(pidLines[1]?.includes("pid&nbsp;10"))
+  assert.ok(
+    processLines.some((line) =>
+      line.includes('<strong>node</strong> <em>(step: &quot;Run tests&quot;)'),
+    ),
+  )
+  assert.ok(!numericTree.includes("pid&nbsp;0"))
+
+  const nameOrderProfile = structuredClone(profile)
+  const nameOrderPeer = nameOrderProfile.network.egress.peers[0]
+  if (!nameOrderPeer) throw new Error("expected a profile peer")
+  const nameOrderTree = nameOrderPeer.proc_trees[0]
+  if (!nameOrderTree) throw new Error("expected a recorded process tree")
+  nameOrderPeer.proc_trees.push({
+    ...nameOrderTree,
+    pid: 900,
+    process: "git",
+    executable: "/usr/bin/git",
+    ancestry: ["systemd", "bash", "git"],
+  })
+  const nameOrderedJob = summarizeProfile(nameOrderProfile)
+  const nameOrderedTree = renderJobTree(nameOrderedJob, nameOrderedJob.edges, {
+    defang: false,
+    dedupe: false,
+  })
+  const gitLineIndex = nameOrderedTree.indexOf("<strong>git</strong> · pid&nbsp;900")
+  const nodeLineIndex = nameOrderedTree.indexOf("<strong>node</strong> · pid&nbsp;101")
+  assert.ok(
+    gitLineIndex !== -1 && nodeLineIndex !== -1 && gitLineIndex < nodeLineIndex,
+    "PID ordering must preserve canonical sibling process-name order",
+  )
 })
 
 await test("gate: preview material is contained — default bytes carry none of it on any surface", () => {
