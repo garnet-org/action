@@ -22,6 +22,7 @@ import { profilePermalink, renderStepSummary, summarizeProfile } from "./runtime
 import { appendUnrecordedSummary } from "./job-summary.js"
 import { getGitHubIDToken, resolveOIDCAudience } from "./oidc.js"
 import { parseSystemdTimespanSeconds } from "./systemd-timespan.js"
+import { redactString } from "./redact.js"
 import { classifyProfileContent } from "./post-profile-state.js"
 import { classifyAgentStop, formatAgentStopDetail } from "./post-signal.js"
 import { resolveJobStatusFromGitHub } from "./github-job-status.js"
@@ -264,12 +265,13 @@ async function readProfile(jsonProfilerFile, debug) {
         const stat = await statRootFile(jsonProfilerFile)
         const jsonProfile = stat.exists ? await readOptionalRootFile(jsonProfilerFile) : ""
 
+        const result = classifyProfileContent(stat, jsonProfile)
+
         if (debug && jsonProfile !== "") {
             core.info(`${JSON_PROFILE_LABEL} contents:`)
-            core.info(jsonProfile)
+            core.info(result.profile !== null ? JSON.stringify(result.profile.raw) : redactString(jsonProfile))
         }
 
-        const result = classifyProfileContent(stat, jsonProfile)
         switch (result.state) {
             case "missing":
                 core.info(`${JSON_PROFILE_LABEL} not found: ${jsonProfilerFile}`)

@@ -8,6 +8,7 @@ import * as fs from "node:fs/promises"
 import * as os from "node:os"
 import * as path from "node:path"
 import { default as artifactClient } from "@actions/artifact"
+import { redactProfile } from "./redact.js"
 import { getErrorMessage, getOptionalRecord } from "./shared.js"
 
 /** @typedef {import("./control-plane/types.js").CreateAgentRequest} CreateAgentRequest */
@@ -84,7 +85,7 @@ export function buildRunArtifact(input) {
     return {
         schema_version: 1,
         agent: withJobIndex(input.agent, input.jobIndex),
-        profile: input.profile,
+        profile: input.profile === null ? null : redactProfile(input.profile),
         stopped: input.stopped,
     }
 }

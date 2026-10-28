@@ -130,3 +130,34 @@ test("serialize: profile passed through, dropped when it blows the budget", () =
     assert.match(parsed.stopped.detail, /profile written; profile omitted: \d+ bytes exceeds/)
     AGENT_STOPPED_REQUEST_SCHEMA.parse(parsed.stopped)
 })
+
+test("buildRunArtifact: redacts secrets in the profile before serialization", () => {
+    const profile = {
+        scenarios: { github: { job_index: 1 } },
+        network: {
+            egress: {
+                peers: [
+                    {
+                        proc_trees: [
+                            {
+                                arguments: "curl -H 'Authorization: Bearer super-secret' --token my-token",
+                            },
+                        ],
+                    },
+                ],
+            },
+        },
+    }
+
+    const serialized = serializeRunArtifact(
+        buildRunArtifact({ agent: AGENT, jobIndex: 1, profile, stopped: STOPPED }),
+    )
+    const parsed = JSON.parse(serialized.content)
+
+    assert.equal(
+        parsed.profile.network.egress.peers[0].proc_trees[0].arguments,
+        "curl -H 'Authorization: Bearer ***' --token ***",
+    )
+    assert.ok(!serialized.content.includes("super-secret"))
+    assert.ok(!serialized.content.includes("my-token"))
+})
