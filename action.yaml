@@ -1,6 +1,6 @@
 name: "Garnet Runtime Review"
 author: "Garnet Labs Inc."
-description: "Execution evidence for code review: what each CI job ran and reached, recorded at the kernel."
+description: "Garnet instruments your CI runner and shows what changed at runtime on each pull request."
 branding:
     icon: "activity"
     color: "purple"
