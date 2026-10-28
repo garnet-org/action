@@ -28,8 +28,8 @@ test("redactString: masks environment variable assignments, flags, headers, and 
             "curl -H 'Authorization: Bearer ***'",
         ],
         [
-            '{"api_key": "secret-val", "refresh_token": "rt_123", "password": "pw", "client_secret": "cs"}',
-            '{"api_key": "***", "refresh_token": "***", "password": "***", "client_secret": "***"}',
+            '{"api_key": "secret-val", "refreshToken": "rt_123", "password": "pw", "clientSecret": "cs", "apiKey": "ak"}',
+            '{"api_key": "***", "refreshToken": "***", "password": "***", "clientSecret": "***", "apiKey": "***"}',
         ],
         [
             "X-API-Token: my-raw-token\npassword: my-yaml-password\nclient_secret: 'my-secret'",

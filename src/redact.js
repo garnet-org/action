@@ -27,7 +27,7 @@ const SECRET_FLAG =
     "api[_-]?key|access[_-]?key|private[_-]?key)[= ]\\s*)"
 
 const SENSITIVE_FIELD =
-    "(?:(?:[a-z0-9_-]*[_-])?(?:token|secret|password|passwd|passphrase|credentials?)|" +
+    "(?:[a-z0-9_-]*(?:token|secret|password|passwd|passphrase|credentials?)|" +
     "(?:x-)?(?:api|access|private|secret|encryption|signing|client|consumer|auth|ssh|gpg|pgp|deploy)[_-]?key)"
 
 /** @type {RedactRule[]} */
