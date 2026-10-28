@@ -1365,7 +1365,9 @@ await test("shape: Step Summary is lineage-keyed (deduped) with preview-only con
   // only in the Workload table, and the brand is never doubled beside the CTA.
   assert.ok(!EDGE_SUMMARY.includes("Powered by Garnet</strong> ·"))
   assert.ok(!/<sub>workflow /.test(EDGE_SUMMARY))
-  assert.ok(EDGE_SUMMARY.includes("Job summary generated at run-time"))
+  // GitHub prints its own "Job summary generated at run-time" line; the CTA ends the summary.
+  assert.ok(!EDGE_SUMMARY.includes("Job summary generated at run-time"))
+  assert.ok(EDGE_SUMMARY.trimEnd().endsWith("</div>"))
   assert.ok(EDGE_SUMMARY.includes("2026-07-08 05:35:56 UTC"))
 
   const rows = buildDestinationRows(EDGE_REVIEW.jobs[0].edges)

@@ -50,5 +50,3 @@ No assertions recorded.
 <sub>2026-08-07 13:00:00 UTC</sub><br>
 <a href="https://app.garnet.ai/public/runs/32000000002?profile=019f2c11-aaaa-7bbb-8ccc-0123456789ab&amp;utm_source=github&amp;utm_medium=step_summary">View this job's Execution Profile in Garnet →</a>
 </div>
-
-<sub><a href="https://github.com/garnet-org/runtime-review-testbed/actions/runs/32000000002">Job summary generated at run-time</a></sub>
