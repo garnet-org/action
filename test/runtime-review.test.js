@@ -13,6 +13,7 @@ import { readFileSync, readdirSync } from "node:fs"
 import { fileURLToPath } from "node:url"
 import { dirname, join } from "node:path"
 import {
+  escapeMarkdownCell,
   CONTRACT_VOCAB,
   RUNTIME_REVIEW_MARKER,
   COMMENT_MARKER,
@@ -1039,7 +1040,11 @@ await test("gate 19: HTML/Markdown injection payloads render inert on all render
     assert.ok(!block.includes("<script"), "raw <script> inside pre")
     assert.ok(!block.includes("<img"), "raw <img> inside pre")
   }
-  assert.ok(summary.includes("![exfil](//evil.example/x.png)"), "payload dropped instead of contained")
+  // GitHub parses Markdown inside inline <code>, so table cells must carry the
+  // payload with its Markdown punctuation entity-encoded, not merely wrapped.
+  const outsidePre = summary.replace(/<pre>[\s\S]*?<\/pre>/g, "<pre>pre</pre>")
+  assert.ok(!outsidePre.includes("![exfil]("), "markdown image left active inside a table cell")
+  assert.ok(summary.includes("!&#91;exfil&#93;(//evil.example/x.png)"), "payload dropped instead of contained")
   // JSON surface: structured, embargo respected, no pre-rendered HTML fields.
   const json = exportReviewModel(review)
   const processes = json.jobs[0].edges.map((edge) => edge.process)
@@ -1415,7 +1420,7 @@ await test("shape: assertion evidence renders only when explicitly recorded and 
   assert.ok(!hidden.includes("bad.example"))
   assert.ok(preview.includes("| Assertion | Timestamp | Event | Remote Peer | Protocol | Ports | Result |"))
   assert.ok(preview.includes("bad.example"))
-  assert.ok(preview.includes("network_peer"))
+  assert.ok(preview.includes("network&#95;peer"))
   assert.ok(!preview.includes("assertion-secret"))
   assert.ok(!model.includes("assertion-secret"))
   assert.ok(!model.includes("arguments"))
@@ -1429,6 +1434,17 @@ await test("shape: recorded matrix job index remains distinct metadata", () => {
   const model = exportReviewModel(reviewFor([envelope]))
   assert.equal(model.jobs[0].job_index, "3")
   assert.ok(renderStepSummary([envelope]).includes("| Matrix job index | 3 |"))
+})
+
+await test("gate 19b: table cells entity-encode Markdown link, emphasis, autolink and mention syntax", () => {
+  const cell = escapeMarkdownCell("[a](https://evil.example/x) **b** @octocat www.evil.example | x")
+  for (const active of ["[a](", "**", "https://", "@octocat", "www.", " | "]) {
+    assert.ok(!cell.includes(active), `active Markdown survived: ${active}`)
+  }
+  assert.equal(
+    cell,
+    "&#91;a&#93;(https&#58;//evil.example/x) &#42;&#42;b&#42;&#42; &#64;octocat www&#46;evil.example \\| x",
+  )
 })
 
 await test("shape: step attribution renders as factual `(step: …)` context, always HTML-escaped", () => {
