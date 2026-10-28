@@ -148621,7 +148621,9 @@ function annotateDeliveryFailure(cause, detail) {
     const annotation = DELIVERY_FAILURE_ANNOTATIONS[cause]
     warning(annotation.message, { title: annotation.title })
     if (detail !== "") {
-        info(`${annotation.title}: ${detail}`)
+        // core.info does not escape workflow commands; a line break in a
+        // diagnostic drawn from the profile could start a new "::" command.
+        info(`${annotation.title}: ${detail.replace(/[\r\n]+/g, " ")}`)
     }
 }
 

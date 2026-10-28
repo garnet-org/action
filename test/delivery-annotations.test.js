@@ -114,6 +114,13 @@ test("delivery failure annotations and artifact uploads stay warning-only", () =
             infos: [...calls.infos],
         }
 
+        clearCalls()
+        annotations.annotateDeliveryFailure("profile_invalid", "bad token\\n::error::injected\\r\\n::set-output name=x::y")
+        const multilineDetailResult = {
+            warnings: [...calls.warnings],
+            infos: [...calls.infos],
+        }
+
         const { uploadRunArtifact } = await import("./src/run-artifact.js")
         const envelope = {
             schema_version: 1,
@@ -159,6 +166,7 @@ test("delivery failure annotations and artifact uploads stay warning-only", () =
         process.stdout.write(JSON.stringify({
             annotationResults,
             emptyDetailResult,
+            multilineDetailResult,
             titles: {
                 noProfile: annotations.NO_PROFILE_TITLE,
                 noReview: annotations.NO_REVIEW_TITLE,
@@ -189,6 +197,11 @@ test("delivery failure annotations and artifact uploads stay warning-only", () =
 
     assert.equal(result.emptyDetailResult.warnings.length, 1)
     assert.deepEqual(result.emptyDetailResult.infos, [])
+
+    assert.equal(result.multilineDetailResult.warnings.length, 1)
+    assert.deepEqual(result.multilineDetailResult.infos, [
+        `${result.titles.noProfile}: bad token ::error::injected ::set-output name=x::y`,
+    ])
 
     assert.equal(result.failedUpload.warnings.length, 1)
     assert.equal(result.failedUpload.warnings[0].title, result.titles.noReview)
