@@ -168,8 +168,6 @@ Network telemetry observed 2 unique domains, 2 destinations, 2 connections, and 
 <a href="https://app.garnet.ai/public/runs/29294366437?profile=019f5de7-59af-7208-a4f7-6cfecaae0c59&amp;utm_source=github&amp;utm_medium=step_summary">View this job's Execution Profile in Garnet →</a>
 </div>
 
-<sub><a href="https://github.com/garnet-org/runtime-review-testbed/actions/runs/29294366437">Job summary generated at run-time</a></sub>
-
 ---
 
 ## Garnet Execution Summary
@@ -223,8 +221,6 @@ Network telemetry observed 4 unique domains, 4 destinations, 4 connections, and 
 <a href="https://app.garnet.ai/public/runs/29294366437?profile=019f5de7-571c-78d6-8a61-dd43f61c441c&amp;utm_source=github&amp;utm_medium=step_summary">View this job's Execution Profile in Garnet →</a>
 </div>
 
-<sub><a href="https://github.com/garnet-org/runtime-review-testbed/actions/runs/29294366437">Job summary generated at run-time</a></sub>
-
 ---
 
 ## Garnet Execution Summary
@@ -272,8 +268,6 @@ Network telemetry observed 3 unique domains, 3 destinations, 3 connections, and 
 <a href="https://app.garnet.ai/public/runs/29294366437?profile=019f5de7-54b9-704c-a002-a7d9d70b271b&amp;utm_source=github&amp;utm_medium=step_summary">View this job's Execution Profile in Garnet →</a>
 </div>
 
-<sub><a href="https://github.com/garnet-org/runtime-review-testbed/actions/runs/29294366437">Job summary generated at run-time</a></sub>
-
 ---
 
 ## Garnet Execution Summary
@@ -320,8 +314,6 @@ Network telemetry observed 3 unique domains, 3 destinations, 3 connections, and 
 <sub>2026-07-13 23:54:31 UTC</sub><br>
 <a href="https://app.garnet.ai/public/runs/29294366437?profile=019f5de7-5ca7-7f9d-bfb3-c59ccde51111&amp;utm_source=github&amp;utm_medium=step_summary">View this job's Execution Profile in Garnet →</a>
 </div>
-
-<sub><a href="https://github.com/garnet-org/runtime-review-testbed/actions/runs/29294366437">Job summary generated at run-time</a></sub>
 
 ---
 
@@ -384,5 +376,3 @@ Network telemetry observed 7 unique domains, 8 destinations, 8 connections, and 
 <sub>2026-07-13 23:54:30 UTC</sub><br>
 <a href="https://app.garnet.ai/public/runs/29294366437?profile=019f5de7-5992-7409-89cf-6d88e0fb46ea&amp;utm_source=github&amp;utm_medium=step_summary">View this job's Execution Profile in Garnet →</a>
 </div>
-
-<sub><a href="https://github.com/garnet-org/runtime-review-testbed/actions/runs/29294366437">Job summary generated at run-time</a></sub>

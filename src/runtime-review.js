@@ -3199,15 +3199,9 @@ function renderStepSummaryFooter(job, appUrl) {
     link === ""
       ? "<strong>Powered by Garnet</strong>"
       : `<a href="${escapeHtmlAttr(link)}">${VOCAB.permalinkLabel}</a>`
+  // The CTA is the last element: GitHub prints its own "Job summary generated
+  // at run-time" line under every job summary.
   lines.push(cta, "</div>")
-  if (job.run_url !== "") {
-    lines.push(
-      "",
-      `<sub><a href="${escapeHtmlAttr(job.run_url)}">Job summary generated at run-time</a></sub>`,
-    )
-  } else {
-    lines.push("", "<sub>Job summary generated at run-time</sub>")
-  }
   return lines.join("\n")
 }
 

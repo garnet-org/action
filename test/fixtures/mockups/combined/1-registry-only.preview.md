@@ -93,5 +93,3 @@ No assertions recorded.
 <div align="right">
 <a href="https://app.garnet.ai/public/runs/28488074733?profile=019f1b61-9f3c-7ac8-a8ed-0c07bf1546af&amp;utm_source=github&amp;utm_medium=step_summary">View this job's Execution Profile in Garnet →</a>
 </div>
-
-<sub><a href="https://github.com/garnet-labs/runtime-review-testbed/actions/runs/28488074733">Job summary generated at run-time</a></sub>

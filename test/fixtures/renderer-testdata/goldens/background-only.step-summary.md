@@ -40,5 +40,3 @@ systemd
 <sub>2026-08-07 18:30:00 UTC</sub><br>
 <strong>Powered by Garnet</strong>
 </div>
-
-<sub><a href="https://github.com/garnet-labs/posthog/actions/runs/32100000003">Job summary generated at run-time</a></sub>

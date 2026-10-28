@@ -47,8 +47,6 @@ systemd
 <strong>Powered by Garnet</strong>
 </div>
 
-<sub><a href="https://github.com/garnet-org/runtime-review-testbed/actions/runs/32000000001">Job summary generated at run-time</a></sub>
-
 ---
 
 ## Garnet Execution Summary
@@ -94,8 +92,6 @@ systemd
 <strong>Powered by Garnet</strong>
 </div>
 
-<sub><a href="https://github.com/garnet-org/runtime-review-testbed/actions/runs/32000000001">Job summary generated at run-time</a></sub>
-
 ---
 
 ## Garnet Execution Summary
@@ -134,5 +130,3 @@ systemd
 <sub>2026-08-07 12:00:00 UTC</sub><br>
 <strong>Powered by Garnet</strong>
 </div>
-
-<sub><a href="https://github.com/garnet-org/runtime-review-testbed/actions/runs/32000000001">Job summary generated at run-time</a></sub>
