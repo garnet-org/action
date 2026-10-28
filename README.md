@@ -7,7 +7,6 @@
 
   <p><strong>Runtime review for pull requests</strong></p>
 
-  <p>The diff shows what changed.<br/>Garnet shows what ran.</p>
 
   <p>
     <a href="https://github.com/apps/garnet-runtime-review/installations/select_target">Install the GitHub App</a> ·
@@ -35,15 +34,7 @@ Install the GitHub App, add one step. No code changes, no secret.
 - **Action**: adds the step; Jibril records the job; the Garnet Execution Summary lands in the job's Step Summary with a public Execution Profile permalink.
 - **Companion GitHub App**: owns the single Runtime Review comment per pull request — one fold per recorded job, a comparison against the previous recorded commit, and a per-job Execution Profile link.
 
-<p align="center">
-  <img
-    src="docs/images/pr-comment-v610.png"
-    width="800"
-    alt="A Garnet Runtime Review comment on a pull request: Execution Profiles recorded for 3 jobs, compared with the previous commit; one fold per job showing the execution tree as a diff, with ○ destination leaves and (step: …) context"
-  />
-</p>
-
-<p align="center"><sub>Runtime Review comment posted by the companion GitHub App on <a href="https://github.com/garnet-labs/pnpm/pull/65#issuecomment-5780094095">a pnpm pull request</a> (Action v2.3.0, contract 6.10.0).</sub></p>
+See what the comment looks like at [docs.garnet.ai/consume](https://docs.garnet.ai/consume).
 
 ## What Garnet records
 
@@ -56,8 +47,10 @@ Install the GitHub App, add one step. No code changes, no secret.
 
 | Permission | Required | Why |
 | :--- | :--- | :--- |
-| `contents: read` | Yes | The minimum job token. The action uses it for `gh attestation verify`, to fetch the running workflow file through the GitHub API when there is no checkout, and to read the job's status when no Execution Profile was produced. No write scope is needed; the action does not post comments. |
+| `contents: read` | Yes | The minimum job token. The action uses it for `gh attestation verify` and to fetch the running workflow file through the GitHub API when there is no checkout. No write scope is needed; the action does not post comments. |
 | `id-token: write` | Only without `api_token` | Lets the action request a GitHub OIDC token and exchange it with the Garnet control plane. Not needed when you pass `api_token`. |
+
+When a job produces no Execution Profile, the action looks up the job's status to explain why. That lookup needs `actions: read`; without it the lookup is skipped and the job is unaffected. Add `actions: read` only if you want that explanation.
 
 The Action never needs `pull-requests: write`; the pull request comment is posted by the companion GitHub App under its own installation.
 
