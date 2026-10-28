@@ -36,6 +36,7 @@ import {
     formatKernelGaps,
     parseJibrilStatus,
 } from "./jibril-status.js"
+import { redactString } from "./redact.js"
 
 /**
  * @typedef {import("./jibril-status.js").JibrilStatus} JibrilStatus
@@ -1410,13 +1411,7 @@ async function readdirRecursiveSafe(dirPath) {
  */
 function redactSensitive(text) {
     if (typeof text !== "string") return text
-    return text
-        .replace(/\bAI_TOKEN=[^\s\n]*/gi, "AI_TOKEN=***")
-        .replace(/\bGITHUB_TOKEN=[^\s\n]*/gi, "GITHUB_TOKEN=***")
-        .replace(/\bGARNET_API_TOKEN=[^\s\n]*/gi, "GARNET_API_TOKEN=***")
-        .replace(/\bGARNET_AGENT_TOKEN=[^\s\n]*/gi, "GARNET_AGENT_TOKEN=***")
-        .replace(/^([A-Z0-9_]*(?:TOKEN|SECRET|PASSWORD|KEY))=.*/gim, "$1=***")
-        .replace(/(authorization:\s*(?:bearer|token|basic)\s+)[^\s\n]+/gi, "$1***")
+    return redactString(text)
 }
 
 /**

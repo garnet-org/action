@@ -89677,7 +89677,7 @@ function firstNonEmptyString(...values) {
  */
 async function pathExists(filePath) {
   try {
-    await promises_.access(filePath)
+    await fs.access(filePath)
     return true
   } catch {
     return false
@@ -148185,11 +148185,381 @@ If the error persists, please check whether Actions and API requests are operati
 const client = new DefaultArtifactClient();
 /* harmony default export */ const artifact = (client);
 //# sourceMappingURL=artifact.js.map
+;// CONCATENATED MODULE: ./src/redact.js
+// Removes secrets such as API tokens, passwords, and authorization headers
+// from profile payloads and log output before they are stored or emitted.
+
+
+
+/**
+ * @typedef {object} RedactRule
+ * @property {RegExp} re
+ * @property {string} repl
+ */
+
+const MASK = "***"
+
+// Rules err on the side of over-masking: a redacted value that turned out to be
+// harmless only costs a little telemetry, whereas a missed one is a leak. Every
+// rule must be idempotent, so re-running over already masked text is a no-op.
+//
+// Length bounds are open-ended on purpose. Providers lengthen token formats
+// over time, and an exact bound such as {36} silently matches nothing at all
+// once a token grows by one character.
+//
+// SECRET_FLAG matches a command line flag whose name denotes a secret, up to
+// and including the separator, e.g. "--token ", "--password=", "--api-key ".
+// Single-letter flags are left out: they are far too ambiguous.
+const SECRET_FLAG =
+    "(--?(?:[a-z0-9-]*-)?(?:token|secret|password|passwd|passphrase|credentials?|auth|" +
+    "api[_-]?key|access[_-]?key|private[_-]?key)[= ]\\s*)"
+
+const SENSITIVE_FIELD =
+    "(?:[a-z0-9_-]*(?:token|secret|password|passwd|passphrase|credentials?)|" +
+    "(?:x-)?(?:api|access|private|secret|encryption|signing|client|consumer|auth|ssh|gpg|pgp|deploy)[_-]?key)"
+
+/** @type {RedactRule[]} */
+const RULES = [
+    // NAME=VALUE assignments where the name denotes a secret, e.g.
+    // GITHUB_TOKEN=abc, MY_SECRET=xyz, DB_PASSWORD=p, API_KEY=k,
+    // NODE_AUTH=t, SSH_KEY=k. The value may be bare or single/double quoted.
+    {
+        re: /\b([A-Z0-9_]*(?:TOKEN|SECRET|PASSWORD|PASSWD|PASSPHRASE|CREDENTIALS?|AUTH|(?:API|ACCESS|PRIVATE|SECRET|ENCRYPTION|SIGNING|CLIENT|CONSUMER|AUTH|SSH|GPG|PGP|DEPLOY)[_-]?KEY))=(?:"[^"]*"|'[^']*'|[^\s'"]+)/gi,
+        repl: `$1=${MASK}`,
+    },
+    // Command line flags carrying a secret, e.g. --token xyz, --password=p,
+    // --api-key k. Quotes are kept so the surrounding command stays readable.
+    {
+        re: new RegExp(`${SECRET_FLAG}"[^"]*"`, "gi"),
+        repl: `$1"${MASK}"`,
+    },
+    {
+        re: new RegExp(`${SECRET_FLAG}'[^']*'`, "gi"),
+        repl: `$1'${MASK}'`,
+    },
+    // A bare flag value. Assignments such as --token GITHUB_TOKEN=abc are
+    // already masked to GITHUB_TOKEN=*** by the first rule and are left alone
+    // so the variable name stays visible; any other '=' (such as base64
+    // padding in --token dGVzdA== or --api-key foo=bar) is still masked. A
+    // value that is only a shell variable reference such as $GITHUB_TOKEN
+    // reveals nothing, so it stays readable.
+    {
+        re: new RegExp(`${SECRET_FLAG}(?![A-Z0-9_]+=\\*{3}(?:\\s|['"]|$))[^\\s'"$][^\\s'"]*`, "gi"),
+        repl: `$1${MASK}`,
+    },
+    // HTTP authorization headers: Authorization: Bearer/Token/Basic/Digest xxx.
+    {
+        re: /(authorization\s*:\s*(?:bearer|token|basic|digest)\s+)[^\s'"]+/gi,
+        repl: `$1${MASK}`,
+    },
+    // Sensitive headers and JSON/YAML fields with a quoted value, e.g.
+    // "api_key": "xxx", "password": "xxx", "client_secret": "xxx". The quotes
+    // are kept so the result stays parseable and so a second pass is a no-op.
+    {
+        re: new RegExp(`\\b(${SENSITIVE_FIELD}['"]?\\s*:\\s*)"[^"]*"`, "gi"),
+        repl: `$1"${MASK}"`,
+    },
+    {
+        re: new RegExp(`\\b(${SENSITIVE_FIELD}['"]?\\s*:\\s*)'[^']*'`, "gi"),
+        repl: `$1'${MASK}'`,
+    },
+    // The same fields with a bare value, e.g. X-API-Token: xxx or YAML password: xxx.
+    {
+        re: new RegExp(`\\b(${SENSITIVE_FIELD}['"]?\\s*:\\s*)[^\\s'",}]+`, "gi"),
+        repl: `$1${MASK}`,
+    },
+    // Well-known token formats that can leak without a name or header.
+    {
+        re: /\bghs_[A-Za-z0-9_.-]{36,}/g,
+        repl: MASK,
+    },
+    {
+        re: /\bgh[pour]_[A-Za-z0-9]{36,}\b/g,
+        repl: MASK,
+    },
+    {
+        re: /\bgithub_pat_[A-Za-z0-9_]{22,}\b/g,
+        repl: MASK,
+    },
+    {
+        re: /\bnpm_[A-Za-z0-9]{36,}\b/g,
+        repl: MASK,
+    },
+    // AWS key IDs: AKIA is the long-lived form, ASIA a session credential and
+    // the rest identify other principal types.
+    {
+        re: /\b(?:AKIA|ASIA|ABIA|ACCA|AGPA|AIDA|AIPA|ANPA|ANVA|AROA)[0-9A-Z]{16,}\b/g,
+        repl: MASK,
+    },
+    // Slack bot, user, app and refresh tokens.
+    {
+        re: /\b(?:xox[abeprs]|xapp)-[A-Za-z0-9-]{10,}\b/g,
+        repl: MASK,
+    },
+    {
+        re: /\bAIza[0-9A-Za-z_-]{35,}\b/g,
+        repl: MASK,
+    },
+    // Stripe secret and restricted keys.
+    {
+        re: /\b[sr]k_(?:live|test)_[A-Za-z0-9]{10,}\b/g,
+        repl: MASK,
+    },
+    // JSON web tokens, which is what most short-lived CI credentials look like
+    // once they are expanded, e.g. ACTIONS_RUNTIME_TOKEN.
+    {
+        re: /\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}/g,
+        repl: MASK,
+    },
+    {
+        re: /-----BEGIN[A-Z ]*PRIVATE KEY-----[\s\S]*?-----END[A-Z ]*PRIVATE KEY-----/g,
+        repl: MASK,
+    },
+]
+
+/**
+ * Returns `value` with any detected secrets replaced by a mask.
+ * @param {string} value
+ * @returns {string}
+ */
+function redactString(value) {
+    if (value === "") {
+        return value
+    }
+
+    let redacted = value
+    for (const rule of RULES) {
+        redacted = redacted.replace(rule.re, rule.repl)
+    }
+
+    return redacted
+}
+
+/**
+ * Returns a copy of `base` with secrets removed from the fields that can carry
+ * user-controlled command lines, arguments, and environment variables.
+ * The input is not modified.
+ * @template T
+ * @param {T} base
+ * @returns {T}
+ */
+function redactBase(base) {
+    if (!isRecord(base) || Array.isArray(base)) {
+        return base
+    }
+
+    const cloned = structuredClone(base)
+    const root = getOptionalRecord(cloned)
+    if (root === null) {
+        return cloned
+    }
+
+    redactBackground(getOptionalRecord(root.background))
+
+    return cloned
+}
+
+/**
+ * Returns a copy of `profile` with secrets removed from the fields that can
+ * carry user-controlled command lines, arguments, and environment variables.
+ * The input is not modified.
+ * @template T
+ * @param {T} profile
+ * @returns {T}
+ */
+function redactProfile(profile) {
+    if (!shared_isRecord(profile) || Array.isArray(profile)) {
+        return profile
+    }
+
+    const cloned = structuredClone(profile)
+    const root = shared_getOptionalRecord(cloned)
+    if (root === null) {
+        return cloned
+    }
+
+    redactBackground(shared_getOptionalRecord(root.background))
+    redactNetProfile(shared_getOptionalRecord(root.network))
+    redactAssertions(root.assertions)
+    redactProfileDetections(root.profile_detections)
+
+    return cloned
+}
+
+/**
+ * @param {Record<string, unknown> | null} netProfile
+ * @returns {void}
+ */
+function redactNetProfile(netProfile) {
+    if (netProfile === null) {
+        return
+    }
+
+    redactDirection(shared_getOptionalRecord(netProfile.egress))
+    redactDirection(shared_getOptionalRecord(netProfile.ingress))
+    redactDirection(shared_getOptionalRecord(netProfile.local))
+}
+
+/**
+ * @param {Record<string, unknown> | null} direction
+ * @returns {void}
+ */
+function redactDirection(direction) {
+    if (direction === null || !Array.isArray(direction.peers)) {
+        return
+    }
+
+    for (const item of direction.peers) {
+        const peer = shared_getOptionalRecord(item)
+        if (peer !== null) {
+            redactProcTrees(peer.proc_trees)
+        }
+    }
+}
+
+/**
+ * @param {unknown} assertions
+ * @returns {void}
+ */
+function redactAssertions(assertions) {
+    if (!Array.isArray(assertions)) {
+        return
+    }
+
+    for (const assertionItem of assertions) {
+        const assertion = shared_getOptionalRecord(assertionItem)
+        if (assertion === null || !Array.isArray(assertion.evidence)) {
+            continue
+        }
+
+        for (const evidenceItem of assertion.evidence) {
+            const evidence = shared_getOptionalRecord(evidenceItem)
+            if (evidence === null) {
+                continue
+            }
+
+            const peer = shared_getOptionalRecord(evidence.peer)
+            if (peer !== null) {
+                redactProcTrees(peer.proc_trees)
+            }
+        }
+    }
+}
+
+/**
+ * @param {unknown} profileDetections
+ * @returns {void}
+ */
+function redactProfileDetections(profileDetections) {
+    if (!Array.isArray(profileDetections)) {
+        return
+    }
+
+    for (const detectionItem of profileDetections) {
+        const detection = shared_getOptionalRecord(detectionItem)
+        if (detection === null || !Array.isArray(detection.digested_detections)) {
+            continue
+        }
+
+        for (const digestedItem of detection.digested_detections) {
+            const digested = shared_getOptionalRecord(digestedItem)
+            if (digested !== null) {
+                redactProcTrees(digested.proc_trees)
+            }
+        }
+    }
+}
+
+/**
+ * @param {unknown} trees
+ * @returns {void}
+ */
+function redactProcTrees(trees) {
+    if (!Array.isArray(trees)) {
+        return
+    }
+
+    for (const item of trees) {
+        const tree = shared_getOptionalRecord(item)
+        if (tree !== null) {
+            redactRecordStringField(tree, "arguments")
+        }
+    }
+}
+
+/**
+ * @param {Record<string, unknown> | null} background
+ * @returns {void}
+ */
+function redactBackground(background) {
+    if (background === null) {
+        return
+    }
+
+    if (Array.isArray(background.ancestry)) {
+        for (const item of background.ancestry) {
+            const process = shared_getOptionalRecord(item)
+            if (process === null) {
+                continue
+            }
+
+            redactRecordStringField(process, "cmd")
+            redactRecordStringField(process, "args")
+            redactRecordStringField(process, "envs")
+            redactRecordStringField(process, "prev_args")
+            redactRecordStringField(process, "prev_envs")
+        }
+    }
+
+    const containersWrapper = shared_getOptionalRecord(background.containers)
+    if (containersWrapper !== null && Array.isArray(containersWrapper.containers)) {
+        for (const item of containersWrapper.containers) {
+            const container = shared_getOptionalRecord(item)
+            if (container === null) {
+                continue
+            }
+
+            redactStringArray(container.cmd)
+            redactStringArray(container.env)
+        }
+    }
+}
+
+/**
+ * @param {Record<string, unknown>} record
+ * @param {string} key
+ * @returns {void}
+ */
+function redactRecordStringField(record, key) {
+    const value = record[key]
+    if (typeof value === "string") {
+        record[key] = redactString(value)
+    }
+}
+
+/**
+ * @param {unknown} list
+ * @returns {void}
+ */
+function redactStringArray(list) {
+    if (!Array.isArray(list)) {
+        return
+    }
+
+    for (let i = 0; i < list.length; i += 1) {
+        const value = list[i]
+        if (typeof value === "string") {
+            list[i] = redactString(value)
+        }
+    }
+}
+
 ;// CONCATENATED MODULE: ./src/run-artifact.js
 // A fork's pull request gets neither repository secrets nor an OIDC ID
 // token, so the job cannot reach the control plane at all. It can still
 // upload a workflow artifact, which the Garnet GitHub App collects
 // afterwards with its own credentials.
+
 
 
 
@@ -148272,7 +148642,7 @@ function buildRunArtifact(input) {
     return {
         schema_version: 1,
         agent: withJobIndex(input.agent, input.jobIndex),
-        profile: input.profile,
+        profile: input.profile === null ? null : redactProfile(input.profile),
         stopped: input.stopped,
     }
 }
@@ -158736,81 +159106,64 @@ function getValidationErrorDetail(payload) {
 
 
 
+
 const DEBUG_ARTIFACT_NAME = "jibril-debug-logs"
 const DEFAULT_RUN_ATTEMPT = "1"
 /** @type {[string, string][]} */
 const JIBRIL_LOG_FILES = [
-  ["/var/log/jibril.log", "jibril.log"],
-  ["/var/log/jibril.err", "jibril.err"],
-  ["/var/log/jibril.out", "jibril.out"],
+    ["/var/log/jibril.log", "jibril.log"],
+    ["/var/log/jibril.err", "jibril.err"],
+    ["/var/log/jibril.out", "jibril.out"],
 ]
 
 async function uploadJibrilArtifacts() {
-  // A predictable staging path is a symlink-overwrite target for the
-  // root-privileged copy below; mkdtemp gives an unpredictable, freshly
-  // created directory owned by this process.
-  /** @type {string} */
-  let artifactDir
-  try {
-    artifactDir = await promises_.mkdtemp(external_node_path_.join(external_node_os_namespaceObject.tmpdir(), "garnet-"))
-  } catch (err) {
-    warning(
-      `Failed to create a staging directory for jibril artifacts: ${getErrorMessage(err)}`,
-    )
-    return
-  }
-
-  try {
-    const uploaded = await copyReadableLogFiles(artifactDir)
-    if (uploaded.length === 0) {
-      info("No jibril log files to upload")
-      return
+    /** @type {string} */
+    let artifactDir
+    try {
+        artifactDir = await promises_.mkdtemp(external_node_path_.join(external_node_os_namespaceObject.tmpdir(), "garnet-"))
+    } catch (err) {
+        warning(`Failed to create a staging directory for jibril artifacts: ${getErrorMessage(err)}`)
+        return
     }
 
-    const existing = await findExistingArtifactFiles(artifactDir, uploaded)
-    if (existing.length === 0) {
-      info("No readable jibril log files to upload")
-      return
-    }
+    try {
+        const staged = await stageRedactedLogFiles(artifactDir)
+        if (staged.length === 0) {
+            info("No jibril log files to upload")
+            return
+        }
 
-    const absolutePaths = existing.map((fileName) =>
-      external_node_path_.resolve(artifactDir, fileName),
-    )
+        const absolutePaths = staged.map(fileName => external_node_path_.resolve(artifactDir, fileName))
 
-    await artifact.uploadArtifact(
-      getDebugArtifactName(),
-      absolutePaths,
-      artifactDir,
-    )
-    info(`Uploaded jibril artifacts: ${existing.join(", ")}`)
-  } catch (err) {
-    const msg = getErrorMessage(err)
-    if (isArtifactAuthErrorMessage(msg)) {
-      warning(`Jibril artifact upload skipped (auth unavailable): ${msg}`)
-    } else {
-      warning(`Failed to upload jibril artifacts: ${msg}`)
+        await artifact.uploadArtifact(getDebugArtifactName(), absolutePaths, artifactDir)
+        info(`Uploaded jibril artifacts: ${staged.join(", ")}`)
+    } catch (err) {
+        const msg = getErrorMessage(err)
+        if (isArtifactAuthErrorMessage(msg)) {
+            warning(`Jibril artifact upload skipped (auth unavailable): ${msg}`)
+        } else {
+            warning(`Failed to upload jibril artifacts: ${msg}`)
+        }
+    } finally {
+        await promises_.rm(artifactDir, { recursive: true, force: true })
     }
-  } finally {
-    await promises_.rm(artifactDir, { recursive: true, force: true })
-  }
 }
 
 /**
  * @param {string} artifactDir
  * @returns {Promise<string[]>}
  */
-async function copyReadableLogFiles(artifactDir) {
-  /** @type {string[]} */
-  const uploaded = []
+async function stageRedactedLogFiles(artifactDir) {
+    /** @type {string[]} */
+    const staged = []
 
-  for (const [src, destName] of JIBRIL_LOG_FILES) {
-    const copied = await copyReadableLogFile(artifactDir, src, destName)
-    if (copied) {
-      uploaded.push(destName)
+    for (const [src, destName] of JIBRIL_LOG_FILES) {
+        if (await stageRedactedLogFile(artifactDir, src, destName)) {
+            staged.push(destName)
+        }
     }
-  }
 
-  return uploaded
+    return staged
 }
 
 /**
@@ -158819,65 +159172,41 @@ async function copyReadableLogFiles(artifactDir) {
  * @param {string} destName
  * @returns {Promise<boolean>}
  */
-async function copyReadableLogFile(artifactDir, src, destName) {
-  try {
-    const destPath = external_node_path_.join(artifactDir, destName)
-    const cpResult = await getExecOutput("sudo", ["cp", src, destPath], {
-      ignoreReturnCode: true,
-      silent: true,
-    })
-    if (cpResult.exitCode !== 0) {
-      debug(
-        `Skipping ${destName}: source may not exist (cp exit ${cpResult.exitCode})`,
-      )
-      return false
+async function stageRedactedLogFile(artifactDir, src, destName) {
+    try {
+        const catResult = await getExecOutput("sudo", ["cat", src], {
+            ignoreReturnCode: true,
+            silent: true,
+        })
+        if (catResult.exitCode !== 0) {
+            debug(`Skipping ${destName}: source may not exist (cat exit ${catResult.exitCode})`)
+            return false
+        }
+
+        const destPath = external_node_path_.join(artifactDir, destName)
+        await promises_.writeFile(destPath, redactString(catResult.stdout), "utf8")
+        return true
+    } catch {
+        return false
     }
-
-    await exec_exec("sudo", ["chmod", "a+r", destPath], {
-      ignoreReturnCode: true,
-    })
-    return await pathExists(destPath)
-  } catch {
-    return false
-  }
-}
-
-/**
- * @param {string} artifactDir
- * @param {string[]} fileNames
- * @returns {Promise<string[]>}
- */
-async function findExistingArtifactFiles(artifactDir, fileNames) {
-  /** @type {string[]} */
-  const existing = []
-
-  for (const fileName of fileNames) {
-    if (await pathExists(external_node_path_.join(artifactDir, fileName))) {
-      existing.push(fileName)
-    }
-  }
-
-  return existing
 }
 
 /**
  * @returns {string}
  */
 function getDebugArtifactName() {
-  const jobName = shared_getEnv("GITHUB_JOB")
-  const runAttempt = shared_getEnv("GITHUB_RUN_ATTEMPT")
+    const jobName = shared_getEnv("GITHUB_JOB")
+    const runAttempt = shared_getEnv("GITHUB_RUN_ATTEMPT")
 
-  const artifactNameParts = [DEBUG_ARTIFACT_NAME]
-  if (jobName !== "") {
-    artifactNameParts.push(sanitizeArtifactNamePart(jobName))
-  }
+    const artifactNameParts = [DEBUG_ARTIFACT_NAME]
+    if (jobName !== "") {
+        artifactNameParts.push(sanitizeArtifactNamePart(jobName))
+    }
 
-  const parsedRunAttempt = parseRunAttempt(
-    runAttempt === "" ? DEFAULT_RUN_ATTEMPT : runAttempt,
-  )
-  artifactNameParts.push(`attempt-${parsedRunAttempt}`)
+    const parsedRunAttempt = parseRunAttempt(runAttempt === "" ? DEFAULT_RUN_ATTEMPT : runAttempt)
+    artifactNameParts.push(`attempt-${parsedRunAttempt}`)
 
-  return artifactNameParts.join("-")
+    return artifactNameParts.join("-")
 }
 
 /**
@@ -158885,8 +159214,8 @@ function getDebugArtifactName() {
  * @returns {number}
  */
 function parseRunAttempt(value) {
-  const parsedValue = Number.parseInt(value, 10)
-  return Number.isSafeInteger(parsedValue) ? parsedValue : 1
+    const parsedValue = Number.parseInt(value, 10)
+    return Number.isSafeInteger(parsedValue) ? parsedValue : 1
 }
 
 /**
@@ -158894,7 +159223,7 @@ function parseRunAttempt(value) {
  * @returns {string}
  */
 function sanitizeArtifactNamePart(value) {
-  return value.replace(/[^A-Za-z0-9._-]+/g, "-")
+    return value.replace(/[^A-Za-z0-9._-]+/g, "-")
 }
 
 /**
@@ -158902,11 +159231,7 @@ function sanitizeArtifactNamePart(value) {
  * @returns {boolean}
  */
 function isArtifactAuthErrorMessage(message) {
-  return (
-    message.includes("ACTIONS_RUNTIME_TOKEN") ||
-    message.includes("AUTH_TOKEN") ||
-    message.includes("token")
-  )
+    return message.includes("ACTIONS_RUNTIME_TOKEN") || message.includes("AUTH_TOKEN") || message.includes("token")
 }
 
 ;// CONCATENATED MODULE: ./src/report-link.js
@@ -162875,6 +163200,7 @@ function parseSystemdTimespanSeconds(value) {
 
 
 
+
 /**
  * @typedef {object} RootFileStat
  * @property {boolean} exists
@@ -162928,7 +163254,7 @@ function classifyProfileContent(stat, content) {
     }
 
     try {
-        const raw = JSON.parse(content)
+        const raw = redactProfile(JSON.parse(content))
         if (summarizeProfile(raw) === null) {
             throw new Error("Invalid profile JSON: not a profile object")
         }
@@ -163762,6 +164088,7 @@ function parseCoreVersion(tag) {
 
 
 
+
 /** @typedef {import("./post-profile-state.js").LoadedProfile} LoadedProfile */
 /** @typedef {import("./post-profile-state.js").ProfileResult} ProfileResult */
 /** @typedef {import("./post-profile-state.js").RootFileStat} RootFileStat */
@@ -163991,12 +164318,13 @@ async function readProfile(jsonProfilerFile, debug) {
         const stat = await statRootFile(jsonProfilerFile)
         const jsonProfile = stat.exists ? await readOptionalRootFile(jsonProfilerFile) : ""
 
+        const result = classifyProfileContent(stat, jsonProfile)
+
         if (debug && jsonProfile !== "") {
             info(`${JSON_PROFILE_LABEL} contents:`)
-            info(jsonProfile)
+            info(result.profile !== null ? JSON.stringify(result.profile.raw) : redactString(jsonProfile))
         }
 
-        const result = classifyProfileContent(stat, jsonProfile)
         switch (result.state) {
             case "missing":
                 info(`${JSON_PROFILE_LABEL} not found: ${jsonProfilerFile}`)
