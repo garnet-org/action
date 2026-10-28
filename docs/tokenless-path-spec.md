@@ -30,10 +30,10 @@ The goal: `uses: garnet-org/action@v2` with **no inputs** produces a complete
 local Runtime Review — GitHub Step Summary always, standalone PR comment when
 `github_token` permits — rendered entirely from Jibril's local JSON profile,
 with **zero control-plane dependency**. The token *upgrades* the experience
-(hosted Run Profile, managed policies, GitHub App comment, dashboard history)
+(hosted Execution Profile, managed policies, GitHub App comment, dashboard history)
 instead of gating it.
 
-Forward-compatibility note from product direction: Run Profile reports in the
+Forward-compatibility note from product direction: Execution Profile reports in the
 UI will later be **always private**. The public/step-summary value must
 therefore be producible through this local path — the tokenless output is not
 a temporary degraded mode but the permanent public surface of the action.
@@ -50,7 +50,7 @@ Audit of `src/main.js`, `src/action.js`, `src/post.js`:
 | `/etc/default/jibril` env file | `action.js` | Partly | Embeds `GARNET_API_TOKEN` / `GARNET_AGENT_TOKEN`; `GARNET_SAR=true` is already the default |
 | Jibril systemd run + profile JSON | `action.js` / Jibril | **No** | Profiler printers write `/var/log/jibril.profile.json` locally regardless |
 | Sensor upload to api.garnet.ai | Jibril (garnet printer) | **Yes** | Requires agent token; degrades gracefully without one |
-| `report_url` output (Run Profile permalink) | `main.js` `buildReportLink` | **Yes** (semantically) | URL is derivable offline, but the target only exists if the profile was uploaded |
+| `report_url` output (Execution Profile permalink) | `main.js` `buildReportLink` | **Yes** (semantically) | URL is derivable offline, but the target only exists if the profile was uploaded |
 | Step Summary render | `post.js` → `runtime-review.js` | **No** | Reads local JSON profile only |
 | Standalone PR comment | `post.js` → `pr-comment.js` | **No** | Needs only `GITHUB_TOKEN` with `pull-requests: write` |
 | `agent_id` output | `action.js` | **Yes** | No agent exists without registration |
@@ -77,7 +77,7 @@ resolved Jibril version bundles (§6, §7).
      api_token:
 -        description: "Your Garnet API token from app.garnet.ai"
 -        required: true
-+        description: "Your Garnet API token from app.garnet.ai. Optional: without it the action runs in local-only mode (Step Summary + PR comment from the local profile, no hosted Run Profile)."
++        description: "Your Garnet API token from app.garnet.ai. Optional: without it the action runs in local-only mode (Step Summary + PR comment from the local profile, no hosted Execution Profile)."
 +        required: false
 ```
 
@@ -93,7 +93,7 @@ vs standalone).
 | `api_token` | App installed | Main step | Post step |
 | --- | --- | --- | --- |
 | present, valid | yes | register agent, fetch merged netpolicy, cloud sync | Step Summary; action defers the PR comment to the App (unchanged) |
-| present, valid | no | same | Step Summary + standalone PR comment + Run Profile permalink (unchanged) |
+| present, valid | no | same | Step Summary + standalone PR comment + Execution Profile permalink (unchanged) |
 | **absent** | yes\* | log "local-only mode"; skip registration + netpolicy fetch; action writes a **known observe-only policy** to `/etc/jibril/netpolicy.yaml` (§6); omit token lines from `/etc/default/jibril` | Step Summary + standalone PR comment, **local shape** (§5): no garnet permalink, labeled local-only, upgrade CTA |
 | **absent** | no | same | same |
 | present, **invalid** (control-plane call fails auth) | — | **fail loudly** — today's semantics: a visible `core.warning` and no monitoring, the job itself is **not** failed (`setFailed` is not introduced). Misconfiguration is not tokenless intent | no local fallback: a configured token that stops working should be visible, not silently downgraded |
@@ -126,11 +126,11 @@ The v6.1 contract (`ux-contract.md`) is the single source of truth for both
 surfaces; the tokenless path must **not** fork it silently. What changes is
 exactly the set of elements whose referent does not exist:
 
-- **Garnet permalink** (`View Run Profile in Garnet ↗`, §1.1/§1.7/§8.6):
+- **Garnet permalink** (`View Execution Profile in Garnet ↗`, §1.1/§1.7/§8.6):
   omitted. The contract already contains the governing rule — *omit rather
   than mislabel*. Per-fold subtext and the Step Summary footer instead carry
   a single upgrade CTA, e.g.
-  `<sub>local-only run — connect Garnet for the hosted Run Profile ↗</sub>`
+  `<sub>local-only run — connect Garnet for the hosted Execution Profile ↗</sub>`
   linking to app.garnet.ai signup (utm-tagged, `utm_medium=pr_comment` /
   `step_summary`).
 - **A labeled local-only marker**: one line in the meta/footer area stating
@@ -225,7 +225,7 @@ against two shapes).
 
 1. **CTA vocab**: exact locked strings for the upgrade CTA and the
    local-only marker (needs the same one-label-one-destination discipline as
-   `View Run Profile in Garnet ↗`).
+   `View Execution Profile in Garnet ↗`).
 2. **Waiting state**: the tokenless standalone comment renders only from the
    post step of each job — is the §2 waiting body reachable/needed at all in
    tokenless mode, or is the comment only ever created at first profile?

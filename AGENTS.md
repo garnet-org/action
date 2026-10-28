@@ -36,3 +36,9 @@
 - Prefer explicit file imports (for example `./module.js`); avoid barrel `index.js` re-export files.
 - Prettier owns formatting (config in `package.json`: no semicolons, 4-space indent, 120 columns); do not hand-format against it.
 - Treat `package.json` and `package-lock.json` as intentional edits only. Never upgrade or add dependencies as a side effect of another change.
+
+## Runtime Review wording and contract
+- `garnet-org/runtime-review-testbed` `main` is the single reference for the renderer, `contract/vocab.json` and goldens. Vendor values into `src/runtime-review-vocab.js` pinned by its SHA (`contractRef`); never fork or hand-edit them.
+- `test/wording-gate.test.js` holds every comment-shaped surface (goldens, mockups, vendored copy, README, action.yaml, agent rules) to the comment-final wording: no emoji, the heading family (Runtime behavior changed / No runtime changes / Runtime behavior recorded / Recording runtime behavior / Runtime behavior not recorded), "nothing new" instead of "unchanged", "(Cloud IMDS)", no resolver note, `Job log · Full record in Garnet ↗`, "Capture is best-effort.".
+- "Execution Profile" names the Garnet page; it appears only in the Step Summary CTA and Profile row, never in PR-comment text.
+- Detection labels are off by default on every surface and come back only with the `show_detections` input.

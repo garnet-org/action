@@ -2,7 +2,9 @@
 <!-- garnet-run-profile -->
 <!-- garnet:commit 6e5d0d4cf00a92a9e1fe697efe0e41b3ae61533e -->
 <!-- garnet:summary {"contract":"6.10.0","githubMeta":"2026-08-08","commit":"6e5d0d4cf00a92a9e1fe697efe0e41b3ae61533e","previous":null,"jobs":5,"changed":null,"unchanged":null,"noOutbound":null,"vanished":null,"added":null,"removed":null,"backgroundAdded":null,"backgroundRemoved":null,"vanishedDestinations":null,"chains":25,"destinations":19,"recorded":"2026-07-13 23:54:31 UTC","kinds":["network"]} -->
-**Execution Profiles recorded for 5 jobs, triggered by [`6e5d0d4`](https://github.com/garnet-org/runtime-review-testbed/commit/6e5d0d4cf00a92a9e1fe697efe0e41b3ae61533e)**
+### Runtime behavior recorded
+
+<sub>*head* [`6e5d0d4`](https://github.com/garnet-org/runtime-review-testbed/commit/6e5d0d4cf00a92a9e1fe697efe0e41b3ae61533e)</sub>
 
 > *19&nbsp;destinations across 5&nbsp;jobs*
 > <sub>recorded at the kernel by Garnet · 2026-07-13 23:54 UTC</sub>
@@ -13,11 +15,11 @@
 Runner.Worker
 └─ bash
    └─ <strong>node</strong> <em>(step: &quot;Run workload&quot;)</em>
-      ├─ ○ localhost <em>(dns resolver)</em>
+      ├─ ○ localhost
       └─ ○ registry.npmjs[.]org
 </pre>
 
-<p align="right"><sub><a href="https://app.garnet.ai/public/runs/29294366437?profile=019f5de7-59af-7208-a4f7-6cfecaae0c59&amp;utm_source=github&amp;utm_medium=pr_comment">View this job's Execution Profile in Garnet →</a></sub></p>
+<sub><a href="https://github.com/garnet-org/runtime-review-testbed/actions/runs/29294366437">Job log</a> · <a href="https://app.garnet.ai/public/runs/29294366437?profile=019f5de7-59af-7208-a4f7-6cfecaae0c59&amp;utm_source=github&amp;utm_medium=pr_comment">Full record in Garnet ↗</a></sub>
 
 </details>
 
@@ -27,7 +29,7 @@ Runner.Worker
 Runner.Worker
 └─ bash
    └─ <strong>node</strong> <em>(step: &quot;Run workload&quot;)</em>
-      ├─ ○ localhost <em>(dns resolver)</em>
+      ├─ ○ localhost
       └─ ○ registry.npmjs[.]org
 
 systemd
@@ -35,10 +37,10 @@ systemd
    ├─ sudo
    │  └─ <strong>provjobd</strong> <em>(ran from /tmp/…)</em>
    │     └─ ○ hosted-compute-watchdog-prod-iad-01[.]githubapp <em>(github infra)</em>
-   └─ ○ 140.82.112.23
+   └─ ○ 140.82.112[.]23
 </pre>
 
-<p align="right"><sub><a href="https://app.garnet.ai/public/runs/29294366437?profile=019f5de7-571c-78d6-8a61-dd43f61c441c&amp;utm_source=github&amp;utm_medium=pr_comment">View this job's Execution Profile in Garnet →</a></sub></p>
+<sub><a href="https://github.com/garnet-org/runtime-review-testbed/actions/runs/29294366437">Job log</a> · <a href="https://app.garnet.ai/public/runs/29294366437?profile=019f5de7-571c-78d6-8a61-dd43f61c441c&amp;utm_source=github&amp;utm_medium=pr_comment">Full record in Garnet ↗</a></sub>
 
 </details>
 
@@ -50,11 +52,11 @@ systemd
    ├─ sudo
    │  └─ <strong>provjobd</strong> <em>(ran from /tmp/…)</em>
    │     ├─ ○ hosted-compute-watchdog-prod-iad-02[.]githubapp <em>(github infra)</em>
-   │     └─ ○ localhost <em>(dns resolver)</em>
-   └─ ○ 140.82.113.24
+   │     └─ ○ localhost
+   └─ ○ 140.82.113[.]24
 </pre>
 
-<p align="right"><sub><a href="https://app.garnet.ai/public/runs/29294366437?profile=019f5de7-54b9-704c-a002-a7d9d70b271b&amp;utm_source=github&amp;utm_medium=pr_comment">View this job's Execution Profile in Garnet →</a></sub></p>
+<sub><a href="https://github.com/garnet-org/runtime-review-testbed/actions/runs/29294366437">Job log</a> · <a href="https://app.garnet.ai/public/runs/29294366437?profile=019f5de7-54b9-704c-a002-a7d9d70b271b&amp;utm_source=github&amp;utm_medium=pr_comment">Full record in Garnet ↗</a></sub>
 
 </details>
 
@@ -66,11 +68,11 @@ systemd
    ├─ sudo
    │  └─ <strong>provjobd</strong> <em>(ran from /tmp/…)</em>
    │     ├─ ○ hosted-compute-watchdog-prod-iad-02[.]githubapp <em>(github infra)</em>
-   │     └─ ○ localhost <em>(dns resolver)</em>
-   └─ ○ 140.82.114.24
+   │     └─ ○ localhost
+   └─ ○ 140.82.114[.]24
 </pre>
 
-<p align="right"><sub><a href="https://app.garnet.ai/public/runs/29294366437?profile=019f5de7-5ca7-7f9d-bfb3-c59ccde51111&amp;utm_source=github&amp;utm_medium=pr_comment">View this job's Execution Profile in Garnet →</a></sub></p>
+<sub><a href="https://github.com/garnet-org/runtime-review-testbed/actions/runs/29294366437">Job log</a> · <a href="https://app.garnet.ai/public/runs/29294366437?profile=019f5de7-5ca7-7f9d-bfb3-c59ccde51111&amp;utm_source=github&amp;utm_medium=pr_comment">Full record in Garnet ↗</a></sub>
 
 </details>
 
@@ -87,7 +89,7 @@ Runner.Worker
       │     │     └─ ○ httpbin[.]org
       │     ├─ ○ api.garnet[.]ai <em>(garnet sensor)</em>
       │     └─ ○ github[.]com
-      ├─ ○ localhost <em>(dns resolver)</em>
+      ├─ ○ localhost
       └─ ○ registry.npmjs[.]org
 
 systemd
@@ -95,16 +97,16 @@ systemd
    ├─ sudo
    │  └─ <strong>provjobd</strong> <em>(ran from /tmp/…)</em>
    │     └─ ○ hosted-compute-watchdog-prod-iad-02[.]githubapp <em>(github infra)</em>
-   └─ ○ 140.82.113.23
+   └─ ○ 140.82.113[.]23
 </pre>
 
-<p align="right"><sub><a href="https://app.garnet.ai/public/runs/29294366437?profile=019f5de7-5992-7409-89cf-6d88e0fb46ea&amp;utm_source=github&amp;utm_medium=pr_comment">View this job's Execution Profile in Garnet →</a></sub></p>
+<sub><a href="https://github.com/garnet-org/runtime-review-testbed/actions/runs/29294366437">Job log</a> · <a href="https://app.garnet.ai/public/runs/29294366437?profile=019f5de7-5992-7409-89cf-6d88e0fb46ea&amp;utm_source=github&amp;utm_medium=pr_comment">Full record in Garnet ↗</a></sub>
 
 </details>
 
 ---
 
-<details><summary><sub>💡 How to read this</sub></summary>
+<details><summary><sub>How to read this</sub></summary>
 
 <pre>
 Runner.Worker          <em>← process on a path</em>
@@ -113,8 +115,10 @@ Runner.Worker          <em>← process on a path</em>
       └─ ○ npmjs[.]org <em>← observed action</em>
 </pre>
 
-<sub><i>follow a path downward to see what ran and what it did — each path to an observed action is an execution chain</i></sub>
+<sub><i>follow a path downward to see what ran and what it did — each path to an observed action is an execution chain · Capture is best-effort.</i></sub>
 
 <sub><i>names on the path = processes · ○ = observed action · (…) = context</i></sub>
 
 </details>
+
+<sub>Runtime behavior, recorded by Garnet. <a href="https://app.garnet.ai/onboarding?utm_source=github&amp;utm_medium=pr_comment&amp;utm_campaign=garnet-org-runtime-review-testbed-pr76&amp;utm_content=add_to_ci">Add it to your CI ↗</a></sub>

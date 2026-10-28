@@ -13,7 +13,7 @@
 | Commit | 786a5bc8680486720bcf5dae13931de95d89b5ec |
 | Triggered by | devin-ai-integration&#91;bot&#93; |
 | Run | [28488074733](https://github.com/garnet-labs/runtime-review-testbed/actions/runs/28488074733) |
-| Coverage | recorded at the kernel by Garnet · best effort |
+| Coverage | recorded at the kernel by Garnet. Capture is best-effort. |
 | Workload activity | 1&nbsp;execution chain · 1&nbsp;destination · 1&nbsp;destination association |
 | Runner activity | none recorded |
 | Sensor network totals | 1&nbsp;unique domain · 15&nbsp;connections |
@@ -35,7 +35,7 @@ systemd
       └─ Runner.Worker
          └─ bash
             └─ <strong>npm install</strong>
-               └─ ○ registry.npmjs&#91;.&#93;org [104.16.5.34] :443
+               └─ ○ registry.npmjs&#91;.&#93;org [104.16.5&#91;.&#93;34] :443
 </pre>
 </details>
 

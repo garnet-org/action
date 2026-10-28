@@ -9,7 +9,7 @@
 | Repository | garnet-org/runtime-review-testbed |
 | Commit | bb22cc33dd44ee55ff6677889900aabbccddee11 |
 | Run | [32000000020](https://github.com/garnet-org/runtime-review-testbed/actions/runs/32000000020) |
-| Coverage | recorded at the kernel by Garnet · best effort |
+| Coverage | recorded at the kernel by Garnet. Capture is best-effort. |
 | Workload activity | 2&nbsp;execution chains · 3&nbsp;destinations · 3&nbsp;destination associations |
 | Runner activity | none recorded |
 | Sensor network totals | network totals not recorded |
@@ -31,15 +31,15 @@ systemd
 └─ Runner.Worker
    └─ bash
       └─ <strong>node</strong> <em>(pid 5001)</em> <em>(step: &quot;Run tests&quot;)</em>
-         ├─ ○ kept.example&#91;.&#93;com [198.51.100.7] :443 tcp
-         └─ ○ fresh.example&#91;.&#93;net [198.51.100.8] :443 tcp
+         ├─ ○ kept.example&#91;.&#93;com [198.51.100&#91;.&#93;7] :443 tcp
+         └─ ○ fresh.example&#91;.&#93;net [198.51.100&#91;.&#93;8] :443 tcp
 
 systemd
 └─ Runner.Worker
    └─ bash
       └─ python3
          └─ <strong>pip</strong> <em>(pid 5002)</em> <em>(step: &quot;Install tools&quot;)</em>
-            └─ ○ pypi.example&#91;.&#93;org [198.51.100.9] :443 tcp
+            └─ ○ pypi.example&#91;.&#93;org [198.51.100&#91;.&#93;9] :443 tcp
 </pre>
 </details>
 

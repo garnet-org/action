@@ -2,7 +2,9 @@
 <!-- garnet-run-profile -->
 <!-- garnet:commit 6e5d0d4cf00a92a9e1fe697efe0e41b3ae61533e -->
 <!-- garnet:summary {"contract":"6.10.0","githubMeta":"2026-08-08","commit":"6e5d0d4cf00a92a9e1fe697efe0e41b3ae61533e","previous":null,"jobs":1,"changed":null,"unchanged":null,"noOutbound":null,"vanished":null,"added":null,"removed":null,"backgroundAdded":null,"backgroundRemoved":null,"vanishedDestinations":null,"chains":10,"destinations":6,"recorded":"2026-07-13 23:54:23 UTC","kinds":["network"]} -->
-**Execution Profiles recorded for 1 job, triggered by [`6e5d0d4`](https://github.com/garnet-org/runtime-review-testbed/commit/6e5d0d4cf00a92a9e1fe697efe0e41b3ae61533e)**
+### Runtime behavior recorded
+
+<sub>*head* [`6e5d0d4`](https://github.com/garnet-org/runtime-review-testbed/commit/6e5d0d4cf00a92a9e1fe697efe0e41b3ae61533e)</sub>
 
 > *6&nbsp;destinations*
 > <sub>recorded at the kernel by Garnet · 2026-07-13 23:54 UTC</sub>
@@ -20,7 +22,7 @@ Runner.Worker
       │     │     └─ ○ httpbin[.]org
       │     ├─ ○ api.garnet[.]ai <em>(garnet sensor)</em>
       │     └─ ○ github[.]com
-      ├─ ○ localhost <em>(dns resolver)</em>
+      ├─ ○ localhost
       └─ ○ registry.npmjs[.]org
 
 systemd
@@ -34,7 +36,7 @@ systemd
 
 ---
 
-<details><summary><sub>💡 How to read this</sub></summary>
+<details><summary><sub>How to read this</sub></summary>
 
 <pre>
 Runner.Worker          <em>← process on a path</em>
@@ -43,8 +45,10 @@ Runner.Worker          <em>← process on a path</em>
       └─ ○ npmjs[.]org <em>← observed action</em>
 </pre>
 
-<sub><i>follow a path downward to see what ran and what it did — each path to an observed action is an execution chain</i></sub>
+<sub><i>follow a path downward to see what ran and what it did — each path to an observed action is an execution chain · Capture is best-effort.</i></sub>
 
 <sub><i>names on the path = processes · ○ = observed action · (…) = context</i></sub>
 
 </details>
+
+<sub>Runtime behavior, recorded by Garnet. <a href="https://app.garnet.ai/onboarding?utm_source=github&amp;utm_medium=pr_comment&amp;utm_campaign=garnet-org-runtime-review-testbed-pr76&amp;utm_content=add_to_ci">Add it to your CI ↗</a></sub>

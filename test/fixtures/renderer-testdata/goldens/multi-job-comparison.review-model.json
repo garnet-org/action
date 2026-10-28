@@ -359,9 +359,7 @@
             "provjobd314572800"
           ],
           "github_step": "99. Runner Processes",
-          "notes": [
-            "dns resolver"
-          ]
+          "notes": []
         }
       ]
     }

@@ -1,19 +1,24 @@
 /**
  * Runtime Review contract values — vendored from
- * garnet-org/runtime-review-testbed contract/vocab.json at contract v6.10.0.
- * Only the values the renderer and its gates consume are vendored here; the
- * testbed remains the normative source for the full contract. Never hand-edit
- * values outside a contract sync.
+ * garnet-org/runtime-review-testbed `main` contract/vocab.json, the single
+ * living reference for renderer, vocabulary and goldens. `contractRef` pins
+ * the testbed-main SHA the values were copied from. Only the values the
+ * renderer and its gates consume are vendored here. Never hand-edit values
+ * outside a contract sync; re-vendor from testbed main instead.
+ *
+ * PREP: until the renderer lane lands the comment-final contract on testbed
+ * main, copy values follow its interim ledger (testbed PR 180,
+ * docs/design/comment-final/README.md, rows 16-25) and `contractRef` is a
+ * placeholder.
  */
 
 export const CONTRACT_VOCAB = {
     version: "6.10.0",
+    contractRef: "pending-renderer-lane-v17.3",
     profileFormatVersion: "0.2.0",
     copy: {
-        headlineLead: "Execution Profiles recorded for",
-        headlinePendingLead: "Execution Profiles recording for jobs triggered by",
         stepSummaryHeading: "Garnet Execution Summary",
-        artifact: "Execution Profile",
+        artifact: "Full record in Garnet ↗",
         kernelProvenance: "recorded at the kernel by Garnet",
         sensor: "Jibril",
         destinationNoun: "destination",
@@ -22,7 +27,7 @@ export const CONTRACT_VOCAB = {
         emptyPeers: "no outbound destinations recorded.",
         noRunProfile: "no Execution Profile recorded.",
         unknownLineage: "unknown (not recorded)",
-        explainerLabel: "💡 How to read this",
+        explainerLabel: "How to read this",
         explainerReadingLine:
             "follow a path downward to see what ran and what it did — each path to an observed action is an execution chain",
         explainerComparisonLine: "+ only in the current record · − only in the previous record",
@@ -31,10 +36,22 @@ export const CONTRACT_VOCAB = {
         explainerCalloutActed: "process that acted",
         explainerCalloutAction: "observed action",
         explainerLegendLine: "names on the path = processes · ○ = observed action · (…) = context",
-        pendingStatus:
-            "⏳ Execution Profiles for this commit are still being recorded — this comment updates in place as jobs finish.",
+        pendingStatus: "This comment updates when the remaining jobs finish.",
+        headings: {
+            changed: "Runtime behavior changed",
+            nothingNew: "No runtime changes",
+            recorded: "Runtime behavior recorded",
+            recording: "Recording runtime behavior",
+            notRecorded: "Runtime behavior not recorded",
+        },
+        jobLogLabel: "Job log",
+        fullRecordLabel: "Full record in Garnet ↗",
+        captureBestEffort: "Capture is best-effort.",
+        footerLead: "Runtime behavior, recorded by Garnet.",
+        footerLinkLabel: "Add it to your CI ↗",
+        onboardingUrl: "https://app.garnet.ai/onboarding",
         truncationTemplate: "rendered X of Y destination associations",
-        noChange: "unchanged",
+        noChange: "nothing new",
         terminalNetwork: "○",
         terminalFile: "□",
         terminalExecution: "▷",
@@ -43,7 +60,7 @@ export const CONTRACT_VOCAB = {
         jobsLineNoOutbound: "with no outbound destinations recorded",
         jobsLineVanished: "no longer recorded",
         jobsLineChanged: "changed",
-        jobsLineUnchanged: "unchanged",
+        jobsLineUnchanged: "nothing new",
         machineSummaryMarker: "garnet:summary",
         whatIsGarnetLabel: "What is Garnet →",
         whatIsGarnetUrl: "https://docs.garnet.ai?utm_source=github&utm_medium=pr_comment",
@@ -81,11 +98,11 @@ export const CONTRACT_VOCAB = {
     ],
     notes: {
         dnsResolver: {
-            text: "dns resolver",
+            text: "",
             loopbackPattern: "^(127\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}|::1|localhost)$",
         },
         instanceMetadata: {
-            text: "cloud metadata",
+            text: "Cloud IMDS",
             addresses: ["169.254.169.254"],
         },
         githubInfrastructure: {

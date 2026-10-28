@@ -13,7 +13,7 @@
 | Commit | ef01a52517e7532ab34aadea58b952c9f1e79ece |
 | Triggered by | devin-ai-integration&#91;bot&#93; |
 | Run | [28492112239](https://github.com/garnet-labs/runtime-review-testbed/actions/runs/28492112239) |
-| Coverage | recorded at the kernel by Garnet · best effort |
+| Coverage | recorded at the kernel by Garnet. Capture is best-effort. |
 | Workload activity | 2&nbsp;execution chains · 4&nbsp;destinations · 5&nbsp;destination associations |
 | Runner activity | none recorded |
 | Sensor network totals | 4&nbsp;unique domains · 19&nbsp;connections |
@@ -36,7 +36,7 @@ systemd
       └─ Runner.Worker
          └─ bash
             └─ <strong>npm install</strong>
-               └─ ○ registry.npmjs&#91;.&#93;org [104.16.8.34] :443
+               └─ ○ registry.npmjs&#91;.&#93;org [104.16.8&#91;.&#93;34] :443
 
 systemd
 └─ hosted-compute-agent
@@ -46,10 +46,10 @@ systemd
             └─ npm test
                └─ sh
                   └─ <strong>node</strong>
-                     ├─ ○ registry.npmjs&#91;.&#93;org [104.16.8.34] :443
-                     ├─ ○ api.garnet&#91;.&#93;ai [104.26.11.16] :443 <em>(garnet sensor)</em>
-                     ├─ ○ github&#91;.&#93;com [140.82.113.3] :443
-                     └─ ○ images.unsplash&#91;.&#93;com [146.75.94.208] :443 · also recorded: dualstack.com.imgix.map.fastly&#91;.&#93;net, unsplash.imgix&#91;.&#93;net
+                     ├─ ○ registry.npmjs&#91;.&#93;org [104.16.8&#91;.&#93;34] :443
+                     ├─ ○ api.garnet&#91;.&#93;ai [104.26.11&#91;.&#93;16] :443 <em>(garnet sensor)</em>
+                     ├─ ○ github&#91;.&#93;com [140.82.113&#91;.&#93;3] :443
+                     └─ ○ images.unsplash&#91;.&#93;com [146.75.94&#91;.&#93;208] :443 · also recorded: dualstack.com.imgix.map.fastly&#91;.&#93;net, unsplash.imgix&#91;.&#93;net
 </pre>
 </details>
 

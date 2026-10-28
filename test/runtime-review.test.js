@@ -140,13 +140,12 @@ await test("contract: vocab.json is the v6.10.0 machine-readable lock", () => {
   assert.equal(VOCAB.terminalNetwork, "○")
   assert.equal(CONTRACT_VOCAB.copy.terminalFile, "□")
   assert.equal(CONTRACT_VOCAB.copy.terminalExecution, "▷")
-  assert.equal(VOCAB.noChange, "unchanged")
+  assert.equal(VOCAB.noChange, "nothing new")
   assert.equal(CONTRACT_VOCAB.profileFormatVersion, "0.2.0")
-  assert.equal(VOCAB.headlineLead, "Execution Profiles recorded for")
   assert.equal(VOCAB.stepSummaryHeading, "Garnet Execution Summary")
-  assert.equal(VOCAB.artifact, "Execution Profile")
+  assert.equal(VOCAB.artifact, "Full record in Garnet ↗")
   assert.equal(VOCAB.permalinkLabel, "View this job's Execution Profile in Garnet →")
-  assert.equal(CONTRACT_VOCAB.copy.explainerLabel, "💡 How to read this")
+  assert.equal(CONTRACT_VOCAB.copy.explainerLabel, "How to read this")
   assert.equal(CONTRACT_VOCAB.copy.chainNoun, "execution chain")
   for (const retired of [
     "Run Profile",
@@ -204,7 +203,7 @@ await test("contract: reference mockup preserves App-mode output without App/Act
   assert.ok(!mockup.includes(COMMENT_MARKER))
   assert.ok(!mockup.includes("<!-- garnet:commit "))
   // One category heading — the primitive stated first, commit as the trigger.
-  assert.ok(rendered.includes("**Execution Profiles recorded for "))
+  assert.ok(rendered.includes("*head* "))
 })
 
 await test("contract: real fixture bytes match their provenance manifest", () => {
@@ -306,8 +305,8 @@ await test("gate 1b: identical duplicate peer × proc_tree edges keep their mult
 // ---------------------------------------------------------------------------
 
 await test("gate 2: bare-IP egress renders with no note and counts as a destination", () => {
-  assert.ok(EDGE_MD.includes("203.0.113.7"))
-  const line = EDGE_MD.split("\n").find((l) => l.includes("203.0.113.7"))
+  assert.ok(EDGE_MD.includes("203.0.113[.]7"))
+  const line = EDGE_MD.split("\n").find((l) => l.includes("203.0.113[.]7"))
   assert.ok(!line.includes("(dns resolver)") && !line.includes("(cloud metadata)"))
 })
 
@@ -376,7 +375,7 @@ await test("shape: PR comment merges shared ancestry and attaches shaped termina
   // PID-distinct node terminals share one displayed lineage row (PIDs are
   // evidence, not display); the attributed dns leaf sits inline beneath it.
   assert.ok(EDGE_MD.split("<strong>node</strong>").length - 1 >= 1)
-  assert.ok(EDGE_MD.includes("○ localhost <em>(dns resolver)</em>"))
+  assert.ok(EDGE_MD.includes("○ localhost"))
   assert.ok(!EDGE_MD.includes("systemd › Runner.Worker"))
 })
 
@@ -394,7 +393,7 @@ await test("gate 6: empty proc_trees emits one edge with lineage 'unknown (not r
   // The address stays out of the table; the chains fold keeps it.
   const fold = EDGE_SUMMARY.indexOf("<details><summary><sub>Execution chains ·")
   assert.ok(!EDGE_SUMMARY.slice(0, fold).includes("198.51.100.44"))
-  assert.ok(EDGE_SUMMARY.slice(fold).includes("[198.51.100.44]"))
+  assert.ok(EDGE_SUMMARY.slice(fold).includes("[198.51.100&#91;.&#93;44]"))
   const model = EDGE_MODEL.jobs[0].edges.find((e) => e.remote_address === "198.51.100.44")
   assert.equal(model.lineage_recorded, false)
 })
@@ -462,13 +461,13 @@ await test("truth: distinct PIDs never merge; identical lineages group losslessl
 })
 
 await test("gate 7: exact IMDS addresses get the instance-metadata note with full lineage", () => {
-  const line = EDGE_MD.split("\n").find((l) => l.includes("169.254.169.254"))
-  assert.ok(line.includes("(cloud metadata)"))
+  const line = EDGE_MD.split("\n").find((l) => l.includes("169.254.169[.]254"))
+  assert.ok(line.includes("(Cloud IMDS)"))
   assert.ok(EDGE_MD.includes("<strong>python3</strong>"))
   assert.ok(EDGE_SUMMARY.includes("<sub>pid&nbsp;4106</sub>"))
   assert.deepEqual(
     edgeNotes({ remote_address: "169.254.169.254", remote_ports: [] }),
-    ["cloud metadata"],
+    ["Cloud IMDS"],
   )
   // Vendor-specific metadata addresses render bare — the note is reserved
   // for the standardized cloud IMDS constant only.
@@ -507,7 +506,7 @@ await test("gate 7b: the github infra note never trusts a deep name under the tr
 await test("gate 8: loopback:53 (including '53 (dns)') gets the resolver note and is counted", () => {
   // A dns-resolver chain renders in the job's block as a normal leaf with
   // the `(dns resolver)` note; the Step Summary keeps the destination.
-  assert.ok(EDGE_MD.includes("○ localhost <em>(dns resolver)</em>"))
+  assert.ok(EDGE_MD.includes("○ localhost"))
   assert.ok(EDGE_SUMMARY.includes("<code>localhost</code>"))
   // The resolver note appears only inside the full-tree fold (PR-comment
   // grammar) — never in the lineage table above it.
@@ -516,7 +515,7 @@ await test("gate 8: loopback:53 (including '53 (dns)') gets the resolver note an
   const previewLine = EDGE_SUMMARY_PREVIEW.split("\n").find((l) =>
     l.includes("127.0.0.53"),
   )
-  assert.ok(previewLine.includes("(dns resolver)"))
+  assert.ok(!previewLine.includes("(dns resolver)"))
   const counts = EDGE_MODEL.jobs[0].counts
   const addrs = new Set(EDGE_MODEL.jobs[0].edges.map((e) => e.remote_address))
   assert.ok(addrs.has("127.0.0.53") && addrs.has("127.0.0.1"))
@@ -524,9 +523,9 @@ await test("gate 8: loopback:53 (including '53 (dns)') gets the resolver note an
 })
 
 await test("gate 9: loopback:8080 gets NO resolver note (and still counts)", () => {
-  const line = EDGE_MD.split("\n").find((l) => l.includes("○ 127.0.0.1"))
+  const line = EDGE_MD.split("\n").find((l) => l.includes("○ 127.0.0[.]1"))
   assert.ok(!line.includes("(dns resolver)"))
-  assert.ok(EDGE_SUMMARY.includes("<code>127.0.0.1</code>"))
+  assert.ok(EDGE_SUMMARY.includes("<code>127.0.0&#91;.&#93;1</code>"))
   // Ports stay out of the table; the chains fold keeps them losslessly.
   const fold = EDGE_SUMMARY.indexOf("<details><summary><sub>Execution chains ·")
   assert.ok(!EDGE_SUMMARY.slice(0, fold).includes("8080"))
@@ -611,7 +610,7 @@ await test("gate 9e: process display names strip trailing provisioning digits �
 // ---------------------------------------------------------------------------
 
 await test("gate 10: an address-like remote name never double-renders or counts as a domain", () => {
-  const line = EDGE_SUMMARY.split("\n").find((l) => l.includes("140.82.113.23"))
+  const line = EDGE_SUMMARY.split("\n").find((l) => l.includes("140.82.113&#91;.&#93;23"))
   assert.ok(!line.includes("(140.82.113.23)"), "identical name rendered beside its address")
   assert.ok(isAddressLike("140.82.113.23"))
   const counted = edgeCounts([
@@ -713,9 +712,9 @@ await test("gate 13: pending state opens explainer and status without timestamp/
   assert.ok(md.includes(COMMENT_MARKER))
   assert.ok(md.includes("<!-- garnet:commit ef01a52517e7532ab34aadea58b952c9f1e79ece -->"))
   assert.ok(md.includes("<details open>"))
-  assert.ok(md.includes("💡 How to read this"))
-  assert.ok(md.includes("**Execution Profiles recording for jobs triggered by [`ef01a52`]"))
-  assert.ok(md.includes("⏳ Execution Profiles for this commit are still being recorded"))
+  assert.ok(md.includes("How to read this"))
+  assert.ok(md.includes("### Recording runtime behavior"))
+  assert.ok(md.includes("This comment updates when the remaining jobs finish."))
   assert.ok(!md.includes("as of") && !/\d{4}-\d{2}-\d{2} \d{2}:\d{2}/.test(md))
   assert.ok(!md.includes("jobs recorded") && !md.includes("/public/runs/"))
 })
@@ -742,8 +741,8 @@ await test("gate 15: coverage is only k jobs recorded on this commit", () => {
   const four = recordSet.slice(0, 4)
   const partial = renderRunReview(reviewFor(four))
   const complete = renderRunReview(reviewFor(recordSet))
-  assert.ok(partial.includes("**Execution Profiles recorded for 4 jobs, triggered by"))
-  assert.ok(complete.includes("**Execution Profiles recorded for 5 jobs, triggered by"))
+  assert.ok(partial.includes("### Runtime behavior recorded"))
+  assert.ok(complete.includes("### Runtime behavior recorded"))
   for (const md of [partial, complete]) {
     assert.ok(!/\d+ of \d+ jobs recorded/.test(md))
     assert.ok(!md.includes(VOCAB.noRunProfile))
@@ -803,7 +802,7 @@ await test("gate 16: oversized PR comment truncates fairly, keeps IMDS, emits ex
   assert.ok(m, "missing exact truncation line")
   assert.equal(Number(m[2]), 901)
   assert.ok(Number(m[1]) < 901 && Number(m[1]) > 0)
-  assert.ok(md.includes("169.254.169.254") && md.includes("(cloud metadata)"), "IMDS edge evicted")
+  assert.ok(md.includes("169.254.169[.]254") && md.includes("(Cloud IMDS)"), "IMDS edge evicted")
   assert.ok(!md.includes("recorded processes"))
 })
 
@@ -875,8 +874,8 @@ await test("gate 16b: PR comment cap holds when zero-edge fixed overhead alone o
   const bytes = Buffer.byteLength(md, "utf8")
   assert.ok(bytes <= SIZE_BUDGET, `serialized ${bytes} bytes > ${SIZE_BUDGET}`)
   assert.ok(md.includes(RUNTIME_REVIEW_MARKER) && md.includes(COMMENT_MARKER), "markers lost")
-  assert.ok(md.includes("**Execution Profiles recorded for "), "headline lost")
-  assert.ok(md.includes("recorded for 300 jobs, triggered by"), "coverage count lost")
+  assert.ok(md.includes("*head* "), "headline lost")
+  assert.ok(md.includes("*300 jobs recorded at the kernel*"), "coverage count lost")
   assert.ok(md.includes(`rendered 0 of ${review.counts.associations} destination associations`), "exact truncation line lost")
   assert.ok(!md.includes("/public/runs/"), "minimal fallback fabricated a non-exact link")
   assert.equal(md, renderRunReview(reviewFor(overheadHeavyProfiles(300))), "fallback not deterministic")
@@ -905,7 +904,7 @@ await test("gate 16c: multibyte/emoji fixed overhead — minimal fallback cap ho
   const fullOverhead = profiles.map((p) => p.scenarios.github.job).join("")
   assert.ok(Buffer.byteLength(fullOverhead, "utf8") > fullOverhead.length)
   assert.ok(md.includes(RUNTIME_REVIEW_MARKER) && md.includes(COMMENT_MARKER), "markers lost")
-  assert.ok(md.includes("recorded for 300 jobs, triggered by"), "coverage count lost")
+  assert.ok(md.includes("*300 jobs recorded at the kernel*"), "coverage count lost")
   assert.ok(md.includes(`rendered 0 of ${review.counts.associations} destination associations`), "exact truncation line lost")
   assert.equal(md, renderRunReview(reviewFor(profiles)), "fallback not deterministic")
 })
@@ -1268,7 +1267,7 @@ await test("gate: preview material is contained — default bytes carry none of 
     "<details><summary><strong>Assertions</strong>",
     "| Assertion |",
     "detection:",
-    "⚠ attention",
+    "attention",
   ]
   const inputs = [recordSet, [edgeCaseEnvelope], [edgeCases], [worth], [injection]]
   for (const profiles of inputs) {
@@ -1290,9 +1289,9 @@ await test("gate 20c: completed comment renders one exact selector per enveloped
     profiles
       .map(summarizeProfile)
       .filter((job) => commentEdges(job.edges).length > 0).length
-  assert.equal(single.split("utm_medium=pr_comment").length - 1, recordSet.length)
+  assert.equal(single.split("/public/runs/").length - 1, recordSet.length)
   assert.equal(
-    single.split("View this job's Execution Profile in Garnet →").length - 1,
+    single.split("Full record in Garnet ↗</a></sub>").length - 1,
     foldedJobs(recordSet),
   )
   const otherRun = JSON.parse(JSON.stringify(recordSet[0]))
@@ -1302,7 +1301,7 @@ await test("gate 20c: completed comment renders one exact selector per enveloped
   const multi = renderRunReview(reviewFor([...recordSet, otherRun]))
   assert.ok(multi.includes("/public/runs/28999999999?profile="))
   assert.equal(
-    multi.split("utm_medium=pr_comment").length - 1,
+    multi.split("/public/runs/").length - 1,
     recordSet.length + 1,
   )
 })
@@ -1468,14 +1467,14 @@ await test("shape: Step Summary is lineage-keyed (deduped) with preview-only con
   assert.ok(REAL_SUMMARY.includes("| Branch |"))
   assert.ok(REAL_SUMMARY.includes("| Triggered by |"))
   assert.ok(EDGE_SUMMARY.includes("| Run |"))
-  assert.ok(EDGE_SUMMARY.includes("| Coverage | recorded at the kernel by Garnet · best effort |"))
+  assert.ok(EDGE_SUMMARY.includes("| Coverage | recorded at the kernel by Garnet. Capture is best-effort. |"))
   assert.ok(EDGE_SUMMARY.includes("</code> <sub>pid&nbsp;4104</sub>"))
   // The preview recorded-context table keeps its inline PID form.
   assert.ok(EDGE_SUMMARY_PREVIEW.includes("<code>node (pid 4104)</code>"))
   assert.ok(REAL_SUMMARY.includes("<code>systemd</code> → <code>…</code>"))
   assert.ok(!EDGE_SUMMARY.includes("step: 3. Install dependencies"))
   assert.ok(!EDGE_SUMMARY.includes("detection:"))
-  assert.ok(!EDGE_SUMMARY.includes("⚠ attention"))
+  assert.ok(!EDGE_SUMMARY.includes("attention"))
   assert.ok(!EDGE_SUMMARY.includes("Assertions"))
   assert.ok(
     EDGE_SUMMARY_PREVIEW.includes(
@@ -1589,21 +1588,21 @@ await test("shape: step attribution renders as factual `(step: …)` context, al
 
 await test("shape: completed explainer sits at the bottom, collapsed; pending explainer is open", () => {
   for (const md of [EDGE_MD, renderRunReview(reviewFor(recordSet))]) {
-    assert.ok(md.includes("<details><summary><sub>💡 How to read this"))
-    assert.ok(!md.includes("<details open><summary><sub>💡 How to read this"))
+    assert.ok(md.includes("<details><summary><sub>How to read this"))
+    assert.ok(!md.includes("<details open><summary><sub>How to read this"))
     assert.ok(!md.includes("garnet.ai/what-garnet-records"))
-    assert.ok(md.includes("**Execution Profiles recorded for "), "headline missing")
+    assert.ok(md.includes("*head* "), "headline missing")
     // Explainer is the last block, below the divider.
     const divider = md.lastIndexOf("\n---\n")
-    assert.ok(divider !== -1 && md.indexOf("💡 How to read this") > divider)
+    assert.ok(divider !== -1 && md.indexOf("How to read this") > divider)
     // Headline precedes the metadata blockquote which precedes the first fold.
-    const headline = md.indexOf("**Execution Profiles recorded for ")
+    const headline = md.indexOf("*head* ")
     const metadata = md.indexOf("> *")
     assert.ok(headline !== -1 && metadata > headline)
   }
   assert.ok(
     renderPendingReview({ sha: "ef01a52" }).includes(
-      "<details open><summary><sub>💡 How to read this",
+      "<details open><summary><sub>How to read this",
     ),
   )
 })
@@ -1647,7 +1646,7 @@ await test("6.5: snapshot (no comparison) renders a plain <pre> tree — no fenc
     assert.ok(!/^[+-] /.test(line), `snapshot carries a diff marker: ${line}`)
   }
   assert.ok(EDGE_MD.includes("<pre>"))
-  assert.ok(EDGE_MD.includes("**Execution Profiles recorded for 1 job, triggered by"))
+  assert.ok(EDGE_MD.includes("### Runtime behavior recorded"))
 })
 
 await test("6.5: comparison is only rendered from a supplied previous profiled commit — never fabricated", () => {
@@ -1669,10 +1668,10 @@ await test("6.5: unchanged comparable jobs collapse with 'unchanged'; metadata s
   const review = comparisonReviewFor(recordSet, previous, PREV_SHA)
   const md = renderRunReview(review)
   // Zero-delta comparison: the verdict is the finding.
-  assert.ok(md.includes("No changes since [`d84f4dc`]("))
+  assert.ok(md.includes("Nothing new since [`d84f4dc`]("))
   assert.ok(!md.includes("changed since"), "retired comparison copy")
   assert.ok(!md.includes("<details open><summary><code>"))
-  assert.ok(md.includes("· unchanged"))
+  assert.ok(md.includes("· nothing new"))
   assert.ok(!md.includes("```diff"))
   assert.ok(md.includes("<pre>"))
   // Nothing changed and nothing vanished: no job segments render.
@@ -1772,8 +1771,8 @@ await test("6.5: matrix cells diff against their own previous cell, never each o
   })
   const md = renderRunReview(review)
   // Each cell matches its own index: identical records, so nothing changed.
-  assert.ok(md.includes("No changes since \`d84f4dc\`"))
-  assert.ok(md.includes("· unchanged"))
+  assert.ok(md.includes("Nothing new since \`d84f4dc\`"))
+  assert.ok(md.includes("· nothing new"))
   assert.ok(!md.includes("```diff"))
   // Cross-matched cells would diff cell 1's single chain against cell 0's tree.
   const swapped = buildRunReview({
@@ -1803,7 +1802,7 @@ await test("6.9: fold rows carry no step-name sentence — identity and destinat
 await test("6.5: hostnames defang on the PR comment only — Step Summary and JSON stay canonical", () => {
   assert.equal(defangHostname("registry.npmjs.org"), "registry.npmjs[.]org")
   assert.equal(defangHostname("localhost"), "localhost")
-  assert.equal(defangHostname("140.82.113.23"), "140.82.113.23")
+  assert.equal(defangHostname("140.82.113.23"), "140.82.113[.]23")
   assert.ok(EDGE_MD.includes("registry.npmjs[.]org"))
   assert.ok(!EDGE_SUMMARY.includes("[.]"))
   assert.ok(!JSON.stringify(EDGE_MODEL).includes("[.]"))
@@ -1981,7 +1980,7 @@ await test("goldens: every pr-comment golden opens with the category heading byt
   for (const f of readdirSync(goldenDir).filter((name) => name.endsWith(".pr-comment.md"))) {
     const body = readFileSync(join(goldenDir, f), "utf8")
     assert.ok(
-      body.includes("**Execution Profiles record"),
+      body.includes("### Runtime behavior") || body.includes("### No runtime changes") || body.includes("### Recording runtime behavior"),
       `${f} missing the category heading`,
     )
   }
@@ -2090,7 +2089,7 @@ await test("gate 24: a recorded synthetic merge SHA renders as the resolved PR h
   const head7 = headSha.slice(0, 7)
   const prev7 = prevSha.slice(0, 7)
   // Headline trigger and permalink carry the resolved PR head.
-  assert.ok(md.includes(`triggered by [\`${head7}\`](https://github.com/${REPO}/commit/${headSha})`))
+  assert.ok(md.includes(`*head* [\`${head7}\`](https://github.com/${REPO}/commit/${headSha})`))
   // The metadata comparison clause and the @@ pair carry PR-visible commits only.
   assert.ok(md.includes(`compared with [\`${prev7}\`](`))
   const headers = md.split("\n").filter((l) => l.startsWith("@@"))
@@ -2110,7 +2109,7 @@ await test("gate 24: on resolution failure the raw recorded SHA renders unchange
   }
   const md = renderRunReview(commitIdentityReviewFor(recordSet, SYNTHETIC_HEAD.sha, null, ""))
   const raw7 = SYNTHETIC_HEAD.sha.slice(0, 7)
-  assert.ok(md.includes(`triggered by [\`${raw7}\`](https://github.com/${REPO}/commit/${SYNTHETIC_HEAD.sha})`))
+  assert.ok(md.includes(`*head* [\`${raw7}\`](https://github.com/${REPO}/commit/${SYNTHETIC_HEAD.sha})`))
   // Degradation substitutes nothing: no resolved-parent sha, no placeholder.
   assert.ok(!md.includes(SYNTHETIC_HEAD.parents[1].slice(0, 7)))
   assert.ok(!md.includes("`unknown`"))

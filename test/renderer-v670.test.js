@@ -59,7 +59,7 @@ const markedDestinations = (fence) =>
     .map((line) => line.slice(line.indexOf("○ ") + 2).replace(/\s+\([^)]*\).*$/, "").trim())
 
 const destinationDisplay = (id) =>
-  id.includes(".") && !/^(?:\d{1,3}\.){3}\d{1,3}$/.test(id)
+  id.includes(".")
     ? id.replace(/\.(?=[^.]*$)/, "[.]")
     : id
 const escapedDisplay = (id) =>
@@ -260,13 +260,13 @@ for (const [label, previousName, headName] of pairSpecs) {
   if (metadataLine.includes("compared with")) {
     // v6.10.0 one human register: the meta line claims workload-attributed
     // movement only — runner-background movement never inflates it, and
-    // background-only movement reads as unchanged, never `No changes`.
+    // background-only movement reads as nothing new.
     const addedClaim = Number(metadataLine.match(/\+(\d+)/)?.[1] ?? 0)
     const removedClaim = Number(metadataLine.match(/−(\d+)/)?.[1] ?? 0)
     assert.ok(
       addedClaim + removedClaim > 0 ||
-        metadataLine.includes("unchanged") ||
-        metadataLine.includes("No changes"),
+        metadataLine.includes("nothing new") ||
+        metadataLine.includes("Nothing new"),
       `${label}: comparison meta carries the delta or a no-change finding`,
     )
     if (delta.backgroundAddedCount + delta.backgroundRemovedCount > 0) {
@@ -451,7 +451,7 @@ for (const [label, previousName, headName] of pairSpecs) {
     ),
     "changed segment carries the workload delta totals",
   )
-  assert.ok(jobsLine.includes("1&nbsp;job unchanged"), "unchanged segment")
+  assert.ok(jobsLine.includes("1&nbsp;job nothing new"), "nothing-new segment")
   assert.ok(jobsLine.includes("1&nbsp;job with no outbound destinations"), "no-outbound segment")
   assert.ok(jobsLine.includes("1&nbsp;job no longer recorded"), "vanished segment")
 
@@ -527,7 +527,7 @@ for (const [label, previousName, headName] of pairSpecs) {
   )
   assert.equal(snapshotSummary.previous, null)
   assert.equal(snapshotSummary.changed, null)
-  assert.ok(!snapshot.includes("job unchanged"), "snapshot renders no jobs line")
+  assert.ok(!snapshot.includes("job nothing new"), "snapshot renders no jobs line")
 
   // Determinism: job input order never changes bytes.
   const shuffled = renderRunReview(
@@ -638,7 +638,7 @@ const reviewFor = (headProfile, previousProfile = null) => {
   const markdown = renderRunReview(reviewFor(head, previous))
   const fence = diffFence(markdown)
   assert.ok(
-    fence.split("\n").some((line) => line.startsWith("- ") && line.includes("127.0.0.53")),
+    fence.split("\n").some((line) => line.startsWith("- ") && line.includes("127.0.0[.]53")),
     "previous-only destination renders as a − row",
   )
 }
@@ -666,12 +666,12 @@ const reviewFor = (headProfile, previousProfile = null) => {
     !fence.split("\n").some((line) => /^[+-] /.test(line) && line.includes(kept)),
     "an identity present on both commits is never an added/removed identity",
   )
-  assert.ok(markdown.includes(kept), "the destination stays visible")
+  assert.ok(markdown.includes("45.55.44[.]33"), "the destination stays visible")
   assert.ok(!markdown.includes("previously in"), "no movement notes render")
 }
 
-// A dns-resolver chain renders in the job's one tree as a normal leaf with
-// the `(dns resolver)` note, counted and diffed like every destination.
+// A dns-resolver chain renders in the job's one tree as a normal leaf,
+// counted and diffed like every destination; its note is retired.
 {
   const dnsPeer = (address) => ({
     remote_address: address,
@@ -692,8 +692,8 @@ const reviewFor = (headProfile, previousProfile = null) => {
   const markdown = renderRunReview(reviewFor(head, previous))
   const fence = diffFence(markdown)
   assert.ok(
-    fence.split("\n").some((line) => line.startsWith("+ ") && line.includes("localhost") && line.includes("(dns resolver)")),
-    "dns leaf renders inline as a + row with its note",
+    fence.split("\n").some((line) => line.startsWith("+ ") && line.includes("localhost") && !line.includes("(dns resolver)")),
+    "dns leaf renders inline as a + row; the resolver note is retired",
   )
   const foldRow = markdown
     .split("\n")
@@ -1112,8 +1112,8 @@ const markedLineageLines = (fence, mark) =>
   const markdown = renderRunReview(reviewFor(head, previous))
   const metaLine = markdown.split("\n").find((line) => line.startsWith("> *")) ?? ""
   assert.ok(
-    metaLine.includes("unchanged") && !metaLine.includes("job changed"),
-    "background-only movement reads as unchanged",
+    metaLine.includes("nothing new") && !metaLine.includes("job changed"),
+    "background-only movement reads as nothing new",
   )
   assert.ok(!metaLine.includes("No changes"), "background movement is never No changes")
   const delta = foldRowDelta(markdown)

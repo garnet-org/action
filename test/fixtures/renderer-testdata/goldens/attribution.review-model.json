@@ -60,7 +60,7 @@
           ],
           "github_step": "",
           "notes": [
-            "cloud metadata"
+            "Cloud IMDS"
           ]
         },
         {
@@ -134,7 +134,7 @@
           ],
           "github_step": "4. Run integration tests",
           "notes": [
-            "cloud metadata"
+            "Cloud IMDS"
           ]
         },
         {

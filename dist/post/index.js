@@ -159417,20 +159417,25 @@ var external_node_net_ = __nccwpck_require__(77030);
 ;// CONCATENATED MODULE: ./src/runtime-review-vocab.js
 /**
  * Runtime Review contract values — vendored from
- * garnet-org/runtime-review-testbed contract/vocab.json at contract v6.10.0.
- * Only the values the renderer and its gates consume are vendored here; the
- * testbed remains the normative source for the full contract. Never hand-edit
- * values outside a contract sync.
+ * garnet-org/runtime-review-testbed `main` contract/vocab.json, the single
+ * living reference for renderer, vocabulary and goldens. `contractRef` pins
+ * the testbed-main SHA the values were copied from. Only the values the
+ * renderer and its gates consume are vendored here. Never hand-edit values
+ * outside a contract sync; re-vendor from testbed main instead.
+ *
+ * PREP: until the renderer lane lands the comment-final contract on testbed
+ * main, copy values follow its interim ledger (testbed PR 180,
+ * docs/design/comment-final/README.md, rows 16-25) and `contractRef` is a
+ * placeholder.
  */
 
 const runtime_review_vocab_CONTRACT_VOCAB = {
     version: "6.10.0",
+    contractRef: "pending-renderer-lane-v17.3",
     profileFormatVersion: "0.2.0",
     copy: {
-        headlineLead: "Execution Profiles recorded for",
-        headlinePendingLead: "Execution Profiles recording for jobs triggered by",
         stepSummaryHeading: "Garnet Execution Summary",
-        artifact: "Execution Profile",
+        artifact: "Full record in Garnet ↗",
         kernelProvenance: "recorded at the kernel by Garnet",
         sensor: "Jibril",
         destinationNoun: "destination",
@@ -159439,7 +159444,7 @@ const runtime_review_vocab_CONTRACT_VOCAB = {
         emptyPeers: "no outbound destinations recorded.",
         noRunProfile: "no Execution Profile recorded.",
         unknownLineage: "unknown (not recorded)",
-        explainerLabel: "💡 How to read this",
+        explainerLabel: "How to read this",
         explainerReadingLine:
             "follow a path downward to see what ran and what it did — each path to an observed action is an execution chain",
         explainerComparisonLine: "+ only in the current record · − only in the previous record",
@@ -159448,10 +159453,22 @@ const runtime_review_vocab_CONTRACT_VOCAB = {
         explainerCalloutActed: "process that acted",
         explainerCalloutAction: "observed action",
         explainerLegendLine: "names on the path = processes · ○ = observed action · (…) = context",
-        pendingStatus:
-            "⏳ Execution Profiles for this commit are still being recorded — this comment updates in place as jobs finish.",
+        pendingStatus: "This comment updates when the remaining jobs finish.",
+        headings: {
+            changed: "Runtime behavior changed",
+            nothingNew: "No runtime changes",
+            recorded: "Runtime behavior recorded",
+            recording: "Recording runtime behavior",
+            notRecorded: "Runtime behavior not recorded",
+        },
+        jobLogLabel: "Job log",
+        fullRecordLabel: "Full record in Garnet ↗",
+        captureBestEffort: "Capture is best-effort.",
+        footerLead: "Runtime behavior, recorded by Garnet.",
+        footerLinkLabel: "Add it to your CI ↗",
+        onboardingUrl: "https://app.garnet.ai/onboarding",
         truncationTemplate: "rendered X of Y destination associations",
-        noChange: "unchanged",
+        noChange: "nothing new",
         terminalNetwork: "○",
         terminalFile: "□",
         terminalExecution: "▷",
@@ -159460,7 +159477,7 @@ const runtime_review_vocab_CONTRACT_VOCAB = {
         jobsLineNoOutbound: "with no outbound destinations recorded",
         jobsLineVanished: "no longer recorded",
         jobsLineChanged: "changed",
-        jobsLineUnchanged: "unchanged",
+        jobsLineUnchanged: "nothing new",
         machineSummaryMarker: "garnet:summary",
         whatIsGarnetLabel: "What is Garnet →",
         whatIsGarnetUrl: "https://docs.garnet.ai?utm_source=github&utm_medium=pr_comment",
@@ -159498,11 +159515,11 @@ const runtime_review_vocab_CONTRACT_VOCAB = {
     ],
     notes: {
         dnsResolver: {
-            text: "dns resolver",
+            text: "",
             loopbackPattern: "^(127\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}|::1|localhost)$",
         },
         instanceMetadata: {
-            text: "cloud metadata",
+            text: "Cloud IMDS",
             addresses: ["169.254.169.254"],
         },
         githubInfrastructure: {
@@ -159670,9 +159687,9 @@ const GITHUB_META_IP_RANGES = {
  *   - Typography is attribution, not trust: a lineage recorded under a
  *     GitHub step below `Runner.Worker` is bold; runner scaffolding is italic.
  *     A recorded detection always overrides de-emphasis.
- *   - Deterministic factual notes only: `(dns resolver)`, `(instance
- *     metadata)`, and record-backed `detection: <kind>` values other than
- *     `flow`.
+ *   - Deterministic factual notes only: `(Cloud IMDS)`, `(github infra)`,
+ *     and, behind the `show_detections` opt-in, record-backed
+ *     `detection: <kind>` values other than `flow`.
  *   - Counts are mechanical and qualified. Sensor telemetry is preserved
  *     verbatim and never aliased to renderer-derived destinations or flows.
  *   - Timestamps come from `profile.timestamp` only, rendered
@@ -159834,6 +159851,7 @@ const GITHUB_META_IP_RANGES = {
 /**
  * @typedef {EdgeDelta & {
  *   names: Map<string, string>
+ *   isNewJob: boolean
  * }} JobDelta
  */
 
@@ -159872,7 +159890,6 @@ const REFERENCE_MOCKUP_MARKER = "<!-- garnet-reference-renderer-mockup -->"
 
 /** Exact emitted vocabulary — byte-locked by contract/vocab.json. */
 const VOCAB = {
-  headlineLead: runtime_review_vocab_CONTRACT_VOCAB.copy.headlineLead,
   stepSummaryHeading: runtime_review_vocab_CONTRACT_VOCAB.copy.stepSummaryHeading,
   artifact: runtime_review_vocab_CONTRACT_VOCAB.copy.artifact,
   permalinkLabel: runtime_review_vocab_CONTRACT_VOCAB.copy.permalinkLabel,
@@ -160089,9 +160106,9 @@ const numericPort = (value) => {
 
 /**
  * Deterministic factual notes for one association:
- *   - `dns resolver` — loopback remote_address AND a remote_ports value with
- *     numeric port 53.
- *   - `cloud metadata` — remote_address is exactly the standardized IMDS
+ *   - dns-resolver note — retired by the contract (empty text); loopback
+ *     remote_address AND a remote_ports value with numeric port 53.
+ *   - `Cloud IMDS` — remote_address is exactly the standardized IMDS
  *     addresses.
  *   - `github infra` — the primary recorded remote name ends with a
  *     contract-locked GitHub infrastructure suffix.
@@ -160106,6 +160123,7 @@ function edgeNotes(edge, { detections = false } = {}) {
   /** @type {string[]} */
   const notes = []
   if (
+    runtime_review_vocab_CONTRACT_VOCAB.notes.dnsResolver.text !== "" &&
     LOOPBACK_RE.test(edge.remote_address) &&
     edge.remote_ports.some((p) => numericPort(p) === 53)
   ) {
@@ -160704,6 +160722,7 @@ const renderNote = (note) =>
  */
 function defangHostname(value) {
   const v = String(value ?? "")
+  if (/^\d{1,3}(\.\d{1,3}){3}$/.test(v)) return v.replace(/\.(?=[^.]*$)/, "[.]")
   if (v === "" || isAddressLike(v) || !v.includes(".")) return v
   return v.replace(/\.(?=[^.]*$)/, "[.]")
 }
@@ -161790,7 +161809,7 @@ function renderExplainer({ open = false, comparison = false, background = false 
     `      └─ ${VOCAB.terminalNetwork} npmjs[.]org ${callout(VOCAB.explainerCalloutAction)}`,
     "</pre>",
     "",
-    `<sub><i>${VOCAB.explainerReadingLine}</i></sub>`,
+    `<sub><i>${VOCAB.explainerReadingLine} · ${CONTRACT_VOCAB.copy.captureBestEffort}</i></sub>`,
     "",
     `<sub><i>${VOCAB.explainerLegendLine}</i></sub>`,
   ]
@@ -161884,6 +161903,9 @@ function jobSummaryLine(job, { delta = null, treeEdges = null } = {}) {
   // inside the diff's @@ header — the fold row carries only its own delta.
   // The meta block's changed segment names the destination unit once for
   // the whole comment; the fold row carries only its own bold split.
+  if (delta !== null && delta.isNewJob && delta.addedCount > 0) {
+    return `new job · ${jobIdentity(job)} · ${countPhrase(treeCounts, "destination")}`
+  }
   const changed = delta !== null && delta.addedCount + delta.removedCount > 0
   if (changed) {
     parts.push(`${deltaPhrase(delta.addedCount, delta.removedCount, { unit: false })} ·`)
@@ -161943,16 +161965,43 @@ function previousCommitRef(review) {
 
 /**
  * The category heading — the core primitive stated as the high-level
- * summary: Execution Profiles belong to jobs; the commit is the trigger.
+ * summary: each job carries its own record; the commit is the trigger.
  * All counts and change facts live in the metadata line and job folds.
  * @param {RunReview} review
  */
 function headlineSentence(review) {
-  const k = review.counts.jobs
-  const jobsNoun = `${k} job${k === 1 ? "" : "s"}`
-  // Bold body line, not a `#` heading — a recurring bot comment speaks at
-  // body register; the primitive is the emphasis, not the type size.
-  return `**${VOCAB.headlineLead} ${jobsNoun}, triggered by ${commitRef(review.sha, review.commitUrl)}**`
+  const headings = CONTRACT_VOCAB.copy.headings
+  const head = `<sub>*head* ${commitRef(review.sha, review.commitUrl)}</sub>`
+  /** @type {string} */
+  let heading = headings.changed
+  if (review.counts.jobs === 0) {
+    heading = headings.notRecorded
+  } else if (review.comparison === null) {
+    heading = headings.recorded
+  } else {
+    const accounting = changeAccounting(review)
+    const moved =
+      accounting.changedJobs + accounting.newJobs + accounting.vanishedJobCount + accounting.added + accounting.removed > 0
+    heading = moved ? headings.changed : headings.nothingNew
+  }
+  return `### ${heading}\n\n${head}`
+}
+
+/**
+ * The comment footer: what Garnet is, and the onboarding path, attributed
+ * to the repository and pull request the comment sits on.
+ * @param {string} repo
+ * @param {string} prNumber
+ */
+function renderCommentFooter(repo, prNumber) {
+  const copy = CONTRACT_VOCAB.copy
+  const campaign = [safeRepositorySlug(repo).replace("/", "-"), /^\d+$/.test(prNumber) ? `pr${prNumber}` : ""]
+    .filter((value) => value !== "")
+    .join("-")
+  const query = new URLSearchParams({ utm_source: "github", utm_medium: "pr_comment" })
+  if (campaign !== "") query.set("utm_campaign", campaign)
+  query.set("utm_content", "add_to_ci")
+  return `<sub>${copy.footerLead} <a href="${escapeHtmlAttr(`${copy.onboardingUrl}?${query}`)}">${copy.footerLinkLabel}</a></sub>`
 }
 
 /**
@@ -162006,6 +162055,7 @@ function metaBlock(review, accounting) {
       /** @type {RunReview & { comparison: ReviewComparison }} */ (review)
     const zeroDelta =
       accounting.changedJobs === 0 &&
+      accounting.newJobs === 0 &&
       accounting.vanishedJobCount === 0 &&
       accounting.added === 0 &&
       accounting.removed === 0 &&
@@ -162013,8 +162063,13 @@ function metaBlock(review, accounting) {
       accounting.backgroundRemoved === 0
     if (zeroDelta) {
       // Zero-delta comparison: the verdict is the finding.
-      findings.push(`No changes ${VOCAB.sinceWord} ${previousCommitRef(comparisonReview)}`)
+      findings.push(`Nothing new ${VOCAB.sinceWord} ${previousCommitRef(comparisonReview)}`)
     } else {
+      if (accounting.newJobs > 0) {
+        const jobs = `${accounting.newJobs} new job${accounting.newJobs === 1 ? "" : "s"}`
+        const destinations = `${accounting.newJobDestinations} destination${accounting.newJobDestinations === 1 ? "" : "s"}`
+        findings.push(`${jobs} · ${destinations}`)
+      }
       if (accounting.changedJobs > 0) {
         findings.push(
           `${countPhrase(accounting.changedJobs, "job")} ${VOCAB.jobsLineChanged} ${deltaPhrase(accounting.added, accounting.removed, { bold: false })}`,
@@ -162126,6 +162181,7 @@ function reviewDeltas(review) {
     deltas.set(job.id, {
       ...compareJobEdges(job.edges, prevEdges),
       names,
+      isNewJob: prev === undefined,
     })
   }
   return deltas
@@ -162167,6 +162223,8 @@ function changeAccounting(review) {
   const tiers = new Map()
   const totals = {
     changedJobs: 0,
+    newJobs: 0,
+    newJobDestinations: 0,
     unchangedJobs: 0,
     noOutboundJobs: 0,
     added: 0,
@@ -162185,7 +162243,13 @@ function changeAccounting(review) {
     // whose whole record left is a changed job, never "no outbound
     // destinations". Background-only movement never makes a changed job —
     // the fold row and fence carry it, the changed count does not.
-    if (delta !== null && delta !== undefined && delta.addedCount + delta.removedCount > 0) {
+    if (delta !== null && delta !== undefined && delta.isNewJob && delta.addedCount > 0) {
+      // A job with no counterpart on the compared commit is new, never a
+      // `+N` change: it reads `1 new job · N destinations`.
+      tier = 0
+      totals.newJobs += 1
+      totals.newJobDestinations += delta.addedCount
+    } else if (delta !== null && delta !== undefined && delta.addedCount + delta.removedCount > 0) {
       tier = 0
       totals.changedJobs += 1
       totals.added += delta.addedCount
@@ -162226,11 +162290,11 @@ function machineSummaryMarker(review, accounting) {
     commit: review.sha,
     previous: review.comparison !== null ? review.comparison.previousSha : null,
     jobs: review.jobs.length,
-    changed: comparing ? accounting.changedJobs : null,
+    changed: comparing ? accounting.changedJobs + accounting.newJobs : null,
     unchanged: comparing ? accounting.unchangedJobs : null,
     noOutbound: comparing ? accounting.noOutboundJobs : null,
     vanished: comparing ? accounting.vanishedJobCount : null,
-    added: comparing ? accounting.added : null,
+    added: comparing ? accounting.added + accounting.newJobDestinations : null,
     removed: comparing ? accounting.removed : null,
     backgroundAdded: comparing ? accounting.backgroundAdded : null,
     backgroundRemoved: comparing ? accounting.backgroundRemoved : null,
@@ -162294,7 +162358,7 @@ function renderCommentBody(review, kept, { explainerOpen = false } = {}) {
     // Quiet by default: the only folds that ever open are changed folds
     // within the budget. Snapshot, first-profile, and unchanged folds stay
     // collapsed — their rows carry the counts.
-    const open = changed && accounting.changedJobs <= FOLD_OPEN_BUDGET
+    const open = changed && accounting.changedJobs + accounting.newJobs <= FOLD_OPEN_BUDGET
     lines.push(
       `<details${open ? " open" : ""}><summary>${jobSummaryLine(job, { delta: delta ?? null, treeEdges: shown })}</summary>`,
     )
@@ -162329,9 +162393,10 @@ function renderCommentBody(review, kept, { explainerOpen = false } = {}) {
     }
     const link = profilePermalink(job, review.appUrl, "pr_comment")
     if (link !== "") {
-      lines.push(
-        `<p align="right"><sub><a href="${escapeHtmlAttr(link)}">${VOCAB.permalinkLabel}</a></sub></p>`,
-      )
+      const jobLog = job.job_url || job.run_url
+      const jobLogPart =
+        jobLog === "" ? "" : `<a href="${escapeHtmlAttr(jobLog)}">${CONTRACT_VOCAB.copy.jobLogLabel}</a> · `
+      lines.push(`<sub>${jobLogPart}<a href="${escapeHtmlAttr(link)}">${CONTRACT_VOCAB.copy.fullRecordLabel}</a></sub>`)
       lines.push("")
     }
     lines.push("</details>")
@@ -162374,6 +162439,9 @@ function renderCommentBody(review, kept, { explainerOpen = false } = {}) {
       background: hasBackgroundLabel,
     }),
   )
+  lines.push("")
+  const prNumber = review.jobs.map((job) => job.pr_url.split("/").pop() ?? "").find((value) => /^\d+$/.test(value)) ?? ""
+  lines.push(renderCommentFooter(review.repo, prNumber))
 
   while (lines.length > 0 && lines[lines.length - 1] === "") lines.pop()
   return lines.join("\n")
@@ -162390,6 +162458,7 @@ function renderMinimalComment(review) {
   const head = [RUNTIME_REVIEW_MARKER, COMMENT_MARKER]
   if (review.sha !== "") head.push(`<!-- garnet:commit ${review.sha} -->`)
   head.push(headlineSentence(review))
+  head.push(`<sub>*${review.counts.jobs} jobs recorded at the kernel*</sub>`)
   head.push("")
   head.push(`<sub>${truncationLine(0, review.counts.associations)}</sub>`)
   return head.join("\n")
@@ -162471,21 +162540,23 @@ function renderRunReview(review, opts = {}) {
 /**
  * The waiting/pending comment: open explainer + hourglass, but no timestamp,
  * renderer clock, count, expected denominator, or permalink.
- * @param {{sha?: string, commitUrl?: string, appMode?: boolean}} input
+ * @param {{sha?: string, commitUrl?: string, appMode?: boolean, repo?: string, prNumber?: string}} input
  */
 function renderPendingReview(input = {}) {
   const sha = String(input.sha || "")
   const lines = [RUNTIME_REVIEW_MARKER, COMMENT_MARKER]
   if (sha !== "") lines.push(`<!-- garnet:commit ${sha} -->`)
-  lines.push(
-    `**${CONTRACT_VOCAB.copy.headlinePendingLead} ${commitRef(sha, String(input.commitUrl || ""))}**`,
-  )
+  lines.push(`### ${CONTRACT_VOCAB.copy.headings.recording}`)
+  lines.push("")
+  lines.push(`> <sub>*head* ${commitRef(sha, String(input.commitUrl || ""))}</sub>`)
   lines.push("")
   lines.push(CONTRACT_VOCAB.copy.pendingStatus)
   lines.push("")
   lines.push("---")
   lines.push("")
   lines.push(renderExplainer({ open: true }))
+  lines.push("")
+  lines.push(renderCommentFooter(String(input.repo || ""), String(input.prNumber || "")))
   return lines.join("\n")
 }
 
@@ -162745,7 +162816,7 @@ function renderRecordedContextPreview(edges, detections) {
           : `(${escapeMarkdownCell(note)})`,
       ),
     )
-    if (edge.result.toLowerCase() === "attention") context.push("⚠ attention")
+    if (edge.result.toLowerCase() === "attention") context.push("attention")
     lines.push(
       `| <code>${destinationDisplay(edge, escapeHtmlCell)}</code> | ${processTreeCell(edge)} | ${context.join(" · ") || "—"} |`,
     )
@@ -162937,8 +163008,11 @@ function workloadContextRows(job, appUrl, context) {
     rows.push(["Run", `${run}${attempt}`])
   }
   const runner = [job.runner_os, job.runner_arch].filter((value) => value !== "").join(" ")
-  if (runner !== "") rows.push(["Runner", escapeMarkdownCell(runner)])
-  rows.push(["Coverage", `${escapeMarkdownCell(runtime_review_vocab_CONTRACT_VOCAB.copy.kernelProvenance)} · best effort`])
+  const provenance =
+    runner === ""
+      ? runtime_review_vocab_CONTRACT_VOCAB.copy.kernelProvenance
+      : runtime_review_vocab_CONTRACT_VOCAB.copy.kernelProvenance.replace("at the kernel", `at the kernel (${runner})`)
+  rows.push(["Coverage", `${escapeMarkdownCell(provenance)}. ${runtime_review_vocab_CONTRACT_VOCAB.copy.captureBestEffort}`])
   if (context !== null) {
     if (context.capture !== "") rows.push(["Capture", escapeMarkdownCell(context.capture)])
     if (context.sensor !== "") rows.push(["Sensor", escapeMarkdownCell(context.sensor)])

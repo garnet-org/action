@@ -112,7 +112,7 @@
           ],
           "github_step": "3. Install",
           "notes": [
-            "cloud metadata"
+            "Cloud IMDS"
           ]
         },
         {

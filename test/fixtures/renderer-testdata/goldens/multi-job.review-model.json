@@ -112,9 +112,7 @@
             "node"
           ],
           "github_step": "4. Run workload (${{ matrix.job_name }})",
-          "notes": [
-            "dns resolver"
-          ]
+          "notes": []
         },
         {
           "remote_address": "127.0.0.53",
@@ -137,9 +135,7 @@
             "provjobd920019609"
           ],
           "github_step": "99. Runner Processes",
-          "notes": [
-            "dns resolver"
-          ]
+          "notes": []
         }
       ]
     },
@@ -264,9 +260,7 @@
             "node"
           ],
           "github_step": "4. Run workload (${{ matrix.job_name }})",
-          "notes": [
-            "dns resolver"
-          ]
+          "notes": []
         },
         {
           "remote_address": "127.0.0.53",
@@ -289,9 +283,7 @@
             "provjobd1326539233"
           ],
           "github_step": "99. Runner Processes",
-          "notes": [
-            "dns resolver"
-          ]
+          "notes": []
         },
         {
           "remote_address": "140.82.114.23",
@@ -415,9 +407,7 @@
             "provjobd1278877480"
           ],
           "github_step": "99. Runner Processes",
-          "notes": [
-            "dns resolver"
-          ]
+          "notes": []
         },
         {
           "remote_address": "140.82.112.23",
@@ -541,9 +531,7 @@
             "provjobd3832655626"
           ],
           "github_step": "99. Runner Processes",
-          "notes": [
-            "dns resolver"
-          ]
+          "notes": []
         },
         {
           "remote_address": "140.82.113.24",
@@ -694,9 +682,7 @@
             "node"
           ],
           "github_step": "4. Run workload (${{ matrix.job_name }})",
-          "notes": [
-            "dns resolver"
-          ]
+          "notes": []
         },
         {
           "remote_address": "104.16.8.34",
@@ -779,9 +765,7 @@
             "node"
           ],
           "github_step": "4. Run workload (${{ matrix.job_name }})",
-          "notes": [
-            "dns resolver"
-          ]
+          "notes": []
         },
         {
           "remote_address": "140.82.113.3",
@@ -866,9 +850,7 @@
             "curl"
           ],
           "github_step": "4. Run workload (${{ matrix.job_name }})",
-          "notes": [
-            "dns resolver"
-          ]
+          "notes": []
         },
         {
           "remote_address": "127.0.0.53",
@@ -891,9 +873,7 @@
             "provjobd811584691"
           ],
           "github_step": "99. Runner Processes",
-          "notes": [
-            "dns resolver"
-          ]
+          "notes": []
         },
         {
           "remote_address": "140.82.114.23",

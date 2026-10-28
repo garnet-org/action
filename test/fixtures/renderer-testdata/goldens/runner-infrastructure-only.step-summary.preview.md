@@ -10,7 +10,7 @@
 | Repository | garnet-org/runtime-review-testbed |
 | Commit | cc33dd44ee55ff6677889900aabbccddee112233 |
 | Run | [32000000002](https://github.com/garnet-org/runtime-review-testbed/actions/runs/32000000002) |
-| Coverage | recorded at the kernel by Garnet · best effort |
+| Coverage | recorded at the kernel by Garnet. Capture is best-effort. |
 | Workload activity | none recorded |
 | Runner activity | 2&nbsp;execution chains · 2&nbsp;destinations · 2&nbsp;destination associations |
 | Sensor network totals | network totals not recorded |
@@ -30,13 +30,13 @@ Keyed by execution chain; repeated destination names within a chain are collapse
 <pre>
 systemd
 └─ <strong>hosted-compute-agent</strong> <em>(pid 2002)</em>
-   └─ ○ hosted-compute-watchdog-prod-iad-01&#91;.&#93;githubapp [140.82.113.41] :443 tcp <em>(github infra)</em>
+   └─ ○ hosted-compute-watchdog-prod-iad-01&#91;.&#93;githubapp [140.82.113&#91;.&#93;41] :443 tcp <em>(github infra)</em>
 
 systemd
 └─ hosted-compute-agent
    └─ sudo
       └─ <strong>provjobd734003200</strong> <em>(pid 2001)</em>
-         └─ ○ localhost [127.0.0.53] :53 (dns) udp <em>(dns resolver)</em>
+         └─ ○ localhost [127.0.0&#91;.&#93;53] :53 (dns) udp
 </pre>
 </details>
 
@@ -45,7 +45,7 @@ systemd
 | Destination | Process Tree | Context |
 | --- | --- | --- |
 | <code>hosted-compute-watchdog-prod-iad-01.githubapp [140.82.113.41] :443 tcp</code> | <code>systemd</code> → <code>hosted-compute-agent (pid 2002)</code> | (github infra) |
-| <code>localhost [127.0.0.53] :53 (dns) udp</code> | <code>systemd</code> → <code>hosted-compute-agent</code> → <code>sudo</code> → <code>provjobd734003200 (pid 2001)</code> | step: 99. Runner Processes · (dns resolver) |
+| <code>localhost [127.0.0.53] :53 (dns) udp</code> | <code>systemd</code> → <code>hosted-compute-agent</code> → <code>sudo</code> → <code>provjobd734003200 (pid 2001)</code> | step: 99. Runner Processes |
 
 </details>
 

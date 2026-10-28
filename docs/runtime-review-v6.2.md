@@ -1,5 +1,10 @@
 # Runtime Review v6.2 — surfaces, framing, and the preview flag
 
+> **Superseded.** This page records the v6.2 design. The current reference for
+> the renderer, vocabulary and goldens is `garnet-org/runtime-review-testbed`
+> `main`; this repo vendors from it (see `src/runtime-review-vocab.js`) and
+> `test/wording-gate.test.js` enforces the current wording.
+
 Contract source of truth: `garnet-org/runtime-review-testbed` `docs/ux-contract.md`
 (v6.2). The testbed's byte-gated goldens are the spec; this action's renderer
 (`src/runtime-review.js`) is a port of the testbed reference renderer.
@@ -10,7 +15,7 @@ Contract source of truth: `garnet-org/runtime-review-testbed` `docs/ux-contract.
   observation-only: it answers "what happened?", never "is this good?". No
   verdict vocabulary, status icons, badges, or rankings anywhere.
 - **Step Summary** — the per-run record, read by the person who ran the job.
-  It is a faithful, readable projection of the Run Profile artifact: could you
+  It is a faithful, readable projection of the Execution Profile artifact: could you
   reconstruct the profile's story from it? That is the test it must pass.
 
 ## What changed in the PR comment (v6.1 → v6.2)
@@ -24,7 +29,7 @@ Contract source of truth: `garnet-org/runtime-review-testbed` `docs/ux-contract.
 - Provenance line on one quote rail:
   `> <sub>*commit [sha7](url) · recorded at the kernel · as of {stamp}*</sub>`
   (waiting variant: `no jobs recorded yet as of {stamp}`). No coverage fraction.
-- 💡 explainer rewritten to the A-format annotated mini-tree (lineage-exact,
+- Explainer rewritten to the A-format annotated mini-tree (lineage-exact,
   with ← teaching labels, legend, and notes); open through the first-commit
   lifecycle only.
 - Jobs-count separator line: `<sub><i>{N} jobs recorded on this commit</i></sub>`
@@ -74,7 +79,7 @@ with their own fixtures so prod bytes cannot drift while preview evolves.
 
 ## Vocab drift: jibril and ashkaal
 
-The action renders from the JSON Run Profile, so jibril's own Go markdown
+The action renders from the JSON Execution Profile, so jibril's own Go markdown
 printer output ("Garnet - Runtime Report", ✅/❌ headline, `contacted`) is no
 longer user-visible through this action — no runtime coupling breaks. If that
 printer's output resurfaces on a user-facing path, it should adopt the v6.2

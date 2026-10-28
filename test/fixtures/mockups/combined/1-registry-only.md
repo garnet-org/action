@@ -4,7 +4,9 @@
 <!-- garnet-run-profile -->
 <!-- garnet:commit 786a5bc8680486720bcf5dae13931de95d89b5ec -->
 <!-- garnet:summary {"contract":"6.10.0","githubMeta":"2026-08-08","commit":"786a5bc8680486720bcf5dae13931de95d89b5ec","previous":null,"jobs":1,"changed":null,"unchanged":null,"noOutbound":null,"vanished":null,"added":null,"removed":null,"backgroundAdded":null,"backgroundRemoved":null,"vanishedDestinations":null,"chains":1,"destinations":1,"recorded":null,"kinds":["network"]} -->
-**Execution Profiles recorded for 1 job, triggered by [`786a5bc`](https://github.com/garnet-org/runtime-review-testbed/commit/786a5bc8680486720bcf5dae13931de95d89b5ec)**
+### Runtime behavior recorded
+
+<sub>*head* [`786a5bc`](https://github.com/garnet-org/runtime-review-testbed/commit/786a5bc8680486720bcf5dae13931de95d89b5ec)</sub>
 
 > *1&nbsp;destination*
 > <sub>recorded at the kernel by Garnet</sub>
@@ -18,13 +20,13 @@ Runner.Worker
       └─ ○ registry.npmjs[.]org
 </pre>
 
-<p align="right"><sub><a href="https://app.garnet.ai/public/runs/28488074733?profile=019f1b61-9f3c-7ac8-a8ed-0c07bf1546af&amp;utm_source=github&amp;utm_medium=pr_comment">View this job's Execution Profile in Garnet →</a></sub></p>
+<sub><a href="https://github.com/garnet-labs/runtime-review-testbed/actions/runs/28488074733">Job log</a> · <a href="https://app.garnet.ai/public/runs/28488074733?profile=019f1b61-9f3c-7ac8-a8ed-0c07bf1546af&amp;utm_source=github&amp;utm_medium=pr_comment">Full record in Garnet ↗</a></sub>
 
 </details>
 
 ---
 
-<details><summary><sub>💡 How to read this</sub></summary>
+<details><summary><sub>How to read this</sub></summary>
 
 <pre>
 Runner.Worker          <em>← process on a path</em>
@@ -33,11 +35,13 @@ Runner.Worker          <em>← process on a path</em>
       └─ ○ npmjs[.]org <em>← observed action</em>
 </pre>
 
-<sub><i>follow a path downward to see what ran and what it did — each path to an observed action is an execution chain</i></sub>
+<sub><i>follow a path downward to see what ran and what it did — each path to an observed action is an execution chain · Capture is best-effort.</i></sub>
 
 <sub><i>names on the path = processes · ○ = observed action · (…) = context</i></sub>
 
 </details>
+
+<sub>Runtime behavior, recorded by Garnet. <a href="https://app.garnet.ai/onboarding?utm_source=github&amp;utm_medium=pr_comment&amp;utm_campaign=garnet-org-runtime-review-testbed-pr22&amp;utm_content=add_to_ci">Add it to your CI ↗</a></sub>
 
 ---
 
@@ -58,7 +62,7 @@ Runner.Worker          <em>← process on a path</em>
 | Commit | 786a5bc8680486720bcf5dae13931de95d89b5ec |
 | Triggered by | devin-ai-integration&#91;bot&#93; |
 | Run | [28488074733](https://github.com/garnet-labs/runtime-review-testbed/actions/runs/28488074733) |
-| Coverage | recorded at the kernel by Garnet · best effort |
+| Coverage | recorded at the kernel by Garnet. Capture is best-effort. |
 | Workload activity | 1&nbsp;execution chain · 1&nbsp;destination · 1&nbsp;destination association |
 | Runner activity | none recorded |
 | Sensor network totals | 1&nbsp;unique domain · 15&nbsp;connections |
@@ -80,7 +84,7 @@ systemd
       └─ Runner.Worker
          └─ bash
             └─ <strong>npm install</strong>
-               └─ ○ registry.npmjs&#91;.&#93;org [104.16.5.34] :443
+               └─ ○ registry.npmjs&#91;.&#93;org [104.16.5&#91;.&#93;34] :443
 </pre>
 </details>
 

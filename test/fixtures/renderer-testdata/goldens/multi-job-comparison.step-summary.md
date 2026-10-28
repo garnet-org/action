@@ -9,7 +9,7 @@
 | Repository | garnet-org/runtime-review-testbed |
 | Commit | bb22cc33dd44ee55ff6677889900aabbccddee11 |
 | Run | [32000000001](https://github.com/garnet-org/runtime-review-testbed/actions/runs/32000000001) |
-| Coverage | recorded at the kernel by Garnet · best effort |
+| Coverage | recorded at the kernel by Garnet. Capture is best-effort. |
 | Workload activity | 4&nbsp;execution chains · 4&nbsp;destinations · 4&nbsp;destination associations |
 | Runner activity | 2&nbsp;execution chains · 2&nbsp;destinations · 2&nbsp;destination associations |
 | Sensor network totals | network totals not recorded |
@@ -35,23 +35,23 @@ systemd
 └─ Runner.Worker
    └─ bash
       ├─ <strong>node</strong> <em>(pid 4004)</em> <em>(step: &quot;Run api tests&quot;)</em>
-      │  └─ ○ cache.internal&#91;.&#93;example [192.0.2.40] :6379 tcp
+      │  └─ ○ cache.internal&#91;.&#93;example [192.0.2&#91;.&#93;40] :6379 tcp
       ├─ <strong>node</strong> <em>(pid 4003)</em> <em>(step: &quot;Run api tests&quot;)</em>
-      │  └─ ○ flap-b.example&#91;.&#93;com [198.51.100.61] :443 tcp
+      │  └─ ○ flap-b.example&#91;.&#93;com [198.51.100&#91;.&#93;61] :443 tcp
       ├─ <strong>node</strong> <em>(pid 4001)</em> <em>(step: &quot;Run api tests&quot;)</em>
-      │  └─ ○ kept.example&#91;.&#93;com [198.51.100.7] :443 tcp
+      │  └─ ○ kept.example&#91;.&#93;com [198.51.100&#91;.&#93;7] :443 tcp
       └─ <strong>node</strong> <em>(pid 4002)</em> <em>(step: &quot;Run api tests&quot;)</em>
-         └─ ○ fresh.example&#91;.&#93;net [203.0.113.14] :443 tcp
+         └─ ○ fresh.example&#91;.&#93;net [203.0.113&#91;.&#93;14] :443 tcp
 
 systemd
 └─ <strong>hosted-compute-agent</strong> <em>(pid 1901)</em>
-   └─ ○ telemetry&#91;.&#93;example [192.0.2.50] :443 tcp
+   └─ ○ telemetry&#91;.&#93;example [192.0.2&#91;.&#93;50] :443 tcp
 
 systemd
 └─ hosted-compute-agent
    └─ sudo
       └─ <strong>provjobd104857600</strong> <em>(pid 1902)</em>
-         └─ ○ glb-2a3c35-public-internal.githubapp&#91;.&#93;com [140.82.113.9] :443 tcp <em>(github infra)</em>
+         └─ ○ glb-2a3c35-public-internal.githubapp&#91;.&#93;com [140.82.113&#91;.&#93;9] :443 tcp <em>(github infra)</em>
 </pre>
 </details>
 
@@ -72,7 +72,7 @@ systemd
 | Repository | garnet-org/runtime-review-testbed |
 | Commit | bb22cc33dd44ee55ff6677889900aabbccddee11 |
 | Run | [32000000001](https://github.com/garnet-org/runtime-review-testbed/actions/runs/32000000001) |
-| Coverage | recorded at the kernel by Garnet · best effort |
+| Coverage | recorded at the kernel by Garnet. Capture is best-effort. |
 | Workload activity | 1&nbsp;execution chain · 1&nbsp;destination · 1&nbsp;destination association |
 | Runner activity | 2&nbsp;execution chains · 2&nbsp;destinations · 2&nbsp;destination associations |
 | Sensor network totals | network totals not recorded |
@@ -95,17 +95,17 @@ systemd
 └─ Runner.Worker
    └─ bash
       └─ <strong>node</strong> <em>(pid 4101)</em> <em>(step: &quot;Install dependencies&quot;)</em>
-         └─ ○ registry.npmjs&#91;.&#93;org [104.16.24.34] :443 tcp
+         └─ ○ registry.npmjs&#91;.&#93;org [104.16.24&#91;.&#93;34] :443 tcp
 
 systemd
 └─ <strong>hosted-compute-agent</strong> <em>(pid 1912)</em>
-   └─ ○ hosted-compute-watchdog-prod-iad-03.githubapp&#91;.&#93;com [140.82.115.40] :443 tcp <em>(github infra)</em>
+   └─ ○ hosted-compute-watchdog-prod-iad-03.githubapp&#91;.&#93;com [140.82.115&#91;.&#93;40] :443 tcp <em>(github infra)</em>
 
 systemd
 └─ hosted-compute-agent
    └─ sudo
       └─ <strong>provjobd209715200</strong> <em>(pid 1911)</em>
-         └─ ○ glb-2a3c35-public-internal.githubapp&#91;.&#93;com [140.82.114.30] :443 tcp <em>(github infra)</em>
+         └─ ○ glb-2a3c35-public-internal.githubapp&#91;.&#93;com [140.82.114&#91;.&#93;30] :443 tcp <em>(github infra)</em>
 </pre>
 </details>
 
@@ -126,7 +126,7 @@ systemd
 | Repository | garnet-org/runtime-review-testbed |
 | Commit | bb22cc33dd44ee55ff6677889900aabbccddee11 |
 | Run | [32000000001](https://github.com/garnet-org/runtime-review-testbed/actions/runs/32000000001) |
-| Coverage | recorded at the kernel by Garnet · best effort |
+| Coverage | recorded at the kernel by Garnet. Capture is best-effort. |
 | Workload activity | none recorded |
 | Runner activity | 2&nbsp;execution chains · 2&nbsp;destinations · 2&nbsp;destination associations |
 | Sensor network totals | network totals not recorded |
@@ -146,13 +146,13 @@ Keyed by execution chain; repeated destination names within a chain are collapse
 <pre>
 systemd
 └─ <strong>hosted-compute-agent</strong> <em>(pid 1922)</em>
-   └─ ○ hosted-compute-watchdog-prod-iad-02.githubapp&#91;.&#93;com [140.82.112.31] :443 tcp <em>(github infra)</em>
+   └─ ○ hosted-compute-watchdog-prod-iad-02.githubapp&#91;.&#93;com [140.82.112&#91;.&#93;31] :443 tcp <em>(github infra)</em>
 
 systemd
 └─ hosted-compute-agent
    └─ sudo
       └─ <strong>provjobd314572800</strong> <em>(pid 1921)</em>
-         └─ ○ localhost [127.0.0.53] :53 (dns) udp <em>(dns resolver)</em>
+         └─ ○ localhost [127.0.0&#91;.&#93;53] :53 (dns) udp
 </pre>
 </details>
 
