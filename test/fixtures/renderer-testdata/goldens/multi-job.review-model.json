@@ -74,10 +74,32 @@
           ],
           "protocol": "TCP",
           "result": "attention",
-          "detections": [
-            "exec_from_unusual_dir",
-            "flow"
+          "detections": [],
+          "lineage_recorded": true,
+          "pid": "2384",
+          "process": "node",
+          "ancestry": [
+            "systemd",
+            "hosted-compute-agent",
+            "Runner.Listener",
+            "Runner.Worker",
+            "bash",
+            "node"
           ],
+          "github_step": "4. Run workload (${{ matrix.job_name }})",
+          "notes": []
+        },
+        {
+          "remote_address": "127.0.0.53",
+          "remote_names": [
+            "localhost"
+          ],
+          "remote_ports": [
+            "53 (dns)"
+          ],
+          "protocol": "UDP",
+          "result": "attention",
+          "detections": [],
           "lineage_recorded": true,
           "pid": "2384",
           "process": "node",
@@ -91,7 +113,7 @@
           ],
           "github_step": "4. Run workload (${{ matrix.job_name }})",
           "notes": [
-            "detection: exec_from_unusual_dir"
+            "dns resolver"
           ]
         },
         {
@@ -104,41 +126,7 @@
           ],
           "protocol": "UDP",
           "result": "attention",
-          "detections": [
-            "exec_from_unusual_dir",
-            "flow"
-          ],
-          "lineage_recorded": true,
-          "pid": "2384",
-          "process": "node",
-          "ancestry": [
-            "systemd",
-            "hosted-compute-agent",
-            "Runner.Listener",
-            "Runner.Worker",
-            "bash",
-            "node"
-          ],
-          "github_step": "4. Run workload (${{ matrix.job_name }})",
-          "notes": [
-            "dns resolver",
-            "detection: exec_from_unusual_dir"
-          ]
-        },
-        {
-          "remote_address": "127.0.0.53",
-          "remote_names": [
-            "localhost"
-          ],
-          "remote_ports": [
-            "53 (dns)"
-          ],
-          "protocol": "UDP",
-          "result": "attention",
-          "detections": [
-            "exec_from_unusual_dir",
-            "flow"
-          ],
+          "detections": [],
           "lineage_recorded": true,
           "pid": "1867",
           "process": "provjobd920019609",
@@ -150,8 +138,7 @@
           ],
           "github_step": "99. Runner Processes",
           "notes": [
-            "dns resolver",
-            "detection: exec_from_unusual_dir"
+            "dns resolver"
           ]
         }
       ]
@@ -218,9 +205,7 @@
           ],
           "protocol": "TCP",
           "result": "pass",
-          "detections": [
-            "flow"
-          ],
+          "detections": [],
           "lineage_recorded": true,
           "pid": "1878",
           "process": "hosted-compute-agent",
@@ -241,10 +226,32 @@
           ],
           "protocol": "TCP",
           "result": "attention",
-          "detections": [
-            "exec_from_unusual_dir",
-            "flow"
+          "detections": [],
+          "lineage_recorded": true,
+          "pid": "2371",
+          "process": "node",
+          "ancestry": [
+            "systemd",
+            "hosted-compute-agent",
+            "Runner.Listener",
+            "Runner.Worker",
+            "bash",
+            "node"
           ],
+          "github_step": "4. Run workload (${{ matrix.job_name }})",
+          "notes": []
+        },
+        {
+          "remote_address": "127.0.0.53",
+          "remote_names": [
+            "localhost"
+          ],
+          "remote_ports": [
+            "53 (dns)"
+          ],
+          "protocol": "UDP",
+          "result": "attention",
+          "detections": [],
           "lineage_recorded": true,
           "pid": "2371",
           "process": "node",
@@ -258,7 +265,7 @@
           ],
           "github_step": "4. Run workload (${{ matrix.job_name }})",
           "notes": [
-            "detection: exec_from_unusual_dir"
+            "dns resolver"
           ]
         },
         {
@@ -271,41 +278,7 @@
           ],
           "protocol": "UDP",
           "result": "attention",
-          "detections": [
-            "exec_from_unusual_dir",
-            "flow"
-          ],
-          "lineage_recorded": true,
-          "pid": "2371",
-          "process": "node",
-          "ancestry": [
-            "systemd",
-            "hosted-compute-agent",
-            "Runner.Listener",
-            "Runner.Worker",
-            "bash",
-            "node"
-          ],
-          "github_step": "4. Run workload (${{ matrix.job_name }})",
-          "notes": [
-            "dns resolver",
-            "detection: exec_from_unusual_dir"
-          ]
-        },
-        {
-          "remote_address": "127.0.0.53",
-          "remote_names": [
-            "localhost"
-          ],
-          "remote_ports": [
-            "53 (dns)"
-          ],
-          "protocol": "UDP",
-          "result": "attention",
-          "detections": [
-            "exec_from_unusual_dir",
-            "flow"
-          ],
+          "detections": [],
           "lineage_recorded": true,
           "pid": "1893",
           "process": "provjobd1326539233",
@@ -317,8 +290,7 @@
           ],
           "github_step": "99. Runner Processes",
           "notes": [
-            "dns resolver",
-            "detection: exec_from_unusual_dir"
+            "dns resolver"
           ]
         },
         {
@@ -332,9 +304,7 @@
           ],
           "protocol": "TCP",
           "result": "pass",
-          "detections": [
-            "flow"
-          ],
+          "detections": [],
           "lineage_recorded": true,
           "pid": "1893",
           "process": "provjobd1326539233",
@@ -413,9 +383,7 @@
           ],
           "protocol": "TCP",
           "result": "pass",
-          "detections": [
-            "flow"
-          ],
+          "detections": [],
           "lineage_recorded": true,
           "pid": "1854",
           "process": "hosted-compute-agent",
@@ -436,9 +404,7 @@
           ],
           "protocol": "UDP",
           "result": "pass",
-          "detections": [
-            "flow"
-          ],
+          "detections": [],
           "lineage_recorded": true,
           "pid": "1868",
           "process": "provjobd1278877480",
@@ -464,9 +430,7 @@
           ],
           "protocol": "TCP",
           "result": "pass",
-          "detections": [
-            "flow"
-          ],
+          "detections": [],
           "lineage_recorded": true,
           "pid": "1868",
           "process": "provjobd1278877480",
@@ -545,9 +509,7 @@
           ],
           "protocol": "TCP",
           "result": "pass",
-          "detections": [
-            "flow"
-          ],
+          "detections": [],
           "lineage_recorded": true,
           "pid": "1878",
           "process": "hosted-compute-agent",
@@ -568,9 +530,7 @@
           ],
           "protocol": "UDP",
           "result": "pass",
-          "detections": [
-            "flow"
-          ],
+          "detections": [],
           "lineage_recorded": true,
           "pid": "1893",
           "process": "provjobd3832655626",
@@ -596,9 +556,7 @@
           ],
           "protocol": "TCP",
           "result": "pass",
-          "detections": [
-            "flow"
-          ],
+          "detections": [],
           "lineage_recorded": true,
           "pid": "1893",
           "process": "provjobd3832655626",
@@ -677,9 +635,7 @@
           ],
           "protocol": "TCP",
           "result": "pass",
-          "detections": [
-            "flow"
-          ],
+          "detections": [],
           "lineage_recorded": true,
           "pid": "1849",
           "process": "hosted-compute-agent",
@@ -700,10 +656,7 @@
           ],
           "protocol": "TCP",
           "result": "attention",
-          "detections": [
-            "exec_from_unusual_dir",
-            "flow"
-          ],
+          "detections": [],
           "lineage_recorded": true,
           "pid": "2361",
           "process": "node",
@@ -716,9 +669,7 @@
             "node"
           ],
           "github_step": "4. Run workload (${{ matrix.job_name }})",
-          "notes": [
-            "detection: exec_from_unusual_dir"
-          ]
+          "notes": []
         },
         {
           "remote_address": "127.0.0.53",
@@ -730,10 +681,7 @@
           ],
           "protocol": "UDP",
           "result": "attention",
-          "detections": [
-            "exec_from_unusual_dir",
-            "flow"
-          ],
+          "detections": [],
           "lineage_recorded": true,
           "pid": "2361",
           "process": "node",
@@ -747,8 +695,7 @@
           ],
           "github_step": "4. Run workload (${{ matrix.job_name }})",
           "notes": [
-            "dns resolver",
-            "detection: exec_from_unusual_dir"
+            "dns resolver"
           ]
         },
         {
@@ -761,10 +708,7 @@
           ],
           "protocol": "TCP",
           "result": "attention",
-          "detections": [
-            "exec_from_unusual_dir",
-            "flow"
-          ],
+          "detections": [],
           "lineage_recorded": true,
           "pid": "2384",
           "process": "node",
@@ -779,9 +723,7 @@
             "node"
           ],
           "github_step": "4. Run workload (${{ matrix.job_name }})",
-          "notes": [
-            "detection: exec_from_unusual_dir"
-          ]
+          "notes": []
         },
         {
           "remote_address": "104.26.10.16",
@@ -793,10 +735,7 @@
           ],
           "protocol": "TCP",
           "result": "attention",
-          "detections": [
-            "exec_from_unusual_dir",
-            "flow"
-          ],
+          "detections": [],
           "lineage_recorded": true,
           "pid": "2384",
           "process": "node",
@@ -812,8 +751,7 @@
           ],
           "github_step": "4. Run workload (${{ matrix.job_name }})",
           "notes": [
-            "garnet sensor",
-            "detection: exec_from_unusual_dir"
+            "garnet sensor"
           ]
         },
         {
@@ -826,10 +764,7 @@
           ],
           "protocol": "UDP",
           "result": "attention",
-          "detections": [
-            "exec_from_unusual_dir",
-            "flow"
-          ],
+          "detections": [],
           "lineage_recorded": true,
           "pid": "2384",
           "process": "node",
@@ -845,8 +780,7 @@
           ],
           "github_step": "4. Run workload (${{ matrix.job_name }})",
           "notes": [
-            "dns resolver",
-            "detection: exec_from_unusual_dir"
+            "dns resolver"
           ]
         },
         {
@@ -859,10 +793,7 @@
           ],
           "protocol": "TCP",
           "result": "attention",
-          "detections": [
-            "exec_from_unusual_dir",
-            "flow"
-          ],
+          "detections": [],
           "lineage_recorded": true,
           "pid": "2384",
           "process": "node",
@@ -877,9 +808,7 @@
             "node"
           ],
           "github_step": "4. Run workload (${{ matrix.job_name }})",
-          "notes": [
-            "detection: exec_from_unusual_dir"
-          ]
+          "notes": []
         },
         {
           "remote_address": "100.52.37.185",
@@ -891,9 +820,7 @@
           ],
           "protocol": "TCP",
           "result": "pass",
-          "detections": [
-            "flow"
-          ],
+          "detections": [],
           "lineage_recorded": true,
           "pid": "2396",
           "process": "curl",
@@ -922,10 +849,7 @@
           ],
           "protocol": "UDP",
           "result": "attention",
-          "detections": [
-            "exec_from_unusual_dir",
-            "flow"
-          ],
+          "detections": [],
           "lineage_recorded": true,
           "pid": "2396",
           "process": "curl",
@@ -943,8 +867,7 @@
           ],
           "github_step": "4. Run workload (${{ matrix.job_name }})",
           "notes": [
-            "dns resolver",
-            "detection: exec_from_unusual_dir"
+            "dns resolver"
           ]
         },
         {
@@ -957,10 +880,7 @@
           ],
           "protocol": "UDP",
           "result": "attention",
-          "detections": [
-            "exec_from_unusual_dir",
-            "flow"
-          ],
+          "detections": [],
           "lineage_recorded": true,
           "pid": "1864",
           "process": "provjobd811584691",
@@ -972,8 +892,7 @@
           ],
           "github_step": "99. Runner Processes",
           "notes": [
-            "dns resolver",
-            "detection: exec_from_unusual_dir"
+            "dns resolver"
           ]
         },
         {
@@ -987,9 +906,7 @@
           ],
           "protocol": "TCP",
           "result": "pass",
-          "detections": [
-            "flow"
-          ],
+          "detections": [],
           "lineage_recorded": true,
           "pid": "1864",
           "process": "provjobd811584691",

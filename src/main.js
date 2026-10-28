@@ -35,6 +35,10 @@ async function main() {
         const preview = core.getInput("preview") === "true"
         core.saveState("preview", preview ? "true" : "")
 
+        // Detection labels stay off every surface unless the workflow opts in.
+        const showDetections = core.getInput("show_detections") === "true"
+        core.saveState("showDetections", showDetections ? "true" : "")
+
         const githubToken = core.getInput("github_token")
         core.saveState("githubToken", githubToken)
 

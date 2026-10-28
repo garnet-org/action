@@ -30,6 +30,7 @@ import {
   renderPendingReview,
   renderReferenceMockup,
   renderStepSummary,
+  renderExecutionChains,
   truncateMiddle,
   lintRenderedSurface,
   exportReviewModel,
@@ -343,7 +344,7 @@ await test("gate 4: one meaning per style — bold marks the process that acted"
   assert.ok(!EDGE_MD.includes("not shown here"))
   assert.ok(EDGE_SUMMARY.includes("unknown (not recorded)"))
 
-  const detected = exportReviewModel(reviewFor([workload])).jobs[0].edges.find(
+  const detected = exportReviewModel(reviewFor([workload]), { detections: true }).jobs[0].edges.find(
     (edge) => edge.detections.includes("exec_from_unusual_dir"),
   )
   assert.ok(hasRecordedDetection(detected))
@@ -388,9 +389,12 @@ await test("gate 6: empty proc_trees emits one edge with lineage 'unknown (not r
   // root and stay in the model and Step Summary.
   assert.ok(EDGE_MD.includes("○ no-lineage[.]example"))
   assert.ok(!EDGE_MD.includes("[198.51.100.44]"))
-  assert.ok(EDGE_SUMMARY.includes("<code>no-lineage.example</code>"))
+  assert.ok(EDGE_SUMMARY.includes("<code>no-lineage&#91;.&#93;example</code>"))
   assert.ok(EDGE_SUMMARY.includes("<code>unknown (not recorded)</code>"))
-  assert.ok(!EDGE_SUMMARY.includes("[198.51.100.44]"))
+  // The address stays out of the table; the chains fold keeps it.
+  const fold = EDGE_SUMMARY.indexOf("<details><summary><sub>Execution chains ·")
+  assert.ok(!EDGE_SUMMARY.slice(0, fold).includes("198.51.100.44"))
+  assert.ok(EDGE_SUMMARY.slice(fold).includes("[198.51.100.44]"))
   const model = EDGE_MODEL.jobs[0].edges.find((e) => e.remote_address === "198.51.100.44")
   assert.equal(model.lineage_recorded, false)
 })
@@ -507,7 +511,7 @@ await test("gate 8: loopback:53 (including '53 (dns)') gets the resolver note an
   assert.ok(EDGE_SUMMARY.includes("<code>localhost</code>"))
   // The resolver note appears only inside the full-tree fold (PR-comment
   // grammar) — never in the lineage table above it.
-  const summaryFoldStart = EDGE_SUMMARY.indexOf("<details><summary><sub>Full recorded tree")
+  const summaryFoldStart = EDGE_SUMMARY.indexOf("<details><summary><sub>Execution chains ·")
   assert.ok(!EDGE_SUMMARY.slice(0, summaryFoldStart).includes("(dns resolver)"))
   const previewLine = EDGE_SUMMARY_PREVIEW.split("\n").find((l) =>
     l.includes("127.0.0.53"),
@@ -523,7 +527,10 @@ await test("gate 9: loopback:8080 gets NO resolver note (and still counts)", () 
   const line = EDGE_MD.split("\n").find((l) => l.includes("○ 127.0.0.1"))
   assert.ok(!line.includes("(dns resolver)"))
   assert.ok(EDGE_SUMMARY.includes("<code>127.0.0.1</code>"))
-  assert.ok(!EDGE_SUMMARY.includes("8080"))
+  // Ports stay out of the table; the chains fold keeps them losslessly.
+  const fold = EDGE_SUMMARY.indexOf("<details><summary><sub>Execution chains ·")
+  assert.ok(!EDGE_SUMMARY.slice(0, fold).includes("8080"))
+  assert.ok(EDGE_SUMMARY.slice(fold).includes(":8080"))
   const previewLine = EDGE_SUMMARY_PREVIEW.split("\n").find((l) => l.includes("8080"))
   assert.ok(previewLine.includes("8080"))
   assert.ok(!previewLine.includes("(dns resolver)"))
@@ -615,10 +622,11 @@ await test("gate 10: an address-like remote name never double-renders or counts 
 })
 
 await test("gate 11: secondary/truncated names stay out of prod and remain verbatim in preview", () => {
-  assert.ok(EDGE_SUMMARY.includes("glb-2a3c35-public-internal.githubapp.com"))
+  assert.ok(EDGE_SUMMARY.includes("glb-2a3c35-public-internal.githubapp&#91;.&#93;com"))
   assert.ok(!EDGE_MD.includes("hosted-compute-watchdog-prod-iad-02.githubapp"))
   assert.ok(!EDGE_MD.includes("also recorded:"))
-  const previewLine = EDGE_SUMMARY_PREVIEW.split("\n").find((line) =>
+  const previewTable = EDGE_SUMMARY_PREVIEW.slice(EDGE_SUMMARY_PREVIEW.indexOf("Recorded context preview"))
+  const previewLine = previewTable.split("\n").find((line) =>
     line.includes("also recorded:"),
   )
   assert.ok(previewLine.includes("hosted-compute-watchdog-prod-iad-02.githubapp"))
@@ -628,12 +636,24 @@ await test("gate 11: secondary/truncated names stay out of prod and remain verba
 
 await test("gate 11b: non-flow detections annotate only under assertions preview; flow is omitted", () => {
   assert.deepEqual(
+    edgeNotes(
+      {
+        remote_address: "203.0.113.1",
+        remote_ports: ["443"],
+        detections: ["flow", "exec_from_unusual_dir", "network_peer"],
+      },
+      { detections: true },
+    ),
+    ["detection: exec_from_unusual_dir", "detection: network_peer"],
+  )
+  // Off unless the caller opts in.
+  assert.deepEqual(
     edgeNotes({
       remote_address: "203.0.113.1",
       remote_ports: ["443"],
-      detections: ["flow", "exec_from_unusual_dir", "network_peer"],
+      detections: ["flow", "exec_from_unusual_dir"],
     }),
-    ["detection: exec_from_unusual_dir", "detection: network_peer"],
+    [],
   )
   assert.deepEqual(
     edgeNotes(
@@ -651,9 +671,12 @@ await test("gate 11b: non-flow detections annotate only under assertions preview
   assert.ok(!md.includes("detection: flow"))
   const prodSummary = renderStepSummary([workload], { appUrl: APP_URL })
   assert.ok(!prodSummary.includes("detection: exec_from_unusual_dir"))
+  // Preview alone does not turn detections on; only the opt-in does.
   const previewSummary = renderStepSummary([workload], { appUrl: APP_URL, preview: true })
-  assert.ok(previewSummary.includes("detection: exec_from_unusual_dir"))
-  assert.ok(!previewSummary.includes("detection: flow"))
+  assert.ok(!previewSummary.includes("detection:"))
+  const optedIn = renderStepSummary([workload], { appUrl: APP_URL, preview: true, detections: true })
+  assert.ok(optedIn.includes("detection: exec_from_unusual_dir"))
+  assert.ok(!optedIn.includes("detection: flow"))
 })
 
 // ---------------------------------------------------------------------------
@@ -1125,20 +1148,118 @@ await test("gate: step summary PR link — pull_request refs link the PR row; ot
   assert.equal(summarizeProfile(noRepo).pr_url, "")
 })
 
-await test("gate: step summary full-tree fold — collapsed by default, absolute grammar, no diff markers", () => {
-  assert.ok(EDGE_SUMMARY.includes("<details><summary><sub>Full recorded tree</sub></summary>"))
+await test("gate: step summary chains fold — collapsed, root-to-action, PIDs never merged, no diff markers", () => {
+  assert.ok(EDGE_SUMMARY.includes("<details><summary><sub>Execution chains · "))
+  assert.ok(!EDGE_SUMMARY.includes("Execution tree"))
+  assert.ok(!EDGE_SUMMARY.includes("Full recorded tree"))
   assert.ok(!EDGE_SUMMARY.includes("<details open"))
   const job = summarizeProfile(edgeCaseEnvelope)
-  const tree = renderJobTree(job, job.edges, { defang: false })
-  assert.ok(EDGE_SUMMARY.includes(tree))
-  // Step Summary stays canonical — no defanged hostnames in the fold.
-  assert.ok(!tree.includes("[.]"))
-  // Absolute view only — no comparison material inside the fold.
-  const foldStart = EDGE_SUMMARY.indexOf("<details><summary><sub>Full recorded tree")
+  const chains = renderExecutionChains(buildLineageRows(job.edges))
+  assert.ok(EDGE_SUMMARY.includes(chains))
+  const foldStart = EDGE_SUMMARY.indexOf("<details><summary><sub>Execution chains")
   const foldEnd = EDGE_SUMMARY.indexOf("</details>", foldStart)
   const fold = EDGE_SUMMARY.slice(foldStart, foldEnd)
+  // The fold count is the number of action leaves.
+  const leaves = (fold.match(/○ /g) || []).length
+  assert.equal(leaves, job.edges.length)
+  assert.ok(fold.includes(`Execution chains · ${job.edges.length}&nbsp;destination association`))
+  // Every recorded PID is its own bold process line.
+  const pids = new Set(job.edges.filter((edge) => edge.pid !== "").map((edge) => edge.pid))
+  for (const pid of pids) {
+    assert.equal(fold.split(`<em>(pid ${pid})</em>`).length - 1, 1, `pid ${pid} must render exactly once`)
+  }
+  // Absolute view only — no comparison material inside the fold.
   assert.ok(!/^[+−-] /m.test(fold.replace(/<[^>]+>/g, "")))
   assert.ok(!fold.includes("no longer recorded"))
+})
+
+await test("detections: off by default on every Action surface, restored only by the opt-in", () => {
+  const surfaces = [
+    ...recordSet,
+    workload,
+    worth,
+    edgeCaseEnvelope,
+  ].flatMap((profile) => [
+    renderStepSummary([profile], { appUrl: APP_URL }),
+    renderStepSummary([profile], { appUrl: APP_URL, preview: true }),
+    renderRunReview(reviewFor([profile])),
+    JSON.stringify(exportReviewModel(reviewFor([profile]))),
+  ])
+  for (const surface of surfaces) {
+    assert.ok(!surface.includes("detection:"), "a default surface carries a detection label")
+    assert.ok(!surface.includes("exec_from_unusual_dir"), "a default surface carries a detection kind")
+  }
+  const optedIn = renderStepSummary([workload], { appUrl: APP_URL, detections: true })
+  const fold = optedIn.slice(optedIn.indexOf("<details><summary><sub>Execution chains"))
+  assert.ok(fold.includes("detection: exec_from_unusual_dir"))
+  const model = exportReviewModel(reviewFor([workload]), { detections: true })
+  assert.ok(model.jobs[0].edges.some((edge) => edge.detections.includes("exec_from_unusual_dir")))
+})
+
+await test("shape: workload context heads the receipt with every recorded fact and the post-step context", () => {
+  const context = {
+    sensor: "Jibril v2.17.0",
+    capture: "capture incomplete: eBPF errors: attach=1",
+    sensorIntegrity: "bundle digests match the signed release manifest",
+    sensorAuthenticity: "not checked: github_token is unset",
+    steps: "8 recorded (source: api)",
+  }
+  const summary = renderStepSummary([workload], { appUrl: APP_URL, context })
+  const head = summary.slice(0, summary.indexOf("### Network egress"))
+  for (const row of [
+    "| Workflow |",
+    "| Job |",
+    "| Commit |",
+    "| Run |",
+    "| Coverage |",
+    "| Capture | capture incomplete&#58; eBPF errors&#58; attach=1 |",
+    "| Sensor | Jibril v2.17.0 |",
+    "| Sensor integrity | bundle digests match the signed release manifest |",
+    "| Sensor authenticity | not checked&#58; github&#95;token is unset |",
+    "| Workflow steps |",
+    "| Workload activity |",
+    "| Runner activity |",
+    "| Sensor network totals |",
+  ]) {
+    assert.ok(head.includes(row), `workload context lacks ${row}`)
+  }
+  assert.ok(!/verified|detected|caught|\bsafe\b/i.test(head))
+  // Without post-step context the record-only rows still render, nothing is guessed.
+  const bare = renderStepSummary([workload], { appUrl: APP_URL })
+  assert.ok(!bare.includes("| Sensor |") && !bare.includes("| Capture |"))
+  assert.ok(bare.includes("| Coverage |"))
+})
+
+await test("shape: chains share parents only on an exact recorded ancestry match", () => {
+  const edge = (pid, ancestry) => ({
+    remote_names: ["example.org"],
+    remote_address: "203.0.113.9",
+    remote_ports: ["443"],
+    protocol: "TCP",
+    proc_trees: [{ pid, process: ancestry[ancestry.length - 1], ancestry, github_step: "4. Run workload" }],
+  })
+  const profile = {
+    scenarios: { github: { job: "j", workflow: "w", repository: "o/r", run_id: "1" } },
+    network: {
+      egress: {
+        peers: [
+          edge(101, ["systemd", "Runner.Worker", "bash", "node"]),
+          edge(102, ["systemd", "Runner.Worker", "bash", "node"]),
+          edge(103, ["systemd", "Runner.Worker", "bash", "node", "dash", "curl"]),
+        ],
+      },
+    },
+  }
+  const job = summarizeProfile(profile)
+  const chains = renderExecutionChains(buildLineageRows(job.edges))
+  const blocks = chains.split("\n\n")
+  // 101 and 102 share the exact ancestry above them: one group, two leaves.
+  assert.equal(blocks.length, 2)
+  assert.ok(blocks[0].includes("(pid 101)") && blocks[0].includes("(pid 102)"))
+  assert.equal(blocks[0].split("<strong>node</strong>").length - 1, 2)
+  // 103's ancestry only shares a prefix, so it stays its own chain.
+  assert.ok(blocks[1].includes("(pid 103)") && !blocks[1].includes("(pid 101)"))
+  assert.ok(blocks[1].startsWith("systemd\n└─ Runner.Worker"))
 })
 
 await test("gate: preview material is contained — default bytes carry none of it on any surface", () => {
@@ -1325,10 +1446,14 @@ await test("Gate T: historical mismatches render without unexplained telemetry",
 await test("shape: Step Summary is lineage-keyed (deduped) with preview-only context", () => {
   assert.ok(EDGE_SUMMARY.startsWith(`## ${VOCAB.stepSummaryHeading}`))
   assert.ok(
-    EDGE_SUMMARY.indexOf("### Workload Summary") <
-      EDGE_SUMMARY.indexOf("### Network Egress Summary"),
+    EDGE_SUMMARY.indexOf("### Workload context") <
+      EDGE_SUMMARY.indexOf("### Network egress"),
   )
-  assert.ok(EDGE_SUMMARY.includes("| Process Tree | Destinations |"))
+  assert.ok(
+    EDGE_SUMMARY.indexOf("| Execution chain | Destinations |") <
+      EDGE_SUMMARY.indexOf("<details><summary><sub>Execution chains"),
+  )
+  assert.ok(EDGE_SUMMARY.includes("| Execution chain | Destinations |"))
   assert.ok(!EDGE_SUMMARY.includes("| Destination | Process Tree |"))
   assert.ok(
     EDGE_SUMMARY.includes(
@@ -1342,7 +1467,8 @@ await test("shape: Step Summary is lineage-keyed (deduped) with preview-only con
   assert.ok(!EDGE_SUMMARY.includes("| Record UUID |"))
   assert.ok(REAL_SUMMARY.includes("| Branch |"))
   assert.ok(REAL_SUMMARY.includes("| Triggered by |"))
-  assert.ok(EDGE_SUMMARY.includes("| Run ID / Job |"))
+  assert.ok(EDGE_SUMMARY.includes("| Run |"))
+  assert.ok(EDGE_SUMMARY.includes("| Coverage | recorded at the kernel by Garnet · best effort |"))
   assert.ok(EDGE_SUMMARY.includes("</code> <sub>pid&nbsp;4104</sub>"))
   // The preview recorded-context table keeps its inline PID form.
   assert.ok(EDGE_SUMMARY_PREVIEW.includes("<code>node (pid 4104)</code>"))
@@ -1359,7 +1485,7 @@ await test("shape: Step Summary is lineage-keyed (deduped) with preview-only con
   assert.ok(EDGE_SUMMARY_PREVIEW.includes("<details><summary><strong>Assertions</strong>"))
   assert.ok(REAL_SUMMARY.includes("| Check | Result | Context |"))
   assert.ok(!EDGE_SUMMARY.includes("Network telemetry observed"))
-  assert.ok(REAL_SUMMARY.includes("Network telemetry observed"))
+  assert.ok(REAL_SUMMARY.includes("| Sensor network totals |"))
   assert.ok(EDGE_SUMMARY.includes('<div align="right">'))
   // Footer: timestamp + one product path; workflow/run/job identity lives
   // only in the Workload table, and the brand is never doubled beside the CTA.

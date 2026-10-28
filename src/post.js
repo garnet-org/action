@@ -29,6 +29,7 @@ import { resolveJobStatusFromGitHub } from "./github-job-status.js"
 import { resolveStopTimeoutFromSettings, resolveStopTimeoutFromUnit } from "./post-stop-timeout.js"
 import { versionAtLeast } from "./jibril-version.js"
 import { annotateDeliveryFailure } from "./delivery-annotations.js"
+import { buildRecordingContext } from "./recording-context.js"
 import {
     JIBRIL_RUN_STATUS_FILE,
     formatAttachFailures,
@@ -240,7 +241,16 @@ async function run() {
             }
         }
 
-        await appendRuntimeReviewSummary(profile)
+        const context = buildRecordingContext({
+            jibrilVersion: core.getState("jibrilVersion"),
+            sensorBundle: core.getState("sensorBundle"),
+            sensorAttestation: core.getState("sensorAttestation"),
+            stopOutcome,
+            forceStopped,
+            stopTimeoutSeconds,
+            runStatus,
+        })
+        await appendRuntimeReviewSummary(profile, context)
         if (profile !== null) {
             logProfileReportLink(profile)
         }
@@ -584,9 +594,10 @@ function resolveControlPlaneBaseURL() {
 
 /**
  * @param {LoadedProfile | null} profile
+ * @param {import("./runtime-review.js").StepSummaryContext} context
  * @returns {Promise<void>}
  */
-async function appendRuntimeReviewSummary(profile) {
+async function appendRuntimeReviewSummary(profile, context) {
     if (profile === null) {
         await appendUnrecordedSummary(
             "The job ended without a usable Execution Profile. No runtime evidence is available for this job.",
@@ -601,7 +612,8 @@ async function appendRuntimeReviewSummary(profile) {
     }
 
     const preview = core.getState("preview") === "true"
-    const content = renderStepSummary([profile.raw], { appUrl: resolveAppBaseURL(), preview })
+    const detections = core.getState("showDetections") === "true"
+    const content = renderStepSummary([profile.raw], { appUrl: resolveAppBaseURL(), preview, detections, context })
 
     await fs.appendFile(summaryFile, `\n${content}\n`)
     core.info("Garnet Runtime Summary written to job summary")

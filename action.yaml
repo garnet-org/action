@@ -42,6 +42,10 @@ inputs:
         description: "Render the full-fidelity Step Summary record (assertions + evidence). Preview shape is unstable and may change without a major version bump"
         required: false
         default: "false"
+    show_detections:
+        description: "Show the sensor's detection labels (for example exec_from_unusual_dir) next to recorded destinations in the Step Summary. Off by default"
+        required: false
+        default: "false"
     stop_timeout_seconds:
         description: |
             Maximum seconds Jibril is given at shutdown to finish writing its Execution Profile and flushing

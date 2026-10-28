@@ -159772,6 +159772,10 @@ const GITHUB_META_IP_RANGES = {
  *   ref: string
  *   pr_url: string
  *   actor: string
+ *   run_attempt: string
+ *   event_name: string
+ *   runner_os: string
+ *   runner_arch: string
  *   job_index: string
  *   flow_count: number
  *   telemetry: JobTelemetry
@@ -160093,11 +160097,12 @@ const numericPort = (value) => {
  *     contract-locked GitHub infrastructure suffix.
  *   - `garnet sensor` — the primary recorded remote name is `garnet.ai` or
  *     ends with `.garnet.ai`.
- *   - `detection: <kind>` — every non-empty recorded detection except `flow`.
+ *   - `detection: <kind>` — every non-empty recorded detection except `flow`,
+ *     only when the caller opts in (the `show_detections` input).
  * @param {ReviewEdge} edge
  * @param {{ detections?: boolean }} [options]
  */
-function edgeNotes(edge, { detections = true } = {}) {
+function edgeNotes(edge, { detections = false } = {}) {
   /** @type {string[]} */
   const notes = []
   if (
@@ -160363,6 +160368,10 @@ function summarizeProfile(profile) {
     ref: String(github.ref || ""),
     pr_url: pullRequestURL(github),
     actor: String(github.triggering_actor || github.actor || ""),
+    run_attempt: String(github.run_attempt || ""),
+    event_name: String(github.event_name || ""),
+    runner_os: String(github.runner_os || ""),
+    runner_arch: String(github.runner_arch || ""),
     job_index:
       github.job_index !== undefined && github.job_index !== null
         ? String(github.job_index)
@@ -160490,6 +160499,10 @@ function buildRunReview(input) {
       ref: String(j.ref || ""),
       pr_url: String(j.pr_url || ""),
       actor: String(j.actor || ""),
+      run_attempt: String(j.run_attempt || ""),
+      event_name: String(j.event_name || ""),
+      runner_os: String(j.runner_os || ""),
+      runner_arch: String(j.runner_arch || ""),
       job_index: String(j.job_index || ""),
       flow_count: Number(j.flow_count || 0),
       telemetry: {
@@ -160596,7 +160609,7 @@ function buildRunReview(input) {
  * Stable JSON-serializable review model (the review-model golden surface).
  * @param {RunReview} review
  */
-function exportReviewModel(review) {
+function exportReviewModel(review, { detections = false } = {}) {
   return {
     contractVersion: CONTRACT_VOCAB.version,
     repo: review.repo,
@@ -160631,13 +160644,13 @@ function exportReviewModel(review) {
         remote_ports: e.remote_ports,
         protocol: e.protocol,
         result: e.result,
-        detections: e.detections,
+        detections: detections ? e.detections : [],
         lineage_recorded: e.lineage_recorded,
         pid: e.pid,
         process: e.process,
         ancestry: e.ancestry,
         github_step: e.github_step,
-        notes: edgeNotes(e),
+        notes: edgeNotes(e, { detections }),
       })),
     })),
   }
@@ -162668,9 +162681,9 @@ function lineageDestinationsCell(row) {
   // record never captured (ordinals would), and the glue keeps the glyph
   // from orphaning onto its own line at phone width. A single destination
   // renders bare — a marker of one is noise.
-  if (labels.length === 1) return `<code>${escapeHtmlCell(truncateMiddle(labels[0]))}</code>`
+  if (labels.length === 1) return `<code>${escapeHtmlCell(truncateMiddle(defangHostname(labels[0])))}</code>`
   return labels
-    .map((label) => `· <code>${escapeHtmlCell(truncateMiddle(label))}</code>`)
+    .map((label) => `· <code>${escapeHtmlCell(truncateMiddle(defangHostname(label)))}</code>`)
     .join("<br>")
 }
 
@@ -162682,9 +162695,11 @@ function lineageDestinationsCell(row) {
  * @param {LineageRow[]} rows
  */
 function renderLineageTable(rows) {
-  const lines = ["| Process Tree | Destinations |", "| --- | --- |"]
+  const lines = ["| Execution chain | Destinations |", "| --- | --- |"]
   for (const row of rows) {
-    lines.push(`| ${processTreeCell(row.edge, true)} | ${lineageDestinationsCell(row)} |`)
+    const step = stepAnnotationName(row.edge.github_step)
+    const context = step === "" ? "" : `<br><sub>step: &quot;${escapeHtmlCell(truncateMiddle(step))}&quot;</sub>`
+    lines.push(`| ${processTreeCell(row.edge, true)}${context} | ${lineageDestinationsCell(row)} |`)
   }
   return lines.join("\n")
 }
@@ -162708,34 +162723,10 @@ function lineageRetentionOrder(rows) {
 }
 
 /**
- * @param {ReviewJob} job
- */
-function hasExplainableTelemetry(job) {
-  if (
-    job.telemetry.total_domains === null ||
-    job.telemetry.total_connections === null ||
-    telemetryDiscrepancies(job).length > 0
-  ) {
-    return false
-  }
-  return true
-}
-
-/**
- * Djalal's sensor + derived telemetry semantics in the approved prose shape.
- * @param {ReviewJob} job
- */
-function renderTelemetry(job) {
-  if (!hasExplainableTelemetry(job)) return ""
-  const domains = `${job.telemetry.total_domains} unique domain${job.telemetry.total_domains === 1 ? "" : "s"}`
-  const connections = `${job.telemetry.total_connections} connection${job.telemetry.total_connections === 1 ? "" : "s"}`
-  return `Network telemetry observed ${domains}, ${job.counts.destinations} destination${job.counts.destinations === 1 ? "" : "s"}, ${connections}, and ${job.counts.flows} flow${job.counts.flows === 1 ? "" : "s"}.`
-}
-
-/**
  * @param {ReviewEdge[]} edges
+ * @param {boolean} detections
  */
-function renderRecordedContextPreview(edges) {
+function renderRecordedContextPreview(edges, detections) {
   if (edges.length === 0) return ""
   const lines = [
     "<details><summary><strong>Recorded context preview</strong></summary>",
@@ -162748,7 +162739,7 @@ function renderRecordedContextPreview(edges) {
     const context = []
     if (edge.github_step !== "") context.push(`step: ${escapeMarkdownCell(edge.github_step)}`)
     context.push(
-      ...edgeNotes(edge, { detections: true }).map((note) =>
+      ...edgeNotes(edge, { detections }).map((note) =>
         note.startsWith("detection: ")
           ? `\`${escapeCodeCell(note)}\``
           : `(${escapeMarkdownCell(note)})`,
@@ -162837,11 +162828,9 @@ function renderAssertionPreview(assertions) {
  * @param {string} appUrl
  */
 function renderStepSummaryFooter(job, appUrl) {
-  // Workflow, run, and job identity live in the Workload table; the footer
-  // adds only the recording timestamp and the product path.
-  const stamp = formatTimestamp(job.timestamp)
+  // Identity and the recording timestamp live in the workload context; the
+  // footer carries only the product path.
   const lines = ['<div align="right">']
-  if (stamp !== "") lines.push(`<sub>${stamp}</sub><br>`)
   const link = profilePermalink(job, appUrl, "step_summary")
   const cta =
     link === ""
@@ -162854,15 +162843,72 @@ function renderStepSummaryFooter(job, appUrl) {
 }
 
 /**
+ * Post-step facts about the recording that the profile itself does not
+ * carry, already phrased for display. An empty field renders no row.
+ * @typedef {{
+ *   sensor: string
+ *   capture: string
+ *   sensorIntegrity: string
+ *   sensorAuthenticity: string
+ *   steps: string
+ * }} StepSummaryContext
+ */
+
+/**
+ * @typedef {{
+ *   previewAssertions: boolean
+ *   detections: boolean
+ *   context: StepSummaryContext | null
+ * }} ProfileSummaryOptions
+ */
+
+/**
+ * A chain belongs to the workload when it descends through `Runner.Worker`,
+ * carries a real recorded step, or has no recorded lineage (an unprovable
+ * chain is never quieted into the runner); everything else is the runner.
+ * @param {ReviewEdge} edge
+ */
+function isWorkloadEdge(edge) {
+  if (!edge.lineage_recorded) return true
+  if (edgeProcessPath(edge).includes("Runner.Worker")) return true
+  return stepAnnotationName(edge.github_step) !== ""
+}
+
+/**
+ * `3 execution chains · 5 destinations · 7 destination associations`
+ * for one side of the workload/runner split.
+ * @param {ReviewEdge[]} edges
+ */
+function activityCell(edges) {
+  if (edges.length === 0) return "none recorded"
+  return [
+    countPhrase(buildLineageRows(edges).length, "execution chain"),
+    countPhrase(edgeCounts(edges).destinations, "destination"),
+    countPhrase(edges.length, "destination association"),
+  ].join(" · ")
+}
+
+/**
+ * @param {ReviewJob} job
+ */
+function sensorTotalsCell(job) {
+  /** @type {string[]} */
+  const parts = []
+  if (job.telemetry.total_domains !== null) parts.push(countPhrase(job.telemetry.total_domains, "unique domain"))
+  if (job.telemetry.total_connections !== null) parts.push(countPhrase(job.telemetry.total_connections, "connection"))
+  return parts.length === 0 ? "network totals not recorded" : parts.join(" · ")
+}
+
+/**
+ * The always-visible head of a job's receipt: every identity, coverage and
+ * capture fact the record (and the post step) carries, one row each. A
+ * field the record does not carry renders no row rather than a guess.
  * @param {ReviewJob} job
  * @param {string} appUrl
- * @param {number} keptDestinations
- * @param {boolean} previewAssertions
+ * @param {StepSummaryContext | null} context
+ * @returns {[string, string][]}
  */
-function renderProfileSummary(job, appUrl, keptDestinations, previewAssertions) {
-  const lines = [`## ${VOCAB.stepSummaryHeading}`, ""]
-
-  lines.push("### Workload Summary", "")
+function workloadContextRows(job, appUrl, context) {
   /** @type {[string, string][]} */
   const rows = []
   if (job.profile_id !== "") {
@@ -162874,6 +162920,8 @@ function renderProfileSummary(job, appUrl, keptDestinations, previewAssertions) 
     rows.push(["Profile", profileCell])
   }
   if (job.workflow !== "") rows.push(["Workflow", escapeMarkdownCell(job.workflow)])
+  if (job.name !== "") rows.push(["Job", escapeMarkdownCell(job.name)])
+  if (job.job_index !== "") rows.push(["Matrix job index", escapeMarkdownCell(job.job_index)])
   if (job.repository !== "") rows.push(["Repository", escapeMarkdownCell(job.repository)])
   if (job.ref !== "") rows.push(["Branch", escapeMarkdownCell(job.ref)])
   if (job.pr_url !== "") {
@@ -162881,19 +162929,140 @@ function renderProfileSummary(job, appUrl, keptDestinations, previewAssertions) 
     rows.push(["Pull request", `[#${escapeMarkdownCell(prNumber ?? "")}](${job.pr_url})`])
   }
   if (job.sha !== "") rows.push(["Commit", escapeMarkdownCell(job.sha)])
+  if (job.event_name !== "") rows.push(["Event", escapeMarkdownCell(job.event_name)])
   if (job.actor !== "") rows.push(["Triggered by", escapeMarkdownCell(job.actor)])
-  if (job.run_id !== "" || job.name !== "") {
-    rows.push(["Run ID / Job", escapeMarkdownCell([job.run_id, job.name].filter(Boolean).join(" / "))])
+  if (job.run_id !== "") {
+    const attempt = job.run_attempt === "" ? "" : ` · attempt ${escapeMarkdownCell(job.run_attempt)}`
+    const run = job.run_url === "" ? escapeMarkdownCell(job.run_id) : `[${escapeMarkdownCell(job.run_id)}](${job.run_url})`
+    rows.push(["Run", `${run}${attempt}`])
   }
-  if (job.job_index !== "") rows.push(["Matrix job index", escapeMarkdownCell(job.job_index)])
+  const runner = [job.runner_os, job.runner_arch].filter((value) => value !== "").join(" ")
+  if (runner !== "") rows.push(["Runner", escapeMarkdownCell(runner)])
+  rows.push(["Coverage", `${escapeMarkdownCell(runtime_review_vocab_CONTRACT_VOCAB.copy.kernelProvenance)} · best effort`])
+  if (context !== null) {
+    if (context.capture !== "") rows.push(["Capture", escapeMarkdownCell(context.capture)])
+    if (context.sensor !== "") rows.push(["Sensor", escapeMarkdownCell(context.sensor)])
+    if (context.sensorIntegrity !== "") rows.push(["Sensor integrity", escapeMarkdownCell(context.sensorIntegrity)])
+    if (context.sensorAuthenticity !== "") {
+      rows.push(["Sensor authenticity", escapeMarkdownCell(context.sensorAuthenticity)])
+    }
+    if (context.steps !== "") rows.push(["Workflow steps", escapeMarkdownCell(context.steps)])
+  }
+  rows.push(["Workload activity", activityCell(job.edges.filter(isWorkloadEdge))])
+  rows.push(["Runner activity", activityCell(job.edges.filter((edge) => !isWorkloadEdge(edge)))])
+  rows.push(["Sensor network totals", sensorTotalsCell(job)])
+  const stamp = formatTimestamp(job.timestamp)
+  // formatTimestamp emits a fixed `YYYY-MM-DD HH:MM:SS UTC` shape built from
+  // a parsed Date, never raw record text.
+  if (stamp !== "") rows.push(["Recorded at", stamp])
+  return rows
+}
+
+/**
+ * Text inside the `<pre>` fold: HTML-escaped, with brackets entity-encoded
+ * so a recorded value can never read as a link reference.
+ * @param {unknown} value
+ */
+function escapeChainText(value) {
+  return escapeHtml(value).replaceAll("[", "&#91;").replaceAll("]", "&#93;")
+}
+
+/**
+ * One group of chains that share the exact same recorded ancestry above
+ * their acting process. The shared names render once; each acting process
+ * (its own PID) is a separate leaf with every destination association it
+ * owns beneath it. Nothing is merged on a partial prefix.
+ * @param {LineageRow[]} group
+ * @param {boolean} detections
+ */
+function renderChainGroup(group, detections) {
+  const first = group[0]
+  if (first === undefined) return ""
+  const parents = edgeProcessPath(first.edge).slice(0, -1)
+  const lines = parents.map((name, index) =>
+    index === 0 ? escapeChainText(name) : `${"   ".repeat(index - 1)}└─ ${escapeChainText(name)}`,
+  )
+  const leafIndent = parents.length === 0 ? "" : "   ".repeat(parents.length - 1)
+  group.forEach((row, rowIndex) => {
+    const path = edgeProcessPath(row.edge)
+    const leafName = path[path.length - 1] ?? VOCAB.unknownLineage
+    const pid = row.edge.pid === "" ? "" : ` <em>(pid ${escapeChainText(row.edge.pid)})</em>`
+    const step = stepAnnotationName(row.edge.github_step)
+    const stepNote = step === "" ? "" : ` <em>(step: &quot;${escapeChainText(step)}&quot;)</em>`
+    const ranFrom = row.edge.executable === "" ? "" : ranFromNote(new Set([row.edge.executable]))
+    const ranFromText = ranFrom === "" ? "" : ` ${renderNote(ranFrom)}`
+    const leaf = `<strong>${escapeChainText(leafName)}</strong>${pid}${stepNote}${ranFromText}`
+    let childPrefix = ""
+    if (parents.length === 0) {
+      lines.push(leaf)
+    } else {
+      const last = rowIndex === group.length - 1
+      lines.push(`${leafIndent}${last ? "└─ " : "├─ "}${leaf}`)
+      childPrefix = `${leafIndent}${last ? "   " : "│  "}`
+    }
+    row.associations.forEach((edge, index) => {
+      const branch = index === row.associations.length - 1 ? "└─ " : "├─ "
+      const destination = destinationDisplay(edge, (value) => escapeChainText(defangHostname(value)))
+      const notes = edgeNotes(edge, { detections }).map(renderNote)
+      const suffix = notes.length === 0 ? "" : ` ${notes.join(" ")}`
+      lines.push(`${childPrefix}${branch}${VOCAB.terminalNetwork} ${destination}${suffix}`)
+    })
+  })
+  return lines.join("\n")
+}
+
+/**
+ * Every destination association as root-to-action chains. The record
+ * carries ancestry names and the acting process's PID only, so two
+ * processes with the same name cannot be proven to be one node: chains are
+ * grouped only when their full recorded ancestry above the acting process
+ * matches exactly, and two PIDs never share a node. Workload groups render
+ * before runner groups.
+ * @param {LineageRow[]} rows
+ * @param {boolean} [detections]
+ */
+function renderExecutionChains(rows, detections = false) {
+  /** @type {Map<string, LineageRow[]>} */
+  const groups = new Map()
+  for (const row of rows) {
+    const parents = edgeProcessPath(row.edge).slice(0, -1)
+    const key =
+      !row.edge.lineage_recorded || parents.length === 0 ? `root:${groups.size}` : JSON.stringify(parents)
+    const group = groups.get(key)
+    if (group === undefined) {
+      groups.set(key, [row])
+    } else {
+      group.push(row)
+    }
+  }
+  const ordered = [...groups.values()]
+  const isWorkloadGroup = (/** @type {LineageRow[]} */ group) => group.some((row) => isWorkloadEdge(row.edge))
+  return [...ordered.filter(isWorkloadGroup), ...ordered.filter((group) => !isWorkloadGroup(group))]
+    .map((group) => renderChainGroup(group, detections))
+    .join("\n\n")
+}
+
+/**
+ * One job's receipt: workload context (always visible), the execution
+ * chain table, the collapsed chains fold, preview-only material, then the
+ * Execution Profile CTA.
+ * @param {ReviewJob} job
+ * @param {string} appUrl
+ * @param {number} keptDestinations
+ * @param {ProfileSummaryOptions} options
+ */
+function renderProfileSummary(job, appUrl, keptDestinations, options) {
+  const lines = [`## ${VOCAB.stepSummaryHeading}`, ""]
+
+  lines.push("### Workload context", "")
   lines.push("| Field | Value |")
   lines.push("| --- | --- |")
-  for (const [key, value] of rows) {
+  for (const [key, value] of workloadContextRows(job, appUrl, options.context)) {
     lines.push(`| ${escapeMarkdownCell(key)} | ${value} |`)
   }
   lines.push("")
 
-  lines.push("### Network Egress Summary", "")
+  lines.push("### Network egress", "")
   const lineageRows = buildLineageRows(job.edges)
   if (lineageRows.length === 0) {
     lines.push(VOCAB.emptyPeers)
@@ -162906,32 +163075,22 @@ function renderProfileSummary(job, appUrl, keptDestinations, previewAssertions) 
     lines.push(renderLineageTable(shown))
     lines.push("")
     if (shown.length < lineageRows.length) {
-      lines.push(
-        `<sub>rendered ${shown.length} of ${lineageRows.length} execution chains</sub>`,
-      )
+      lines.push(`<sub>rendered ${shown.length} of ${lineageRows.length} execution chains</sub>`)
       lines.push("")
     }
-  }
-
-  // Absolute recorded tree in the PR-comment grammar; no comparison material.
-  if (job.edges.length > 0) {
-    lines.push("<details><summary><sub>Full recorded tree</sub></summary>")
+    lines.push(
+      `<details><summary><sub>Execution chains · ${countPhrase(job.edges.length, "destination association")}</sub></summary>`,
+    )
     lines.push("")
     lines.push("<pre>")
-    lines.push(renderJobTree(job, job.edges, { defang: false }))
+    lines.push(renderExecutionChains(lineageRows, options.detections))
     lines.push("</pre>")
     lines.push("</details>")
     lines.push("")
   }
 
-  const telemetry = renderTelemetry(job)
-  if (telemetry !== "") {
-    lines.push(telemetry)
-    lines.push("")
-  }
-
-  if (previewAssertions) {
-    lines.push(renderRecordedContextPreview(job.edges))
+  if (options.previewAssertions) {
+    lines.push(renderRecordedContextPreview(job.edges, options.detections))
     lines.push("")
     lines.push(renderAssertionPreview(job.assertions))
     lines.push("")
@@ -162942,12 +163101,12 @@ function renderProfileSummary(job, appUrl, keptDestinations, previewAssertions) 
 }
 
 /**
- * Render the GitHub Step Summary: heading `## Garnet Runtime Summary`,
- * Workload first, then the lineage-first network-egress table, source-
- * backed telemetry, optional preview-only assertions, and the aligned footer.
+ * Render the GitHub Step Summary, the job's full receipt: workload context
+ * first, then the execution chain table, the collapsed chains fold,
+ * optional preview-only material, and the Execution Profile CTA.
  * The 1 MiB budget uses deterministic fair-round-robin retention.
  * @param {unknown[]} profiles raw parsed Jibril profiles
- * @param {{appUrl?: string, preview?: boolean}} [opts]
+ * @param {{appUrl?: string, preview?: boolean, detections?: boolean, context?: StepSummaryContext | null}} [opts]
  */
 function renderStepSummary(profiles, opts = {}) {
   const appUrl = String(opts.appUrl || "https://app.garnet.ai").replace(/\/+$/, "")
@@ -162958,7 +163117,11 @@ function renderStepSummary(profiles, opts = {}) {
   const render = (/** @type {Map<number, number>} */ kept) =>
     jobs
       .map((j, i) =>
-        renderProfileSummary(j, appUrl, kept.get(i) ?? Infinity, opts.preview === true),
+        renderProfileSummary(j, appUrl, kept.get(i) ?? Infinity, {
+          previewAssertions: opts.preview === true,
+          detections: opts.detections === true,
+          context: opts.context ?? null,
+        }),
       )
       .join("\n\n---\n\n")
 
@@ -164135,7 +164298,112 @@ function parseCoreVersion(tag) {
     return { major: Number(major), minor: Number(minor), patch: Number(patch) }
 }
 
+;// CONCATENATED MODULE: ./src/recording-context.js
+
+
+
+/** @typedef {import("./jibril-status.js").JibrilStatus} JibrilStatus */
+/** @typedef {import("./runtime-review.js").StepSummaryContext} StepSummaryContext */
+
+/**
+ * What the main step recorded about the sensor binary it installed.
+ * `matched` means every bundle digest matched the signed release manifest;
+ * `unavailable` means the release predates signed bundles.
+ * @typedef {"matched" | "unavailable" | ""} SensorBundleState
+ */
+
+/**
+ * `signed` means `gh attestation verify` accepted the expected signer
+ * workflow; the skipped states name why the check did not run.
+ * @typedef {"signed" | "skipped_no_token" | "skipped_no_gh" | "unavailable" | ""} SensorAttestationState
+ */
+
+/**
+ * @typedef {object} RecordingObservations
+ * @property {string} jibrilVersion
+ * @property {string} sensorBundle - the main step's saved SensorBundleState
+ * @property {string} sensorAttestation - the main step's saved SensorAttestationState
+ * @property {"completed" | "timed_out"} stopOutcome
+ * @property {boolean} forceStopped
+ * @property {number} stopTimeoutSeconds
+ * @property {JibrilStatus | null} runStatus
+ */
+
+/** @type {Readonly<Record<string, string>>} */
+const SENSOR_INTEGRITY = Object.freeze({
+    matched: "bundle digests match the signed release manifest",
+    unavailable: "not checked: this Jibril release ships no signed bundle",
+})
+
+/** @type {Readonly<Record<string, string>>} */
+const SENSOR_AUTHENTICITY = Object.freeze({
+    signed: "signed by the jibril-releases release workflow (gh attestation)",
+    skipped_no_token: "not checked: github_token is unset",
+    skipped_no_gh: "not checked: gh CLI is unavailable",
+    unavailable: "not checked: this Jibril release ships no attestation",
+})
+
+/**
+ * Phrases how the capture went, from the sensor's own account. Gaps are
+ * named; a clean account is still only what the sensor reported.
+ * @param {RecordingObservations} observations
+ * @returns {string}
+ */
+function describeCapture(observations) {
+    /** @type {string[]} */
+    const gaps = []
+    if (observations.stopOutcome === "timed_out") {
+        const forced = observations.forceStopped ? "; sensor force-stopped" : ""
+        gaps.push(`stop timed out after ${observations.stopTimeoutSeconds}s${forced}`)
+    }
+
+    const runStatus = observations.runStatus
+    if (runStatus !== null) {
+        if (runStatus.ebpf === null) {
+            gaps.push("no eBPF counters reported")
+        } else {
+            const errors = formatEbpfErrors(runStatus.ebpf.errors)
+            if (errors !== "") gaps.push(`eBPF errors: ${errors}`)
+        }
+    }
+
+    if (gaps.length > 0) return `capture incomplete: ${gaps.join("; ")}`
+    if (runStatus !== null) return "no capture gaps reported by the sensor"
+    if (versionAtLeast(observations.jibrilVersion, 2, 17, 0)) return "capture state not reported by the sensor"
+    return "capture state not reported (sensor before v2.17)"
+}
+
+/**
+ * @param {JibrilStatus | null} runStatus
+ * @returns {string}
+ */
+function describeSteps(runStatus) {
+    const steps = runStatus === null ? null : runStatus.githubSteps
+    if (steps === null) return ""
+    const source = steps.source === null ? "" : ` (source: ${steps.source})`
+    const degraded = steps.status === "degraded" ? "; step attribution degraded" : ""
+    return `${steps.count} recorded${source}${degraded}`
+}
+
+/**
+ * The Step Summary's post-step context. Every value is phrased from what
+ * the action or the sensor recorded; nothing here claims more than the
+ * named check showed.
+ * @param {RecordingObservations} observations
+ * @returns {StepSummaryContext}
+ */
+function buildRecordingContext(observations) {
+    return {
+        sensor: observations.jibrilVersion === "" ? "" : `Jibril ${observations.jibrilVersion}`,
+        capture: describeCapture(observations),
+        sensorIntegrity: SENSOR_INTEGRITY[observations.sensorBundle] ?? "",
+        sensorAuthenticity: SENSOR_AUTHENTICITY[observations.sensorAttestation] ?? "",
+        steps: describeSteps(observations.runStatus),
+    }
+}
+
 ;// CONCATENATED MODULE: ./src/post.js
+
 
 
 
@@ -164364,7 +164632,16 @@ async function run() {
             }
         }
 
-        await appendRuntimeReviewSummary(profile)
+        const context = buildRecordingContext({
+            jibrilVersion: getState("jibrilVersion"),
+            sensorBundle: getState("sensorBundle"),
+            sensorAttestation: getState("sensorAttestation"),
+            stopOutcome,
+            forceStopped,
+            stopTimeoutSeconds,
+            runStatus,
+        })
+        await appendRuntimeReviewSummary(profile, context)
         if (profile !== null) {
             logProfileReportLink(profile)
         }
@@ -164708,9 +164985,10 @@ function resolveControlPlaneBaseURL() {
 
 /**
  * @param {LoadedProfile | null} profile
+ * @param {import("./runtime-review.js").StepSummaryContext} context
  * @returns {Promise<void>}
  */
-async function appendRuntimeReviewSummary(profile) {
+async function appendRuntimeReviewSummary(profile, context) {
     if (profile === null) {
         await appendUnrecordedSummary(
             "The job ended without a usable Execution Profile. No runtime evidence is available for this job.",
@@ -164725,7 +165003,8 @@ async function appendRuntimeReviewSummary(profile) {
     }
 
     const preview = getState("preview") === "true"
-    const content = renderStepSummary([profile.raw], { appUrl: resolveAppBaseURL(), preview })
+    const detections = getState("showDetections") === "true"
+    const content = renderStepSummary([profile.raw], { appUrl: resolveAppBaseURL(), preview, detections, context })
 
     await promises_.appendFile(summaryFile, `\n${content}\n`)
     info("Garnet Runtime Summary written to job summary")

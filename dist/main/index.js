@@ -44224,6 +44224,8 @@ async function downloadJibril(tag, tmpDir) {
         const binaryURL = `${releaseURL}/${JIBRIL_BINARY}`
         info(`Downloading jibril: ${binaryURL}`)
         await downloadFile(binaryURL, binaryPath)
+        saveState("sensorBundle", "unavailable")
+        saveState("sensorAttestation", "unavailable")
         return binaryPath
     }
 
@@ -44238,7 +44240,8 @@ async function downloadJibril(tag, tmpDir) {
     await promises_namespaceObject.mkdir(bundleDir, { recursive: true })
     await exec_exec("tar", ["-xzf", archivePath, "-C", bundleDir])
     await verifyJibrilBundle(bundleDir, tag)
-    await verifyJibrilAttestation(external_node_path_namespaceObject.join(bundleDir, JIBRIL_BINARY))
+    saveState("sensorBundle", "matched")
+    saveState("sensorAttestation", await verifyJibrilAttestation(external_node_path_namespaceObject.join(bundleDir, JIBRIL_BINARY)))
     await promises_namespaceObject.rename(external_node_path_namespaceObject.join(bundleDir, JIBRIL_BINARY), binaryPath)
 
     return binaryPath
@@ -44301,17 +44304,17 @@ async function verifySignedPayload(bundleDir, name) {
  * environment; when either is absent we warn rather than fail so self-hosted
  * runners keep working.
  * @param {string} binaryPath
- * @returns {Promise<void>}
+ * @returns {Promise<"signed" | "skipped_no_token" | "skipped_no_gh">} what the Step Summary reports
  */
 async function verifyJibrilAttestation(binaryPath) {
     if (getEnv("GITHUB_TOKEN", "") === "") {
         warning("github_token is unset: skipping jibril attestation verification.")
-        return
+        return "skipped_no_token"
     }
 
     if (!(await isCommandAvailable("gh"))) {
         warning("gh CLI is unavailable: skipping jibril attestation verification.")
-        return
+        return "skipped_no_gh"
     }
 
     const args = [
@@ -44331,6 +44334,7 @@ async function verifyJibrilAttestation(binaryPath) {
     }
 
     info(`Verified the jibril attestation signed by ${JIBRIL_SIGNER_WORKFLOW}`)
+    return "signed"
 }
 
 /**
@@ -45069,6 +45073,10 @@ async function main() {
         // prod default renders the observation-only record.
         const preview = getInput("preview") === "true"
         saveState("preview", preview ? "true" : "")
+
+        // Detection labels stay off every surface unless the workflow opts in.
+        const showDetections = getInput("show_detections") === "true"
+        saveState("showDetections", showDetections ? "true" : "")
 
         const githubToken = getInput("github_token")
         saveState("githubToken", githubToken)

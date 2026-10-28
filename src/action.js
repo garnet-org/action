@@ -874,6 +874,8 @@ async function downloadJibril(tag, tmpDir) {
         const binaryURL = `${releaseURL}/${JIBRIL_BINARY}`
         core.info(`Downloading jibril: ${binaryURL}`)
         await downloadFile(binaryURL, binaryPath)
+        core.saveState("sensorBundle", "unavailable")
+        core.saveState("sensorAttestation", "unavailable")
         return binaryPath
     }
 
@@ -888,7 +890,8 @@ async function downloadJibril(tag, tmpDir) {
     await fs.mkdir(bundleDir, { recursive: true })
     await exec.exec("tar", ["-xzf", archivePath, "-C", bundleDir])
     await verifyJibrilBundle(bundleDir, tag)
-    await verifyJibrilAttestation(path.join(bundleDir, JIBRIL_BINARY))
+    core.saveState("sensorBundle", "matched")
+    core.saveState("sensorAttestation", await verifyJibrilAttestation(path.join(bundleDir, JIBRIL_BINARY)))
     await fs.rename(path.join(bundleDir, JIBRIL_BINARY), binaryPath)
 
     return binaryPath
@@ -951,17 +954,17 @@ async function verifySignedPayload(bundleDir, name) {
  * environment; when either is absent we warn rather than fail so self-hosted
  * runners keep working.
  * @param {string} binaryPath
- * @returns {Promise<void>}
+ * @returns {Promise<"signed" | "skipped_no_token" | "skipped_no_gh">} what the Step Summary reports
  */
 async function verifyJibrilAttestation(binaryPath) {
     if (getEnv("GITHUB_TOKEN", "") === "") {
         core.warning("github_token is unset: skipping jibril attestation verification.")
-        return
+        return "skipped_no_token"
     }
 
     if (!(await isCommandAvailable("gh"))) {
         core.warning("gh CLI is unavailable: skipping jibril attestation verification.")
-        return
+        return "skipped_no_gh"
     }
 
     const args = [
@@ -981,6 +984,7 @@ async function verifyJibrilAttestation(binaryPath) {
     }
 
     core.info(`Verified the jibril attestation signed by ${JIBRIL_SIGNER_WORKFLOW}`)
+    return "signed"
 }
 
 /**
