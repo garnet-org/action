@@ -125,26 +125,7 @@ When neither credential is available, a pull request run is relayed to the App t
 
 ## Comment anatomy
 
-One comment per pull request, one fold per job, updated in place as each job's profile lands:
-
-- **Headline** — `Execution Profiles recorded for N jobs, triggered by <sha7>`, linking the commit.
-- **Metadata line** — one fact per `·` segment: destination count (or the change summary when a comparison exists), `recorded at the kernel by Garnet`, UTC timestamp.
-- **One fold per job** — headed `workflow / job ↗ · N destinations`, the job linking to its Actions run. Inside: every recorded root of the job's process tree; independent roots separated by a blank line. Tree nodes are recorded process names; observed actions render as `○ destination`, defanged at the final dot. `(…)` carries factual context only — `(step: "Run tests")`, `(dns resolver)`, `(cloud metadata)`, `(github infra)`, `(garnet sensor)`, `(ran from /tmp/…)`. A job with no recorded egress stays a plain row with its profile link.
-- **Per-job permalink** — `View this job's Execution Profile in Garnet →`, opening the [public run report](https://app.garnet.ai/public/runs/35818535654?profile=01a0cc87-186b-7be4-aa88-2a28f71e0744). The `?profile=` selector is part of the permalink; a bare run URL returns 404.
-- **Explainer** — a `💡 How to read this` fold at the bottom:
-
-<pre>
-Runner.Worker          <em>← process on a path</em>
-└─ npm
-   └─ <strong>node</strong>             <em>← process that acted</em>
-      └─ ○ npmjs[.]org <em>← observed action</em>
-</pre>
-
-follow a path downward to see what ran and what it did — each path to an observed action is an execution chain
-
-names on the path = processes · ○ = observed action · (…) = context
-
-Once a pull request has two recorded commits, the comment compares against the previous recorded commit: the metadata line carries `compared with <sha7>`, changed job rows lead with the delta (`+1 −2`), unchanged rows read `· N destinations · unchanged`, and a changed job's tree renders as a diff headed `@@ <previous> (previous) vs <current> (current) @@`. `+` marks a destination only in the current record, `−` one only in the previous record. Jobs recorded previously but not on this commit sit in one collapsed `jobs no longer recorded` fold.
+The companion GitHub App owns the comment: one per pull request, one row per recorded job, updated in place as each job's Execution Profile lands, with a link from each job to its full Execution Profile in Garnet. Its current shape and how to read it are documented at [docs.garnet.ai/consume](https://docs.garnet.ai/consume).
 
 The same record is appended to the job's Step Summary as the **Garnet Execution Summary** ([example run](https://github.com/garnet-labs/pnpm/actions/runs/35818535654)).
 
@@ -204,7 +185,7 @@ jobs:
                 node: [20, 22, 24]
         runs-on: ubuntu-latest
         steps:
-            - uses: garnet-org/garnet-action@v0
+            - uses: garnet-org/action@8cccc85403e4ac4e05fb7822c994d3c199f9aa57 # v2.4.0
               with:
                   job_index: ${{ strategy.job-index }}
 ```
