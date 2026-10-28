@@ -165,7 +165,7 @@ export async function run() {
             core.warning("GITHUB_WORKSPACE is not set. Jibril workflow-file resolution may be limited.")
         } else if (!(await pathExists(path.join(workspace, ".git")))) {
             core.warning(
-                "Repository checkout not detected. Jibril will rely on the GitHub API to fetch the running workflow file; " +
+                "No repository checkout found. Jibril will rely on the GitHub API to fetch the running workflow file; " +
                     "if that fails, add 'actions/checkout@v6' before this action as a fallback.",
             )
         }

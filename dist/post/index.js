@@ -148318,7 +148318,7 @@ const RULES = [
 ]
 
 /**
- * Returns `value` with any detected secrets replaced by a mask.
+ * Returns `value` with any matched secrets replaced by a mask.
  * @param {string} value
  * @returns {string}
  */
@@ -158949,7 +158949,7 @@ class ControlPlaneClient {
 
     /**
      * Signals that this run's sensor stopped, with the reason and whether a usable
-     * Run Profile was produced, so the control plane can resolve pending state.
+     * Execution Profile was produced, so the control plane can resolve pending state.
      * Authenticated as the agent itself.
      * @param {AgentStoppedRequest} input
      * @returns {Promise<void>}
@@ -159652,7 +159652,7 @@ const GITHUB_META_IP_RANGES = {
  * ./runtime-review-vocab.js instead of a filesystem read.
  *
  * Three projections of the same selected record set: the GitHub PR comment,
- * the GitHub job Step Summary, and the public Run Profile (HTML/JSON —
+ * the GitHub job Step Summary, and the public Execution Profile (HTML/JSON —
  * contract carried here as machine-readable policy data; the page itself is
  * served by the Garnet app).
  *
@@ -160023,7 +160023,7 @@ function neutralizeInlineMarkdown(value) {
  * Bound a captured (attacker-controllable) label to `max` chars with a
  * middle ellipsis, preserving head+tail so it stays identifiable while a
  * crafted payload buried mid-string cannot survive or inflate token cost.
- * Full untruncated values remain in the Run Profile / API.
+ * Full untruncated values remain in the Execution Profile / API.
  * @param {unknown} value
  * @param {number} [max]
  */
@@ -160644,7 +160644,7 @@ function exportReviewModel(review) {
 }
 
 // ---------------------------------------------------------------------------
-// Public Run Profile — selector and publication policy (contract data; the
+// Public Execution Profile — selector and publication policy (contract data; the
 // page is served by the Garnet app, this repo locks the policy + URLs).
 // ---------------------------------------------------------------------------
 
@@ -164209,7 +164209,7 @@ const STOP_TIMED_OUT_EXIT_CODE = 124
 // This is the post step for the action. It is called by the GitHub Actions
 // runtime. It stops the Jibril service so the daemon flushes all pending events
 // and writes the JSON profile before we read it. It then renders the Garnet
-// Runtime Summary (Step Summary) from the Run Profile. The Runtime Review PR
+// Runtime Summary (Step Summary) from the Execution Profile. The Runtime Review PR
 // comment is published by the Garnet GitHub App, not by this action.
 
 async function run() {
@@ -164448,7 +164448,7 @@ async function buildAgentStopped(observations) {
 
 /**
  * Reports to the control plane that this run's sensor stopped without leaving
- * a usable Run Profile, authenticated as the agent itself. Best-effort: every
+ * a usable Execution Profile, authenticated as the agent itself. Best-effort: every
  * failure is logged and swallowed so the job stays green.
  * @param {string} agentToken
  * @param {AgentStoppedRequest} request
@@ -164732,7 +164732,7 @@ async function appendRuntimeReviewSummary(profile) {
 }
 
 /**
- * Logs the public Run Profile report link to the job log so it is reachable
+ * Logs the public Execution Profile report link to the job log so it is reachable
  * from every run (push, schedule, forks without comment permissions), not
  * only from PR comments and the Step Summary. The exact per-profile selector
  * is preferred when the profile carries an envelope ID; otherwise the
@@ -164762,7 +164762,7 @@ function logProfileReportLink(profile) {
         return
     }
 
-    info(`Garnet Run Profile report: ${link}`)
+    info(`Garnet Execution Profile report: ${link}`)
 }
 
 /**

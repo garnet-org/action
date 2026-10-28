@@ -42067,7 +42067,7 @@ class ControlPlaneClient {
 
     /**
      * Signals that this run's sensor stopped, with the reason and whether a usable
-     * Run Profile was produced, so the control plane can resolve pending state.
+     * Execution Profile was produced, so the control plane can resolve pending state.
      * Authenticated as the agent itself.
      * @param {AgentStoppedRequest} input
      * @returns {Promise<void>}
@@ -43126,7 +43126,7 @@ const RULES = [
 ]
 
 /**
- * Returns `value` with any detected secrets replaced by a mask.
+ * Returns `value` with any matched secrets replaced by a mask.
  * @param {string} value
  * @returns {string}
  */
@@ -43515,7 +43515,7 @@ async function run() {
             warning("GITHUB_WORKSPACE is not set. Jibril workflow-file resolution may be limited.")
         } else if (!(await pathExists(external_node_path_namespaceObject.join(workspace, ".git")))) {
             warning(
-                "Repository checkout not detected. Jibril will rely on the GitHub API to fetch the running workflow file; " +
+                "No repository checkout found. Jibril will rely on the GitHub API to fetch the running workflow file; " +
                     "if that fails, add 'actions/checkout@v6' before this action as a fallback.",
             )
         }
@@ -45100,7 +45100,7 @@ async function main() {
         process.env.GARNET_JIBRIL_STOP_TIMEOUT_SECONDS = String(stopTimeoutSeconds)
         saveState("stopTimeoutSeconds", String(stopTimeoutSeconds))
 
-        // The Run Profile permalink derives from the run id and the configured
+        // The Execution Profile permalink derives from the run id and the configured
         // API host, so it is known up front — emit the declared report_url output
         // here where later steps in the same job can consume it (post-step
         // outputs are not visible to them).
@@ -45113,7 +45113,7 @@ async function main() {
             }),
         )
 
-        // Set the default Run Profile printer file paths.
+        // Set the default Execution Profile printer file paths.
         const profilerFile = process.env.JIBRIL_PROFILER_FILE || "/var/log/jibril.profiler.out"
         const jsonProfilerFile = process.env.JIBRIL_JSONPROFILER_FILE || "/var/log/jibril.profile.json"
         process.env.JIBRIL_PROFILER_FILE = profilerFile

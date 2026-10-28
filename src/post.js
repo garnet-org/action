@@ -85,7 +85,7 @@ const STOP_TIMED_OUT_EXIT_CODE = 124
 // This is the post step for the action. It is called by the GitHub Actions
 // runtime. It stops the Jibril service so the daemon flushes all pending events
 // and writes the JSON profile before we read it. It then renders the Garnet
-// Runtime Summary (Step Summary) from the Run Profile. The Runtime Review PR
+// Runtime Summary (Step Summary) from the Execution Profile. The Runtime Review PR
 // comment is published by the Garnet GitHub App, not by this action.
 
 async function run() {
@@ -324,7 +324,7 @@ async function buildAgentStopped(observations) {
 
 /**
  * Reports to the control plane that this run's sensor stopped without leaving
- * a usable Run Profile, authenticated as the agent itself. Best-effort: every
+ * a usable Execution Profile, authenticated as the agent itself. Best-effort: every
  * failure is logged and swallowed so the job stays green.
  * @param {string} agentToken
  * @param {AgentStoppedRequest} request
@@ -608,7 +608,7 @@ async function appendRuntimeReviewSummary(profile) {
 }
 
 /**
- * Logs the public Run Profile report link to the job log so it is reachable
+ * Logs the public Execution Profile report link to the job log so it is reachable
  * from every run (push, schedule, forks without comment permissions), not
  * only from PR comments and the Step Summary. The exact per-profile selector
  * is preferred when the profile carries an envelope ID; otherwise the
@@ -638,7 +638,7 @@ function logProfileReportLink(profile) {
         return
     }
 
-    core.info(`Garnet Run Profile report: ${link}`)
+    core.info(`Garnet Execution Profile report: ${link}`)
 }
 
 /**

@@ -65,7 +65,7 @@ async function main() {
         process.env.GARNET_JIBRIL_STOP_TIMEOUT_SECONDS = String(stopTimeoutSeconds)
         core.saveState("stopTimeoutSeconds", String(stopTimeoutSeconds))
 
-        // The Run Profile permalink derives from the run id and the configured
+        // The Execution Profile permalink derives from the run id and the configured
         // API host, so it is known up front — emit the declared report_url output
         // here where later steps in the same job can consume it (post-step
         // outputs are not visible to them).
@@ -78,7 +78,7 @@ async function main() {
             }),
         )
 
-        // Set the default Run Profile printer file paths.
+        // Set the default Execution Profile printer file paths.
         const profilerFile = process.env.JIBRIL_PROFILER_FILE || "/var/log/jibril.profiler.out"
         const jsonProfilerFile = process.env.JIBRIL_JSONPROFILER_FILE || "/var/log/jibril.profile.json"
         process.env.JIBRIL_PROFILER_FILE = profilerFile

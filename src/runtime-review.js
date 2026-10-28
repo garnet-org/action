@@ -13,7 +13,7 @@
  * ./runtime-review-vocab.js instead of a filesystem read.
  *
  * Three projections of the same selected record set: the GitHub PR comment,
- * the GitHub job Step Summary, and the public Run Profile (HTML/JSON —
+ * the GitHub job Step Summary, and the public Execution Profile (HTML/JSON —
  * contract carried here as machine-readable policy data; the page itself is
  * served by the Garnet app).
  *
@@ -384,7 +384,7 @@ function neutralizeInlineMarkdown(value) {
  * Bound a captured (attacker-controllable) label to `max` chars with a
  * middle ellipsis, preserving head+tail so it stays identifiable while a
  * crafted payload buried mid-string cannot survive or inflate token cost.
- * Full untruncated values remain in the Run Profile / API.
+ * Full untruncated values remain in the Execution Profile / API.
  * @param {unknown} value
  * @param {number} [max]
  */
@@ -1005,7 +1005,7 @@ export function exportReviewModel(review) {
 }
 
 // ---------------------------------------------------------------------------
-// Public Run Profile — selector and publication policy (contract data; the
+// Public Execution Profile — selector and publication policy (contract data; the
 // page is served by the Garnet app, this repo locks the policy + URLs).
 // ---------------------------------------------------------------------------
 
