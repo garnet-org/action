@@ -4,83 +4,66 @@ import * as fs from "node:fs/promises"
 import * as os from "node:os"
 import * as path from "node:path"
 import { default as artifactClient } from "@actions/artifact"
-import { getEnv, getErrorMessage, pathExists } from "./shared.js"
+import { redactString } from "./redact.js"
+import { getEnv, getErrorMessage } from "./shared.js"
 
 const DEBUG_ARTIFACT_NAME = "jibril-debug-logs"
 const DEFAULT_RUN_ATTEMPT = "1"
 /** @type {[string, string][]} */
 const JIBRIL_LOG_FILES = [
-  ["/var/log/jibril.log", "jibril.log"],
-  ["/var/log/jibril.err", "jibril.err"],
-  ["/var/log/jibril.out", "jibril.out"],
+    ["/var/log/jibril.log", "jibril.log"],
+    ["/var/log/jibril.err", "jibril.err"],
+    ["/var/log/jibril.out", "jibril.out"],
 ]
 
 export async function uploadJibrilArtifacts() {
-  // A predictable staging path is a symlink-overwrite target for the
-  // root-privileged copy below; mkdtemp gives an unpredictable, freshly
-  // created directory owned by this process.
-  /** @type {string} */
-  let artifactDir
-  try {
-    artifactDir = await fs.mkdtemp(path.join(os.tmpdir(), "garnet-"))
-  } catch (err) {
-    core.warning(
-      `Failed to create a staging directory for jibril artifacts: ${getErrorMessage(err)}`,
-    )
-    return
-  }
-
-  try {
-    const uploaded = await copyReadableLogFiles(artifactDir)
-    if (uploaded.length === 0) {
-      core.info("No jibril log files to upload")
-      return
+    /** @type {string} */
+    let artifactDir
+    try {
+        artifactDir = await fs.mkdtemp(path.join(os.tmpdir(), "garnet-"))
+    } catch (err) {
+        core.warning(`Failed to create a staging directory for jibril artifacts: ${getErrorMessage(err)}`)
+        return
     }
 
-    const existing = await findExistingArtifactFiles(artifactDir, uploaded)
-    if (existing.length === 0) {
-      core.info("No readable jibril log files to upload")
-      return
-    }
+    try {
+        const staged = await stageRedactedLogFiles(artifactDir)
+        if (staged.length === 0) {
+            core.info("No jibril log files to upload")
+            return
+        }
 
-    const absolutePaths = existing.map((fileName) =>
-      path.resolve(artifactDir, fileName),
-    )
+        const absolutePaths = staged.map(fileName => path.resolve(artifactDir, fileName))
 
-    await artifactClient.uploadArtifact(
-      getDebugArtifactName(),
-      absolutePaths,
-      artifactDir,
-    )
-    core.info(`Uploaded jibril artifacts: ${existing.join(", ")}`)
-  } catch (err) {
-    const msg = getErrorMessage(err)
-    if (isArtifactAuthErrorMessage(msg)) {
-      core.warning(`Jibril artifact upload skipped (auth unavailable): ${msg}`)
-    } else {
-      core.warning(`Failed to upload jibril artifacts: ${msg}`)
+        await artifactClient.uploadArtifact(getDebugArtifactName(), absolutePaths, artifactDir)
+        core.info(`Uploaded jibril artifacts: ${staged.join(", ")}`)
+    } catch (err) {
+        const msg = getErrorMessage(err)
+        if (isArtifactAuthErrorMessage(msg)) {
+            core.warning(`Jibril artifact upload skipped (auth unavailable): ${msg}`)
+        } else {
+            core.warning(`Failed to upload jibril artifacts: ${msg}`)
+        }
+    } finally {
+        await fs.rm(artifactDir, { recursive: true, force: true })
     }
-  } finally {
-    await fs.rm(artifactDir, { recursive: true, force: true })
-  }
 }
 
 /**
  * @param {string} artifactDir
  * @returns {Promise<string[]>}
  */
-async function copyReadableLogFiles(artifactDir) {
-  /** @type {string[]} */
-  const uploaded = []
+async function stageRedactedLogFiles(artifactDir) {
+    /** @type {string[]} */
+    const staged = []
 
-  for (const [src, destName] of JIBRIL_LOG_FILES) {
-    const copied = await copyReadableLogFile(artifactDir, src, destName)
-    if (copied) {
-      uploaded.push(destName)
+    for (const [src, destName] of JIBRIL_LOG_FILES) {
+        if (await stageRedactedLogFile(artifactDir, src, destName)) {
+            staged.push(destName)
+        }
     }
-  }
 
-  return uploaded
+    return staged
 }
 
 /**
@@ -89,65 +72,41 @@ async function copyReadableLogFiles(artifactDir) {
  * @param {string} destName
  * @returns {Promise<boolean>}
  */
-async function copyReadableLogFile(artifactDir, src, destName) {
-  try {
-    const destPath = path.join(artifactDir, destName)
-    const cpResult = await exec.getExecOutput("sudo", ["cp", src, destPath], {
-      ignoreReturnCode: true,
-      silent: true,
-    })
-    if (cpResult.exitCode !== 0) {
-      core.debug(
-        `Skipping ${destName}: source may not exist (cp exit ${cpResult.exitCode})`,
-      )
-      return false
+async function stageRedactedLogFile(artifactDir, src, destName) {
+    try {
+        const catResult = await exec.getExecOutput("sudo", ["cat", src], {
+            ignoreReturnCode: true,
+            silent: true,
+        })
+        if (catResult.exitCode !== 0) {
+            core.debug(`Skipping ${destName}: source may not exist (cat exit ${catResult.exitCode})`)
+            return false
+        }
+
+        const destPath = path.join(artifactDir, destName)
+        await fs.writeFile(destPath, redactString(catResult.stdout), "utf8")
+        return true
+    } catch {
+        return false
     }
-
-    await exec.exec("sudo", ["chmod", "a+r", destPath], {
-      ignoreReturnCode: true,
-    })
-    return await pathExists(destPath)
-  } catch {
-    return false
-  }
-}
-
-/**
- * @param {string} artifactDir
- * @param {string[]} fileNames
- * @returns {Promise<string[]>}
- */
-async function findExistingArtifactFiles(artifactDir, fileNames) {
-  /** @type {string[]} */
-  const existing = []
-
-  for (const fileName of fileNames) {
-    if (await pathExists(path.join(artifactDir, fileName))) {
-      existing.push(fileName)
-    }
-  }
-
-  return existing
 }
 
 /**
  * @returns {string}
  */
 function getDebugArtifactName() {
-  const jobName = getEnv("GITHUB_JOB")
-  const runAttempt = getEnv("GITHUB_RUN_ATTEMPT")
+    const jobName = getEnv("GITHUB_JOB")
+    const runAttempt = getEnv("GITHUB_RUN_ATTEMPT")
 
-  const artifactNameParts = [DEBUG_ARTIFACT_NAME]
-  if (jobName !== "") {
-    artifactNameParts.push(sanitizeArtifactNamePart(jobName))
-  }
+    const artifactNameParts = [DEBUG_ARTIFACT_NAME]
+    if (jobName !== "") {
+        artifactNameParts.push(sanitizeArtifactNamePart(jobName))
+    }
 
-  const parsedRunAttempt = parseRunAttempt(
-    runAttempt === "" ? DEFAULT_RUN_ATTEMPT : runAttempt,
-  )
-  artifactNameParts.push(`attempt-${parsedRunAttempt}`)
+    const parsedRunAttempt = parseRunAttempt(runAttempt === "" ? DEFAULT_RUN_ATTEMPT : runAttempt)
+    artifactNameParts.push(`attempt-${parsedRunAttempt}`)
 
-  return artifactNameParts.join("-")
+    return artifactNameParts.join("-")
 }
 
 /**
@@ -155,8 +114,8 @@ function getDebugArtifactName() {
  * @returns {number}
  */
 function parseRunAttempt(value) {
-  const parsedValue = Number.parseInt(value, 10)
-  return Number.isSafeInteger(parsedValue) ? parsedValue : 1
+    const parsedValue = Number.parseInt(value, 10)
+    return Number.isSafeInteger(parsedValue) ? parsedValue : 1
 }
 
 /**
@@ -164,7 +123,7 @@ function parseRunAttempt(value) {
  * @returns {string}
  */
 function sanitizeArtifactNamePart(value) {
-  return value.replace(/[^A-Za-z0-9._-]+/g, "-")
+    return value.replace(/[^A-Za-z0-9._-]+/g, "-")
 }
 
 /**
@@ -172,9 +131,5 @@ function sanitizeArtifactNamePart(value) {
  * @returns {boolean}
  */
 function isArtifactAuthErrorMessage(message) {
-  return (
-    message.includes("ACTIONS_RUNTIME_TOKEN") ||
-    message.includes("AUTH_TOKEN") ||
-    message.includes("token")
-  )
+    return message.includes("ACTIONS_RUNTIME_TOKEN") || message.includes("AUTH_TOKEN") || message.includes("token")
 }

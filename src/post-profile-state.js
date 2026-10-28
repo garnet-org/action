@@ -1,3 +1,4 @@
+import { redactProfile } from "./redact.js"
 import { summarizeProfile } from "./runtime-review.js"
 import { getErrorMessage } from "./shared.js"
 
@@ -54,7 +55,7 @@ export function classifyProfileContent(stat, content) {
     }
 
     try {
-        const raw = JSON.parse(content)
+        const raw = redactProfile(JSON.parse(content))
         if (summarizeProfile(raw) === null) {
             throw new Error("Invalid profile JSON: not a profile object")
         }
