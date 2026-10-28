@@ -137,7 +137,7 @@ Runner.Worker          <em>← process on a path</em>
 | Branch | refs/pull/76/merge |
 | Pull request | [#76](https://github.com/garnet-org/runtime-review-testbed/pull/76) |
 | Commit | 6e5d0d4cf00a92a9e1fe697efe0e41b3ae61533e |
-| Triggered by | devin-ai-integration[bot] |
+| Triggered by | devin-ai-integration&#91;bot&#93; |
 | Run ID / Job | 29294366437 / docs-build |
 | Matrix job index | 2 |
 
@@ -184,7 +184,7 @@ Network telemetry observed 2 unique domains, 2 destinations, 2 connections, and 
 | Branch | refs/pull/76/merge |
 | Pull request | [#76](https://github.com/garnet-org/runtime-review-testbed/pull/76) |
 | Commit | 6e5d0d4cf00a92a9e1fe697efe0e41b3ae61533e |
-| Triggered by | devin-ai-integration[bot] |
+| Triggered by | devin-ai-integration&#91;bot&#93; |
 | Run ID / Job | 29294366437 / install-only |
 | Matrix job index | 1 |
 
@@ -239,7 +239,7 @@ Network telemetry observed 4 unique domains, 4 destinations, 4 connections, and 
 | Branch | refs/pull/76/merge |
 | Pull request | [#76](https://github.com/garnet-org/runtime-review-testbed/pull/76) |
 | Commit | 6e5d0d4cf00a92a9e1fe697efe0e41b3ae61533e |
-| Triggered by | devin-ai-integration[bot] |
+| Triggered by | devin-ai-integration&#91;bot&#93; |
 | Run ID / Job | 29294366437 / lint |
 | Matrix job index | 3 |
 
@@ -288,7 +288,7 @@ Network telemetry observed 3 unique domains, 3 destinations, 3 connections, and 
 | Branch | refs/pull/76/merge |
 | Pull request | [#76](https://github.com/garnet-org/runtime-review-testbed/pull/76) |
 | Commit | 6e5d0d4cf00a92a9e1fe697efe0e41b3ae61533e |
-| Triggered by | devin-ai-integration[bot] |
+| Triggered by | devin-ai-integration&#91;bot&#93; |
 | Run ID / Job | 29294366437 / typecheck |
 | Matrix job index | 4 |
 
@@ -337,7 +337,7 @@ Network telemetry observed 3 unique domains, 3 destinations, 3 connections, and 
 | Branch | refs/pull/76/merge |
 | Pull request | [#76](https://github.com/garnet-org/runtime-review-testbed/pull/76) |
 | Commit | 6e5d0d4cf00a92a9e1fe697efe0e41b3ae61533e |
-| Triggered by | devin-ai-integration[bot] |
+| Triggered by | devin-ai-integration&#91;bot&#93; |
 | Run ID / Job | 29294366437 / workload-egress |
 | Matrix job index | 0 |
 

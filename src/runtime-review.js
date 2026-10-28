@@ -362,10 +362,23 @@ const escapeCode = (value) =>
 const escapeCodeCell = (value) => escapeCode(value).replaceAll("|", "\\|")
 
 /**
- * Escape a value destined for HTML inside a GFM table cell.
+ * Escape a value destined for HTML inside a GFM table cell. GitHub still parses
+ * Markdown inside inline HTML such as `<code>`, so recorded names would
+ * otherwise render links, emphasis, autolinks, and @mentions.
  * @param {unknown} value
  */
-const escapeHtmlCell = (value) => escapeHtml(value).replaceAll("|", "\\|")
+const escapeHtmlCell = (value) => neutralizeInlineMarkdown(escapeHtml(value)).replaceAll("|", "\\|")
+
+/**
+ * Replaces Markdown-active punctuation with numeric entities. Run it after HTML
+ * escaping so the entities are not themselves escaped.
+ * @param {string} value
+ */
+function neutralizeInlineMarkdown(value) {
+  return value
+    .replace(/[\\`*_~\[\]:@]/g, (character) => `&#${character.charCodeAt(0)};`)
+    .replaceAll("www.", "www&#46;")
+}
 
 /**
  * Bound a captured (attacker-controllable) label to `max` chars with a
@@ -388,13 +401,9 @@ export const truncateMiddle = (value, max = 64) => {
  * @param {unknown} value
  */
 export function escapeMarkdownCell(value) {
-  return stripControl(value)
-    .replaceAll("\\", "\\\\")
+  const html = stripControl(value).replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;")
+  return neutralizeInlineMarkdown(html)
     .replaceAll("|", "\\|")
-    .replaceAll("`", "\\`")
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
     .replace(/[\r\n]+/g, " ")
 }
 

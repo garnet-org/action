@@ -55,7 +55,7 @@ Runner.Worker          <em>← process on a path</em>
 | Branch | refs/pull/22/merge |
 | Pull request | [#22](https://github.com/garnet-labs/runtime-review-testbed/pull/22) |
 | Commit | 786a5bc8680486720bcf5dae13931de95d89b5ec |
-| Triggered by | devin-ai-integration[bot] |
+| Triggered by | devin-ai-integration&#91;bot&#93; |
 | Run ID / Job | 28488074733 / runtime-review |
 
 ### Network Egress Summary

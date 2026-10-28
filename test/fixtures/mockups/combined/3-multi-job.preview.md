@@ -137,7 +137,7 @@ Runner.Worker          <em>← process on a path</em>
 | Branch | refs/pull/76/merge |
 | Pull request | [#76](https://github.com/garnet-org/runtime-review-testbed/pull/76) |
 | Commit | 6e5d0d4cf00a92a9e1fe697efe0e41b3ae61533e |
-| Triggered by | devin-ai-integration[bot] |
+| Triggered by | devin-ai-integration&#91;bot&#93; |
 | Run ID / Job | 29294366437 / docs-build |
 | Matrix job index | 2 |
 
@@ -167,8 +167,8 @@ Network telemetry observed 2 unique domains, 2 destinations, 2 connections, and 
 
 | Destination | Process Tree | Context |
 | --- | --- | --- |
-| <code>registry.npmjs.org [104.16.6.34] :443 (https) TCP</code> | <code>systemd</code> → <code>…</code> → <code>Runner.Worker</code> → <code>bash</code> → <code>node (pid 2384)</code> | step: 4. Run workload (${{ matrix.job_name }}) · `detection: exec_from_unusual_dir` · ⚠ attention |
-| <code>localhost [127.0.0.53] :53 (dns) UDP</code> | <code>systemd</code> → <code>…</code> → <code>Runner.Worker</code> → <code>bash</code> → <code>node (pid 2384)</code> | step: 4. Run workload (${{ matrix.job_name }}) · (dns resolver) · `detection: exec_from_unusual_dir` · ⚠ attention |
+| <code>registry.npmjs.org [104.16.6.34] :443 (https) TCP</code> | <code>systemd</code> → <code>…</code> → <code>Runner.Worker</code> → <code>bash</code> → <code>node (pid 2384)</code> | step: 4. Run workload (${{ matrix.job&#95;name }}) · `detection: exec_from_unusual_dir` · ⚠ attention |
+| <code>localhost [127.0.0.53] :53 (dns) UDP</code> | <code>systemd</code> → <code>…</code> → <code>Runner.Worker</code> → <code>bash</code> → <code>node (pid 2384)</code> | step: 4. Run workload (${{ matrix.job&#95;name }}) · (dns resolver) · `detection: exec_from_unusual_dir` · ⚠ attention |
 | <code>localhost [127.0.0.53] :53 (dns) UDP</code> | <code>systemd</code> → <code>hosted-compute-agent</code> → <code>sudo</code> → <code>provjobd920019609 (pid 1867)</code> | step: 99. Runner Processes · (dns resolver) · `detection: exec_from_unusual_dir` · ⚠ attention |
 
 </details>
@@ -177,9 +177,9 @@ Network telemetry observed 2 unique domains, 2 destinations, 2 connections, and 
 
 | Check | Result | Context |
 | --- | --- | --- |
-| A process contacted a bad network domain. | `attention` | Network Egress · no_bad_egress_domain |
-| A program was executed, and then its file was deleted. | `pass` | Stealth · no_binary_execution_and_deletion |
-| A process initiated code injection via /proc/{pid}/mem access. | `pass` | Privilege Escalation · no_code_injection_via_proc_memory |
+| A process contacted a bad network domain. | `attention` | Network Egress · no&#95;bad&#95;egress&#95;domain |
+| A program was executed, and then its file was deleted. | `pass` | Stealth · no&#95;binary&#95;execution&#95;and&#95;deletion |
+| A process initiated code injection via /proc/{pid}/mem access. | `pass` | Privilege Escalation · no&#95;code&#95;injection&#95;via&#95;proc&#95;memory |
 
 </details>
 
@@ -204,7 +204,7 @@ Network telemetry observed 2 unique domains, 2 destinations, 2 connections, and 
 | Branch | refs/pull/76/merge |
 | Pull request | [#76](https://github.com/garnet-org/runtime-review-testbed/pull/76) |
 | Commit | 6e5d0d4cf00a92a9e1fe697efe0e41b3ae61533e |
-| Triggered by | devin-ai-integration[bot] |
+| Triggered by | devin-ai-integration&#91;bot&#93; |
 | Run ID / Job | 29294366437 / install-only |
 | Matrix job index | 1 |
 
@@ -243,8 +243,8 @@ Network telemetry observed 4 unique domains, 4 destinations, 4 connections, and 
 | Destination | Process Tree | Context |
 | --- | --- | --- |
 | <code>140.82.112.23 :443 (https) TCP</code> | <code>systemd</code> → <code>hosted-compute-agent (pid 1878)</code> | step: 99. Runner Processes |
-| <code>registry.npmjs.org [104.16.6.34] :443 (https) TCP</code> | <code>systemd</code> → <code>…</code> → <code>Runner.Worker</code> → <code>bash</code> → <code>node (pid 2371)</code> | step: 4. Run workload (${{ matrix.job_name }}) · `detection: exec_from_unusual_dir` · ⚠ attention |
-| <code>localhost [127.0.0.53] :53 (dns) UDP</code> | <code>systemd</code> → <code>…</code> → <code>Runner.Worker</code> → <code>bash</code> → <code>node (pid 2371)</code> | step: 4. Run workload (${{ matrix.job_name }}) · (dns resolver) · `detection: exec_from_unusual_dir` · ⚠ attention |
+| <code>registry.npmjs.org [104.16.6.34] :443 (https) TCP</code> | <code>systemd</code> → <code>…</code> → <code>Runner.Worker</code> → <code>bash</code> → <code>node (pid 2371)</code> | step: 4. Run workload (${{ matrix.job&#95;name }}) · `detection: exec_from_unusual_dir` · ⚠ attention |
+| <code>localhost [127.0.0.53] :53 (dns) UDP</code> | <code>systemd</code> → <code>…</code> → <code>Runner.Worker</code> → <code>bash</code> → <code>node (pid 2371)</code> | step: 4. Run workload (${{ matrix.job&#95;name }}) · (dns resolver) · `detection: exec_from_unusual_dir` · ⚠ attention |
 | <code>localhost [127.0.0.53] :53 (dns) UDP</code> | <code>systemd</code> → <code>hosted-compute-agent</code> → <code>sudo</code> → <code>provjobd1326539233 (pid 1893)</code> | step: 99. Runner Processes · (dns resolver) · `detection: exec_from_unusual_dir` · ⚠ attention |
 | <code>hosted-compute-watchdog-prod-iad-01.githubapp [140.82.114.23] :443 (https) TCP · also recorded: glb-2a3c35-public-internal.githubapp.com</code> | <code>systemd</code> → <code>hosted-compute-agent</code> → <code>sudo</code> → <code>provjobd1326539233 (pid 1893)</code> | step: 99. Runner Processes · (github infra) |
 
@@ -254,9 +254,9 @@ Network telemetry observed 4 unique domains, 4 destinations, 4 connections, and 
 
 | Check | Result | Context |
 | --- | --- | --- |
-| A process contacted a bad network domain. | `attention` | Network Egress · no_bad_egress_domain |
-| A program was executed, and then its file was deleted. | `pass` | Stealth · no_binary_execution_and_deletion |
-| A process initiated code injection via /proc/{pid}/mem access. | `pass` | Privilege Escalation · no_code_injection_via_proc_memory |
+| A process contacted a bad network domain. | `attention` | Network Egress · no&#95;bad&#95;egress&#95;domain |
+| A program was executed, and then its file was deleted. | `pass` | Stealth · no&#95;binary&#95;execution&#95;and&#95;deletion |
+| A process initiated code injection via /proc/{pid}/mem access. | `pass` | Privilege Escalation · no&#95;code&#95;injection&#95;via&#95;proc&#95;memory |
 
 </details>
 
@@ -281,7 +281,7 @@ Network telemetry observed 4 unique domains, 4 destinations, 4 connections, and 
 | Branch | refs/pull/76/merge |
 | Pull request | [#76](https://github.com/garnet-org/runtime-review-testbed/pull/76) |
 | Commit | 6e5d0d4cf00a92a9e1fe697efe0e41b3ae61533e |
-| Triggered by | devin-ai-integration[bot] |
+| Triggered by | devin-ai-integration&#91;bot&#93; |
 | Run ID / Job | 29294366437 / lint |
 | Matrix job index | 3 |
 
@@ -323,9 +323,9 @@ Network telemetry observed 3 unique domains, 3 destinations, 3 connections, and 
 
 | Check | Result | Context |
 | --- | --- | --- |
-| A process contacted a bad network domain. | `pass` | Network Egress · no_bad_egress_domain |
-| A program was executed, and then its file was deleted. | `pass` | Stealth · no_binary_execution_and_deletion |
-| A process initiated code injection via /proc/{pid}/mem access. | `pass` | Privilege Escalation · no_code_injection_via_proc_memory |
+| A process contacted a bad network domain. | `pass` | Network Egress · no&#95;bad&#95;egress&#95;domain |
+| A program was executed, and then its file was deleted. | `pass` | Stealth · no&#95;binary&#95;execution&#95;and&#95;deletion |
+| A process initiated code injection via /proc/{pid}/mem access. | `pass` | Privilege Escalation · no&#95;code&#95;injection&#95;via&#95;proc&#95;memory |
 
 </details>
 
@@ -350,7 +350,7 @@ Network telemetry observed 3 unique domains, 3 destinations, 3 connections, and 
 | Branch | refs/pull/76/merge |
 | Pull request | [#76](https://github.com/garnet-org/runtime-review-testbed/pull/76) |
 | Commit | 6e5d0d4cf00a92a9e1fe697efe0e41b3ae61533e |
-| Triggered by | devin-ai-integration[bot] |
+| Triggered by | devin-ai-integration&#91;bot&#93; |
 | Run ID / Job | 29294366437 / typecheck |
 | Matrix job index | 4 |
 
@@ -392,9 +392,9 @@ Network telemetry observed 3 unique domains, 3 destinations, 3 connections, and 
 
 | Check | Result | Context |
 | --- | --- | --- |
-| A process contacted a bad network domain. | `pass` | Network Egress · no_bad_egress_domain |
-| A program was executed, and then its file was deleted. | `pass` | Stealth · no_binary_execution_and_deletion |
-| A process initiated code injection via /proc/{pid}/mem access. | `pass` | Privilege Escalation · no_code_injection_via_proc_memory |
+| A process contacted a bad network domain. | `pass` | Network Egress · no&#95;bad&#95;egress&#95;domain |
+| A program was executed, and then its file was deleted. | `pass` | Stealth · no&#95;binary&#95;execution&#95;and&#95;deletion |
+| A process initiated code injection via /proc/{pid}/mem access. | `pass` | Privilege Escalation · no&#95;code&#95;injection&#95;via&#95;proc&#95;memory |
 
 </details>
 
@@ -419,7 +419,7 @@ Network telemetry observed 3 unique domains, 3 destinations, 3 connections, and 
 | Branch | refs/pull/76/merge |
 | Pull request | [#76](https://github.com/garnet-org/runtime-review-testbed/pull/76) |
 | Commit | 6e5d0d4cf00a92a9e1fe697efe0e41b3ae61533e |
-| Triggered by | devin-ai-integration[bot] |
+| Triggered by | devin-ai-integration&#91;bot&#93; |
 | Run ID / Job | 29294366437 / workload-egress |
 | Matrix job index | 0 |
 
@@ -467,14 +467,14 @@ Network telemetry observed 7 unique domains, 8 destinations, 8 connections, and 
 | Destination | Process Tree | Context |
 | --- | --- | --- |
 | <code>140.82.113.23 :443 (https) TCP</code> | <code>systemd</code> → <code>hosted-compute-agent (pid 1849)</code> | step: 99. Runner Processes |
-| <code>registry.npmjs.org [104.16.1.34] :443 (https) TCP</code> | <code>systemd</code> → <code>…</code> → <code>Runner.Worker</code> → <code>bash</code> → <code>node (pid 2361)</code> | step: 4. Run workload (${{ matrix.job_name }}) · `detection: exec_from_unusual_dir` · ⚠ attention |
-| <code>localhost [127.0.0.53] :53 (dns) UDP</code> | <code>systemd</code> → <code>…</code> → <code>Runner.Worker</code> → <code>bash</code> → <code>node (pid 2361)</code> | step: 4. Run workload (${{ matrix.job_name }}) · (dns resolver) · `detection: exec_from_unusual_dir` · ⚠ attention |
-| <code>registry.npmjs.org [104.16.8.34] :443 (https) TCP</code> | <code>systemd</code> → <code>…</code> → <code>node</code> → <code>dash</code> → <code>node (pid 2384)</code> | step: 4. Run workload (${{ matrix.job_name }}) · `detection: exec_from_unusual_dir` · ⚠ attention |
-| <code>api.garnet.ai [104.26.10.16] :443 (https) TCP</code> | <code>systemd</code> → <code>…</code> → <code>node</code> → <code>dash</code> → <code>node (pid 2384)</code> | step: 4. Run workload (${{ matrix.job_name }}) · (garnet sensor) · `detection: exec_from_unusual_dir` · ⚠ attention |
-| <code>localhost [127.0.0.53] :53 (dns) UDP</code> | <code>systemd</code> → <code>…</code> → <code>node</code> → <code>dash</code> → <code>node (pid 2384)</code> | step: 4. Run workload (${{ matrix.job_name }}) · (dns resolver) · `detection: exec_from_unusual_dir` · ⚠ attention |
-| <code>github.com [140.82.113.3] :443 (https) TCP</code> | <code>systemd</code> → <code>…</code> → <code>node</code> → <code>dash</code> → <code>node (pid 2384)</code> | step: 4. Run workload (${{ matrix.job_name }}) · `detection: exec_from_unusual_dir` · ⚠ attention |
-| <code>httpbin.org [100.52.37.185] :443 (https) TCP</code> | <code>systemd</code> → <code>…</code> → <code>node</code> → <code>dash</code> → <code>curl (pid 2396)</code> | step: 4. Run workload (${{ matrix.job_name }}) |
-| <code>localhost [127.0.0.53] :53 (dns) UDP</code> | <code>systemd</code> → <code>…</code> → <code>node</code> → <code>dash</code> → <code>curl (pid 2396)</code> | step: 4. Run workload (${{ matrix.job_name }}) · (dns resolver) · `detection: exec_from_unusual_dir` · ⚠ attention |
+| <code>registry.npmjs.org [104.16.1.34] :443 (https) TCP</code> | <code>systemd</code> → <code>…</code> → <code>Runner.Worker</code> → <code>bash</code> → <code>node (pid 2361)</code> | step: 4. Run workload (${{ matrix.job&#95;name }}) · `detection: exec_from_unusual_dir` · ⚠ attention |
+| <code>localhost [127.0.0.53] :53 (dns) UDP</code> | <code>systemd</code> → <code>…</code> → <code>Runner.Worker</code> → <code>bash</code> → <code>node (pid 2361)</code> | step: 4. Run workload (${{ matrix.job&#95;name }}) · (dns resolver) · `detection: exec_from_unusual_dir` · ⚠ attention |
+| <code>registry.npmjs.org [104.16.8.34] :443 (https) TCP</code> | <code>systemd</code> → <code>…</code> → <code>node</code> → <code>dash</code> → <code>node (pid 2384)</code> | step: 4. Run workload (${{ matrix.job&#95;name }}) · `detection: exec_from_unusual_dir` · ⚠ attention |
+| <code>api.garnet.ai [104.26.10.16] :443 (https) TCP</code> | <code>systemd</code> → <code>…</code> → <code>node</code> → <code>dash</code> → <code>node (pid 2384)</code> | step: 4. Run workload (${{ matrix.job&#95;name }}) · (garnet sensor) · `detection: exec_from_unusual_dir` · ⚠ attention |
+| <code>localhost [127.0.0.53] :53 (dns) UDP</code> | <code>systemd</code> → <code>…</code> → <code>node</code> → <code>dash</code> → <code>node (pid 2384)</code> | step: 4. Run workload (${{ matrix.job&#95;name }}) · (dns resolver) · `detection: exec_from_unusual_dir` · ⚠ attention |
+| <code>github.com [140.82.113.3] :443 (https) TCP</code> | <code>systemd</code> → <code>…</code> → <code>node</code> → <code>dash</code> → <code>node (pid 2384)</code> | step: 4. Run workload (${{ matrix.job&#95;name }}) · `detection: exec_from_unusual_dir` · ⚠ attention |
+| <code>httpbin.org [100.52.37.185] :443 (https) TCP</code> | <code>systemd</code> → <code>…</code> → <code>node</code> → <code>dash</code> → <code>curl (pid 2396)</code> | step: 4. Run workload (${{ matrix.job&#95;name }}) |
+| <code>localhost [127.0.0.53] :53 (dns) UDP</code> | <code>systemd</code> → <code>…</code> → <code>node</code> → <code>dash</code> → <code>curl (pid 2396)</code> | step: 4. Run workload (${{ matrix.job&#95;name }}) · (dns resolver) · `detection: exec_from_unusual_dir` · ⚠ attention |
 | <code>localhost [127.0.0.53] :53 (dns) UDP</code> | <code>systemd</code> → <code>hosted-compute-agent</code> → <code>sudo</code> → <code>provjobd811584691 (pid 1864)</code> | step: 99. Runner Processes · (dns resolver) · `detection: exec_from_unusual_dir` · ⚠ attention |
 | <code>hosted-compute-watchdog-prod-iad-02.githubapp [140.82.114.23] :443 (https) TCP · also recorded: glb-2a3c35-public-internal.githubapp.com</code> | <code>systemd</code> → <code>hosted-compute-agent</code> → <code>sudo</code> → <code>provjobd811584691 (pid 1864)</code> | step: 99. Runner Processes · (github infra) |
 
@@ -484,9 +484,9 @@ Network telemetry observed 7 unique domains, 8 destinations, 8 connections, and 
 
 | Check | Result | Context |
 | --- | --- | --- |
-| A process contacted a bad network domain. | `attention` | Network Egress · no_bad_egress_domain |
-| A program was executed, and then its file was deleted. | `pass` | Stealth · no_binary_execution_and_deletion |
-| A process initiated code injection via /proc/{pid}/mem access. | `pass` | Privilege Escalation · no_code_injection_via_proc_memory |
+| A process contacted a bad network domain. | `attention` | Network Egress · no&#95;bad&#95;egress&#95;domain |
+| A program was executed, and then its file was deleted. | `pass` | Stealth · no&#95;binary&#95;execution&#95;and&#95;deletion |
+| A process initiated code injection via /proc/{pid}/mem access. | `pass` | Privilege Escalation · no&#95;code&#95;injection&#95;via&#95;proc&#95;memory |
 
 </details>
 
