@@ -16,6 +16,10 @@ test("redactString: masks environment variable assignments, flags, headers, and 
             "cli --token *** --password \"***\" --api-key '***' --access-key=***",
         ],
         [
+            "cli --token dGVzdA== --api-key foo=bar",
+            "cli --token *** --api-key ***",
+        ],
+        [
             "cli --token $GITHUB_TOKEN --auth GITHUB_TOKEN=abc",
             "cli --token $GITHUB_TOKEN --auth GITHUB_TOKEN=***",
         ],
@@ -24,12 +28,12 @@ test("redactString: masks environment variable assignments, flags, headers, and 
             "curl -H 'Authorization: Bearer ***'",
         ],
         [
-            '{"api_key": "secret-val", "refresh_token": "rt_123"}',
-            '{"api_key": "***", "refresh_token": "***"}',
+            '{"api_key": "secret-val", "refresh_token": "rt_123", "password": "pw", "client_secret": "cs"}',
+            '{"api_key": "***", "refresh_token": "***", "password": "***", "client_secret": "***"}',
         ],
         [
-            "X-API-Token: my-raw-token",
-            "X-API-Token: ***",
+            "X-API-Token: my-raw-token\npassword: my-yaml-password\nclient_secret: 'my-secret'",
+            "X-API-Token: ***\npassword: ***\nclient_secret: '***'",
         ],
         [
             `token=ghs_${"a".repeat(36)} pat=ghp_${"B".repeat(36)} fine=github_pat_${"c".repeat(22)}`,

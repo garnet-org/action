@@ -43022,6 +43022,10 @@ const SECRET_FLAG =
     "(--?(?:[a-z0-9-]*-)?(?:token|secret|password|passwd|passphrase|credentials?|auth|" +
     "api[_-]?key|access[_-]?key|private[_-]?key)[= ]\\s*)"
 
+const SENSITIVE_FIELD =
+    "(?:(?:[a-z0-9_-]*[_-])?(?:token|secret|password|passwd|passphrase|credentials?)|" +
+    "(?:x-)?(?:api|access|private|secret|encryption|signing|client|consumer|auth|ssh|gpg|pgp|deploy)[_-]?key)"
+
 /** @type {RedactRule[]} */
 const RULES = [
     // NAME=VALUE assignments where the name denotes a secret, e.g.
@@ -43041,14 +43045,15 @@ const RULES = [
         re: new RegExp(`${SECRET_FLAG}'[^']*'`, "gi"),
         repl: `$1'${MASK}'`,
     },
-    // A bare flag value. The terminator is matched and put back so that a
-    // value containing '=' never matches: those are assignments such as
-    // --token GITHUB_TOKEN=abc, which the first rule already masks more
-    // precisely. A value that is only a shell variable reference such as
-    // $GITHUB_TOKEN reveals nothing, so it stays readable.
+    // A bare flag value. Assignments such as --token GITHUB_TOKEN=abc are
+    // already masked to GITHUB_TOKEN=*** by the first rule and are left alone
+    // so the variable name stays visible; any other '=' (such as base64
+    // padding in --token dGVzdA== or --api-key foo=bar) is still masked. A
+    // value that is only a shell variable reference such as $GITHUB_TOKEN
+    // reveals nothing, so it stays readable.
     {
-        re: new RegExp(`${SECRET_FLAG}[^\\s'"$=]+(\\s|['"]|$)`, "gi"),
-        repl: `$1${MASK}$2`,
+        re: new RegExp(`${SECRET_FLAG}(?![A-Z0-9_]+=\\*{3}(?:\\s|['"]|$))[^\\s'"$][^\\s'"]*`, "gi"),
+        repl: `$1${MASK}`,
     },
     // HTTP authorization headers: Authorization: Bearer/Token/Basic/Digest xxx.
     {
@@ -43056,15 +43061,19 @@ const RULES = [
         repl: `$1${MASK}`,
     },
     // Sensitive headers and JSON/YAML fields with a quoted value, e.g.
-    // "api_key": "xxx". The quotes are kept so the result stays parseable and
-    // so a second pass is a no-op.
+    // "api_key": "xxx", "password": "xxx", "client_secret": "xxx". The quotes
+    // are kept so the result stays parseable and so a second pass is a no-op.
     {
-        re: /\b((?:x-)?(?:api[_-]?key|api[_-]?token|auth[_-]?token|access[_-]?token|session[_-]?token|refresh[_-]?token|csrf[_-]?token|private[_-]?key)"?\s*:\s*)"[^"]*"/gi,
+        re: new RegExp(`\\b(${SENSITIVE_FIELD}['"]?\\s*:\\s*)"[^"]*"`, "gi"),
         repl: `$1"${MASK}"`,
     },
-    // The same fields with a bare value, e.g. X-API-Token: xxx.
     {
-        re: /\b((?:x-)?(?:api[_-]?key|api[_-]?token|auth[_-]?token|access[_-]?token|session[_-]?token|refresh[_-]?token|csrf[_-]?token|private[_-]?key)\s*:\s*)[^\s'"]+/gi,
+        re: new RegExp(`\\b(${SENSITIVE_FIELD}['"]?\\s*:\\s*)'[^']*'`, "gi"),
+        repl: `$1'${MASK}'`,
+    },
+    // The same fields with a bare value, e.g. X-API-Token: xxx or YAML password: xxx.
+    {
+        re: new RegExp(`\\b(${SENSITIVE_FIELD}['"]?\\s*:\\s*)[^\\s'",}]+`, "gi"),
         repl: `$1${MASK}`,
     },
     // Well-known token formats that can leak without a name or header.
