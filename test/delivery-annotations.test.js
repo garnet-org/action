@@ -212,7 +212,7 @@ test("delivery failure annotations and artifact uploads stay warning-only", () =
     assert.deepEqual(result.successfulUpload.uploads, ["successful-artifact"])
 })
 
-test("post step annotates a missing profile once and does not annotate a valid profile", async t => {
+test("post step annotates a missing or empty profile once and does not annotate a valid profile", async t => {
     if (process.platform !== "linux" || process.arch !== "x64") {
         t.skip("Linux/x64-only behavior: the post step exits early on unsupported platforms")
         return
@@ -224,7 +224,7 @@ test("post step annotates a missing profile once and does not annotate a valid p
     const profileContent = await readFile(new URL("./fixtures/profiles/sample-profile.json", import.meta.url), "utf8")
     const warningPrefix = "::warning title=Garnet%3A Execution Profile not recorded::"
 
-    for (const state of ["missing", "present"]) {
+    for (const state of ["missing", "empty", "present"]) {
         const summaryPath = join(directory, `${state}.md`)
         const output = runNodeScript(
             `
@@ -263,7 +263,7 @@ test("post step annotates a missing profile once and does not annotate a valid p
         )
 
         assert.doesNotMatch(output, /::error(?::| )/)
-        if (state === "missing") {
+        if (state !== "present") {
             const annotationLines = output.split("\n").filter(line => line.includes(warningPrefix))
             assert.equal(annotationLines.length, 1, output)
             assert.ok(annotationLines[0].startsWith(warningPrefix), annotationLines[0])

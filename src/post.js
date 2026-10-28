@@ -167,7 +167,7 @@ async function run() {
         // and the file landing on disk.
         const appeared = await waitForRootFile(jsonProfilerFile, profileWaitSeconds * 1000)
         if (!appeared) {
-            annotateDeliveryFailure("profile_not_written", `${JSON_PROFILE_LABEL} path: ${jsonProfilerFile}`)
+            core.info(`${JSON_PROFILE_LABEL} was not written within the bounded wait: ${jsonProfilerFile}`)
         }
 
         let forceStopped = false
@@ -272,7 +272,7 @@ async function readProfile(jsonProfilerFile, debug) {
 
         switch (result.state) {
             case "missing":
-                core.info(`${JSON_PROFILE_LABEL} not found: ${jsonProfilerFile}`)
+                annotateDeliveryFailure("profile_not_written", `${JSON_PROFILE_LABEL} path: ${jsonProfilerFile}`)
                 break
             case "empty":
                 annotateDeliveryFailure("profile_empty", `${JSON_PROFILE_LABEL} path: ${jsonProfilerFile}`)
