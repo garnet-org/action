@@ -30,5 +30,5 @@ export function renderUnrecordedSummary(reason) {
         .replaceAll("<", "&lt;")
         .replaceAll(">", "&gt;")
         .replace(/[\\`*_[\]!]/g, "\\$&")
-    return ["**Execution Profile for this job · not recorded**", "", escaped].join("\n")
+    return ["### Runtime behavior not recorded", "", escaped].join("\n")
 }

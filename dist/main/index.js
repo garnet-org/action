@@ -32024,7 +32024,7 @@ function renderUnrecordedSummary(reason) {
         .replaceAll("<", "&lt;")
         .replaceAll(">", "&gt;")
         .replace(/[\\`*_[\]!]/g, "\\$&")
-    return ["**Execution Profile for this job · not recorded**", "", escaped].join("\n")
+    return ["### Runtime behavior not recorded", "", escaped].join("\n")
 }
 
 ;// CONCATENATED MODULE: ./node_modules/zod/v4/core/util.js
@@ -42067,7 +42067,7 @@ class ControlPlaneClient {
 
     /**
      * Signals that this run's sensor stopped, with the reason and whether a usable
-     * Run Profile was produced, so the control plane can resolve pending state.
+     * Execution Profile was produced, so the control plane can resolve pending state.
      * Authenticated as the agent itself.
      * @param {AgentStoppedRequest} input
      * @returns {Promise<void>}
@@ -42569,7 +42569,7 @@ function renderStartFailureSummary(failure) {
     const excerpt = sections.join("\n\n").replaceAll("```", "'''")
 
     return [
-        "**Execution Profile for this job · not recorded**",
+        "### Runtime behavior not recorded",
         "",
         `<sub>the sensor did not start on this runner — ${escapeHTML(failure.reason)}</sub>`,
         "",
@@ -43126,7 +43126,7 @@ const RULES = [
 ]
 
 /**
- * Returns `value` with any detected secrets replaced by a mask.
+ * Returns `value` with any matched secrets replaced by a mask.
  * @param {string} value
  * @returns {string}
  */
@@ -43515,7 +43515,7 @@ async function run() {
             warning("GITHUB_WORKSPACE is not set. Jibril workflow-file resolution may be limited.")
         } else if (!(await pathExists(external_node_path_namespaceObject.join(workspace, ".git")))) {
             warning(
-                "Repository checkout not detected. Jibril will rely on the GitHub API to fetch the running workflow file; " +
+                "No repository checkout found. Jibril will rely on the GitHub API to fetch the running workflow file; " +
                     "if that fails, add 'actions/checkout@v6' before this action as a fallback.",
             )
         }
@@ -44224,6 +44224,8 @@ async function downloadJibril(tag, tmpDir) {
         const binaryURL = `${releaseURL}/${JIBRIL_BINARY}`
         info(`Downloading jibril: ${binaryURL}`)
         await downloadFile(binaryURL, binaryPath)
+        saveState("sensorBundle", "unavailable")
+        saveState("sensorAttestation", "unavailable")
         return binaryPath
     }
 
@@ -44238,7 +44240,8 @@ async function downloadJibril(tag, tmpDir) {
     await promises_namespaceObject.mkdir(bundleDir, { recursive: true })
     await exec_exec("tar", ["-xzf", archivePath, "-C", bundleDir])
     await verifyJibrilBundle(bundleDir, tag)
-    await verifyJibrilAttestation(external_node_path_namespaceObject.join(bundleDir, JIBRIL_BINARY))
+    saveState("sensorBundle", "matched")
+    saveState("sensorAttestation", await verifyJibrilAttestation(external_node_path_namespaceObject.join(bundleDir, JIBRIL_BINARY)))
     await promises_namespaceObject.rename(external_node_path_namespaceObject.join(bundleDir, JIBRIL_BINARY), binaryPath)
 
     return binaryPath
@@ -44301,17 +44304,17 @@ async function verifySignedPayload(bundleDir, name) {
  * environment; when either is absent we warn rather than fail so self-hosted
  * runners keep working.
  * @param {string} binaryPath
- * @returns {Promise<void>}
+ * @returns {Promise<"signed" | "skipped_no_token" | "skipped_no_gh">} what the Step Summary reports
  */
 async function verifyJibrilAttestation(binaryPath) {
     if (getEnv("GITHUB_TOKEN", "") === "") {
         warning("github_token is unset: skipping jibril attestation verification.")
-        return
+        return "skipped_no_token"
     }
 
     if (!(await isCommandAvailable("gh"))) {
         warning("gh CLI is unavailable: skipping jibril attestation verification.")
-        return
+        return "skipped_no_gh"
     }
 
     const args = [
@@ -44331,6 +44334,7 @@ async function verifyJibrilAttestation(binaryPath) {
     }
 
     info(`Verified the jibril attestation signed by ${JIBRIL_SIGNER_WORKFLOW}`)
+    return "signed"
 }
 
 /**
@@ -45070,6 +45074,10 @@ async function main() {
         const preview = getInput("preview") === "true"
         saveState("preview", preview ? "true" : "")
 
+        // Detection labels stay off every surface unless the workflow opts in.
+        const showDetections = getInput("show_detections") === "true"
+        saveState("showDetections", showDetections ? "true" : "")
+
         const githubToken = getInput("github_token")
         saveState("githubToken", githubToken)
 
@@ -45089,6 +45097,7 @@ async function main() {
         // /etc/default/jibril contains. The main step forwards the matrix leg
         // there under the name Jibril reads it by.
         process.env.GITHUB_STRATEGY_JOB_INDEX = getInput("job_index")
+        saveState("jobTotal", getInput("job_total"))
 
         // Resolve the shutdown flush bound once, here at the boundary: the
         // main step writes it into the unit and the post step reuses the exact
@@ -45100,7 +45109,7 @@ async function main() {
         process.env.GARNET_JIBRIL_STOP_TIMEOUT_SECONDS = String(stopTimeoutSeconds)
         saveState("stopTimeoutSeconds", String(stopTimeoutSeconds))
 
-        // The Run Profile permalink derives from the run id and the configured
+        // The Execution Profile permalink derives from the run id and the configured
         // API host, so it is known up front — emit the declared report_url output
         // here where later steps in the same job can consume it (post-step
         // outputs are not visible to them).
@@ -45113,7 +45122,7 @@ async function main() {
             }),
         )
 
-        // Set the default Run Profile printer file paths.
+        // Set the default Execution Profile printer file paths.
         const profilerFile = process.env.JIBRIL_PROFILER_FILE || "/var/log/jibril.profiler.out"
         const jsonProfilerFile = process.env.JIBRIL_JSONPROFILER_FILE || "/var/log/jibril.profile.json"
         process.env.JIBRIL_PROFILER_FILE = profilerFile

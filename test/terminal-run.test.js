@@ -27,7 +27,7 @@ test("post step writes terminal summaries for missing, empty and invalid profile
                 const state = ${JSON.stringify(state)}
                 let now = 0
                 Date.now = () => { now += 100000; return now }
-                mock.module("@actions/exec", { exports: {
+                mock.module("@actions/exec", { namedExports: {
                     exec: async () => 0,
                     getExecOutput: async (command, args) => {
                         if (args[0] === "stat") return {
@@ -57,8 +57,8 @@ test("post step writes terminal summaries for missing, empty and invalid profile
         )
         assert.doesNotMatch(output, /::error::|failed to write Runtime Review summary/)
         const summary = await readFile(summaryPath, "utf8")
-        assert.match(summary, /Execution Profile for this job · not recorded/)
-        assert.match(summary, /job ended without a usable Execution Profile/)
+        assert.match(summary, /### Runtime behavior not recorded/)
+        assert.match(summary, /job ended without a usable record of its runtime behavior/)
         assert.doesNotMatch(summary, /still being recorded|pending|View this job/)
     }
 })
@@ -78,7 +78,7 @@ test("setup failure is fail-open with a redacted terminal summary", async t => {
             `
             import assert from "node:assert/strict"
             import { mock } from "node:test"
-            mock.module("@actions/exec", { exports: {
+            mock.module("@actions/exec", { namedExports: {
                 exec: async () => { throw new Error("no root execution expected") },
                 getExecOutput: async () => ({
                     exitCode: 0, stdout: "diagnostic fixture-sensitive-value", stderr: "",
@@ -101,7 +101,7 @@ test("setup failure is fail-open with a redacted terminal summary", async t => {
     )
     const summary = await readFile(summaryPath, "utf8")
     assert.match(output, /::warning::Jibril did not start/)
-    assert.match(summary, /Execution Profile for this job · not recorded/)
+    assert.match(summary, /### Runtime behavior not recorded/)
     assert.match(summary, /sensor did not start on this runner/)
     assert.match(summary, /sensor startup log/)
     assert.ok(!output.includes(secret))
