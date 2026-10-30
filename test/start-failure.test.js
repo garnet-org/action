@@ -69,7 +69,7 @@ test("renderStartFailureSummary: terminal register headline, reason, folded star
     assert.equal(
         summary,
         [
-            "**Execution Profile for this job · not recorded**",
+            "### Runtime behavior not recorded",
             "",
             "<sub>the sensor did not start on this runner — the jibril service exited early with state 'failed'</sub>",
             "",

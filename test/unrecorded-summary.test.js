@@ -40,7 +40,7 @@ test("credentialless runs warn, write a terminal summary, and never start record
     assert.match(output, /::warning::Garnet skipped this Runtime Review/)
     assert.doesNotMatch(output, /::error::|Jibril did not start/)
     const summary = await readFile(summaryPath, "utf8")
-    assert.match(summary, /Execution Profile for this job · not recorded/)
+    assert.match(summary, /### Runtime behavior not recorded/)
     assert.match(summary, /no authentication mechanism was available/)
     assert.match(summary, /id-token: write/)
     assert.doesNotMatch(summary, /still being recorded|View this job/)

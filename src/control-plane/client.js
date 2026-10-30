@@ -170,7 +170,7 @@ export class ControlPlaneClient {
 
     /**
      * Signals that this run's sensor stopped, with the reason and whether a usable
-     * Run Profile was produced, so the control plane can resolve pending state.
+     * Execution Profile was produced, so the control plane can resolve pending state.
      * Authenticated as the agent itself.
      * @param {AgentStoppedRequest} input
      * @returns {Promise<void>}

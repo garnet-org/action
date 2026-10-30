@@ -1,21 +1,12 @@
 /**
- * Garnet execution comment — reference renderer for contract v6.8.0.
+ * Garnet Step Summary renderer — the job's full receipt. The Action renders
+ * only this surface; the Garnet App posts the PR comment, fork PRs included
+ * (through the `garnet-run-*` relay artifact, see ./run-artifact.js).
  *
- * Vendored from the locked reference renderer in
- * garnet-org/runtime-review-testbed (cmd/garnet-runtime-review/review.mjs at
- * commit 814d4d328f679f40b4546918a1c3bf347101413f, then aligned to the
- * v6.7.0 contract at commit be91e8a0752e6e44759ae93b2b7db7710f3e428e —
- * contract/vocab.json + docs/ux-contract.md; the testbed's v6.7.0 renderer
- * had not landed at vendoring time, so this implementation follows the
- * contract directly) with two mechanical changes: the CLI plumbing section
- * is dropped (the action drives the renderer from src/post.js) and
- * CONTRACT_VOCAB is imported from the vendored
- * ./runtime-review-vocab.js instead of a filesystem read.
- *
- * Three projections of the same selected record set: the GitHub PR comment,
- * the GitHub job Step Summary, and the public Run Profile (HTML/JSON —
- * contract carried here as machine-readable policy data; the page itself is
- * served by the Garnet app).
+ * Ported from the reference renderer in garnet-org/runtime-review-testbed,
+ * whose `main` is the single reference for the renderer, vocabulary and
+ * goldens. CONTRACT_VOCAB is imported from the vendored
+ * ./runtime-review-vocab.js.
  *
  * v6.5.0 record model:
  *   - One destination association = one `network.egress.peers[]` item × one
@@ -23,17 +14,16 @@
  *     with lineage `unknown (not recorded)`.
  *   - The record is egress-centric — it is NOT a process inventory; a
  *     process that made no recorded egress may not appear.
- *   - The evidence model is lossless; the comment projection deduplicates
- *     destination identities so capture multiplicity never becomes comparison
- *     churn.
+ *   - The evidence model is lossless; the chain table collapses repeated
+ *     destination names within a chain, the chains fold keeps every one.
  *   - `arguments`/argv and `executable` paths are embargoed: never captured
  *     into the render model, never emitted on any surface.
  *   - Typography is attribution, not trust: a lineage recorded under a
  *     GitHub step below `Runner.Worker` is bold; runner scaffolding is italic.
  *     A recorded detection always overrides de-emphasis.
- *   - Deterministic factual notes only: `(dns resolver)`, `(instance
- *     metadata)`, and record-backed `detection: <kind>` values other than
- *     `flow`.
+ *   - Deterministic factual notes only: `(Cloud IMDS)`, `(github infra)`,
+ *     and, behind the `show_detections` opt-in, record-backed
+ *     `detection: <kind>` values other than `flow`.
  *   - Counts are mechanical and qualified. Sensor telemetry is preserved
  *     verbatim and never aliased to renderer-derived destinations or flows.
  *   - Timestamps come from `profile.timestamp` only, rendered
@@ -49,15 +39,8 @@
 import { isIP } from "node:net"
 
 import { CONTRACT_VOCAB } from "./runtime-review-vocab.js"
-import { PUBLIC_SUFFIX_RULES } from "./public-suffix-rules.js"
-import { GITHUB_META_IP_RANGES } from "./github-meta-ip-ranges.js"
 
 export { CONTRACT_VOCAB }
-
-// ---------------------------------------------------------------------------
-// Model typedefs (checkJs) — the v6.6.1 record/review model.
-// ---------------------------------------------------------------------------
-
 /**
  * One destination association: one recorded egress peer × one proc_tree.
  * @typedef {{
@@ -77,7 +60,6 @@ export { CONTRACT_VOCAB }
  *   executable: string
  * }} ReviewEdge
  */
-
 /**
  * @typedef {{
  *   timestamp: string
@@ -88,7 +70,6 @@ export { CONTRACT_VOCAB }
  *   result: string
  * }} AssertionEvidence
  */
-
 /**
  * @typedef {{
  *   class_id: string
@@ -98,14 +79,12 @@ export { CONTRACT_VOCAB }
  *   evidence: AssertionEvidence[]
  * }} JobAssertion
  */
-
 /**
  * @typedef {{
  *   total_domains: number | null
  *   total_connections: number | null
  * }} JobTelemetry
  */
-
 /**
  * @typedef {{
  *   associations: number
@@ -116,7 +95,6 @@ export { CONTRACT_VOCAB }
  *   flows: number
  * }} EdgeCounts
  */
-
 /**
  * One job's summarized record (the output of `summarizeProfile`).
  * @typedef {{
@@ -133,6 +111,10 @@ export { CONTRACT_VOCAB }
  *   ref: string
  *   pr_url: string
  *   actor: string
+ *   run_attempt: string
+ *   event_name: string
+ *   runner_os: string
+ *   runner_arch: string
  *   job_index: string
  *   flow_count: number
  *   telemetry: JobTelemetry
@@ -141,24 +123,9 @@ export { CONTRACT_VOCAB }
  *   counts: EdgeCounts
  * }} JobSummary
  */
-
 /**
  * @typedef {JobSummary & { id: number, job_url: string }} ReviewJob
  */
-
-/**
- * @typedef {{
- *   name: string
- *   workflow: string
- *   job_index: string
- *   edges: ReviewEdge[]
- * }} PreviousJob
- */
-
-/**
- * @typedef {{ previousSha: string, previousJobs: PreviousJob[] }} ReviewComparison
- */
-
 /**
  * @typedef {{
  *   repo: string
@@ -168,33 +135,9 @@ export { CONTRACT_VOCAB }
  *   appMode: boolean
  *   recordedThrough: string
  *   jobs: ReviewJob[]
- *   comparison: ReviewComparison | null
  *   counts: { jobs: number, associations: number, destinations: number }
  * }} RunReview
  */
-
-/**
- * Per-job comparison delta over comment-visible chains.
- * @typedef {{
- *   addedIds: Set<string>
- *   removedIds: Set<string>
- *   added: Set<string>
- *   removed: ReviewEdge[]
- *   addedCount: number
- *   removedCount: number
- *   backgroundAddedCount: number
- *   backgroundRemovedCount: number
- *   rotations: Map<string, string>
- * }} EdgeDelta
- */
-
-/**
- * @typedef {EdgeDelta & {
- *   names: Map<string, string>
- * }} JobDelta
- */
-
-
 /**
  * Shared-prefix lineage tree node for the comment tree.
  * @typedef {{
@@ -208,66 +151,24 @@ export { CONTRACT_VOCAB }
  *   executables: Set<string>
  * }} TreeNode
  */
-
 /**
  * One lineage-first Step Summary row.
  * @typedef {{ edge: ReviewEdge, associations: ReviewEdge[] }} LineageRow
  */
 
-/** Canonical sticky marker. */
-export const RUNTIME_REVIEW_MARKER = "<!-- garnet-runtime-review -->"
-
-/** Self-marker: identifies THIS renderer's own comments for update/delete. */
-export const COMMENT_MARKER = "<!-- garnet-run-profile -->"
-
-/**
- * Stable marker for the testbed-only "after" projection. It deliberately
- * shares no exact marker with the App or Action fallback, so each owner can
- * update only its own PR comment.
- */
-export const REFERENCE_MOCKUP_MARKER = "<!-- garnet-reference-renderer-mockup -->"
-
 /** Exact emitted vocabulary — byte-locked by contract/vocab.json. */
 export const VOCAB = {
-  headlineLead: CONTRACT_VOCAB.copy.headlineLead,
   stepSummaryHeading: CONTRACT_VOCAB.copy.stepSummaryHeading,
-  artifact: CONTRACT_VOCAB.copy.artifact,
   permalinkLabel: CONTRACT_VOCAB.copy.permalinkLabel,
   emptyPeers: CONTRACT_VOCAB.copy.emptyPeers,
-  noRunProfile: CONTRACT_VOCAB.copy.noRunProfile,
   unknownLineage: CONTRACT_VOCAB.copy.unknownLineage,
-  noChange: CONTRACT_VOCAB.copy.noChange,
   terminalNetwork: CONTRACT_VOCAB.copy.terminalNetwork,
-  sinceWord: CONTRACT_VOCAB.copy.sinceWord,
-  vanishedJobsLabel: CONTRACT_VOCAB.copy.vanishedJobsLabel,
-  jobsLineChanged: CONTRACT_VOCAB.copy.jobsLineChanged,
-  jobsLineUnchanged: CONTRACT_VOCAB.copy.jobsLineUnchanged,
-  jobsLineNoOutbound: CONTRACT_VOCAB.copy.jobsLineNoOutbound,
-  jobsLineVanished: CONTRACT_VOCAB.copy.jobsLineVanished,
-  machineSummaryMarker: CONTRACT_VOCAB.copy.machineSummaryMarker,
-  explainerLabel: CONTRACT_VOCAB.copy.explainerLabel,
-  explainerReadingLine: CONTRACT_VOCAB.copy.explainerReadingLine,
-  explainerComparisonLine: CONTRACT_VOCAB.copy.explainerComparisonLine,
-  explainerBackgroundSegment: CONTRACT_VOCAB.copy.explainerBackgroundSegment,
-  runnerBackground: CONTRACT_VOCAB.copy.runnerBackground,
-  explainerLegendLine: CONTRACT_VOCAB.copy.explainerLegendLine,
-  explainerCalloutPath: CONTRACT_VOCAB.copy.explainerCalloutPath,
-  explainerCalloutActed: CONTRACT_VOCAB.copy.explainerCalloutActed,
-  explainerCalloutAction: CONTRACT_VOCAB.copy.explainerCalloutAction,
-  whatIsGarnetLabel: CONTRACT_VOCAB.copy.whatIsGarnetLabel,
-  whatIsGarnetUrl: CONTRACT_VOCAB.copy.whatIsGarnetUrl,
 }
-
-/** PR comment serialized UTF-8 byte budget (GitHub hard cap is 65,536). */
-export const SIZE_BUDGET = CONTRACT_VOCAB.mediumLimits.prCommentBudget
-
-/** Changed folds render open only while at most this many jobs changed. */
-export const FOLD_OPEN_BUDGET = CONTRACT_VOCAB.comment.foldOpenBudget
 
 /** Step Summary hard limit (1 MiB). */
 export const STEP_SUMMARY_BUDGET = CONTRACT_VOCAB.mediumLimits.stepSummaryHardLimit
 
-/** Loopback matcher for the dns-resolver note (anchored — never a suffix). */
+/** Loopback matcher for resolver exclusion (anchored — never a suffix). */
 const LOOPBACK_RE = new RegExp(CONTRACT_VOCAB.notes.dnsResolver.loopbackPattern)
 
 /** The standardized cloud IMDS constant — never vendor-specific addresses. */
@@ -308,11 +209,14 @@ const GARNET_SENSOR_SUFFIXES = CONTRACT_VOCAB.notes.garnetSensor.nameSuffixes
 // ---------------------------------------------------------------------------
 
 /**
- * Strip control characters from any record-sourced string.
+ * Strip control characters from any record-sourced string: C0/C1 controls,
+ * bidi embeddings, overrides and isolates, zero-width characters, the BOM
+ * and line/paragraph separators. Each can make a rendered name read as
+ * something other than what was recorded.
  * @param {unknown} value
  */
 const stripControl = (value) =>
-  String(value ?? "").replace(/[\u0000-\u0008\u000B-\u001F\u007F]/g, "")
+  String(value ?? "").replace(/[\u0000-\u0008\u000B-\u001F\u007F-\u009F\u200B-\u200F\u2028-\u202E\u2060-\u2069\uFEFF]/g, "")
 
 /**
  * Escape a value destined for INSIDE an HTML element. Three-plus backtick
@@ -362,16 +266,29 @@ const escapeCode = (value) =>
 const escapeCodeCell = (value) => escapeCode(value).replaceAll("|", "\\|")
 
 /**
- * Escape a value destined for HTML inside a GFM table cell.
+ * Escape a value destined for HTML inside a GFM table cell. GitHub still parses
+ * Markdown inside inline HTML such as `<code>`, so recorded names would
+ * otherwise render links, emphasis, autolinks, and @mentions.
  * @param {unknown} value
  */
-const escapeHtmlCell = (value) => escapeHtml(value).replaceAll("|", "\\|")
+const escapeHtmlCell = (value) => neutralizeInlineMarkdown(escapeHtml(value)).replaceAll("|", "\\|")
+
+/**
+ * Replaces Markdown-active punctuation with numeric entities. Run it after HTML
+ * escaping so the entities are not themselves escaped.
+ * @param {string} value
+ */
+function neutralizeInlineMarkdown(value) {
+  return value
+    .replace(/[\\`*_~\[\]:@]/g, (character) => `&#${character.charCodeAt(0)};`)
+    .replaceAll("www.", "www&#46;")
+}
 
 /**
  * Bound a captured (attacker-controllable) label to `max` chars with a
  * middle ellipsis, preserving head+tail so it stays identifiable while a
  * crafted payload buried mid-string cannot survive or inflate token cost.
- * Full untruncated values remain in the Run Profile / API.
+ * Full untruncated values remain in the Execution Profile / API.
  * @param {unknown} value
  * @param {number} [max]
  */
@@ -388,13 +305,9 @@ export const truncateMiddle = (value, max = 64) => {
  * @param {unknown} value
  */
 export function escapeMarkdownCell(value) {
-  return stripControl(value)
-    .replaceAll("\\", "\\\\")
+  const html = stripControl(value).replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;")
+  return neutralizeInlineMarkdown(html)
     .replaceAll("|", "\\|")
-    .replaceAll("`", "\\`")
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
     .replace(/[\r\n]+/g, " ")
 }
 
@@ -437,27 +350,22 @@ const numericPort = (value) => {
 
 /**
  * Deterministic factual notes for one association:
- *   - `dns resolver` — loopback remote_address AND a remote_ports value with
- *     numeric port 53.
- *   - `cloud metadata` — remote_address is exactly the standardized IMDS
+ *   - dns-resolver note — retired by the contract (empty text); loopback
+ *     remote_address AND a remote_ports value with numeric port 53.
+ *   - `Cloud IMDS` — remote_address is exactly the standardized IMDS
  *     addresses.
  *   - `github infra` — the primary recorded remote name ends with a
  *     contract-locked GitHub infrastructure suffix.
  *   - `garnet sensor` — the primary recorded remote name is `garnet.ai` or
  *     ends with `.garnet.ai`.
- *   - `detection: <kind>` — every non-empty recorded detection except `flow`.
+ *   - `detection: <kind>` — every non-empty recorded detection except `flow`,
+ *     only when the caller opts in (the `show_detections` input).
  * @param {ReviewEdge} edge
  * @param {{ detections?: boolean }} [options]
  */
-export function edgeNotes(edge, { detections = true } = {}) {
+export function edgeNotes(edge, { detections = false } = {}) {
   /** @type {string[]} */
   const notes = []
-  if (
-    LOOPBACK_RE.test(edge.remote_address) &&
-    edge.remote_ports.some((p) => numericPort(p) === 53)
-  ) {
-    notes.push(CONTRACT_VOCAB.notes.dnsResolver.text)
-  }
   if (IMDS_ADDRESSES.has(edge.remote_address)) {
     notes.push(CONTRACT_VOCAB.notes.instanceMetadata.text)
   }
@@ -715,6 +623,10 @@ export function summarizeProfile(profile) {
     ref: String(github.ref || ""),
     pr_url: pullRequestURL(github),
     actor: String(github.triggering_actor || github.actor || ""),
+    run_attempt: String(github.run_attempt || ""),
+    event_name: String(github.event_name || ""),
+    runner_os: String(github.runner_os || ""),
+    runner_arch: String(github.runner_arch || ""),
     job_index:
       github.job_index !== undefined && github.job_index !== null
         ? String(github.job_index)
@@ -777,41 +689,6 @@ export function edgeCounts(edges, flowCount) {
 }
 
 /**
- * Runtime telemetry comparison. This never throws: historical records may
- * legitimately disagree with the projection. CI separately hard-fails Gate T
- * for the pinned fixtures expected to satisfy the invariant.
- * @param {ReviewJob | JobSummary} job
- * @returns {{ metric: string, sensor: number, derived: number, derivedLabel: string }[]}
- */
-export function telemetryDiscrepancies(job) {
-  /** @type {{ metric: string, sensor: number, derived: number, derivedLabel: string }[]} */
-  const discrepancies = []
-  if (
-    job.telemetry.total_connections !== null &&
-    job.telemetry.total_connections !== job.counts.flows
-  ) {
-    discrepancies.push({
-      metric: "Connections",
-      sensor: job.telemetry.total_connections,
-      derived: job.counts.flows,
-      derivedLabel: "recorded flows",
-    })
-  }
-  if (
-    job.telemetry.total_domains !== null &&
-    job.telemetry.total_domains !== job.counts.primary_names
-  ) {
-    discrepancies.push({
-      metric: "Unique domains",
-      sensor: job.telemetry.total_domains,
-      derived: job.counts.primary_names,
-      derivedLabel: "distinct primary remote names",
-    })
-  }
-  return discrepancies
-}
-
-/**
  * A loosely-typed incoming job record accepted by `buildRunReview`.
  * @typedef {Record<string, any>} JobRecordInput
  */
@@ -819,8 +696,7 @@ export function telemetryDiscrepancies(job) {
 /**
  * Build the review model from job records.
  * @param {{repo?: string, sha?: string, commitUrl?: string, appUrl?: string,
- *          appMode?: boolean, jobs: (JobRecordInput | null | undefined)[],
- *          previousSha?: string, previousJobs?: (JobRecordInput | null | undefined)[] | null}} input
+ *          appMode?: boolean, jobs: (JobRecordInput | null | undefined)[]}} input
  * @returns {RunReview}
  */
 export function buildRunReview(input) {
@@ -842,6 +718,10 @@ export function buildRunReview(input) {
       ref: String(j.ref || ""),
       pr_url: String(j.pr_url || ""),
       actor: String(j.actor || ""),
+      run_attempt: String(j.run_attempt || ""),
+      event_name: String(j.event_name || ""),
+      runner_os: String(j.runner_os || ""),
+      runner_arch: String(j.runner_arch || ""),
       job_index: String(j.job_index || ""),
       flow_count: Number(j.flow_count || 0),
       telemetry: {
@@ -855,7 +735,7 @@ export function buildRunReview(input) {
             : null,
       },
       assertions: Array.isArray(j.assertions) ? j.assertions : [],
-      edges: (j.edges || []).slice().sort(edgeComparator),
+      edges: (j.edges || []).filter((/** @type {ReviewEdge} */ edge) => !isLoopbackResolver(edge)).sort(edgeComparator),
     }))
     .map((j) => ({ ...j, counts: edgeCounts(j.edges, j.flow_count) }))
     // Canonical job order: alphabetic by `workflow / job`.
@@ -885,26 +765,6 @@ export function buildRunReview(input) {
   const stamps = jobs.map((j) => formatTimestamp(j.timestamp)).filter((s) => s !== "")
   const recordedThrough = stamps.length > 0 ? (stamps.sort()[stamps.length - 1] ?? "") : ""
 
-  // Optional execution comparison: the previous profiled commit's job
-  // records (Phase-1 wiring supplies them; without them every fold renders
-  // the snapshot tree). Comparison is computed over comment-visible chains.
-  const previousSha = String(input.previousSha || "")
-  /** @type {PreviousJob[] | null} */
-  const previousJobs = Array.isArray(input.previousJobs)
-    ? input.previousJobs
-        .filter((j) => j !== null && j !== undefined)
-        .map((j) => ({
-          name: String(j.name || ""),
-          workflow: String(j.workflow || ""),
-          job_index: j.job_index === undefined || j.job_index === null ? "" : String(j.job_index),
-          edges: (j.edges || []).slice().sort(edgeComparator),
-        }))
-    : null
-  const comparison =
-    previousSha !== "" && previousJobs !== null
-      ? { previousSha, previousJobs }
-      : null
-
   const destinationUnion = new Set()
   for (const j of jobs) {
     for (const e of j.edges) {
@@ -920,7 +780,6 @@ export function buildRunReview(input) {
     appMode: input.appMode !== false,
     recordedThrough,
     jobs,
-    comparison,
     counts: {
       jobs: jobs.length,
       associations: jobs.reduce((n, j) => n + j.counts.associations, 0),
@@ -928,75 +787,11 @@ export function buildRunReview(input) {
     },
   }
 
-  // Comparison reviews order jobs by decision relevance: destination
-  // change, no change, then jobs with no outbound
-  // destinations. Canonical alphabetic order holds within each tier;
-  // snapshot reviews keep it outright.
-  if (review.comparison !== null) {
-    const { tiers } = changeAccounting(review)
-    const canonicalIndex = new Map(review.jobs.map((j, i) => [j.id, i]))
-    review.jobs = [...review.jobs].sort(
-      (a, b) =>
-        (tiers.get(a.id) ?? 0) - (tiers.get(b.id) ?? 0) ||
-        (canonicalIndex.get(a.id) ?? 0) - (canonicalIndex.get(b.id) ?? 0),
-    )
-  }
   return review
 }
 
-/**
- * Stable JSON-serializable review model (the review-model golden surface).
- * @param {RunReview} review
- */
-export function exportReviewModel(review) {
-  return {
-    contractVersion: CONTRACT_VOCAB.version,
-    repo: review.repo,
-    sha: review.sha,
-    commitUrl: review.commitUrl,
-    appUrl: review.appUrl,
-    appMode: review.appMode,
-    recordedThrough: review.recordedThrough,
-    counts: review.counts,
-    jobs: review.jobs.map((j) => ({
-      name: j.name,
-      workflow: j.workflow,
-      run_id: j.run_id,
-      run_url: j.run_url,
-      job_url: j.job_url,
-      profile_id: j.profile_id,
-      uuid: j.uuid,
-      timestamp: j.timestamp,
-      repository: j.repository,
-      sha: j.sha,
-      ref: j.ref,
-      actor: j.actor,
-      job_index: j.job_index,
-      flow_count: j.flow_count,
-      telemetry: j.telemetry,
-      telemetryDiscrepancies: telemetryDiscrepancies(j),
-      assertions: j.assertions,
-      counts: j.counts,
-      edges: j.edges.map((e) => ({
-        remote_address: e.remote_address,
-        remote_names: e.remote_names,
-        remote_ports: e.remote_ports,
-        protocol: e.protocol,
-        result: e.result,
-        detections: e.detections,
-        lineage_recorded: e.lineage_recorded,
-        pid: e.pid,
-        process: e.process,
-        ancestry: e.ancestry,
-        github_step: e.github_step,
-        notes: edgeNotes(e),
-      })),
-    })),
-  }
-}
-
 // ---------------------------------------------------------------------------
-// Public Run Profile — selector and publication policy (contract data; the
+// Public Execution Profile — selector and publication policy (contract data; the
 // page is served by the Garnet app, this repo locks the policy + URLs).
 // ---------------------------------------------------------------------------
 
@@ -1010,20 +805,6 @@ export function exportReviewModel(review) {
 export function profilePermalink(job, appUrl, utmMedium) {
   if (!job.run_id || !job.profile_id || !appUrl) return ""
   return `${appUrl}/public/runs/${encodeURIComponent(String(job.run_id))}?profile=${encodeURIComponent(String(job.profile_id))}&utm_source=github&utm_medium=${utmMedium}`
-}
-
-// ---------------------------------------------------------------------------
-// PR comment.
-// ---------------------------------------------------------------------------
-
-/**
- * A non-flow detection overrides runner-scaffolding de-emphasis.
- * @param {ReviewEdge} edge
- */
-export function hasRecordedDetection(edge) {
-  return (edge.detections || []).some(
-    (value) => value !== "" && value.toLowerCase() !== "flow",
-  )
 }
 
 /**
@@ -1043,20 +824,9 @@ const renderNote = (note) =>
  */
 export function defangHostname(value) {
   const v = String(value ?? "")
+  if (/^\d{1,3}(\.\d{1,3}){3}$/.test(v)) return v.replace(/\.(?=[^.]*$)/, "[.]")
   if (v === "" || isAddressLike(v) || !v.includes(".")) return v
   return v.replace(/\.(?=[^.]*$)/, "[.]")
-}
-
-/**
- * PR-comment destination display: domain-first — the canonical recorded
- * name is the identity, a bare IP only when no name is recorded. Hostnames
- * are defanged on this surface. No ports, no protocol, address annotation,
- * or secondary-name annotation on the comment.
- * @param {ReviewEdge} edge
- * @param {(value: unknown) => string} escape
- */
-function commentDestinationDisplay(edge, escape) {
-  return escape(defangHostname(truncateMiddle(edgePrimaryDestination(edge))))
 }
 
 /**
@@ -1102,19 +872,6 @@ function edgeProcessPath(edge) {
   const ancestry = (edge.ancestry || []).filter((part) => part !== "")
   if (ancestry.length > 0) return ancestry
   return [edge.process || VOCAB.unknownLineage]
-}
-
-/**
- * Comment-tree path: recorded ancestry rooted at `Runner.Worker` when the
- * lineage descends from it (the scaffolding prefix above the worker is
- * attribution-noise on the comment; the full path stays in the Step Summary
- * and the Execution Profile).
- * @param {ReviewEdge} edge
- */
-function commentTreePath(edge) {
-  const path = edgeProcessPath(edge)
-  const workerIndex = path.indexOf("Runner.Worker")
-  return workerIndex > 0 ? path.slice(workerIndex) : path
 }
 
 /**
@@ -1182,258 +939,17 @@ export function addressNameMap(...edgeSets) {
 }
 
 /**
- * One representative edge per destination identity, named edges preferred.
- * @param {ReviewEdge[]} edges
- * @param {Map<string, string>} [names]
- * @returns {ReviewEdge[]}
+ * Compare normalized destination identities.
+ * @param {ReviewEdge} a
+ * @param {ReviewEdge} b
+ * @param {Map<string, string>} names
  */
-function dedupeDestinationEdges(edges, names = addressNameMap(edges)) {
-  /** @type {Map<string, ReviewEdge>} */
-  const representatives = new Map()
-  for (const edge of [...edges].sort(edgeComparator)) {
-    const key = destinationIdentity(edge, names)
-    const current = representatives.get(key)
-    const named = edge.remote_names.some((name) => name !== "")
-    const currentNamed = current?.remote_names.some((name) => name !== "")
-    if (!current || (named && !currentNamed)) representatives.set(key, edge)
-  }
-  return [...representatives.values()].sort((a, b) => {
-    const ka = destinationIdentity(a, names)
-    const kb = destinationIdentity(b, names)
-    return ka < kb ? -1 : ka > kb ? 1 : edgeComparator(a, b)
-  })
-}
-
-/**
- * A job's comment-visible destination projection: every recorded chain —
- * no attribution partition — rendered one row per destination identity;
- * capture multiplicity (distinct chains to the same identity) stays in the
- * evidence register. A bare-address representative whose address is named
- * elsewhere in the same record renders under that name — the identity's
- * name is captured evidence, not an invention.
- * @param {ReviewEdge[]} edges
- * @returns {ReviewEdge[]}
- */
-export function commentEdges(edges) {
-  const names = addressNameMap(edges)
-  const unify = (/** @type {ReviewEdge} */ edge) => {
-    if (edge.remote_names.some((name) => name !== "")) return edge
-    const name = names.get(edge.remote_address)
-    return name ? { ...edge, remote_names: [name] } : edge
-  }
-  return dedupeDestinationEdges(edges, names).map(unify)
-}
-
-/**
- * @param {string} [name]
- * @returns {TreeNode}
- */
-function makeTreeNode(name = "") {
-  return {
-    name,
-    children: [],
-    childByKey: new Map(),
-    associations: [],
-    pids: new Set(),
-    processes: new Set(),
-    steps: new Set(),
-    executables: new Set(),
-  }
-}
-
-/**
- * Add one destination association to a shared-prefix lineage tree. Nodes
- * are keyed by recorded process name along the lineage path; PID-distinct
- * capture stays in the evidence register (the comment tree renders one row
- * per destination identity).
- * @param {TreeNode} root
- * @param {ReviewEdge} edge
- */
-function addAssociationToTree(root, edge) {
-  const path = commentTreePath(edge)
-  let node = root
-  path.forEach((name, index) => {
-    const terminal = index === path.length - 1
-    const key = JSON.stringify([name])
-    let child = node.childByKey.get(key)
-    if (!child) {
-      child = makeTreeNode(name)
-      node.childByKey.set(key, child)
-      node.children.push(child)
-    }
-    node = child
-    if (terminal) {
-      node.associations.push(edge)
-      if (edge.pid !== "") node.pids.add(edge.pid)
-      if (edge.process !== "") node.processes.add(edge.process)
-      if (edge.github_step !== "") node.steps.add(edge.github_step)
-      if (edge.executable !== "") node.executables.add(edge.executable)
-    }
-  })
-}
-
-/**
- * @param {ReviewEdge[]} edges
- * @returns {TreeNode}
- */
-function treeForAssociations(edges) {
-  const root = makeTreeNode()
-  for (const edge of dedupeDestinationEdges(edges)) addAssociationToTree(root, edge)
-  coalescePrefixTerminalNodes(root)
-  return root
-}
-
-/**
- * @param {TreeNode} target
- * @param {TreeNode} source
- */
-function mergeTreeNode(target, source) {
-  target.associations.push(...source.associations)
-  for (const pid of source.pids) target.pids.add(pid)
-  for (const process of source.processes) target.processes.add(process)
-  for (const step of source.steps) target.steps.add(step)
-  for (const executable of source.executables) target.executables.add(executable)
-}
-
-/**
- * If a process both has its own egress and appears as the prefix of deeper
- * lineage, render it once with destination leaves and child processes.
- * @param {TreeNode} node
- */
-function coalescePrefixTerminalNodes(node) {
-  for (const child of node.children) coalescePrefixTerminalNodes(child)
-  /** @type {Map<string, TreeNode[]>} */
-  const grouped = new Map()
-  for (const child of node.children) {
-    const group = grouped.get(child.name) || []
-    group.push(child)
-    grouped.set(child.name, group)
-  }
-  for (const group of grouped.values()) {
-    const branch = group.find((child) => child.children.length > 0)
-    if (!branch) continue
-    for (const child of group) {
-      if (child !== branch && child.children.length === 0) mergeTreeNode(branch, child)
-    }
-  }
-  node.children = node.children.filter((child) => {
-    const group = grouped.get(child.name) || []
-    const branch = group.find((candidate) => candidate.children.length > 0)
-    return !branch || child === branch || child.children.length > 0
-  })
-}
-
-/**
- * Display-only process name: a trailing run of 4+ digits is provisioning
- * noise (provjobd1326539233 → provjobd) and strips from the comment tree;
- * the record, Step Summary, model JSON, and chain identity keep the raw name.
- * @param {unknown} name
- */
-export function displayProcessName(name) {
-  const stripped = String(name ?? "").replace(/\d{4,}$/, "")
-  return stripped === "" ? String(name ?? "") : stripped
-}
-
-/**
- * @param {TreeNode} node
- * @param {{ steps?: boolean, inheritedSteps?: Set<string> }} [options]
- */
-function processNodeLine(node, { steps = true, inheritedSteps = new Set() } = {}) {
-  const escaped = escapeHtml(truncateMiddle(displayProcessName(completedNodeName(node))))
-  // Bold marks the process that acted: an observed action sits directly
-  // beneath it. Decoration only; the terminal itself carries the fact.
-  const body = node.associations.length > 0 ? `<strong>${escaped}</strong>` : escaped
-  // PID + command identity is Step Summary-only; the comment tree shows
-  // process names alone. A real recorded step renders as a bracket
-  // annotation — additive context that never determines structure.
-  const step = steps
-    ? annotatedStepNames(node, inheritedSteps)
-        .map((name) => ` <em>(step: &quot;${escapeHtml(truncateMiddle(name))}&quot;)</em>`)
-        .join("")
-    : ""
-  const provenance = ranFromNote(node.executables)
-  const ranFrom = provenance !== "" ? ` ${renderNote(provenance)}` : ""
-  return `${body}${step}${ranFrom}`
-}
-
-/**
- * Recorded step names on a node, sentinel excluded, deterministically
- * ordered. Steps are additive decoration: a tree rendered with and without
- * them has identical structure, counts, ordering, and comparison.
- * @param {TreeNode} node
- */
-function recordedStepNames(node) {
-  return [...new Set([...node.steps].map(stepAnnotationName))].filter((name) => name !== "").sort()
-}
-
-/**
- * A step annotation renders once per path, on the shallowest process line
- * where that recorded step applies: descendants with the same recorded step
- * inherit it silently, and a descendant whose recorded step differs renders
- * its own.
- * @param {TreeNode} node
- * @param {Set<string>} inherited
- */
-function annotatedStepNames(node, inherited) {
-  return recordedStepNames(node).filter((name) => !inherited.has(name))
-}
-
-/**
- * A workload root descends through `Runner.Worker` or bears a recorded step
- * anywhere in its subtree; every other recorded root (e.g. systemd) is
- * runner infrastructure. Structural facts only — names of destinations or
- * deeper processes never classify.
- * @param {TreeNode} node
- * @returns {boolean}
- */
-function isWorkloadRoot(node) {
-  if (node.name === "Runner.Worker") return true
-  // Unrecorded lineage attributes to the workload: an unprovable line never
-  // quiets a count, so its root never carries the boundary label either.
-  if (node.name === VOCAB.unknownLineage) return true
-  if (recordedStepNames(node).length > 0) return true
-  return node.children.some(isWorkloadRoot)
-}
-
-/**
- * Root order within a job block: workload roots render before
- * infrastructure-rooted ones so the signal is never buried below runner
- * plumbing — snapshot and comparison alike; canonical order holds within
- * each group.
- * @param {TreeNode[]} children
- * @returns {TreeNode[]}
- */
-function orderedJobRoots(children) {
-  return [...children.filter(isWorkloadRoot), ...children.filter((child) => !isWorkloadRoot(child))]
-}
-
-/**
- * @param {TreeNode} node
- * @param {Set<string>} inherited
- */
-function inheritSteps(node, inherited) {
-  const names = recordedStepNames(node)
-  if (names.length === 0) return inherited
-  return new Set([...inherited, ...names])
-}
-
-/**
- * Display-only completion of a kernel-comm-truncated recorded name (exactly
- * 15 bytes): completed only when the record itself carries the full string —
- * the node's recorded executable basenames extend the truncated name to one
- * unique longer name. The raw recorded name stays in the model, marker, and
- * Step Summary; no completion ever comes from outside the profile.
- * @param {TreeNode} node
- */
-function completedNodeName(node) {
-  const name = String(node.name ?? "")
-  if (Buffer.byteLength(name, "utf8") !== 15) return name
-  const candidates = new Set(
-    [...node.executables]
-      .map((path) => path.slice(path.lastIndexOf("/") + 1))
-      .filter((base) => base.length > name.length && base.startsWith(name)),
-  )
-  return candidates.size === 1 ? [...candidates][0] : name
+function compareDestinationIdentities(a, b, names) {
+  const identityA = destinationIdentity(a, names)
+  const identityB = destinationIdentity(b, names)
+  if (identityA < identityB) return -1
+  if (identityA > identityB) return 1
+  return 0
 }
 
 /**
@@ -1452,606 +968,11 @@ export function ranFromNote(executables) {
   }
   return ""
 }
-
-/**
- * @param {ReviewEdge} edge
- * @param {boolean} detections
- * @param {boolean} [defang]
- */
-function destinationLeafLine(edge, detections, defang = true) {
-  // Observed actions render as shaped terminals — `○ <destination>` for
-  // network; box-drawing characters carry structure, geometric terminals
-  // carry evidence.
-  const display = defang
-    ? commentDestinationDisplay(edge, escapeHtml)
-    : escapeHtml(truncateMiddle(edgePrimaryDestination(edge)))
-  const parts = [VOCAB.terminalNetwork, display]
-  for (const note of edgeNotes(edge, { detections })) parts.push(renderNote(note))
-  return parts.join(" ")
-}
-
-/**
- * @param {TreeNode} node
- * @param {string} prefix
- * @param {string[]} lines
- * @param {{ destinations: boolean, steps?: boolean, detections?: boolean, defang?: boolean, inheritedSteps?: Set<string> }} options
- */
-function renderTreeChildren(node, prefix, lines, { destinations, steps = true, detections = false, defang = true, inheritedSteps = new Set() }) {
-  /** @type {({ kind: "process", child: TreeNode } | { kind: "destination", edge: ReviewEdge })[]} */
-  const entries = [
-    ...node.children.map((child) => ({ kind: /** @type {"process"} */ ("process"), child })),
-    ...(destinations
-      ? node.associations.map((edge) => ({ kind: /** @type {"destination"} */ ("destination"), edge }))
-      : []),
-  ]
-  entries.forEach((entry, index) => {
-    const last = index === entries.length - 1
-    const branch = last ? "└─ " : "├─ "
-    const childPrefix = `${prefix}${last ? "   " : "│  "}`
-    if (entry.kind === "process") {
-      lines.push(`${prefix}${branch}${processNodeLine(entry.child, { steps, inheritedSteps })}`)
-      renderTreeChildren(entry.child, childPrefix, lines, {
-        destinations,
-        steps,
-        detections,
-        defang,
-        inheritedSteps: inheritSteps(entry.child, inheritedSteps),
-      })
-    } else {
-      lines.push(`${prefix}${branch}${destinationLeafLine(entry.edge, detections, defang)}`)
-    }
-  })
-}
-
-/**
- * Render a job's lossless shared-prefix lineage tree. Destination leaves stay
- * attached to the terminal recorded process; no ×N grouping or trust labels.
- * @param {ReviewJob} job
- * @param {ReviewEdge[]} [edges]
- * @param {{ defang?: boolean }} [opts]
- */
-export function renderJobTree(job, edges = job.edges, opts = {}) {
-  /** @type {string[]} */
-  const lines = []
-  const root = treeForAssociations(edges)
-  // One block holds every recorded root; independent recorded ancestry
-  // roots are separated by one blank line — whitespace means independent
-  // recorded roots in the same job, never another category.
-  orderedJobRoots(root.children).forEach((child, index) => {
-    if (index > 0) lines.push("")
-    lines.push(processNodeLine(child, { steps: true }))
-    renderTreeChildren(child, "", lines, {
-      destinations: true,
-      steps: true,
-      defang: opts.defang !== false,
-      inheritedSteps: inheritSteps(child, new Set()),
-    })
-  })
-  return lines.join("\n")
-}
-
-// ---------------------------------------------------------------------------
-// Execution comparison — in-fold marked tree. The tree walk is the same
-// as the snapshot tree; a line is marked `+` iff it was not present in the
-// previous record and `−` iff absent from the current one — a new chain
-// marks its whole branch from the divergence point, a new destination under
-// existing lineage marks only the leaf. Rendered inside a ```diff fence with
-// one `@@ <previous> (previous) vs <head> (current) @@` header.
-// ---------------------------------------------------------------------------
-
-/**
- * Plain-text (fence-safe) node/leaf text — no HTML, backticks neutralized.
- * @param {unknown} value
- */
-const fenceText = (value) =>
-  stripControl(value).replace(/`/g, "ʼ").replace(/[\r\n]+/g, " ").trim()
-
-/**
- * Per-job comparison against the same job in the previous profiled commit:
- * one identity-set diff over the whole job's destination projection — no
- * partition, no equivalence heuristics, no quieting layer.
- * @param {ReviewEdge[]} headEdges
- * @param {ReviewEdge[]} previousEdges
- * @returns {EdgeDelta}
- */
-export function compareJobEdges(headEdges, previousEdges) {
-  const names = addressNameMap(headEdges, previousEdges)
-  const headIds = new Set(headEdges.map((edge) => destinationIdentity(edge, names)))
-  const prevIds = new Set(previousEdges.map((edge) => destinationIdentity(edge, names)))
-  const addedIds = new Set([...headIds].filter((id) => !prevIds.has(id)))
-  const removedIds = new Set([...prevIds].filter((id) => !headIds.has(id)))
-  // Provable-rotation join (contract comment.rotationJoin): a −/+ pair is one
-  // rotating GitHub infrastructure identity when the owning recorded process
-  // is the same and both recorded addresses sit in the same published GitHub
-  // service block — either two bare-address identities (a lease rotation) or
-  // two named identities sharing one registrable domain (a pool
-  // reassignment). A joined pair is unmarked and uncounted, and the current
-  // line carries the identity it replaced. Data, not heuristics: the ranges
-  // and the public-suffix rules are vendored contract bytes, and anything
-  // unprovable stays an honest −/+.
-  /** @type {Map<string, string>} */
-  const rotations = new Map()
-  /**
-   * Join candidates on one side, grouped by [owning process, block, domain].
-   * @param {ReviewEdge[]} edges
-   * @param {Set<string>} ids
-   * @returns {Map<string, Map<string, ReviewEdge>>}
-   */
-  function rotationCandidates(edges, ids) {
-    /** @type {Map<string, Map<string, ReviewEdge>>} */
-    const byGroup = new Map()
-    for (const edge of [...edges].sort(edgeComparator)) {
-      const id = destinationIdentity(edge, names)
-      if (!ids.has(id)) continue
-      // An address-like identity is bare even when the record aliases the
-      // address to itself in remote_names — live captures do exactly that.
-      const bare = isAddressLike(id)
-      const domain = bare ? "" : registrableDomain(id)
-      if (!bare && domain === "") continue
-      const block = githubInfraBlock(edge.remote_address)
-      if (block === "") continue
-      const path = commentTreePath(edge)
-      const owner = path[path.length - 1] ?? ""
-      const key = JSON.stringify([owner, block, domain])
-      let group = byGroup.get(key)
-      if (group === undefined) {
-        group = new Map()
-        byGroup.set(key, group)
-      }
-      if (!group.has(id)) group.set(id, edge)
-    }
-    return byGroup
-  }
-  const removedGroups = rotationCandidates(previousEdges, removedIds)
-  const addedGroups = rotationCandidates(headEdges, addedIds)
-  // Deterministic pairing: groups in sorted key order, identities in sorted
-  // order, and every identity joins at most once.
-  for (const key of [...removedGroups.keys()].sort()) {
-    const addedGroup = addedGroups.get(key)
-    if (addedGroup === undefined) continue
-    const removedGroup = removedGroups.get(key)
-    if (removedGroup === undefined) continue
-    const removedList = [...removedGroup.keys()].filter((id) => removedIds.has(id)).sort()
-    const addedList = [...addedGroup.keys()].filter((id) => addedIds.has(id)).sort()
-    const pairs = Math.min(removedList.length, addedList.length)
-    for (let index = 0; index < pairs; index += 1) {
-      const addedID = addedList[index] ?? ""
-      const removedID = removedList[index] ?? ""
-      rotations.set(addedID, removedID)
-      addedIds.delete(addedID)
-      removedIds.delete(removedID)
-    }
-  }
-  /** @type {Map<string, ReviewEdge>} */
-  const removedByID = new Map()
-  for (const edge of [...previousEdges].sort(edgeComparator)) {
-    const id = destinationIdentity(edge, names)
-    if (removedIds.has(id) && !removedByID.has(id)) removedByID.set(id, edge)
-  }
-  // Delta partition (contract comment.deltaPartition): each added/removed
-  // identity attributes to the workload or to the runner background by the
-  // structural root rule. The headline counts are workload-attributed only;
-  // background movement keeps its own quiet counts. Every identity stays in
-  // addedIds/removedIds, so every mark still renders — only count placement
-  // partitions, never visibility.
-  const headWorkload = workloadIdentitySet(headEdges, names)
-  const previousWorkload = workloadIdentitySet(previousEdges, names)
-  const workloadAdded = [...addedIds].filter((id) => headWorkload.has(id))
-  const workloadRemoved = [...removedIds].filter((id) => previousWorkload.has(id))
-  return {
-    addedIds,
-    removedIds,
-    added: addedIds,
-    removed: [...removedByID.values()],
-    addedCount: workloadAdded.length,
-    removedCount: workloadRemoved.length,
-    backgroundAddedCount: addedIds.size - workloadAdded.length,
-    backgroundRemovedCount: removedIds.size - workloadRemoved.length,
-    rotations,
-  }
-}
-
-/**
- * Workload attribution of destination identities on one side of a job
- * comparison (contract comment.deltaPartition). Edges group by recorded
- * root; a root attributes to the workload when any of its edges descends
- * through `Runner.Worker` or bears a recorded step — the same structural
- * rule as rootOrdering. Unrecorded lineage attributes to the workload: an
- * unprovable line never quiets a count. An identity is workload-attributed
- * when any of its edges is. Names of destinations, processes, hostnames, or
- * domains never classify.
- * @param {ReviewEdge[]} edges
- * @param {Map<string, string>} names
- * @returns {Set<string>}
- */
-function workloadIdentitySet(edges, names) {
-  /** @type {Set<string>} */
-  const workloadRoots = new Set()
-  /** @type {[ReviewEdge, string][]} */
-  const roots = []
-  for (const edge of edges) {
-    const path = commentTreePath(edge)
-    const root = path[0] ?? ""
-    roots.push([edge, root])
-    if (
-      !edge.lineage_recorded ||
-      path.includes("Runner.Worker") ||
-      stepAnnotationName(edge.github_step) !== ""
-    ) {
-      workloadRoots.add(root)
-    }
-  }
-  /** @type {Set<string>} */
-  const ids = new Set()
-  for (const [edge, root] of roots) {
-    if (workloadRoots.has(root)) ids.add(destinationIdentity(edge, names))
-  }
-  return ids
-}
-
-/**
- * The registrable domain (eTLD+1) of a recorded hostname, computed from the
- * versioned public-suffix table — data, not heuristics. Empty for address
- * literals, single labels, and unknown inputs.
- * @param {string} name
- */
-export function registrableDomain(name) {
-  const host = name.toLowerCase().replace(/\.$/, "")
-  if (host === "" || isAddressLike(host) || !host.includes(".")) return ""
-  const labels = host.split(".")
-  let suffixLen = 1
-  for (let i = 0; i < labels.length; i += 1) {
-    const candidate = labels.slice(i).join(".")
-    const kind = PUBLIC_SUFFIX_RULES.get(candidate)
-    if (kind === "exception") {
-      suffixLen = labels.length - i - 1
-      break
-    }
-    const wildcardParent =
-      i + 1 < labels.length &&
-      PUBLIC_SUFFIX_RULES.get(labels.slice(i + 1).join(".")) === "wildcard"
-    if (kind === "rule" || wildcardParent) {
-      suffixLen = labels.length - i
-      break
-    }
-  }
-  if (labels.length <= suffixLen) return ""
-  return labels.slice(labels.length - suffixLen - 1).join(".")
-}
-/**
- * The retrieval date of the vendored published GitHub meta ranges, carried in
- * the garnet:summary marker so a stale range list is diagnosable from any
- * live comment.
- */
-export const GITHUB_META_RETRIEVED = GITHUB_META_IP_RANGES.retrieved
-
-// Service blocks only (web/api): the `actions` block is runner address space,
-// where an attacker-controlled endpoint in another org can sit, so a
-// same-process substitution there is weaker proof and never joins.
-const GITHUB_META_BLOCKS = [...new Set([...GITHUB_META_IP_RANGES.web, ...GITHUB_META_IP_RANGES.api])]
-
-/**
- * The numeric value of an IPv4/IPv6 literal, or null when the text is not one.
- * @param {string} address
- * @returns {bigint | null}
- */
-function ipToBigInt(address) {
-  if (address.includes(":")) {
-    // IPv6 (no embedded-IPv4 forms in the vendored data).
-    const [head, tail] = address.split("::")
-    const headParts = head === undefined || head === "" ? [] : head.split(":")
-    const tailParts = tail === undefined || tail === "" ? [] : tail.split(":")
-    if (tail === undefined && headParts.length !== 8) return null
-    const parts = [
-      ...headParts,
-      ...Array(8 - headParts.length - tailParts.length).fill("0"),
-      ...tailParts,
-    ]
-    if (parts.length !== 8 || parts.some((part) => !/^[0-9a-fA-F]{1,4}$/.test(part))) return null
-    return parts.reduce((acc, part) => (acc << 16n) | BigInt(parseInt(part, 16)), 0n)
-  }
-  const octets = address.split(".")
-  if (octets.length !== 4 || octets.some((o) => !/^\d{1,3}$/.test(o) || Number(o) > 255)) {
-    return null
-  }
-  return octets.reduce((acc, o) => (acc << 8n) | BigInt(Number(o)), 0n)
-}
-
 /**
  * One parsed published block: its text, family, and the shift/value pair the
  * prefix match compares.
  * @typedef {{ cidr: string, v6: boolean, shift: bigint, value: bigint }} MetaBlock
  */
-
-/** @type {MetaBlock[]} */
-const GITHUB_META_PARSED = GITHUB_META_BLOCKS.map((cidr) => {
-  const [networkText, prefixText] = cidr.split("/")
-  const network = networkText ?? ""
-  const v6 = network.includes(":")
-  const bits = v6 ? 128n : 32n
-  const prefix = BigInt(prefixText ?? "0")
-  const value = ipToBigInt(network) ?? 0n
-  return { cidr, v6, shift: bits - prefix, value: value >> (bits - prefix) }
-})
-
-/**
- * The published GitHub infrastructure block containing an address, else "".
- * Longest (most specific) matching prefix wins so the join key is stable.
- * @param {string} address
- * @returns {string}
- */
-export function githubInfraBlock(address) {
-  const text = String(address ?? "")
-  const value = ipToBigInt(text)
-  if (value === null) return ""
-  const v6 = text.includes(":")
-  /** @type {MetaBlock | null} */
-  let best = null
-  for (const block of GITHUB_META_PARSED) {
-    if (block.v6 !== v6) continue
-    if (value >> block.shift === block.value) {
-      if (best === null || block.shift < best.shift) best = block
-    }
-  }
-  return best === null ? "" : best.cidr
-}
-
-
-
-/**
- * @param {TreeNode} node
- * @param {{ steps?: boolean, inheritedSteps?: Set<string> }} [options]
- */
-function diffNodeLine(node, { steps = true, inheritedSteps = new Set() } = {}) {
-  const step = steps
-    ? annotatedStepNames(node, inheritedSteps)
-        .map((name) => ` (step: "${fenceText(truncateMiddle(name))}")`)
-        .join("")
-    : ""
-  const provenance = ranFromNote(node.executables)
-  const ranFrom = provenance !== "" ? ` (${fenceText(provenance)})` : ""
-  return `${fenceText(truncateMiddle(displayProcessName(completedNodeName(node))))}${step}${ranFrom}`
-}
-
-/**
- * @param {ReviewEdge} edge
- * @param {boolean} [annotateAddress]
- * @param {string} [rotatedFrom]
- */
-function diffLeafLine(edge, annotateAddress = false, rotatedFrom = "") {
-  const identity = edgePrimaryDestination(edge)
-  const parts = [VOCAB.terminalNetwork, fenceText(defangHostname(truncateMiddle(identity)))]
-  // A marked (+/−) leaf carries the recorded address as one trailing bracket
-  // annotation only when an oppositely-marked line in the same fence shares
-  // its registrable domain; context lines carry none, and a bare-address
-  // identity never repeats its own address.
-  if (annotateAddress && edge.remote_address !== "" && edge.remote_address !== identity) {
-    parts.push(`(${fenceText(edge.remote_address)})`)
-  }
-  // A joined rotation carries the trust cue and the identity it replaced in
-  // one bracket, so the line reads as context with its provenance attached.
-  if (rotatedFrom !== "") {
-    parts.push(
-      `(${fenceText(
-        `${CONTRACT_VOCAB.notes.githubInfrastructure.text} · rotated from ${defangHostname(rotatedFrom)}`,
-      )})`,
-    )
-  }
-  for (const note of edgeNotes(edge, { detections: false })) {
-    // One bracket per fact: the rotation bracket already names GitHub infra.
-    if (rotatedFrom !== "" && note === CONTRACT_VOCAB.notes.githubInfrastructure.text) continue
-    parts.push(`(${fenceText(note)})`)
-  }
-  return parts.join(" ")
-}
-
-/**
- * Git-shaped branch mark for a process node: `+` when every destination
- * leaf beneath it is added (the whole branch is new from its divergence
- * point), `−` when every leaf beneath it left the record; mixed subtrees
- * stay context. Marked lineage lines never count — fold-row `+A −R` stays
- * destination-anchored.
- * @param {TreeNode} node
- * @param {Map<ReviewEdge, string>} marks
- * @returns {string}
- */
-function diffBranchMark(node, marks) {
-  /** @type {Set<string>} */
-  const leafMarks = new Set()
-  const visit = (/** @type {TreeNode} */ current) => {
-    for (const edge of current.associations) {
-      leafMarks.add(marks.get(edge) ?? " ")
-    }
-    for (const child of current.children) visit(child)
-  }
-  visit(node)
-  if (leafMarks.size === 1) {
-    const only = [...leafMarks][0]
-    if (only === "+" || only === "-") return only
-  }
-  return " "
-}
-
-/**
- * @param {TreeNode} node
- * @param {string} prefix
- * @param {string[]} lines
- * @param {Map<ReviewEdge, string>} marks
- * @param {Set<ReviewEdge>} annotated
- * @param {Set<string>} [inheritedSteps]
- * @param {Map<ReviewEdge, string>} [rotatedByEdge]
- */
-function renderDiffChildren(
-  node,
-  prefix,
-  lines,
-  marks,
-  annotated,
-  inheritedSteps = new Set(),
-  rotatedByEdge = new Map(),
-) {
-  /** @type {({ kind: "process", child: TreeNode } | { kind: "destination", edge: ReviewEdge })[]} */
-  const entries = [
-    ...node.children.map((child) => ({ kind: /** @type {"process"} */ ("process"), child })),
-    ...node.associations.map((edge) => ({ kind: /** @type {"destination"} */ ("destination"), edge })),
-  ]
-  entries.forEach((entry, index) => {
-    const last = index === entries.length - 1
-    const branch = last ? "└─ " : "├─ "
-    const childPrefix = `${prefix}${last ? "   " : "│  "}`
-    if (entry.kind === "process") {
-      const mark = diffBranchMark(entry.child, marks)
-      lines.push(`${mark} ${prefix}${branch}${diffNodeLine(entry.child, { inheritedSteps })}`)
-      renderDiffChildren(
-        entry.child,
-        childPrefix,
-        lines,
-        marks,
-        annotated,
-        inheritSteps(entry.child, inheritedSteps),
-        rotatedByEdge,
-      )
-    } else {
-      const mark = marks.get(entry.edge) ?? " "
-      lines.push(
-        `${mark} ${prefix}${branch}${diffLeafLine(
-          entry.edge,
-          annotated.has(entry.edge),
-          rotatedByEdge.get(entry.edge) ?? "",
-        )}`,
-      )
-    }
-  })
-}
-
-/**
- * Render one changed job's marked tree as the body of a `diff` fence: the
- * union of the head tree and the no-longer-recorded chains, one `@@` header
- * carrying the head-vs-previous attribution and the exact delta.
- * @param {ReviewJob} job
- * @param {EdgeDelta} delta
- * @param {string} headSha
- * @param {string} previousSha
- */
-export function renderJobDiffTree(job, delta, headSha, previousSha) {
-  /** @type {Map<ReviewEdge, string>} */
-  const marks = new Map()
-  const names = addressNameMap(job.edges, delta.removed)
-  /** @type {Map<string, ReviewEdge>} */
-  const representatives = new Map()
-  for (const edge of [...job.edges, ...delta.removed].sort(edgeComparator)) {
-    const id = destinationIdentity(edge, names)
-    const current = representatives.get(id)
-    const named = edge.remote_names.some((name) => name !== "")
-    const currentNamed = current?.remote_names.some((name) => name !== "")
-    if (!current || (named && !currentNamed)) representatives.set(id, edge)
-  }
-  // Provable-rotation join: the joined identity renders unmarked, carrying
-  // the identity it replaced. More than one rotation in a fence would turn
-  // every line into an annotation, so the fence summarizes them instead
-  // (contract comment.rotationJoin).
-  /** @type {Map<ReviewEdge, string>} */
-  const rotatedByEdge = new Map()
-  const unionEdges = [...representatives.entries()].map(([id, edge]) => {
-    marks.set(edge, delta.addedIds.has(id) ? "+" : delta.removedIds.has(id) ? "-" : " ")
-    const rotatedFrom = delta.rotations.get(id)
-    if (rotatedFrom !== undefined) rotatedByEdge.set(edge, rotatedFrom)
-    return edge
-  })
-  if (rotatedByEdge.size > 1) rotatedByEdge.clear()
-  unionEdges.sort((a, b) => {
-    const ka = destinationIdentity(a, names)
-    const kb = destinationIdentity(b, names)
-    return ka < kb ? -1 : ka > kb ? 1 : edgeComparator(a, b)
-  })
-  // Same-domain pair annotation: a marked line carries its recorded address
-  // only when an oppositely-marked line in this fence shares its eTLD+1.
-  /** @type {Set<string>} */
-  const addedDomains = new Set()
-  /** @type {Set<string>} */
-  const removedDomains = new Set()
-  for (const edge of unionEdges) {
-    const domain = registrableDomain(destinationIdentity(edge, names))
-    if (domain === "") continue
-    if (marks.get(edge) === "+") addedDomains.add(domain)
-    if (marks.get(edge) === "-") removedDomains.add(domain)
-  }
-  const annotated = new Set(
-    unionEdges.filter((edge) => {
-      const mark = marks.get(edge)
-      if (mark !== "+" && mark !== "-") return false
-      const domain = registrableDomain(destinationIdentity(edge, names))
-      return domain !== "" && (mark === "+" ? removedDomains : addedDomains).has(domain)
-    }),
-  )
-  // Previous SHA first, roles named: the reader scans old → new like a diff.
-  const lines = [
-    `@@ ${fenceText(previousSha.slice(0, 7) || "unknown")} (previous) vs ${fenceText(headSha.slice(0, 7) || "unknown")} (current) @@`,
-  ]
-  const root = treeForAssociations(unionEdges)
-  // Findings first: workload roots render before infrastructure roots, and
-  // within each group roots carrying any marked (+/−) line render before
-  // all-context roots — a workload change is never buried below runner
-  // plumbing; canonical order holds within each tier.
-  /** @type {(node: TreeNode) => boolean} */
-  const subtreeHasMark = (node) =>
-    node.associations.some((edge) => (marks.get(edge) ?? " ") !== " ") ||
-    node.children.some(subtreeHasMark)
-  /** @type {(children: TreeNode[]) => TreeNode[]} */
-  const withMarks = (children) => [
-    ...children.filter(subtreeHasMark),
-    ...children.filter((child) => !subtreeHasMark(child)),
-  ]
-  const orderedRoots = [
-    ...withMarks(root.children.filter(isWorkloadRoot)),
-    ...withMarks(root.children.filter((child) => !isWorkloadRoot(child))),
-  ]
-  // Boundary label: a moved non-workload root announces its subtree's marks
-  // where the secondary evidence begins — '(runner background · +A −B)' in
-  // the fence's plain parenthetical context grammar. The count sits beside
-  // the marks it counts; workload roots and unmoved roots carry no label.
-  /** @type {(node: TreeNode) => { added: number, removed: number }} */
-  const subtreeMarkCounts = (node) => {
-    const counts = { added: 0, removed: 0 }
-    /** @type {(n: TreeNode) => void} */
-    const walk = (n) => {
-      for (const edge of n.associations) {
-        const mark = marks.get(edge) ?? " "
-        if (mark === "+") counts.added += 1
-        if (mark === "-") counts.removed += 1
-      }
-      n.children.forEach(walk)
-    }
-    walk(node)
-    return counts
-  }
-  /** @type {(child: TreeNode) => string} */
-  const boundaryLabel = (child) => {
-    if (isWorkloadRoot(child)) return ""
-    const { added, removed } = subtreeMarkCounts(child)
-    if (added + removed === 0) return ""
-    const sides = []
-    if (added > 0) sides.push(`+${added}`)
-    if (removed > 0) sides.push(`−${removed}`)
-    return ` (${VOCAB.runnerBackground} · ${sides.join(" ")})`
-  }
-  orderedRoots.forEach((child, index) => {
-    // Independent recorded roots separate with one fence-safe " " line.
-    if (index > 0) lines.push(" ")
-    const mark = diffBranchMark(child, marks)
-    lines.push(`${mark} ${diffNodeLine(child)}${boundaryLabel(child)}`)
-    renderDiffChildren(
-      child,
-      "",
-      lines,
-      marks,
-      annotated,
-      inheritSteps(child, new Set()),
-      rotatedByEdge,
-    )
-  })
-  return lines.join("\n")
-}
 
 /**
  * A count with its inflected unit, glued with `&nbsp;` so `11 chains` never
@@ -2061,87 +982,6 @@ export function renderJobDiffTree(job, delta, headSha, previousSha) {
  */
 function countPhrase(n, unit) {
   return `${n}&nbsp;${unit}${n === 1 ? "" : "s"}`
-}
-
-/**
- * Named workload delta — `+A −R destination(s)` — numbers bold, unit
- * named, zero sides dropped (`−1 destination`, never `+0 −1`). The unit
- * inflects on the total moved identities.
- * @param {number} added
- * @param {number} removed
- * @param {{ bold?: boolean, unit?: boolean }} [options]
- */
-function deltaPhrase(added, removed, { bold = true, unit = true } = {}) {
-  const sides = []
-  if (added > 0) sides.push(`+${added}`)
-  if (removed > 0) sides.push(`−${removed}`)
-  const numbers = sides.join("&nbsp;")
-  const marked = bold ? `<b>${numbers}</b>` : numbers
-  if (!unit) return marked
-  return `${marked}&nbsp;${added + removed === 1 ? "destination" : "destinations"}`
-}
-
-/**
- * The fold identity line: `workflow / job ↗` — the job-id text is the
- * hyperlink. Target: the specific Actions job URL when recorded, else the
- * run URL. Matrix cells are distinct jobs; the cell identity lives in the
- * job-id slot.
- * @param {{ name: string, workflow: string, job_url?: string, run_url?: string }} job
- */
-function jobIdentity(job) {
-  const wf = `<code>${escapeHtml(job.workflow)}</code>`
-  const url = job.job_url || job.run_url
-  const name = url
-    ? `<a href="${escapeHtmlAttr(url)}"><code>${escapeHtml(job.name)}</code>&nbsp;↗</a>`
-    : `<code>${escapeHtml(job.name)}</code>`
-  return job.workflow !== "" ? `${wf} / ${name}` : name
-}
-
-/**
- * Explicit medium-forced omission line.
- * @param {number} x
- * @param {number} y
- */
-const truncationLine = (x, y) =>
-  CONTRACT_VOCAB.copy.truncationTemplate
-    .replace("X", String(x))
-    .replace("Y", String(y))
-
-/**
- * Concise orientation fold with a lineage-exact mini tree. Open while
- * pending and on the first recorded result; collapsed on later updates.
- * @param {{ open?: boolean, comparison?: boolean, background?: boolean }} [options]
- */
-export function renderExplainer({ open = false, comparison = false, background = false } = {}) {
-  // One mini tree of exactly the constructs the real renderer emits, with
-  // ← arrow callouts aligned in one italic column at visible offset 23 —
-  // every callout line fits ~44 monospace columns, so the tree teaches
-  // without horizontal scroll at 390px. One reading sentence and one legend
-  // line follow as proportional <sub> lines that wrap instead of scrolling.
-  const callout = (/** @type {string} */ label) => `<em>← ${label}</em>`
-  const lines = [
-    `<details${open ? " open" : ""}><summary><sub>${VOCAB.explainerLabel}</sub></summary>`,
-    "",
-    "<pre>",
-    `Runner.Worker          ${callout(VOCAB.explainerCalloutPath)}`,
-    "└─ npm",
-    `   └─ <strong>node</strong>             ${callout(VOCAB.explainerCalloutActed)}`,
-    `      └─ ${VOCAB.terminalNetwork} npmjs[.]org ${callout(VOCAB.explainerCalloutAction)}`,
-    "</pre>",
-    "",
-    `<sub><i>${VOCAB.explainerReadingLine}</i></sub>`,
-    "",
-    `<sub><i>${VOCAB.explainerLegendLine}</i></sub>`,
-  ]
-  if (comparison) {
-    // The legend teaches the boundary-label vocabulary only when a label
-    // actually renders above it.
-    const segments = [VOCAB.explainerComparisonLine]
-    if (background) segments.push(VOCAB.explainerBackgroundSegment)
-    lines.push("", `<sub><i>${segments.join(" · ")}</i></sub>`)
-  }
-  lines.push("", "</details>")
-  return lines.join("\n")
 }
 
 /**
@@ -2191,688 +1031,12 @@ function displayStepName(name) {
 export function isSentinelStep(name) {
   return displayStepName(name) === "Runner Processes"
 }
-
-/**
- * Total background-attributed movement in a job delta.
- * @param {JobDelta | null | undefined} delta
- * @returns {number}
- */
-function backgroundDelta(delta) {
-  if (delta === null || delta === undefined) return 0
-  return delta.backgroundAddedCount + delta.backgroundRemovedCount
-}
-
-/**
- * Fold summary row — the row's facts are the identity and the destination
- * count; no step-name sentence, no chain counts. Changed rows lead with
- * the bold delta as their only destination fact; unchanged comparison rows
- * read `· N destinations · unchanged` — adjacency scopes the claim to the
- * destination projection.
- * @param {ReviewJob} job
- * @param {{ delta?: JobDelta | null, treeEdges?: ReviewEdge[] | null }} [options]
- */
-function jobSummaryLine(job, { delta = null, treeEdges = null } = {}) {
-  const tree = treeEdges ?? job.edges
-  const displayEdges = dedupeDestinationEdges(tree)
-  const names = addressNameMap(tree)
-  const treeCounts = new Set(displayEdges.map((edge) => destinationIdentity(edge, names))).size
-  const parts = []
-  // Changed rows lead with the bold delta: the left edge is the scan column,
-  // so what moved reads top-to-bottom without reading a single job name.
-  // The comparison base commit renders once at run scope (metadata line) and
-  // inside the diff's @@ header — the fold row carries only its own delta.
-  // The meta block's changed segment names the destination unit once for
-  // the whole comment; the fold row carries only its own bold split.
-  const changed = delta !== null && delta.addedCount + delta.removedCount > 0
-  if (changed) {
-    parts.push(`${deltaPhrase(delta.addedCount, delta.removedCount, { unit: false })} ·`)
-  }
-  parts.push(jobIdentity(job))
-  if (!changed) parts.push(`· ${countPhrase(treeCounts, "destination")}`)
-  // The workload-scoped 'unchanged' claim only renders when the runner
-  // background held still too — a row never claims 'unchanged' beside a
-  // quiet background split.
-  if (delta !== null && !changed && backgroundDelta(delta) === 0) {
-    parts.push(`· ${VOCAB.noChange}`)
-  }
-  return parts.join(" ")
-}
-
-/**
- * Per-job edge retention order under medium truncation: IMDS edges first
- * (never evicted while any non-IMDS edge renders), then canonical order.
- * @param {ReviewEdge[]} edges
- */
-function retentionOrder(edges) {
-  /** @type {ReviewEdge[]} */
-  const imds = []
-  /** @type {ReviewEdge[]} */
-  const rest = []
-  for (const e of edges) (IMDS_ADDRESSES.has(e.remote_address) ? imds : rest).push(e)
-  return [...imds, ...rest]
-}
-
-/**
- * Render the PR comment body with `kept` edges per job (kept = Map job.id →
- * count from the job's retention order; display stays canonical order).
- */
-/**
- * Markdown commit reference: linked short sha when the commit URL is known.
- * @param {string} sha
- * @param {string} commitUrl
- */
-function commitRef(sha, commitUrl) {
-  const sha7 = escapeCode(sha.slice(0, 7) || "unknown")
-  const url = safeHTTPURL(commitUrl)
-  return url !== "" ? `[\`${sha7}\`](${url})` : `\`${sha7}\``
-}
-
-/**
- * The previous profiled commit's reference, linked when derivable.
- * @param {RunReview & { comparison: ReviewComparison }} review
- */
-function previousCommitRef(review) {
-  const prev = review.comparison.previousSha
-  const url =
-    review.commitUrl !== "" && review.sha !== "" && review.commitUrl.endsWith(review.sha)
-      ? review.commitUrl.slice(0, review.commitUrl.length - review.sha.length) + prev
-      : ""
-  return commitRef(prev, url)
-}
-
-/**
- * The category heading — the core primitive stated as the high-level
- * summary: Execution Profiles belong to jobs; the commit is the trigger.
- * All counts and change facts live in the metadata line and job folds.
- * @param {RunReview} review
- */
-function headlineSentence(review) {
-  const k = review.counts.jobs
-  const jobsNoun = `${k} job${k === 1 ? "" : "s"}`
-  // Bold body line, not a `#` heading — a recurring bot comment speaks at
-  // body register; the primitive is the emphasis, not the type size.
-  return `**${VOCAB.headlineLead} ${jobsNoun}, triggered by ${commitRef(review.sha, review.commitUrl)}**`
-}
-
-/**
- * Comment-register counts: `destinations` totals the job folds' trees
- * exactly — each job's distinct destination identities, summed, so the
- * metadata count equals the fold rows' counts by inspection. `chains` is
- * the machine-register chain aggregate (every recorded destination
- * association) — it never renders on the human surface. Capture
- * multiplicity stays in the Step Summary and the review model.
- * @param {ReviewJob[]} jobs
- */
-function commentRegisterCounts(jobs) {
-  let chains = 0
-  let destinations = 0
-  for (const job of jobs) {
-    const names = addressNameMap(job.edges)
-    const shown = commentEdges(job.edges)
-    chains += job.edges.length
-    destinations += new Set(shown.map((edge) => destinationIdentity(edge, names))).size
-  }
-  return { chains, destinations }
-}
-
-/**
- * The human-line timestamp at minute precision; the machine marker keeps
- * the record's full-precision stamp.
- * @param {string} stamp
- */
-function minuteStamp(stamp) {
-  return stamp.replace(/(\d{2}:\d{2}):\d{2}/, "$1")
-}
-
-/**
- * Meta block — two blockquote lines in every state. The first line is the
- * finding: on a zero-delta comparison the verdict (`No changes since
- * <prev7>`); on comparison comments with movement the job segments (changed
- * with its +A −R delta, unchanged, no-outbound, no-longer-recorded — each
- * counting the folds/entries rendered beneath it) plus the comparison
- * pointer; on snapshot comments the destination total across the job folds.
- * The second line is one quiet `<sub>` provenance line: kernel provenance
- * and the record's timestamp at minute precision. Chain counts never render
- * here.
- * @param {RunReview} review
- * @param {ReturnType<typeof changeAccounting>} accounting
- */
-function metaBlock(review, accounting) {
-  /** @type {string[]} */
-  const findings = []
-  if (review.comparison !== null) {
-    const comparisonReview =
-      /** @type {RunReview & { comparison: ReviewComparison }} */ (review)
-    const zeroDelta =
-      accounting.changedJobs === 0 &&
-      accounting.vanishedJobCount === 0 &&
-      accounting.added === 0 &&
-      accounting.removed === 0 &&
-      accounting.backgroundAdded === 0 &&
-      accounting.backgroundRemoved === 0
-    if (zeroDelta) {
-      // Zero-delta comparison: the verdict is the finding.
-      findings.push(`No changes ${VOCAB.sinceWord} ${previousCommitRef(comparisonReview)}`)
-    } else {
-      if (accounting.changedJobs > 0) {
-        findings.push(
-          `${countPhrase(accounting.changedJobs, "job")} ${VOCAB.jobsLineChanged} ${deltaPhrase(accounting.added, accounting.removed, { bold: false })}`,
-        )
-      }
-      if (accounting.unchangedJobs > 0) {
-        findings.push(`${countPhrase(accounting.unchangedJobs, "job")} ${VOCAB.jobsLineUnchanged}`)
-      }
-      if (accounting.noOutboundJobs > 0) {
-        findings.push(`${countPhrase(accounting.noOutboundJobs, "job")} ${VOCAB.jobsLineNoOutbound}`)
-      }
-      if (accounting.vanishedJobCount > 0) {
-        findings.push(`${countPhrase(accounting.vanishedJobCount, "job")} ${VOCAB.jobsLineVanished}`)
-      }
-      findings.push(`compared with ${previousCommitRef(comparisonReview)}`)
-    }
-  } else {
-    // Snapshot: the destination total is the finding — the visible sum of
-    // the fold rows beneath it (dns-resolver leaves included, every root).
-    const { destinations } = commentRegisterCounts(review.jobs)
-    let total = countPhrase(destinations, "destination")
-    if (review.jobs.length > 1) {
-      total += ` across ${countPhrase(review.jobs.length, "job")}`
-    }
-    findings.push(total)
-  }
-  const provenance = [CONTRACT_VOCAB.copy.kernelProvenance]
-  if (review.recordedThrough !== "") provenance.push(minuteStamp(review.recordedThrough))
-  return [`> *${findings.join(" · ")}*`, `> <sub>${provenance.join(" · ")}</sub>`]
-}
-
-/**
- * Comparison identity of a job: matrix cells are distinct jobs, so the cell
- * discriminator belongs in the key — otherwise every cell of a matrix would
- * diff against one arbitrary earlier cell.
- * @param {{ workflow: string, name: string, job_index?: string }} job
- */
-const comparisonIdentity = (job) =>
-  `${job.workflow}\u0000${job.name}\u0000${job.job_index ?? ""}`
-
-/**
- * @param {{ workflow: string, name: string }} job
- */
-const jobNameKey = (job) => `${job.workflow}\u0000${job.name}`
-
-/**
- * @template T
- * @param {T[]} jobs
- * @param {(job: T) => string} key
- */
-const countByKey = (jobs, key) => {
-  /** @type {Map<string, number>} */
-  const counts = new Map()
-  for (const job of jobs) counts.set(key(job), (counts.get(key(job)) ?? 0) + 1)
-  return counts
-}
-
-/**
- * Pair each recorded job with its counterpart on the previous profiled commit.
- * Matching is exact on workflow + job + matrix cell, so matrix cells never
- * diff against each other. When a record carries no cell index at all, the
- * name alone identifies the job — but only while it is unique on both sides.
- * @param {ReviewJob[]} headJobs
- * @param {PreviousJob[]} previousJobs
- * @returns {{ pairs: Map<number, PreviousJob | null>, matched: Set<PreviousJob> }}
- */
-function pairWithPreviousJobs(headJobs, previousJobs) {
-  const prevByIdentity = new Map(previousJobs.map((j) => [comparisonIdentity(j), j]))
-  const prevByName = new Map(previousJobs.map((j) => [jobNameKey(j), j]))
-  const headNameCounts = countByKey(headJobs, jobNameKey)
-  const prevNameCounts = countByKey(previousJobs, jobNameKey)
-
-  /** @type {Map<number, PreviousJob | null>} */
-  const pairs = new Map()
-  /** @type {Set<PreviousJob>} */
-  const matched = new Set()
-  for (const job of headJobs) {
-    let prev = prevByIdentity.get(comparisonIdentity(job))
-    if (
-      prev === undefined &&
-      headNameCounts.get(jobNameKey(job)) === 1 &&
-      prevNameCounts.get(jobNameKey(job)) === 1
-    ) {
-      prev = prevByName.get(jobNameKey(job))
-    }
-    pairs.set(job.id, prev ?? null)
-    if (prev !== undefined && prev !== null) matched.add(prev)
-  }
-  return { pairs, matched }
-}
-
-/**
- * Per-job comparison deltas over comment-visible chains, keyed by job id.
- * Returns null when the review carries no comparison.
- * @param {RunReview} review
- * @returns {Map<number, JobDelta> | null}
- */
-function reviewDeltas(review) {
-  if (review.comparison === null) return null
-  const { pairs } = pairWithPreviousJobs(review.jobs, review.comparison.previousJobs)
-  /** @type {Map<number, JobDelta>} */
-  const deltas = new Map()
-  for (const job of review.jobs) {
-    const prev = pairs.get(job.id)
-    const prevEdges = prev ? prev.edges : []
-    // One identity-set diff per job over every recorded chain — whole-job
-    // destination identity, no partition, no quieting layer.
-    const names = addressNameMap(job.edges, prevEdges)
-    deltas.set(job.id, {
-      ...compareJobEdges(job.edges, prevEdges),
-      names,
-    })
-  }
-  return deltas
-}
-
-/**
- * Jobs recorded on the previous profiled commit with no counterpart on this
- * one. Their destinations left the record, so they carry their own removal
- * count instead of disappearing from the comparison — destination counts
- * are the same pointable unit as everywhere else.
- * @param {RunReview} review
- * @returns {{ job: PreviousJob, destinations: number }[]}
- */
-function vanishedJobs(review) {
-  if (review.comparison === null) return []
-  const { matched } = pairWithPreviousJobs(review.jobs, review.comparison.previousJobs)
-  return review.comparison.previousJobs
-    .filter((job) => !matched.has(job))
-    .map((job) => {
-      const names = addressNameMap(job.edges)
-      const shown = commentEdges(job.edges)
-      const destinations = new Set(
-        shown.map((edge) => destinationIdentity(edge, names)),
-      ).size
-      return { job, destinations }
-    })
-    .filter((entry) => entry.destinations > 0)
-}
-
-/**
- * Change accounting for a review: per-job ordering tier plus the run-scope
- * job totals the jobs line and machine summary speak. Tier 0 is a
- * destination change, 1 no change, 2 no outbound destinations.
- * @param {RunReview} review
- */
-function changeAccounting(review) {
-  const deltas = reviewDeltas(review)
-  /** @type {Map<number, number>} */
-  const tiers = new Map()
-  const totals = {
-    changedJobs: 0,
-    unchangedJobs: 0,
-    noOutboundJobs: 0,
-    added: 0,
-    removed: 0,
-    backgroundAdded: 0,
-    backgroundRemoved: 0,
-  }
-  for (const job of review.jobs) {
-    let tier
-    const delta = deltas ? deltas.get(job.id) : null
-    if (delta !== null && delta !== undefined) {
-      totals.backgroundAdded += delta.backgroundAddedCount
-      totals.backgroundRemoved += delta.backgroundRemovedCount
-    }
-    // A workload destination delta outranks an empty head record: a job
-    // whose whole record left is a changed job, never "no outbound
-    // destinations". Background-only movement never makes a changed job —
-    // the fold row and fence carry it, the changed count does not.
-    if (delta !== null && delta !== undefined && delta.addedCount + delta.removedCount > 0) {
-      tier = 0
-      totals.changedJobs += 1
-      totals.added += delta.addedCount
-      totals.removed += delta.removedCount
-    } else if (job.edges.length === 0 && backgroundDelta(delta ?? null) === 0) {
-      tier = 2
-      totals.noOutboundJobs += 1
-    } else {
-      tier = 1
-      totals.unchangedJobs += 1
-    }
-    tiers.set(job.id, tier)
-  }
-  const vanished = vanishedJobs(review)
-  return {
-    deltas,
-    tiers,
-    ...totals,
-    vanishedJobCount: vanished.length,
-    vanishedDestinations: vanished.reduce((n, entry) => n + entry.destinations, 0),
-  }
-}
-
-/**
- * The machine summary marker: one HTML comment carrying the run-scope
- * counts as JSON so agents read structure instead of parsing the human
- * surface. Every number equals the corresponding rendered count;
- * comparison-only fields are null on snapshot comments.
- * @param {RunReview} review
- * @param {ReturnType<typeof changeAccounting>} accounting
- */
-function machineSummaryMarker(review, accounting) {
-  const { chains, destinations } = commentRegisterCounts(review.jobs)
-  const comparing = review.comparison !== null
-  const summary = {
-    contract: CONTRACT_VOCAB.version,
-    githubMeta: GITHUB_META_RETRIEVED,
-    commit: review.sha,
-    previous: review.comparison !== null ? review.comparison.previousSha : null,
-    jobs: review.jobs.length,
-    changed: comparing ? accounting.changedJobs : null,
-    unchanged: comparing ? accounting.unchangedJobs : null,
-    noOutbound: comparing ? accounting.noOutboundJobs : null,
-    vanished: comparing ? accounting.vanishedJobCount : null,
-    added: comparing ? accounting.added : null,
-    removed: comparing ? accounting.removed : null,
-    backgroundAdded: comparing ? accounting.backgroundAdded : null,
-    backgroundRemoved: comparing ? accounting.backgroundRemoved : null,
-    vanishedDestinations: comparing ? accounting.vanishedDestinations : null,
-    chains,
-    destinations,
-    recorded: review.recordedThrough !== "" ? review.recordedThrough : null,
-    kinds: ["network"],
-  }
-  // `--` is escaped inside JSON strings so a hostile record-sourced value
-  // can never terminate the HTML comment; JSON.parse restores the bytes.
-  const json = JSON.stringify(summary).replace(/--/g, "-\\u002d")
-  return `<!-- ${VOCAB.machineSummaryMarker} ${json} -->`
-}
-
-/**
- * @param {RunReview} review
- * @param {Map<number, number>} kept
- * @param {{ explainerOpen?: boolean }} [options]
- */
-function renderCommentBody(review, kept, { explainerOpen = false } = {}) {
-  const lines = [RUNTIME_REVIEW_MARKER, COMMENT_MARKER]
-  if (review.sha !== "") lines.push(`<!-- garnet:commit ${review.sha} -->`)
-  const accounting = changeAccounting(review)
-  const deltas = accounting.deltas
-  lines.push(machineSummaryMarker(review, accounting))
-  lines.push(headlineSentence(review))
-  lines.push("")
-  lines.push(...metaBlock(review, accounting))
-  lines.push("")
-
-  const previousSha = review.comparison ? review.comparison.previousSha : ""
-
-  for (const job of review.jobs) {
-    const delta = deltas ? deltas.get(job.id) : null
-    const changed =
-      delta !== null && delta !== undefined && delta.addedCount + delta.removedCount > 0
-    // Any movement — workload or runner background — renders the marked
-    // fence; only a workload delta makes a changed job (bold row, open
-    // fold, changed count).
-    const hasDelta = changed || backgroundDelta(delta ?? null) > 0
-    const keptCount = kept.get(job.id) ?? job.edges.length
-    const retained = new Set(retentionOrder(job.edges).slice(0, keptCount))
-    const shownRaw = job.edges.filter((e) => retained.has(e))
-    // One block per job: every recorded root of the job's projection — no
-    // attribution partition, no category labels.
-    const shown = commentEdges(shownRaw)
-    // An empty projection renders a plain row that keeps the job's
-    // Execution Profile link when known — an empty egress projection never
-    // implies Garnet observed nothing.
-    if (job.edges.length === 0 && !hasDelta) {
-      const link = profilePermalink(job, review.appUrl, "pr_comment")
-      const profilePart =
-        link !== ""
-          ? ` · <a href="${escapeHtmlAttr(link)}">${VOCAB.artifact}</a>`
-          : ""
-      lines.push(`<sub>${jobIdentity(job)} — ${VOCAB.emptyPeers}${profilePart}</sub>`)
-      lines.push("")
-      continue
-    }
-    // Quiet by default: the only folds that ever open are changed folds
-    // within the budget. Snapshot, first-profile, and unchanged folds stay
-    // collapsed — their rows carry the counts.
-    const open = changed && accounting.changedJobs <= FOLD_OPEN_BUDGET
-    lines.push(
-      `<details${open ? " open" : ""}><summary>${jobSummaryLine(job, { delta: delta ?? null, treeEdges: shown })}</summary>`,
-    )
-    lines.push("")
-    /** @type {string[]} */
-    const fenceNotes = []
-    if (hasDelta && delta !== null && delta !== undefined) {
-      lines.push("```diff")
-      lines.push(renderJobDiffTree({ ...job, edges: shown }, delta, review.sha, previousSha))
-      lines.push("```")
-      lines.push("")
-      // Several provable rotations in one fence read as one quiet summary
-      // instead of an annotation on every line (contract comment.rotationJoin).
-      if (delta.rotations.size > 1) {
-        fenceNotes.push(
-          `<i>${delta.rotations.size} addresses rotated (${CONTRACT_VOCAB.notes.githubInfrastructure.text})</i>`,
-        )
-      }
-    } else if (shown.length > 0) {
-      lines.push("<pre>")
-      lines.push(renderJobTree(job, shown))
-      lines.push("</pre>")
-      lines.push("")
-    }
-    if (shownRaw.length < job.edges.length) {
-      fenceNotes.push(truncationLine(shownRaw.length, job.edges.length))
-    }
-    // Quiet notes under a fence merge into one line — never stacked.
-    if (fenceNotes.length > 0) {
-      lines.push(`<sub>${fenceNotes.join(" · ")}</sub>`)
-      lines.push("")
-    }
-    const link = profilePermalink(job, review.appUrl, "pr_comment")
-    if (link !== "") {
-      lines.push(
-        `<p align="right"><sub><a href="${escapeHtmlAttr(link)}">${VOCAB.permalinkLabel}</a></sub></p>`,
-      )
-      lines.push("")
-    }
-    lines.push("</details>")
-    lines.push("")
-  }
-
-  // Jobs that left the record sit below this commit's behavior, in one
-  // collapsed self-counting fold — destination counts, the same pointable
-  // unit as everywhere else.
-  const vanished = vanishedJobs(review)
-  if (vanished.length > 0) {
-    lines.push(
-      `<details><summary><sub>${VOCAB.vanishedJobsLabel} · ${countPhrase(vanished.length, "job")} · ${countPhrase(accounting.vanishedDestinations, "destination")}</sub></summary>`,
-    )
-    lines.push("")
-    lines.push(
-      vanished
-        .map(
-          ({ job, destinations }) =>
-            `<sub>${jobIdentity(job)} · ${countPhrase(destinations, "destination")}</sub>`,
-        )
-        .join("<br>\n"),
-    )
-    lines.push("")
-    lines.push("</details>")
-    lines.push("")
-  }
-
-  // The explainer sits at the bottom under a divider; open only on a
-  // first-profile comment.
-  lines.push("---")
-  lines.push("")
-  // The legend teaches the boundary-label vocabulary only when a label
-  // actually renders above it.
-  const hasBackgroundLabel = lines.some((line) => line.includes(`(${VOCAB.runnerBackground} ·`))
-  lines.push(
-    renderExplainer({
-      open: explainerOpen,
-      comparison: review.comparison !== null,
-      background: hasBackgroundLabel,
-    }),
-  )
-
-  while (lines.length > 0 && lines[lines.length - 1] === "") lines.pop()
-  return lines.join("\n")
-}
-
-/**
- * Deterministic explicit minimal fallback for the pathological case where
- * even zero kept edges (the fixed per-job fold overhead) exceeds the medium
- * budget: markers, heading, headline, coverage count, the exact truncation
- * line, and — when they still fit — the run-index link(s).
- * @param {RunReview} review
- */
-function renderMinimalComment(review) {
-  const head = [RUNTIME_REVIEW_MARKER, COMMENT_MARKER]
-  if (review.sha !== "") head.push(`<!-- garnet:commit ${review.sha} -->`)
-  head.push(headlineSentence(review))
-  head.push("")
-  head.push(`<sub>${truncationLine(0, review.counts.associations)}</sub>`)
-  return head.join("\n")
-}
-
-/**
- * Render the Garnet Runtime Review PR comment. Jobs in review order
- * (change tiers on comparison comments, else alphabetic by
- * `workflow / job`); edges in canonical deterministic order.
- * Truncation (only because of the medium budget, never silently) drops edges
- * via a deterministic fair round-robin across jobs in canonical order — IMDS
- * associations retained first — and emits an explicit destination-association
- * line per truncated fold.
- * @param {RunReview} review
- * @param {RenderRunReviewOptions} [opts] explainer opens on the first
- * recorded result and collapses on later updates; `budget` lowers the
- * serialized byte budget below the contract default when the caller wraps
- * the review with additional payload (never raises it)
- */
-export function renderRunReview(review, opts = {}) {
-  const explainerOpen = opts.explainerOpen === true
-  const budget =
-    typeof opts.budget === "number" && Number.isSafeInteger(opts.budget) && opts.budget < SIZE_BUDGET
-      ? opts.budget
-      : SIZE_BUDGET
-  const full = renderCommentBody(review, new Map(), { explainerOpen })
-  if (Buffer.byteLength(full, "utf8") <= budget) return full
-
-  // Global round-robin retention order: round r keeps the r-th edge of each
-  // job's retention queue, jobs visited in canonical order.
-  const queues = review.jobs.map((j) => ({ id: j.id, total: j.edges.length }))
-  /** @type {{id: number}[]} */
-  const order = []
-  for (let round = 0; order.length < review.counts.associations; round += 1) {
-    for (const q of queues) {
-      if (round < q.total) order.push({ id: q.id })
-    }
-  }
-
-  const bodyFor = (/** @type {number} */ keepTotal) => {
-    /** @type {Map<number, number>} */
-    const kept = new Map(review.jobs.map((j) => [j.id, 0]))
-    for (let i = 0; i < keepTotal; i += 1) {
-      const entry = order[i]
-      if (entry === undefined) break
-      kept.set(entry.id, (kept.get(entry.id) ?? 0) + 1)
-    }
-    return renderCommentBody(review, kept, { explainerOpen })
-  }
-
-  // Largest edge total whose serialized body fits the budget (binary search
-  // — rendering is deterministic, so this is reproducible).
-  let lo = 0
-  let hi = review.counts.associations - 1
-  let best = bodyFor(0)
-  while (lo <= hi) {
-    const mid = (lo + hi) >> 1
-    const body = bodyFor(mid)
-    if (Buffer.byteLength(body, "utf8") <= budget) {
-      best = body
-      lo = mid + 1
-    } else {
-      hi = mid - 1
-    }
-  }
-  // True final cap: when even the zero-edge body's fixed overhead exceeds
-  // the budget, fall back to the deterministic minimal comment.
-  if (Buffer.byteLength(best, "utf8") > budget) return renderMinimalComment(review)
-  return best
-}
-
 /**
  * @typedef {{
  *   explainerOpen?: boolean
  *   budget?: number
  * }} RenderRunReviewOptions
  */
-
-/**
- * The waiting/pending comment: open explainer + hourglass, but no timestamp,
- * renderer clock, count, expected denominator, or permalink.
- * @param {{sha?: string, commitUrl?: string, appMode?: boolean}} input
- */
-export function renderPendingReview(input = {}) {
-  const sha = String(input.sha || "")
-  const lines = [RUNTIME_REVIEW_MARKER, COMMENT_MARKER]
-  if (sha !== "") lines.push(`<!-- garnet:commit ${sha} -->`)
-  lines.push(
-    `**${CONTRACT_VOCAB.copy.headlinePendingLead} ${commitRef(sha, String(input.commitUrl || ""))}**`,
-  )
-  lines.push("")
-  lines.push(CONTRACT_VOCAB.copy.pendingStatus)
-  lines.push("")
-  lines.push("---")
-  lines.push("")
-  lines.push(renderExplainer({ open: true }))
-  return lines.join("\n")
-}
-
-/**
- * Wrap an exact renderer body as the testbed-only "after" comment while
- * replacing ownership markers that the App and Action fallback use.
- * Visible renderer copy and layout remain unchanged.
- * @param {string} body
- */
-export function renderReferenceMockup(body, stepSummary = "") {
-  const projectedBody = String(body)
-    .replaceAll(RUNTIME_REVIEW_MARKER, "<!-- garnet-reference-renderer-body -->")
-    .replaceAll(COMMENT_MARKER, "<!-- garnet-reference-renderer-owner:none -->")
-    .replace(
-      /<!-- garnet:commit ([0-9a-f]+) -->/gi,
-      "<!-- garnet-reference-renderer-commit $1 -->",
-    )
-
-  const lines = [
-    REFERENCE_MOCKUP_MARKER,
-    `<!-- garnet-reference-renderer-contract:v${CONTRACT_VOCAB.version} -->`,
-    `> **After — v${CONTRACT_VOCAB.version} reference renderer.** Generated from this PR's captured profiles by the contract active in this branch. Compare it with the installed GitHub App's live **Before** comment on this PR. This preview updates in place; neither the App nor the Action fallback owns it.`,
-    "",
-    projectedBody,
-  ]
-
-  // Second surface: the exact job Step Summary (lineage-keyed egress table)
-  // as it renders in the Actions run Summary tab — embedded here so this one
-  // isolated comment shows BOTH shipped surfaces for review in one place.
-  if (String(stepSummary).trim()) {
-    lines.push(
-      "",
-      "<!-- garnet-reference-renderer-step-summary -->",
-      "<details><summary><strong>Step Summary</strong> — as rendered in the Actions run Summary tab</summary>",
-      "",
-      String(stepSummary).trim(),
-      "",
-      "</details>",
-    )
-  }
-
-  return lines.join("\n")
-}
-
-// ---------------------------------------------------------------------------
-// Step Summary.
-// ---------------------------------------------------------------------------
-
 /**
  * One destination-first Step Summary row (one source peer).
  * @typedef {{
@@ -2882,42 +1046,6 @@ export function renderReferenceMockup(body, stepSummary = "") {
  *   associations: ReviewEdge[]
  * }} DestinationRow
  */
-
-/**
- * Destination-first Step Summary projection: one row per source peer in the
- * profile's recorded order, with every process tree retained in source order.
- * @param {ReviewEdge[]} edges
- * @returns {DestinationRow[]}
- */
-export function buildDestinationRows(edges) {
-  /** @type {DestinationRow[]} */
-  const rows = []
-  /** @type {Map<number, DestinationRow>} */
-  const byKey = new Map()
-  for (const edge of edges) {
-    const key = edge.flow_id
-    let row = byKey.get(key)
-    if (!row) {
-      row = {
-        flow_id: edge.flow_id,
-        remote_address: edge.remote_address,
-        remote_names: edge.remote_names,
-        associations: [],
-      }
-      byKey.set(key, row)
-      rows.push(row)
-    }
-    row.associations.push(edge)
-  }
-  return rows
-    .sort((a, b) => a.flow_id - b.flow_id)
-    .map((row) => ({
-      ...row,
-      associations: row.associations
-        .slice()
-        .sort((a, b) => a.tree_index - b.tree_index),
-    }))
-}
 
 /**
  * Screenshot-style compact ancestry: first node, ellipsis, final three nodes.
@@ -3020,9 +1148,9 @@ function lineageDestinationsCell(row) {
   // record never captured (ordinals would), and the glue keeps the glyph
   // from orphaning onto its own line at phone width. A single destination
   // renders bare — a marker of one is noise.
-  if (labels.length === 1) return `<code>${escapeHtmlCell(truncateMiddle(labels[0]))}</code>`
+  if (labels.length === 1) return `<code>${escapeHtmlCell(truncateMiddle(defangHostname(labels[0])))}</code>`
   return labels
-    .map((label) => `· <code>${escapeHtmlCell(truncateMiddle(label))}</code>`)
+    .map((label) => `· <code>${escapeHtmlCell(truncateMiddle(defangHostname(label)))}</code>`)
     .join("<br>")
 }
 
@@ -3034,9 +1162,11 @@ function lineageDestinationsCell(row) {
  * @param {LineageRow[]} rows
  */
 function renderLineageTable(rows) {
-  const lines = ["| Process Tree | Destinations |", "| --- | --- |"]
+  const lines = ["| Execution chain | Destinations |", "| --- | --- |"]
   for (const row of rows) {
-    lines.push(`| ${processTreeCell(row.edge, true)} | ${lineageDestinationsCell(row)} |`)
+    const step = stepAnnotationName(row.edge.github_step)
+    const context = step === "" ? "" : `<br><sub>step: <code>${escapeHtmlCell(truncateMiddle(step))}</code></sub>`
+    lines.push(`| ${processTreeCell(row.edge, true)}${context} | ${lineageDestinationsCell(row)} |`)
   }
   return lines.join("\n")
 }
@@ -3060,34 +1190,10 @@ function lineageRetentionOrder(rows) {
 }
 
 /**
- * @param {ReviewJob} job
- */
-function hasExplainableTelemetry(job) {
-  if (
-    job.telemetry.total_domains === null ||
-    job.telemetry.total_connections === null ||
-    telemetryDiscrepancies(job).length > 0
-  ) {
-    return false
-  }
-  return true
-}
-
-/**
- * Djalal's sensor + derived telemetry semantics in the approved prose shape.
- * @param {ReviewJob} job
- */
-function renderTelemetry(job) {
-  if (!hasExplainableTelemetry(job)) return ""
-  const domains = `${job.telemetry.total_domains} unique domain${job.telemetry.total_domains === 1 ? "" : "s"}`
-  const connections = `${job.telemetry.total_connections} connection${job.telemetry.total_connections === 1 ? "" : "s"}`
-  return `Network telemetry observed ${domains}, ${job.counts.destinations} destination${job.counts.destinations === 1 ? "" : "s"}, ${connections}, and ${job.counts.flows} flow${job.counts.flows === 1 ? "" : "s"}.`
-}
-
-/**
  * @param {ReviewEdge[]} edges
+ * @param {boolean} detections
  */
-function renderRecordedContextPreview(edges) {
+function renderRecordedContextPreview(edges, detections) {
   if (edges.length === 0) return ""
   const lines = [
     "<details><summary><strong>Recorded context preview</strong></summary>",
@@ -3100,13 +1206,13 @@ function renderRecordedContextPreview(edges) {
     const context = []
     if (edge.github_step !== "") context.push(`step: ${escapeMarkdownCell(edge.github_step)}`)
     context.push(
-      ...edgeNotes(edge, { detections: true }).map((note) =>
+      ...edgeNotes(edge, { detections }).map((note) =>
         note.startsWith("detection: ")
           ? `\`${escapeCodeCell(note)}\``
           : `(${escapeMarkdownCell(note)})`,
       ),
     )
-    if (edge.result.toLowerCase() === "attention") context.push("⚠ attention")
+    if (edge.result.toLowerCase() === "attention") context.push("attention")
     lines.push(
       `| <code>${destinationDisplay(edge, escapeHtmlCell)}</code> | ${processTreeCell(edge)} | ${context.join(" · ") || "—"} |`,
     )
@@ -3189,38 +1295,121 @@ function renderAssertionPreview(assertions) {
  * @param {string} appUrl
  */
 function renderStepSummaryFooter(job, appUrl) {
-  // Workflow, run, and job identity live in the Workload table; the footer
-  // adds only the recording timestamp and the product path.
-  const stamp = formatTimestamp(job.timestamp)
+  // Identity and the recording timestamp live in the workload context; the
+  // footer carries only the product path.
   const lines = ['<div align="right">']
-  if (stamp !== "") lines.push(`<sub>${stamp}</sub><br>`)
   const link = profilePermalink(job, appUrl, "step_summary")
   const cta =
     link === ""
       ? "<strong>Powered by Garnet</strong>"
       : `<a href="${escapeHtmlAttr(link)}">${VOCAB.permalinkLabel}</a>`
+  // The CTA is the last element: GitHub prints its own "Job summary generated
+  // at run-time" line under every job summary.
   lines.push(cta, "</div>")
-  if (job.run_url !== "") {
-    lines.push(
-      "",
-      `<sub><a href="${escapeHtmlAttr(job.run_url)}">Job summary generated at run-time</a></sub>`,
-    )
-  } else {
-    lines.push("", "<sub>Job summary generated at run-time</sub>")
-  }
   return lines.join("\n")
 }
 
 /**
+ * Post-step facts about the recording that the profile itself does not
+ * carry, already phrased for display. An empty field renders no row.
+ * @typedef {{
+ *   sensor: string
+ *   capture: string
+ *   sensorIntegrity: string
+ *   sensorAuthenticity: string
+ *   steps: string
+ *   jobTotal?: string
+ * }} StepSummaryContext
+ */
+
+/**
+ * @typedef {{
+ *   previewAssertions: boolean
+ *   detections: boolean
+ *   context: StepSummaryContext | null
+ * }} ProfileSummaryOptions
+ */
+
+/**
+ * A chain belongs to the workload when it descends through `Runner.Worker`,
+ * carries a real recorded step, or has no recorded lineage (an unprovable
+ * chain is never quieted into the runner); everything else is the runner.
+ * @param {ReviewEdge} edge
+ */
+function isWorkloadEdge(edge) {
+  if (!edge.lineage_recorded) return true
+  if (edgeProcessPath(edge).includes("Runner.Worker")) return true
+  return stepAnnotationName(edge.github_step) !== ""
+}
+
+/**
+ * `3 execution chains · 5 destinations · 7 destination associations`
+ * for one side of the workload/runner split.
+ * @param {ReviewEdge[]} edges
+ */
+function activityCell(edges) {
+  if (edges.length === 0) return "none recorded"
+  return [
+    countPhrase(buildLineageRows(edges).length, "execution chain"),
+    countPhrase(edgeCounts(edges).destinations, "destination"),
+    countPhrase(edges.length, "destination association"),
+  ].join(" · ")
+}
+
+/**
+ * @param {ReviewJob} job
+ */
+function sensorTotalsCell(job) {
+  /** @type {string[]} */
+  const parts = []
+  if (job.telemetry.total_domains !== null) parts.push(countPhrase(job.telemetry.total_domains, "unique domain"))
+  if (job.telemetry.total_connections !== null) parts.push(countPhrase(job.telemetry.total_connections, "connection"))
+  return parts.length === 0 ? "network totals not recorded" : parts.join(" · ")
+}
+
+/**
+ * A record-sourced table cell, escaped and wrapped in <code>.
+ * @param {unknown} value
+ */
+function recordCell(value) {
+  return `<code>${escapeHtmlCell(value)}</code>`
+}
+
+/**
+ * A matrix leg reads `<job> (i of N)`, the label the App uses, with `i`
+ * one-based from the recorded `job_index`. N comes from the `job_total`
+ * input; without it the leg keeps the bare job name.
+ * @param {ReviewJob} job
+ * @param {StepSummaryContext | null} context
+ */
+function matrixJobLabel(job, context) {
+  const index = Number(job.job_index)
+  const total = Number(context?.jobTotal ?? "")
+  if (job.job_index === "" || !Number.isInteger(index) || !Number.isInteger(total) || total < index + 1) {
+    return job.name
+  }
+  return `${job.name} (${index + 1} of ${total})`
+}
+
+/**
+ * A loopback DNS resolver is the runner talking to itself, not a destination:
+ * it is neither rendered nor counted.
+ * @param {ReviewEdge} edge
+ */
+function isLoopbackResolver(edge) {
+  return LOOPBACK_RE.test(edge.remote_address) && edge.remote_ports.some((port) => numericPort(port) === 53)
+}
+
+/**
+ * The always-visible head of a job's receipt: every identity, coverage and
+ * capture fact the record (and the post step) carries, one row each. A
+ * field the record does not carry renders no row rather than a guess.
  * @param {ReviewJob} job
  * @param {string} appUrl
- * @param {number} keptDestinations
- * @param {boolean} previewAssertions
+ * @param {StepSummaryContext | null} context
+ * @returns {[string, string][]}
  */
-function renderProfileSummary(job, appUrl, keptDestinations, previewAssertions) {
-  const lines = [`## ${VOCAB.stepSummaryHeading}`, ""]
-
-  lines.push("### Workload Summary", "")
+function workloadContextRows(job, appUrl, context) {
   /** @type {[string, string][]} */
   const rows = []
   if (job.profile_id !== "") {
@@ -3231,27 +1420,171 @@ function renderProfileSummary(job, appUrl, keptDestinations, previewAssertions) 
         : `[${escapeMarkdownCell(job.profile_id)}](${profileLink})`
     rows.push(["Profile", profileCell])
   }
-  if (job.workflow !== "") rows.push(["Workflow", escapeMarkdownCell(job.workflow)])
-  if (job.repository !== "") rows.push(["Repository", escapeMarkdownCell(job.repository)])
-  if (job.ref !== "") rows.push(["Branch", escapeMarkdownCell(job.ref)])
+  // Record-sourced text renders inside <code>: GitHub's mention and issue
+  // reference filters skip code, while entity-encoding alone is decoded
+  // before they run.
+  if (job.workflow !== "") rows.push(["Workflow", recordCell(job.workflow)])
+  if (job.name !== "") rows.push(["Job", recordCell(matrixJobLabel(job, context))])
+  if (job.job_index !== "") rows.push(["Matrix job index", recordCell(job.job_index)])
+  if (job.repository !== "") rows.push(["Repository", recordCell(job.repository)])
+  if (job.ref !== "") rows.push(["Branch", recordCell(job.ref)])
   if (job.pr_url !== "") {
     const prNumber = job.pr_url.split("/").pop()
     rows.push(["Pull request", `[#${escapeMarkdownCell(prNumber ?? "")}](${job.pr_url})`])
   }
-  if (job.sha !== "") rows.push(["Commit", escapeMarkdownCell(job.sha)])
-  if (job.actor !== "") rows.push(["Triggered by", escapeMarkdownCell(job.actor)])
-  if (job.run_id !== "" || job.name !== "") {
-    rows.push(["Run ID / Job", escapeMarkdownCell([job.run_id, job.name].filter(Boolean).join(" / "))])
+  if (job.sha !== "") rows.push(["Commit", recordCell(job.sha)])
+  if (job.event_name !== "") rows.push(["Event", recordCell(job.event_name)])
+  if (job.actor !== "") rows.push(["Triggered by", recordCell(job.actor)])
+  if (job.run_id !== "") {
+    const attempt = job.run_attempt === "" ? "" : ` · attempt ${recordCell(job.run_attempt)}`
+    const run = job.run_url === "" ? escapeMarkdownCell(job.run_id) : `[${escapeMarkdownCell(job.run_id)}](${job.run_url})`
+    rows.push(["Run", `${run}${attempt}`])
   }
-  if (job.job_index !== "") rows.push(["Matrix job index", escapeMarkdownCell(job.job_index)])
+  const runner = [job.runner_os, job.runner_arch].filter((value) => value !== "").join(" ")
+  const provenance =
+    runner === ""
+      ? CONTRACT_VOCAB.copy.kernelProvenance
+      : CONTRACT_VOCAB.copy.kernelProvenance.replace("at the kernel", `at the kernel (${recordCell(runner)})`)
+  rows.push(["Coverage", `${provenance}. ${CONTRACT_VOCAB.copy.captureBestEffort}`])
+  if (context !== null) {
+    if (context.capture !== "") rows.push(["Capture", recordCell(context.capture)])
+    if (context.sensor !== "") rows.push(["Sensor", escapeMarkdownCell(context.sensor)])
+    if (context.sensorIntegrity !== "") rows.push(["Sensor integrity", escapeMarkdownCell(context.sensorIntegrity)])
+    if (context.sensorAuthenticity !== "") {
+      rows.push(["Sensor authenticity", escapeMarkdownCell(context.sensorAuthenticity)])
+    }
+    if (context.steps !== "") rows.push(["Workflow steps", escapeMarkdownCell(context.steps)])
+  }
+  rows.push(["Workload activity", activityCell(job.edges.filter(isWorkloadEdge))])
+  rows.push(["Runner activity", activityCell(job.edges.filter((edge) => !isWorkloadEdge(edge)))])
+  rows.push(["Sensor network totals", sensorTotalsCell(job)])
+  const stamp = formatTimestamp(job.timestamp)
+  // formatTimestamp emits a fixed `YYYY-MM-DD HH:MM:SS UTC` shape built from
+  // a parsed Date, never raw record text.
+  if (stamp !== "") rows.push(["Recorded at", stamp])
+  return rows
+}
+
+/**
+ * Text inside the `<pre>` fold: HTML-escaped, with brackets entity-encoded
+ * so a recorded value can never read as a link reference.
+ * @param {unknown} value
+ */
+function escapeChainText(value) {
+  return escapeHtml(value).replaceAll("[", "&#91;").replaceAll("]", "&#93;")
+}
+
+/**
+ * One group of chains that share the exact same recorded ancestry above
+ * their acting process. The shared names render once; each acting process
+ * (its own PID) is a separate leaf with every destination association it
+ * owns beneath it. Nothing is merged on a partial prefix.
+ * @param {LineageRow[]} group
+ * @param {boolean} detections
+ */
+function renderChainGroup(group, detections) {
+  const first = group[0]
+  if (first === undefined) return ""
+  const parents = edgeProcessPath(first.edge).slice(0, -1)
+  const lines = parents.map((name, index) =>
+    index === 0 ? escapeChainText(name) : `${"   ".repeat(index - 1)}└─ ${escapeChainText(name)}`,
+  )
+  const leafIndent = parents.length === 0 ? "" : "   ".repeat(parents.length - 1)
+  group.forEach((row, rowIndex) => {
+    const path = edgeProcessPath(row.edge)
+    const leafName = path[path.length - 1] ?? VOCAB.unknownLineage
+    const pid = row.edge.pid === "" ? "" : ` <em>(pid ${escapeChainText(row.edge.pid)})</em>`
+    const step = stepAnnotationName(row.edge.github_step)
+    const stepNote = step === "" ? "" : ` <em>(step: &quot;${escapeChainText(step)}&quot;)</em>`
+    const ranFrom = row.edge.executable === "" ? "" : ranFromNote(new Set([row.edge.executable]))
+    const ranFromText = ranFrom === "" ? "" : ` ${renderNote(ranFrom)}`
+    const leaf = `<strong>${escapeChainText(leafName)}</strong>${pid}${stepNote}${ranFromText}`
+    let childPrefix = ""
+    if (parents.length === 0) {
+      lines.push(leaf)
+    } else {
+      const last = rowIndex === group.length - 1
+      lines.push(`${leafIndent}${last ? "└─ " : "├─ "}${leaf}`)
+      childPrefix = `${leafIndent}${last ? "   " : "│  "}`
+    }
+    row.associations.forEach((edge, index) => {
+      const branch = index === row.associations.length - 1 ? "└─ " : "├─ "
+      const destination = destinationDisplay(edge, (value) => escapeChainText(defangHostname(value)))
+      const notes = edgeNotes(edge, { detections }).map(renderNote)
+      const suffix = notes.length === 0 ? "" : ` ${notes.join(" ")}`
+      lines.push(`${childPrefix}${branch}${VOCAB.terminalNetwork} ${destination}${suffix}`)
+    })
+  })
+  return lines.join("\n")
+}
+
+/**
+ * Every destination association as root-to-action chains. The record
+ * carries ancestry names and the acting process's PID only, so two
+ * processes with the same name cannot be proven to be one node: chains are
+ * grouped only when their full recorded ancestry above the acting process
+ * matches exactly, and two PIDs never share a node. Destinations, chains
+ * and groups are ordered by destination identity; workload groups render
+ * before runner groups.
+ * @param {LineageRow[]} rows
+ * @param {boolean} [detections]
+ */
+export function renderExecutionChains(rows, detections = false) {
+  const names = addressNameMap(rows.flatMap((row) => row.associations))
+  const compareEdges = (/** @type {ReviewEdge} */ a, /** @type {ReviewEdge} */ b) =>
+    compareDestinationIdentities(a, b, names) || edgeComparator(a, b)
+  const firstEdge = (/** @type {LineageRow} */ row) => row.associations[0] ?? row.edge
+  const compareRows = (/** @type {LineageRow} */ a, /** @type {LineageRow} */ b) => {
+    const identityOrder = compareDestinationIdentities(firstEdge(a), firstEdge(b), names)
+    if (identityOrder !== 0) return identityOrder
+    const difference = Number(a.edge.pid) - Number(b.edge.pid)
+    if (Number.isFinite(difference) && difference !== 0) return difference
+    return compareEdges(firstEdge(a), firstEdge(b))
+  }
+  const orderedRows = rows
+    .map((row) => ({ edge: row.edge, associations: [...row.associations].sort(compareEdges) }))
+    .sort(compareRows)
+  /** @type {Map<string, LineageRow[]>} */
+  const groups = new Map()
+  for (const row of orderedRows) {
+    const parents = edgeProcessPath(row.edge).slice(0, -1)
+    const key =
+      !row.edge.lineage_recorded || parents.length === 0 ? `root:${groups.size}` : JSON.stringify(parents)
+    const group = groups.get(key)
+    if (group === undefined) {
+      groups.set(key, [row])
+    } else {
+      group.push(row)
+    }
+  }
+  const ordered = [...groups.values()]
+  const isWorkloadGroup = (/** @type {LineageRow[]} */ group) => group.some((row) => isWorkloadEdge(row.edge))
+  return [...ordered.filter(isWorkloadGroup), ...ordered.filter((group) => !isWorkloadGroup(group))]
+    .map((group) => renderChainGroup(group, detections))
+    .join("\n\n")
+}
+
+/**
+ * One job's receipt: workload context (always visible), the execution
+ * chain table, the collapsed chains fold, preview-only material, then the
+ * Execution Profile CTA.
+ * @param {ReviewJob} job
+ * @param {string} appUrl
+ * @param {number} keptDestinations
+ * @param {ProfileSummaryOptions} options
+ */
+function renderProfileSummary(job, appUrl, keptDestinations, options) {
+  const lines = [`## ${VOCAB.stepSummaryHeading}`, ""]
+
+  lines.push("### Workload context", "")
   lines.push("| Field | Value |")
   lines.push("| --- | --- |")
-  for (const [key, value] of rows) {
+  for (const [key, value] of workloadContextRows(job, appUrl, options.context)) {
     lines.push(`| ${escapeMarkdownCell(key)} | ${value} |`)
   }
   lines.push("")
 
-  lines.push("### Network Egress Summary", "")
+  lines.push("### Network egress", "")
   const lineageRows = buildLineageRows(job.edges)
   if (lineageRows.length === 0) {
     lines.push(VOCAB.emptyPeers)
@@ -3264,32 +1597,22 @@ function renderProfileSummary(job, appUrl, keptDestinations, previewAssertions) 
     lines.push(renderLineageTable(shown))
     lines.push("")
     if (shown.length < lineageRows.length) {
-      lines.push(
-        `<sub>rendered ${shown.length} of ${lineageRows.length} execution chains</sub>`,
-      )
+      lines.push(`<sub>rendered ${shown.length} of ${lineageRows.length} execution chains</sub>`)
       lines.push("")
     }
-  }
-
-  // Absolute recorded tree in the PR-comment grammar; no comparison material.
-  if (job.edges.length > 0) {
-    lines.push("<details><summary><sub>Full recorded tree</sub></summary>")
+    lines.push(
+      `<details><summary><sub>Execution chains · ${countPhrase(job.edges.length, "destination association")}</sub></summary>`,
+    )
     lines.push("")
     lines.push("<pre>")
-    lines.push(renderJobTree(job, job.edges, { defang: false }))
+    lines.push(renderExecutionChains(lineageRows, options.detections))
     lines.push("</pre>")
     lines.push("</details>")
     lines.push("")
   }
 
-  const telemetry = renderTelemetry(job)
-  if (telemetry !== "") {
-    lines.push(telemetry)
-    lines.push("")
-  }
-
-  if (previewAssertions) {
-    lines.push(renderRecordedContextPreview(job.edges))
+  if (options.previewAssertions) {
+    lines.push(renderRecordedContextPreview(job.edges, options.detections))
     lines.push("")
     lines.push(renderAssertionPreview(job.assertions))
     lines.push("")
@@ -3300,12 +1623,12 @@ function renderProfileSummary(job, appUrl, keptDestinations, previewAssertions) 
 }
 
 /**
- * Render the GitHub Step Summary: heading `## Garnet Runtime Summary`,
- * Workload first, then the lineage-first network-egress table, source-
- * backed telemetry, optional preview-only assertions, and the aligned footer.
+ * Render the GitHub Step Summary, the job's full receipt: workload context
+ * first, then the execution chain table, the collapsed chains fold,
+ * optional preview-only material, and the Execution Profile CTA.
  * The 1 MiB budget uses deterministic fair-round-robin retention.
  * @param {unknown[]} profiles raw parsed Jibril profiles
- * @param {{appUrl?: string, preview?: boolean}} [opts]
+ * @param {{appUrl?: string, preview?: boolean, detections?: boolean, context?: StepSummaryContext | null}} [opts]
  */
 export function renderStepSummary(profiles, opts = {}) {
   const appUrl = String(opts.appUrl || "https://app.garnet.ai").replace(/\/+$/, "")
@@ -3316,7 +1639,11 @@ export function renderStepSummary(profiles, opts = {}) {
   const render = (/** @type {Map<number, number>} */ kept) =>
     jobs
       .map((j, i) =>
-        renderProfileSummary(j, appUrl, kept.get(i) ?? Infinity, opts.preview === true),
+        renderProfileSummary(j, appUrl, kept.get(i) ?? Infinity, {
+          previewAssertions: opts.preview === true,
+          detections: opts.detections === true,
+          context: opts.context ?? null,
+        }),
       )
       .join("\n\n---\n\n")
 
@@ -3379,59 +1706,4 @@ function renderMinimalStepSummary(jobs) {
     "",
     `<sub>rendered 0 of ${lineages} execution chains</sub>`,
   ].join("\n")
-}
-
-/**
- * Semantic surface linter — guards the whole class of "same fact rendered
- * twice in one visual block" regressions (e.g. telemetry counts printed in
- * both the prose line and the footer). Byte-goldens cannot catch this because
- * they lock whatever the renderer emits, duplication included. The Step
- * Summary is split into per-job sections; the PR comment is checked whole.
- * Returns a list of human-readable violations; an empty array means clean.
- * @param {string} surface rendered markdown/HTML for one run
- * @param {"pr"|"step-summary"} kind
- * @returns {string[]}
- */
-export function lintRenderedSurface(surface, kind) {
-  /** @type {string[]} */
-  const violations = []
-  const count = (/** @type {string} */ text, /** @type {RegExp} */ re) => (text.match(re) || []).length
-  if (kind === "step-summary") {
-    const sections = surface.split(/\n\n---\n\n/)
-    sections.forEach((section, i) => {
-      /** @type {[string, RegExp][]} */
-      const families = [
-        ["telemetry unique-domain count", /\bunique domain/gi],
-        ["telemetry connection count", /\d+ connections?\b/gi],
-        ["Powered by Garnet footer", /Powered by Garnet/gi],
-        // The exact profile selector renders in exactly two designated
-        // places: the Workload table's Profile row and the footer CTA.
-        ["profile permalink (Profile row)", /\| Profile \| \[/g],
-        ["profile permalink (footer CTA)", new RegExp(`>${VOCAB.permalinkLabel.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}<`, "g")],
-      ]
-      for (const [name, re] of families) {
-        const n = count(section, re)
-        if (n > 1) {
-          violations.push(
-            `step-summary job section ${i}: "${name}" appears ${n}× (expected \u2264 1)`,
-          )
-        }
-      }
-    })
-  } else {
-    // The PR comment carries no telemetry counts at all; any occurrence means
-    // a fact family leaked into the wrong surface.
-    /** @type {[string, RegExp][]} */
-    const forbidden = [
-      ["telemetry prose", /Network telemetry observed/gi],
-      ["telemetry unique-domain count", /\bunique domain/gi],
-    ]
-    for (const [name, re] of forbidden) {
-      const n = count(surface, re)
-      if (n > 0) {
-        violations.push(`pr comment: "${name}" must not appear (found ${n}\u00d7)`)
-      }
-    }
-  }
-  return violations
 }

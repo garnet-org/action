@@ -1,6 +1,6 @@
 name: "Garnet Runtime Review"
 author: "Garnet Labs Inc."
-description: "Execution evidence for code review: what each CI job ran and reached, recorded at the kernel."
+description: "Garnet records your CI runner at runtime. The Action writes the Step Summary and uploads the record; the Garnet App posts the pull request comment, including on fork PRs."
 branding:
     icon: "activity"
     color: "purple"
@@ -34,12 +34,23 @@ inputs:
             without this the Runtime Review reports a single leg instead of all of them and cannot
             line legs up against the previous commit. Leave unset on non-matrix jobs.
         required: false
+    job_total:
+        description: |
+            Optional, matrix jobs only. Number of legs in the matrix: set it to the
+            strategy.job-total expression next to job_index. The Step Summary then labels the leg
+            "<job> (i of N)"; without it the leg shows the bare job name. The App's PR comment does
+            not need it. Leave unset on non-matrix jobs.
+        required: false
     debug:
         description: "Enable debug mode"
         required: false
         default: "false"
     preview:
         description: "Render the full-fidelity Step Summary record (assertions + evidence). Preview shape is unstable and may change without a major version bump"
+        required: false
+        default: "false"
+    show_detections:
+        description: "Show the sensor's detection labels (for example exec_from_unusual_dir) next to recorded destinations in the Step Summary. Off by default"
         required: false
         default: "false"
     stop_timeout_seconds:
