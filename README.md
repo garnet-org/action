@@ -152,7 +152,7 @@ The final comment lock uses five headings: `Runtime behavior changed`, `Nothing 
 
 Recorded states show the changed-job count, optional coverage, one comparison line, and a best-effort capture line. Each job has one top-level fold, with workload and runner/GitHub traffic in separate trees, followed by available job-log and full-record links. The footer is a separator, a `How to read this` fold, then `Recorded by Garnet · Add it to your CI ↗` linking to garnet.ai.
 
-The comparison baseline is the union of the last 10 recorded runs for the same job on the base branch. A destination is new only when none of those runs reached it; removals never count. Step labels, commit tables, `diff ↗`, and the `○` leaf marker are not part of the comment.
+Marker counts mirror the rendered added and removed workload rows. The headline outcome follows novelty: a destination is new only when none of the last 10 recorded base-branch runs reached it, and removals never change that outcome. Step labels, commit tables, `diff ↗`, and the former circular leaf marker are not part of the comment.
 
 The same record is appended to the job's Step Summary as the **Garnet Execution Summary** ([example run](https://github.com/garnet-labs/pnpm/actions/runs/35818535654)).
 
