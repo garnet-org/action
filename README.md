@@ -31,17 +31,9 @@ Garnet runs [Jibril](https://github.com/garnet-org/jibril-releases), an eBPF sen
 One workflow step. No code changes.
 
 - **Action**: adds the step; Jibril records the job; the Garnet Execution Summary lands in the job's Step Summary with a public Execution Profile permalink.
-- **Companion GitHub App**: owns the single Runtime Review comment per pull request — one fold per recorded job, a comparison against the previous recorded commit, and a per-job Execution Profile link.
+- **Companion GitHub App**: owns the single Runtime Review comment per pull request. It compares each recorded job with the last 10 recorded runs of that job on the base branch; runner and GitHub traffic is shown separately and is not counted as workload change.
 
-<p align="center">
-  <img
-    src="docs/images/pr-comment-v610.png"
-    width="800"
-    alt="A Garnet Runtime Review comment on a pull request: Execution Profiles recorded for 3 jobs, compared with the previous commit; one fold per job showing the execution tree as a diff, with ○ destination leaves and (step: …) context"
-  />
-</p>
-
-<p align="center"><sub>Runtime Review comment posted by the companion GitHub App on <a href="https://github.com/garnet-labs/pnpm/pull/65#issuecomment-5780094095">a pnpm pull request</a> (Action v2.3.0, contract 6.10.0).</sub></p>
+Public example: the Runtime Review comment on [pnpm/pnpm#17521](https://github.com/pnpm/pnpm/pull/17521).
 
 ## What Garnet records
 
@@ -156,26 +148,11 @@ Installation guides for each path: [docs.garnet.ai](https://docs.garnet.ai).
 
 ## Comment anatomy
 
-One comment per pull request, one fold per job, updated in place as each job's profile lands:
+The final comment lock uses five headings: `Runtime behavior changed`, `Nothing new recorded`, `Runtime behavior recorded`, `Recording runtime behavior`, and `Runtime behavior not recorded`.
 
-- **Headline** — `Execution Profiles recorded for N jobs, triggered by <sha7>`, linking the commit.
-- **Metadata line** — one fact per `·` segment: destination count (or the change summary when a comparison exists), `recorded at the kernel by Garnet`, UTC timestamp.
-- **One fold per job** — headed `workflow / job ↗ · N destinations`, the job linking to its Actions run. Inside: every recorded root of the job's process tree; independent roots separated by a blank line. Tree nodes are recorded process names; observed actions render as `○ destination`, defanged at the final dot. `(…)` carries factual context only — `(step: "Run tests")`, `(dns resolver)`, `(cloud metadata)`, `(github infra)`, `(garnet sensor)`, `(ran from /tmp/…)`. A job with no recorded egress stays a plain row with its profile link.
-- **Per-job permalink** — `View this job's Execution Profile in Garnet →`, opening the [public run report](https://app.garnet.ai/public/runs/35818535654?profile=01a0cc87-186b-7be4-aa88-2a28f71e0744). The `?profile=` selector is part of the permalink; a bare run URL returns 404.
-- **Explainer** — a `💡 How to read this` fold at the bottom:
+Recorded states show the changed-job count, optional coverage, one comparison line, and a best-effort capture line. Each job has one top-level fold, with workload and runner/GitHub traffic in separate trees, followed by available job-log and full-record links. The footer is a separator, a `How to read this` fold, then `Recorded by Garnet · Add it to your CI ↗` linking to garnet.ai.
 
-<pre>
-Runner.Worker          <em>← process on a path</em>
-└─ npm
-   └─ <strong>node</strong>             <em>← process that acted</em>
-      └─ ○ npmjs[.]org <em>← observed action</em>
-</pre>
-
-follow a path downward to see what ran and what it did — each path to an observed action is an execution chain
-
-names on the path = processes · ○ = observed action · (…) = context
-
-Once a pull request has two recorded commits, the comment compares against the previous recorded commit: the metadata line carries `compared with <sha7>`, changed job rows lead with the delta (`+1 −2`), unchanged rows read `· N destinations · unchanged`, and a changed job's tree renders as a diff headed `@@ <previous> (previous) vs <current> (current) @@`. `+` marks a destination only in the current record, `−` one only in the previous record. Jobs recorded previously but not on this commit sit in one collapsed `jobs no longer recorded` fold.
+Marker counts mirror the rendered added and removed workload rows. The headline outcome follows novelty: a destination is new only when none of the last 10 recorded base-branch runs reached it, and removals never change that outcome. Step labels, commit tables, `diff ↗`, and the former circular leaf marker are not part of the comment.
 
 The same record is appended to the job's Step Summary as the **Garnet Execution Summary** ([example run](https://github.com/garnet-labs/pnpm/actions/runs/35818535654)).
 
@@ -188,7 +165,7 @@ Read the record for what it is: what Garnet recorded, not a statement that nothi
 - **Matrix jobs.** Jobs that share a name across a matrix can be aggregated under one fold and undercount destinations.
 - **No completeness claim.** The record states what was captured; it does not declare that every connection was captured.
 - **Post-step time.** Stopping the sensor waits for Jibril to flush its Execution Profile, bounded by `stop_timeout_seconds`. On busy jobs this has been measured at 1–3 minutes; lower the bound if post-step latency matters more than a complete flush.
-- **Comparison needs a recorded pair.** The diff view appears only when the previous recorded commit on the pull request has a profile for the same job; otherwise the fold shows the current record alone.
+- **Comparison uses recorded history.** Each job uses the last 10 recorded runs of that job on the base branch; when no base record exists, the previous push is used only if it is part of the pull request.
 - **Matrix legs need `job_index`.** GitHub gives every leg of a `strategy.matrix` job the same job name, so without the `job_index` input the legs are indistinguishable to Garnet. See [Matrix jobs](#matrix-jobs).
 
 ## Under the hood
