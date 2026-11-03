@@ -33,8 +33,6 @@ One workflow step. No code changes.
 - **Action**: adds the step; Jibril records the job; the Garnet Execution Summary lands in the job's Step Summary with a public Execution Profile permalink.
 - **Companion GitHub App**: owns the single Runtime Review comment per pull request. It compares each recorded job with the last 10 recorded runs of that job on the base branch; runner and GitHub traffic is shown separately and is not counted as workload change.
 
-In the #8 example the comment names its comparison: the PR base `main`.
-
 Public example: adding Puppeteer as a devDependency shows [the #8 Runtime Review comment](https://github.com/garnet-labs/ghaw-garnet-reference/pull/8#issuecomment-6615094423) with `node` newly reaching `storage.googleapis[.]com`, compared with the PR base.
 
 <img src="docs/images/pr-comment-ghaw-8.png" alt="Runtime behavior changed: node newly reaches storage.googleapis[.]com, with the workload and runner trees open" width="800">
@@ -159,8 +157,6 @@ The comment uses five headings: `Runtime behavior changed`, `Nothing new recorde
 Recorded states show the changed-job count, optional coverage, one comparison line, and a best-effort capture line. Each job has one top-level fold, with workload and runner/GitHub traffic in separate trees, followed by available job-log and full-record links. The footer is a separator, a `How to read this` fold, then `Recorded by Garnet · Add it to your CI ↗` linking to garnet.ai.
 
 Marker counts mirror the rendered added and removed workload rows. The headline outcome follows novelty: a destination is new only when none of the last 10 recorded base-branch runs reached it, and removals never change that outcome. Step labels, commit tables, `diff ↗`, and the former circular leaf marker are not part of the comment.
-
-In the #8 example the comment names its comparison: the PR base `main`.
 
 In the posted #8 example, the comment compares with PR base `main`: `node` newly reaches `storage.googleapis[.]com`. Runner and GitHub traffic is shown in its own tree and never counts toward workload change.
 
