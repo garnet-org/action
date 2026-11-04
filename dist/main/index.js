@@ -43756,7 +43756,7 @@ GITHUB_WORKSPACE=${getEnv("GITHUB_WORKSPACE")}
         }
 
         info("Installing Jibril as a systemd service")
-        await execSudo([`${INSTPATH}/jibril`, "--systemd", "install"])
+        await execSudo([`${INSTPATH}/jibril`, "--systemd", "install"], { preserveEnv: true })
 
         // Configure logging using a systemd drop-in override
         info("Configuring Jibril logging")
@@ -44630,16 +44630,85 @@ async function readRootFileSafe(filePath) {
     return result.stdout.trim()
 }
 
+const JIBRIL_PRESERVED_ENV_NAME_PATTERN = /^(?:(?:GARNET|JIBRIL|GITHUB|RUNNER|AI)_[A-Z0-9_]+|CI|DEBUG)$/
+
+/**
+ * Builds the `--preserve-env=...` flag for `sudo` from the given environment.
+ *
+ * Ubuntu 26.04 replaced classic `sudo` with `sudo-rs`, which ignores `-E` and
+ * strips the caller's environment unless variable names are listed explicitly
+ * with `--preserve-env=VAR1,VAR2,...` (supported by both `sudo` and `sudo-rs`).
+ * Only the variable names Jibril and the action use are forwarded, so neither
+ * restricted loader variables nor unrelated workflow secrets cross into root.
+ * @param {NodeJS.ProcessEnv} [env]
+ * @returns {string}
+ */
+function buildSudoPreserveEnvFlag(env = process.env) {
+    const names = Object.keys(env)
+        .filter(name => env[name] !== undefined && JIBRIL_PRESERVED_ENV_NAME_PATTERN.test(name))
+        .sort()
+
+    if (names.length === 0) {
+        return ""
+    }
+
+    return `--preserve-env=${names.join(",")}`
+}
+
+/**
+ * @typedef {object} BuildSudoArgsOptions
+ * @property {boolean} [preserveEnv]
+ * @property {NodeJS.ProcessEnv} [env]
+ */
+
+/**
+ * @param {string[]} args
+ * @param {BuildSudoArgsOptions} [options]
+ * @returns {string[]}
+ */
+function buildSudoArgs(args, options = {}) {
+    if (options.preserveEnv !== true) {
+        return [...args]
+    }
+
+    const preserveEnvFlag = buildSudoPreserveEnvFlag(options.env ?? process.env)
+    if (preserveEnvFlag === "") {
+        return [...args]
+    }
+
+    return [preserveEnvFlag, ...args]
+}
+
+/**
+ * @typedef {object} ExecSudoOptions
+ * @property {boolean} [preserveEnv]
+ * @property {boolean} [ignoreReturnCode]
+ * @property {boolean} [silent]
+ * @property {import("@actions/exec").ExecListeners} [listeners]
+ */
+
 /**
  * This function executes a command with sudo.
  * @param {string[]} args
- * @param {ExecOptions=} options
+ * @param {ExecSudoOptions=} options
  */
 async function execSudo(args, options = {}) {
+    const sudoArgs = buildSudoArgs(args, { preserveEnv: options.preserveEnv === true })
     if (getEnv("DEBUG") === "true") {
-        debug(`$ sudo -E ${args.join(" ")}`)
+        debug(`$ sudo ${sudoArgs.join(" ")}`)
     }
-    return exec_exec("sudo", ["-E", ...args], options)
+    /** @type {ExecOptions} */
+    const execOptions = {}
+    if (options.ignoreReturnCode !== undefined) {
+        execOptions.ignoreReturnCode = options.ignoreReturnCode
+    }
+    if (options.silent !== undefined) {
+        execOptions.silent = options.silent
+    }
+    if (options.listeners !== undefined) {
+        execOptions.listeners = options.listeners
+    }
+    return exec_exec("sudo", sudoArgs, execOptions)
 }
 
 /**

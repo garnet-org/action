@@ -14,7 +14,13 @@ import assert from "node:assert/strict"
 import { readFile } from "node:fs/promises"
 import { join, dirname } from "node:path"
 import { fileURLToPath } from "node:url"
-import { resolveControlPlaneAuth, resolveJibrilVersion, JIBRIL_STABLE_VERSION } from "../src/action.js"
+import {
+    buildSudoArgs,
+    buildSudoPreserveEnvFlag,
+    resolveControlPlaneAuth,
+    resolveJibrilVersion,
+    JIBRIL_STABLE_VERSION,
+} from "../src/action.js"
 
 const here = dirname(fileURLToPath(import.meta.url))
 
@@ -187,4 +193,73 @@ test("gate: jibril sensor version never floats — every ref resolves to an expl
     for (const ref of pinnedRefs) {
         assert.equal(resolveJibrilVersion("", ref), JIBRIL_STABLE_VERSION, `ref ${JSON.stringify(ref)}`)
     }
+})
+
+test("gate: sudo commands do not pass -E and only preserve Jibril/GitHub env vars when requested", async () => {
+    const env = {
+        GARNET_API_URL: "https://api.garnet.ai",
+        GARNET_AGENT_TOKEN: "agent-secret-token",
+        GARNET_API_TOKEN: "",
+        GITHUB_ACTIONS: "true",
+        GITHUB_WORKFLOW: "CI",
+        GITHUB_TOKEN: "ghs_secret",
+        JIBRIL_JSONPROFILER_FILE: "/var/log/jibril.profile.json",
+        RUNNER_OS: "Linux",
+        AI_ENABLED: "false",
+        CI: "true",
+        DEBUG: "false",
+        UNSET_VAR: undefined,
+        GITHUB_UNSET: undefined,
+        PATH: "/usr/local/bin:/usr/bin",
+        HOME: "/home/runner",
+        LD_PRELOAD: "/tmp/evil.so",
+        LD_LIBRARY_PATH: "/tmp/lib",
+        "BASH_FUNC_myfunc%%": "() { :; }",
+        AWS_SECRET_ACCESS_KEY: "aws-secret",
+        NPM_TOKEN: "npm-secret",
+    }
+
+    // Default sudo calls (mv, chmod, install, cp, systemctl) never pass -E or --preserve-env.
+    assert.deepEqual(buildSudoArgs(["mv", "/tmp/jibril", "/usr/local/bin/jibril"], { env }), [
+        "mv",
+        "/tmp/jibril",
+        "/usr/local/bin/jibril",
+    ])
+
+    // Preserved-env sudo calls use explicit --preserve-env=VAR1,VAR2 (supported by both sudo and sudo-rs).
+    const flag = buildSudoPreserveEnvFlag(env)
+    assert.equal(
+        flag,
+        "--preserve-env=AI_ENABLED,CI,DEBUG,GARNET_AGENT_TOKEN,GARNET_API_TOKEN,GARNET_API_URL,GITHUB_ACTIONS,GITHUB_TOKEN,GITHUB_WORKFLOW,JIBRIL_JSONPROFILER_FILE,RUNNER_OS",
+    )
+    assert.ok(!flag.includes("agent-secret-token"), "flag must carry variable names only, never secret values")
+    assert.ok(!flag.includes("ghs_secret"), "flag must carry variable names only, never secret values")
+    assert.ok(!flag.includes("LD_PRELOAD"), "restricted loader variables must not be preserved")
+    assert.ok(!flag.includes("BASH_FUNC"), "invalid identifier names must not be preserved")
+    assert.ok(!flag.includes("AWS_SECRET_ACCESS_KEY"), "unrelated user secrets must not be preserved")
+
+    assert.deepEqual(buildSudoArgs(["/usr/local/bin/jibril", "--systemd", "install"], { preserveEnv: true, env }), [
+        flag,
+        "/usr/local/bin/jibril",
+        "--systemd",
+        "install",
+    ])
+
+    // When no matching variables exist, --preserve-env= is omitted rather than passed empty.
+    assert.equal(buildSudoPreserveEnvFlag({ PATH: "/usr/bin", HOME: "/root", GITHUB_SHA: undefined }), "")
+    assert.deepEqual(
+        buildSudoArgs(["/usr/local/bin/jibril", "--systemd", "install"], {
+            preserveEnv: true,
+            env: { PATH: "/usr/bin" },
+        }),
+        ["/usr/local/bin/jibril", "--systemd", "install"],
+    )
+
+    // Source gate: -E is never passed to sudo, and jibril --systemd install opts into preserveEnv.
+    const source = await readFile(join(here, "..", "src", "action.js"), "utf8")
+    assert.doesNotMatch(source, /sudo\s+-E|\["-E"/)
+    assert.match(
+        source,
+        /execSudo\(\[\`\$\{INSTPATH\}\/jibril\`,\s*"--systemd",\s*"install"\],\s*\{\s*preserveEnv:\s*true\s*\}\)/,
+    )
 })
