@@ -142,7 +142,7 @@ export function renderStartFailureSummary(failure) {
     const excerpt = sections.join("\n\n").replaceAll("```", "'''")
 
     return [
-        "**Execution Profile for this job · not recorded**",
+        "### Runtime behavior not recorded",
         "",
         `<sub>the sensor did not start on this runner — ${escapeHTML(failure.reason)}</sub>`,
         "",

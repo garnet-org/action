@@ -1,56 +1,28 @@
 /**
  * Runtime Review contract values — vendored from
- * garnet-org/runtime-review-testbed contract/vocab.json at contract v6.10.0.
- * Only the values the renderer and its gates consume are vendored here; the
- * testbed remains the normative source for the full contract. Never hand-edit
- * values outside a contract sync.
+ * garnet-org/runtime-review-testbed `main` contract/vocab.json, the single
+ * living reference for renderer, vocabulary and goldens. `contractRef` pins
+ * the testbed-main SHA the values were copied from. The Action renders only
+ * the Step Summary (the Garnet App owns the PR comment), so only the values
+ * the Step Summary and its gates consume are vendored here. Never hand-edit
+ * values outside a contract sync; re-vendor from testbed main instead.
+ *
+ * PREP: until the renderer lane lands the comment-final contract on testbed
+ * main, `contractRef` is a placeholder.
  */
 
 export const CONTRACT_VOCAB = {
     version: "6.10.0",
+    contractRef: "pending-renderer-lane-v17.3",
     profileFormatVersion: "0.2.0",
     copy: {
-        headlineLead: "Execution Profiles recorded for",
-        headlinePendingLead: "Execution Profiles recording for jobs triggered by",
         stepSummaryHeading: "Garnet Execution Summary",
-        artifact: "Execution Profile",
         kernelProvenance: "recorded at the kernel by Garnet",
-        sensor: "Jibril",
-        destinationNoun: "destination",
-        chainNoun: "execution chain",
         permalinkLabel: "View this job's Execution Profile in Garnet →",
         emptyPeers: "no outbound destinations recorded.",
-        noRunProfile: "no Execution Profile recorded.",
         unknownLineage: "unknown (not recorded)",
-        explainerLabel: "💡 How to read this",
-        explainerReadingLine:
-            "follow a path downward to see what ran and what it did — each path to an observed action is an execution chain",
-        explainerComparisonLine: "+ only in the current record · − only in the previous record",
-        explainerBackgroundSegment: "runner background = the runner's infrastructure, not your workflow",
-        explainerCalloutPath: "process on a path",
-        explainerCalloutActed: "process that acted",
-        explainerCalloutAction: "observed action",
-        explainerLegendLine: "names on the path = processes · ○ = observed action · (…) = context",
-        pendingStatus:
-            "⏳ Execution Profiles for this commit are still being recorded — this comment updates in place as jobs finish.",
-        truncationTemplate: "rendered X of Y destination associations",
-        noChange: "unchanged",
+        captureBestEffort: "Capture is best-effort.",
         terminalNetwork: "○",
-        terminalFile: "□",
-        terminalExecution: "▷",
-        sinceWord: "since",
-        vanishedJobsLabel: "jobs no longer recorded",
-        jobsLineNoOutbound: "with no outbound destinations recorded",
-        jobsLineVanished: "no longer recorded",
-        jobsLineChanged: "changed",
-        jobsLineUnchanged: "unchanged",
-        machineSummaryMarker: "garnet:summary",
-        whatIsGarnetLabel: "What is Garnet →",
-        whatIsGarnetUrl: "https://docs.garnet.ai?utm_source=github&utm_medium=pr_comment",
-        runnerBackground: "runner background",
-    },
-    comment: {
-        foldOpenBudget: 3,
     },
     bannedVocabulary: [
         "every process",
@@ -81,11 +53,11 @@ export const CONTRACT_VOCAB = {
     ],
     notes: {
         dnsResolver: {
-            text: "dns resolver",
+            text: "",
             loopbackPattern: "^(127\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}|::1|localhost)$",
         },
         instanceMetadata: {
-            text: "cloud metadata",
+            text: "Cloud IMDS",
             addresses: ["169.254.169.254"],
         },
         githubInfrastructure: {
@@ -103,23 +75,6 @@ export const CONTRACT_VOCAB = {
         },
     },
     mediumLimits: {
-        prCommentHardLimit: 65536,
-        prCommentBudget: 60000,
         stepSummaryHardLimit: 1048576,
-    },
-    publicRunProfile: {
-        profileSelectorRoute: "/public/runs/{run_id}?profile=<profile_id>",
-        selectorMiss:
-            "an absent, empty, or wrong profile ID returns 404 — never a silent fallback to run index/job/first profile",
-        embargoedFields: [
-            "argv",
-            "arguments",
-            "executable paths",
-            "environment values",
-            "assertions",
-            "detection evidence",
-            "sensor telemetry",
-            "sensitive actor/ref metadata",
-        ],
     },
 }

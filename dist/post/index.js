@@ -148318,7 +148318,7 @@ const RULES = [
 ]
 
 /**
- * Returns `value` with any detected secrets replaced by a mask.
+ * Returns `value` with any matched secrets replaced by a mask.
  * @param {string} value
  * @returns {string}
  */
@@ -148554,11 +148554,85 @@ function redactStringArray(list) {
     }
 }
 
+;// CONCATENATED MODULE: ./src/delivery-annotations.js
+
+
+/** @typedef {"profile_not_written"|"profile_empty"|"profile_invalid"|"profile_unreadable"|"profile_too_large"|"artifact_upload_failed"|"relay_agent_unreadable"|"summary_failed"} DeliveryFailureCause */
+
+/**
+ * @typedef {object} DeliveryFailureAnnotation
+ * @property {string} title
+ * @property {string} message
+ */
+
+const NO_PROFILE_TITLE = "Garnet: Execution Profile not recorded"
+const NO_REVIEW_TITLE = "Garnet: no Runtime Review for this job"
+const SUMMARY_FAILED_TITLE = "Garnet: Runtime Review step error"
+
+/** @type {Readonly<Record<DeliveryFailureCause, DeliveryFailureAnnotation>>} */
+const DELIVERY_FAILURE_ANNOTATIONS = Object.freeze({
+    profile_not_written: Object.freeze({
+        title: NO_PROFILE_TITLE,
+        message:
+            "The Garnet sensor did not write this job's Execution Profile before the post step's wait ended, so the Runtime Review for this job has no runtime evidence. The job itself is not affected.",
+    }),
+    profile_empty: Object.freeze({
+        title: NO_PROFILE_TITLE,
+        message:
+            "The Garnet sensor wrote an empty Execution Profile for this job, so the Runtime Review for this job has no runtime evidence. The job itself is not affected.",
+    }),
+    profile_invalid: Object.freeze({
+        title: NO_PROFILE_TITLE,
+        message:
+            "The Garnet sensor wrote an Execution Profile for this job that could not be parsed, so the Runtime Review for this job has no runtime evidence. The job itself is not affected.",
+    }),
+    profile_unreadable: Object.freeze({
+        title: NO_PROFILE_TITLE,
+        message:
+            "The Execution Profile for this job could not be read, so the Runtime Review for this job has no runtime evidence. The job itself is not affected.",
+    }),
+    profile_too_large: Object.freeze({
+        title: NO_PROFILE_TITLE,
+        message:
+            "The Execution Profile for this job is too large to relay through a workflow artifact and was dropped, so the Runtime Review will report this job as unrecorded. The job itself is not affected.",
+    }),
+    artifact_upload_failed: Object.freeze({
+        title: NO_REVIEW_TITLE,
+        message:
+            "Uploading the Garnet run artifact failed, so no Runtime Review will be published for this job. The job itself is not affected.",
+    }),
+    relay_agent_unreadable: Object.freeze({
+        title: NO_REVIEW_TITLE,
+        message:
+            "The Garnet agent record saved by the main step could not be read, so the run artifact was skipped and no Runtime Review will be published for this job. The job itself is not affected.",
+    }),
+    summary_failed: Object.freeze({
+        title: SUMMARY_FAILED_TITLE,
+        message: "The Runtime Review step hit an unexpected error and did not finish. The job itself is not affected.",
+    }),
+})
+
+/**
+ * @param {DeliveryFailureCause} cause
+ * @param {string} detail
+ * @returns {void}
+ */
+function annotateDeliveryFailure(cause, detail) {
+    const annotation = DELIVERY_FAILURE_ANNOTATIONS[cause]
+    warning(annotation.message, { title: annotation.title })
+    if (detail !== "") {
+        // core.info does not escape workflow commands; a line break in a
+        // diagnostic drawn from the profile could start a new "::" command.
+        info(`${annotation.title}: ${detail.replace(/[\r\n]+/g, " ")}`)
+    }
+}
+
 ;// CONCATENATED MODULE: ./src/run-artifact.js
 // A fork's pull request gets neither repository secrets nor an OIDC ID
 // token, so the job cannot reach the control plane at all. It can still
 // upload a workflow artifact, which the Garnet GitHub App collects
 // afterwards with its own credentials.
+
 
 
 
@@ -148700,10 +148774,7 @@ function serializeRunArtifact(envelope) {
 async function uploadRunArtifact(name, envelope) {
     const serialized = serializeRunArtifact(envelope)
     if (serialized.profileOmitted) {
-        warning(
-            "The Execution Profile for this job is too large to relay through a workflow artifact and was " +
-                "dropped from the upload. The Runtime Review will report this job as unrecorded.",
-        )
+        annotateDeliveryFailure("profile_too_large", "")
     }
 
     let stagingDir = ""
@@ -148719,10 +148790,7 @@ async function uploadRunArtifact(name, envelope) {
         await artifact.uploadArtifact(name, [entryPath], stagingDir)
         info(`Uploaded the Garnet run artifact '${name}'`)
     } catch (error) {
-        warning(
-            `Failed to upload the Garnet run artifact '${name}': ${getErrorMessage(error)}. ` +
-                "No Runtime Review will be published for this job.",
-        )
+        annotateDeliveryFailure("artifact_upload_failed", `artifact '${name}': ${getErrorMessage(error)}`)
     } finally {
         if (stagingDir !== "") {
             await promises_.rm(stagingDir, { recursive: true, force: true })
@@ -158881,7 +158949,7 @@ class ControlPlaneClient {
 
     /**
      * Signals that this run's sensor stopped, with the reason and whether a usable
-     * Run Profile was produced, so the control plane can resolve pending state.
+     * Execution Profile was produced, so the control plane can resolve pending state.
      * Authenticated as the agent itself.
      * @param {AgentStoppedRequest} input
      * @returns {Promise<void>}
@@ -159349,57 +159417,29 @@ var external_node_net_ = __nccwpck_require__(77030);
 ;// CONCATENATED MODULE: ./src/runtime-review-vocab.js
 /**
  * Runtime Review contract values — vendored from
- * garnet-org/runtime-review-testbed contract/vocab.json at contract v6.10.0.
- * Only the values the renderer and its gates consume are vendored here; the
- * testbed remains the normative source for the full contract. Never hand-edit
- * values outside a contract sync.
+ * garnet-org/runtime-review-testbed `main` contract/vocab.json, the single
+ * living reference for renderer, vocabulary and goldens. `contractRef` pins
+ * the testbed-main SHA the values were copied from. The Action renders only
+ * the Step Summary (the Garnet App owns the PR comment), so only the values
+ * the Step Summary and its gates consume are vendored here. Never hand-edit
+ * values outside a contract sync; re-vendor from testbed main instead.
+ *
+ * PREP: until the renderer lane lands the comment-final contract on testbed
+ * main, `contractRef` is a placeholder.
  */
 
-const runtime_review_vocab_CONTRACT_VOCAB = {
+const CONTRACT_VOCAB = {
     version: "6.10.0",
+    contractRef: "pending-renderer-lane-v17.3",
     profileFormatVersion: "0.2.0",
     copy: {
-        headlineLead: "Execution Profiles recorded for",
-        headlinePendingLead: "Execution Profiles recording for jobs triggered by",
         stepSummaryHeading: "Garnet Execution Summary",
-        artifact: "Execution Profile",
         kernelProvenance: "recorded at the kernel by Garnet",
-        sensor: "Jibril",
-        destinationNoun: "destination",
-        chainNoun: "execution chain",
         permalinkLabel: "View this job's Execution Profile in Garnet →",
         emptyPeers: "no outbound destinations recorded.",
-        noRunProfile: "no Execution Profile recorded.",
         unknownLineage: "unknown (not recorded)",
-        explainerLabel: "💡 How to read this",
-        explainerReadingLine:
-            "follow a path downward to see what ran and what it did — each path to an observed action is an execution chain",
-        explainerComparisonLine: "+ only in the current record · − only in the previous record",
-        explainerBackgroundSegment: "runner background = the runner's infrastructure, not your workflow",
-        explainerCalloutPath: "process on a path",
-        explainerCalloutActed: "process that acted",
-        explainerCalloutAction: "observed action",
-        explainerLegendLine: "names on the path = processes · ○ = observed action · (…) = context",
-        pendingStatus:
-            "⏳ Execution Profiles for this commit are still being recorded — this comment updates in place as jobs finish.",
-        truncationTemplate: "rendered X of Y destination associations",
-        noChange: "unchanged",
+        captureBestEffort: "Capture is best-effort.",
         terminalNetwork: "○",
-        terminalFile: "□",
-        terminalExecution: "▷",
-        sinceWord: "since",
-        vanishedJobsLabel: "jobs no longer recorded",
-        jobsLineNoOutbound: "with no outbound destinations recorded",
-        jobsLineVanished: "no longer recorded",
-        jobsLineChanged: "changed",
-        jobsLineUnchanged: "unchanged",
-        machineSummaryMarker: "garnet:summary",
-        whatIsGarnetLabel: "What is Garnet →",
-        whatIsGarnetUrl: "https://docs.garnet.ai?utm_source=github&utm_medium=pr_comment",
-        runnerBackground: "runner background",
-    },
-    comment: {
-        foldOpenBudget: 3,
     },
     bannedVocabulary: [
         "every process",
@@ -159430,11 +159470,11 @@ const runtime_review_vocab_CONTRACT_VOCAB = {
     ],
     notes: {
         dnsResolver: {
-            text: "dns resolver",
+            text: "",
             loopbackPattern: "^(127\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}|::1|localhost)$",
         },
         instanceMetadata: {
-            text: "cloud metadata",
+            text: "Cloud IMDS",
             addresses: ["169.254.169.254"],
         },
         githubInfrastructure: {
@@ -159452,141 +159492,20 @@ const runtime_review_vocab_CONTRACT_VOCAB = {
         },
     },
     mediumLimits: {
-        prCommentHardLimit: 65536,
-        prCommentBudget: 60000,
         stepSummaryHardLimit: 1048576,
     },
-    publicRunProfile: {
-        profileSelectorRoute: "/public/runs/{run_id}?profile=<profile_id>",
-        selectorMiss:
-            "an absent, empty, or wrong profile ID returns 404 — never a silent fallback to run index/job/first profile",
-        embargoedFields: [
-            "argv",
-            "arguments",
-            "executable paths",
-            "environment values",
-            "assertions",
-            "detection evidence",
-            "sensor telemetry",
-            "sensitive actor/ref metadata",
-        ],
-    },
-}
-
-;// CONCATENATED MODULE: ./src/public-suffix-rules.js
-/**
- * Vendored public-suffix rule table — generated from
- * garnet-org/runtime-review-testbed contract/public_suffix_list.dat at commit
- * 96eed7e (the versioned table the contract pins). Keys are suffix rules;
- * values are "rule", "wildcard" (stored under the parent of the "*"), or
- * "exception". Regenerate from the upstream file; never hand-edit.
- */
-
-const PUBLIC_SUFFIX_RULES = new Map(
-  Object.entries(
-    {"ac":"rule","com.ac":"rule","edu.ac":"rule","gov.ac":"rule","mil.ac":"rule","net.ac":"rule","org.ac":"rule","ad":"rule","ae":"rule","ac.ae":"rule","co.ae":"rule","gov.ae":"rule","mil.ae":"rule","net.ae":"rule","org.ae":"rule","sch.ae":"rule","aero":"rule","airline.aero":"rule","airport.aero":"rule","accident-investigation.aero":"rule","accident-prevention.aero":"rule","aerobatic.aero":"rule","aeroclub.aero":"rule","aerodrome.aero":"rule","agents.aero":"rule","air-surveillance.aero":"rule","air-traffic-control.aero":"rule","aircraft.aero":"rule","airtraffic.aero":"rule","ambulance.aero":"rule","association.aero":"rule","author.aero":"rule","ballooning.aero":"rule","broker.aero":"rule","caa.aero":"rule","cargo.aero":"rule","catering.aero":"rule","certification.aero":"rule","championship.aero":"rule","charter.aero":"rule","civilaviation.aero":"rule","club.aero":"rule","conference.aero":"rule","consultant.aero":"rule","consulting.aero":"rule","control.aero":"rule","council.aero":"rule","crew.aero":"rule","design.aero":"rule","dgca.aero":"rule","educator.aero":"rule","emergency.aero":"rule","engine.aero":"rule","engineer.aero":"rule","entertainment.aero":"rule","equipment.aero":"rule","exchange.aero":"rule","express.aero":"rule","federation.aero":"rule","flight.aero":"rule","freight.aero":"rule","fuel.aero":"rule","gliding.aero":"rule","government.aero":"rule","groundhandling.aero":"rule","group.aero":"rule","hanggliding.aero":"rule","homebuilt.aero":"rule","insurance.aero":"rule","journal.aero":"rule","journalist.aero":"rule","leasing.aero":"rule","logistics.aero":"rule","magazine.aero":"rule","maintenance.aero":"rule","marketplace.aero":"rule","media.aero":"rule","microlight.aero":"rule","modelling.aero":"rule","navigation.aero":"rule","parachuting.aero":"rule","paragliding.aero":"rule","passenger-association.aero":"rule","pilot.aero":"rule","press.aero":"rule","production.aero":"rule","recreation.aero":"rule","repbody.aero":"rule","res.aero":"rule","research.aero":"rule","rotorcraft.aero":"rule","safety.aero":"rule","scientist.aero":"rule","services.aero":"rule","show.aero":"rule","skydiving.aero":"rule","software.aero":"rule","student.aero":"rule","taxi.aero":"rule","trader.aero":"rule","trading.aero":"rule","trainer.aero":"rule","union.aero":"rule","workinggroup.aero":"rule","works.aero":"rule","af":"rule","com.af":"rule","edu.af":"rule","gov.af":"rule","net.af":"rule","org.af":"rule","ag":"rule","co.ag":"rule","com.ag":"rule","net.ag":"rule","nom.ag":"rule","org.ag":"rule","ai":"rule","com.ai":"rule","net.ai":"rule","off.ai":"rule","org.ai":"rule","al":"rule","com.al":"rule","edu.al":"rule","gov.al":"rule","mil.al":"rule","net.al":"rule","org.al":"rule","am":"rule","co.am":"rule","com.am":"rule","commune.am":"rule","net.am":"rule","org.am":"rule","ao":"rule","co.ao":"rule","ed.ao":"rule","edu.ao":"rule","gov.ao":"rule","gv.ao":"rule","it.ao":"rule","og.ao":"rule","org.ao":"rule","pb.ao":"rule","aq":"rule","ar":"rule","bet.ar":"rule","com.ar":"rule","coop.ar":"rule","edu.ar":"rule","gob.ar":"rule","gov.ar":"rule","int.ar":"rule","mil.ar":"rule","musica.ar":"rule","mutual.ar":"rule","net.ar":"rule","org.ar":"rule","seg.ar":"rule","senasa.ar":"rule","tur.ar":"rule","arpa":"rule","e164.arpa":"rule","home.arpa":"rule","in-addr.arpa":"rule","ip6.arpa":"rule","iris.arpa":"rule","uri.arpa":"rule","urn.arpa":"rule","as":"rule","gov.as":"rule","asia":"rule","at":"rule","ac.at":"rule","sth.ac.at":"rule","co.at":"rule","gv.at":"rule","or.at":"rule","au":"rule","asn.au":"rule","com.au":"rule","edu.au":"rule","gov.au":"rule","id.au":"rule","net.au":"rule","org.au":"rule","conf.au":"rule","oz.au":"rule","act.au":"rule","nsw.au":"rule","nt.au":"rule","qld.au":"rule","sa.au":"rule","tas.au":"rule","vic.au":"rule","wa.au":"rule","act.edu.au":"rule","catholic.edu.au":"rule","nsw.edu.au":"rule","nt.edu.au":"rule","qld.edu.au":"rule","sa.edu.au":"rule","tas.edu.au":"rule","vic.edu.au":"rule","wa.edu.au":"rule","qld.gov.au":"rule","sa.gov.au":"rule","tas.gov.au":"rule","vic.gov.au":"rule","wa.gov.au":"rule","aw":"rule","com.aw":"rule","ax":"rule","az":"rule","biz.az":"rule","co.az":"rule","com.az":"rule","edu.az":"rule","gov.az":"rule","info.az":"rule","int.az":"rule","mil.az":"rule","name.az":"rule","net.az":"rule","org.az":"rule","pp.az":"rule","pro.az":"rule","ba":"rule","com.ba":"rule","edu.ba":"rule","gov.ba":"rule","mil.ba":"rule","net.ba":"rule","org.ba":"rule","bb":"rule","biz.bb":"rule","co.bb":"rule","com.bb":"rule","edu.bb":"rule","gov.bb":"rule","info.bb":"rule","net.bb":"rule","org.bb":"rule","store.bb":"rule","tv.bb":"rule","bd":"rule","ac.bd":"rule","ai.bd":"rule","co.bd":"rule","com.bd":"rule","edu.bd":"rule","gov.bd":"rule","id.bd":"rule","info.bd":"rule","it.bd":"rule","mil.bd":"rule","net.bd":"rule","org.bd":"rule","sch.bd":"rule","tv.bd":"rule","be":"rule","ac.be":"rule","bf":"rule","gov.bf":"rule","bg":"rule","0.bg":"rule","1.bg":"rule","2.bg":"rule","3.bg":"rule","4.bg":"rule","5.bg":"rule","6.bg":"rule","7.bg":"rule","8.bg":"rule","9.bg":"rule","a.bg":"rule","b.bg":"rule","c.bg":"rule","d.bg":"rule","e.bg":"rule","f.bg":"rule","g.bg":"rule","h.bg":"rule","i.bg":"rule","j.bg":"rule","k.bg":"rule","l.bg":"rule","m.bg":"rule","n.bg":"rule","o.bg":"rule","p.bg":"rule","q.bg":"rule","r.bg":"rule","s.bg":"rule","t.bg":"rule","u.bg":"rule","v.bg":"rule","w.bg":"rule","x.bg":"rule","y.bg":"rule","z.bg":"rule","bh":"rule","com.bh":"rule","edu.bh":"rule","gov.bh":"rule","net.bh":"rule","org.bh":"rule","bi":"rule","co.bi":"rule","com.bi":"rule","edu.bi":"rule","or.bi":"rule","org.bi":"rule","biz":"rule","bj":"rule","africa.bj":"rule","agro.bj":"rule","architectes.bj":"rule","assur.bj":"rule","avocats.bj":"rule","co.bj":"rule","com.bj":"rule","eco.bj":"rule","econo.bj":"rule","edu.bj":"rule","info.bj":"rule","loisirs.bj":"rule","money.bj":"rule","net.bj":"rule","org.bj":"rule","ote.bj":"rule","restaurant.bj":"rule","resto.bj":"rule","tourism.bj":"rule","univ.bj":"rule","bm":"rule","com.bm":"rule","edu.bm":"rule","gov.bm":"rule","net.bm":"rule","org.bm":"rule","bn":"rule","com.bn":"rule","edu.bn":"rule","gov.bn":"rule","net.bn":"rule","org.bn":"rule","bo":"rule","com.bo":"rule","edu.bo":"rule","gob.bo":"rule","int.bo":"rule","mil.bo":"rule","net.bo":"rule","org.bo":"rule","tv.bo":"rule","web.bo":"rule","academia.bo":"rule","agro.bo":"rule","arte.bo":"rule","blog.bo":"rule","bolivia.bo":"rule","ciencia.bo":"rule","cooperativa.bo":"rule","democracia.bo":"rule","deporte.bo":"rule","ecologia.bo":"rule","economia.bo":"rule","empresa.bo":"rule","indigena.bo":"rule","industria.bo":"rule","info.bo":"rule","medicina.bo":"rule","movimiento.bo":"rule","musica.bo":"rule","natural.bo":"rule","nombre.bo":"rule","noticias.bo":"rule","patria.bo":"rule","plurinacional.bo":"rule","politica.bo":"rule","profesional.bo":"rule","pueblo.bo":"rule","revista.bo":"rule","salud.bo":"rule","tecnologia.bo":"rule","tksat.bo":"rule","transporte.bo":"rule","wiki.bo":"rule","br":"rule","9guacu.br":"rule","abc.br":"rule","adm.br":"rule","adv.br":"rule","agr.br":"rule","aju.br":"rule","am.br":"rule","anani.br":"rule","aparecida.br":"rule","api.br":"rule","app.br":"rule","arq.br":"rule","art.br":"rule","ato.br":"rule","b.br":"rule","barueri.br":"rule","belem.br":"rule","bet.br":"rule","bhz.br":"rule","bib.br":"rule","bio.br":"rule","blog.br":"rule","bmd.br":"rule","boavista.br":"rule","bsb.br":"rule","campinagrande.br":"rule","campinas.br":"rule","caxias.br":"rule","cim.br":"rule","cng.br":"rule","cnt.br":"rule","com.br":"rule","contagem.br":"rule","coop.br":"rule","coz.br":"rule","cri.br":"rule","cuiaba.br":"rule","curitiba.br":"rule","def.br":"rule","des.br":"rule","det.br":"rule","dev.br":"rule","ecn.br":"rule","eco.br":"rule","edu.br":"rule","emp.br":"rule","enf.br":"rule","eng.br":"rule","esp.br":"rule","etc.br":"rule","eti.br":"rule","far.br":"rule","feira.br":"rule","flog.br":"rule","floripa.br":"rule","fm.br":"rule","fnd.br":"rule","fortal.br":"rule","fot.br":"rule","foz.br":"rule","fst.br":"rule","g12.br":"rule","geo.br":"rule","ggf.br":"rule","goiania.br":"rule","gov.br":"rule","ac.gov.br":"rule","al.gov.br":"rule","am.gov.br":"rule","ap.gov.br":"rule","ba.gov.br":"rule","ce.gov.br":"rule","df.gov.br":"rule","es.gov.br":"rule","go.gov.br":"rule","ma.gov.br":"rule","mg.gov.br":"rule","ms.gov.br":"rule","mt.gov.br":"rule","pa.gov.br":"rule","pb.gov.br":"rule","pe.gov.br":"rule","pi.gov.br":"rule","pr.gov.br":"rule","rj.gov.br":"rule","rn.gov.br":"rule","ro.gov.br":"rule","rr.gov.br":"rule","rs.gov.br":"rule","sc.gov.br":"rule","se.gov.br":"rule","sp.gov.br":"rule","to.gov.br":"rule","gru.br":"rule","ia.br":"rule","imb.br":"rule","ind.br":"rule","inf.br":"rule","jab.br":"rule","jampa.br":"rule","jdf.br":"rule","joinville.br":"rule","jor.br":"rule","jus.br":"rule","leg.br":"rule","leilao.br":"rule","lel.br":"rule","log.br":"rule","londrina.br":"rule","macapa.br":"rule","maceio.br":"rule","manaus.br":"rule","maringa.br":"rule","mat.br":"rule","med.br":"rule","mil.br":"rule","morena.br":"rule","mp.br":"rule","mus.br":"rule","natal.br":"rule","net.br":"rule","niteroi.br":"rule","nom.br":"wildcard","not.br":"rule","ntr.br":"rule","odo.br":"rule","ong.br":"rule","org.br":"rule","osasco.br":"rule","palmas.br":"rule","poa.br":"rule","ppg.br":"rule","pro.br":"rule","psc.br":"rule","psi.br":"rule","pvh.br":"rule","qsl.br":"rule","radio.br":"rule","rec.br":"rule","recife.br":"rule","rep.br":"rule","ribeirao.br":"rule","rio.br":"rule","riobranco.br":"rule","riopreto.br":"rule","salvador.br":"rule","sampa.br":"rule","santamaria.br":"rule","santoandre.br":"rule","saobernardo.br":"rule","saogonca.br":"rule","seg.br":"rule","sjc.br":"rule","slg.br":"rule","slz.br":"rule","social.br":"rule","sorocaba.br":"rule","srv.br":"rule","taxi.br":"rule","tc.br":"rule","tec.br":"rule","teo.br":"rule","the.br":"rule","tmp.br":"rule","trd.br":"rule","tur.br":"rule","tv.br":"rule","udi.br":"rule","vet.br":"rule","vix.br":"rule","vlog.br":"rule","wiki.br":"rule","xyz.br":"rule","zlg.br":"rule","bs":"rule","com.bs":"rule","edu.bs":"rule","gov.bs":"rule","net.bs":"rule","org.bs":"rule","bt":"rule","com.bt":"rule","edu.bt":"rule","gov.bt":"rule","net.bt":"rule","org.bt":"rule","bv":"rule","bw":"rule","ac.bw":"rule","co.bw":"rule","gov.bw":"rule","net.bw":"rule","org.bw":"rule","by":"rule","gov.by":"rule","mil.by":"rule","com.by":"rule","of.by":"rule","bz":"rule","co.bz":"rule","com.bz":"rule","edu.bz":"rule","gov.bz":"rule","net.bz":"rule","org.bz":"rule","ca":"rule","ab.ca":"rule","bc.ca":"rule","mb.ca":"rule","nb.ca":"rule","nf.ca":"rule","nl.ca":"rule","ns.ca":"rule","nt.ca":"rule","nu.ca":"rule","on.ca":"rule","pe.ca":"rule","qc.ca":"rule","sk.ca":"rule","yk.ca":"rule","gc.ca":"rule","cat":"rule","cc":"rule","cd":"rule","gov.cd":"rule","cf":"rule","cg":"rule","ch":"rule","ci":"rule","ac.ci":"rule","aéroport.ci":"rule","asso.ci":"rule","co.ci":"rule","com.ci":"rule","ed.ci":"rule","edu.ci":"rule","go.ci":"rule","gouv.ci":"rule","int.ci":"rule","net.ci":"rule","or.ci":"rule","org.ci":"rule","ck":"wildcard","www.ck":"exception","cl":"rule","co.cl":"rule","gob.cl":"rule","gov.cl":"rule","mil.cl":"rule","cm":"rule","co.cm":"rule","com.cm":"rule","gov.cm":"rule","net.cm":"rule","cn":"rule","ac.cn":"rule","com.cn":"rule","edu.cn":"rule","gov.cn":"rule","mil.cn":"rule","net.cn":"rule","org.cn":"rule","公司.cn":"rule","網絡.cn":"rule","网络.cn":"rule","ah.cn":"rule","bj.cn":"rule","cq.cn":"rule","fj.cn":"rule","gd.cn":"rule","gs.cn":"rule","gx.cn":"rule","gz.cn":"rule","ha.cn":"rule","hb.cn":"rule","he.cn":"rule","hi.cn":"rule","hk.cn":"rule","hl.cn":"rule","hn.cn":"rule","jl.cn":"rule","js.cn":"rule","jx.cn":"rule","ln.cn":"rule","mo.cn":"rule","nm.cn":"rule","nx.cn":"rule","qh.cn":"rule","sc.cn":"rule","sd.cn":"rule","sh.cn":"rule","sn.cn":"rule","sx.cn":"rule","tj.cn":"rule","tw.cn":"rule","xj.cn":"rule","xz.cn":"rule","yn.cn":"rule","zj.cn":"rule","co":"rule","com.co":"rule","edu.co":"rule","gov.co":"rule","mil.co":"rule","net.co":"rule","nom.co":"rule","org.co":"rule","com":"rule","coop":"rule","cr":"rule","ac.cr":"rule","co.cr":"rule","ed.cr":"rule","fi.cr":"rule","go.cr":"rule","or.cr":"rule","sa.cr":"rule","cu":"rule","com.cu":"rule","edu.cu":"rule","gob.cu":"rule","inf.cu":"rule","nat.cu":"rule","net.cu":"rule","org.cu":"rule","cv":"rule","com.cv":"rule","edu.cv":"rule","id.cv":"rule","int.cv":"rule","net.cv":"rule","nome.cv":"rule","org.cv":"rule","publ.cv":"rule","cw":"rule","com.cw":"rule","edu.cw":"rule","net.cw":"rule","org.cw":"rule","cx":"rule","gov.cx":"rule","cy":"rule","ac.cy":"rule","biz.cy":"rule","com.cy":"rule","ekloges.cy":"rule","gov.cy":"rule","ltd.cy":"rule","mil.cy":"rule","net.cy":"rule","org.cy":"rule","press.cy":"rule","pro.cy":"rule","tm.cy":"rule","cz":"rule","gov.cz":"rule","de":"rule","dj":"rule","dk":"rule","dm":"rule","co.dm":"rule","com.dm":"rule","edu.dm":"rule","gov.dm":"rule","net.dm":"rule","org.dm":"rule","do":"rule","art.do":"rule","com.do":"rule","edu.do":"rule","gob.do":"rule","gov.do":"rule","mil.do":"rule","net.do":"rule","org.do":"rule","sld.do":"rule","web.do":"rule","dz":"rule","art.dz":"rule","asso.dz":"rule","com.dz":"rule","edu.dz":"rule","gov.dz":"rule","net.dz":"rule","org.dz":"rule","pol.dz":"rule","soc.dz":"rule","tm.dz":"rule","ec":"rule","abg.ec":"rule","adm.ec":"rule","agron.ec":"rule","arqt.ec":"rule","art.ec":"rule","bar.ec":"rule","chef.ec":"rule","com.ec":"rule","cont.ec":"rule","cpa.ec":"rule","cue.ec":"rule","dent.ec":"rule","dgn.ec":"rule","disco.ec":"rule","doc.ec":"rule","edu.ec":"rule","eng.ec":"rule","esm.ec":"rule","fin.ec":"rule","fot.ec":"rule","gal.ec":"rule","gob.ec":"rule","gov.ec":"rule","gye.ec":"rule","ibr.ec":"rule","info.ec":"rule","k12.ec":"rule","lat.ec":"rule","loj.ec":"rule","med.ec":"rule","mil.ec":"rule","mktg.ec":"rule","mon.ec":"rule","net.ec":"rule","ntr.ec":"rule","odont.ec":"rule","org.ec":"rule","pro.ec":"rule","prof.ec":"rule","psic.ec":"rule","psiq.ec":"rule","pub.ec":"rule","rio.ec":"rule","rrpp.ec":"rule","sal.ec":"rule","tech.ec":"rule","tul.ec":"rule","tur.ec":"rule","uio.ec":"rule","vet.ec":"rule","xxx.ec":"rule","edu":"rule","ee":"rule","aip.ee":"rule","com.ee":"rule","edu.ee":"rule","fie.ee":"rule","gov.ee":"rule","lib.ee":"rule","med.ee":"rule","org.ee":"rule","pri.ee":"rule","riik.ee":"rule","eg":"rule","ac.eg":"rule","com.eg":"rule","edu.eg":"rule","eun.eg":"rule","gov.eg":"rule","info.eg":"rule","me.eg":"rule","mil.eg":"rule","name.eg":"rule","net.eg":"rule","org.eg":"rule","sci.eg":"rule","sport.eg":"rule","tv.eg":"rule","er":"wildcard","es":"rule","com.es":"rule","edu.es":"rule","gob.es":"rule","nom.es":"rule","org.es":"rule","et":"rule","biz.et":"rule","com.et":"rule","edu.et":"rule","gov.et":"rule","info.et":"rule","name.et":"rule","net.et":"rule","org.et":"rule","eu":"rule","fi":"rule","aland.fi":"rule","fj":"rule","ac.fj":"rule","biz.fj":"rule","com.fj":"rule","edu.fj":"rule","gov.fj":"rule","id.fj":"rule","info.fj":"rule","mil.fj":"rule","name.fj":"rule","net.fj":"rule","org.fj":"rule","pro.fj":"rule","fk":"wildcard","fm":"rule","com.fm":"rule","edu.fm":"rule","net.fm":"rule","org.fm":"rule","fo":"rule","fr":"rule","asso.fr":"rule","com.fr":"rule","gouv.fr":"rule","nom.fr":"rule","prd.fr":"rule","tm.fr":"rule","avoues.fr":"rule","cci.fr":"rule","greta.fr":"rule","huissier-justice.fr":"rule","ga":"rule","gb":"rule","gd":"rule","edu.gd":"rule","gov.gd":"rule","ge":"rule","com.ge":"rule","cyb.ge":"rule","edu.ge":"rule","gov.ge":"rule","llc.ge":"rule","net.ge":"rule","online.ge":"rule","org.ge":"rule","pvt.ge":"rule","school.ge":"rule","tnx.ge":"rule","gf":"rule","gg":"rule","co.gg":"rule","net.gg":"rule","org.gg":"rule","gh":"rule","biz.gh":"rule","com.gh":"rule","edu.gh":"rule","gov.gh":"rule","mil.gh":"rule","net.gh":"rule","org.gh":"rule","gi":"rule","com.gi":"rule","edu.gi":"rule","gov.gi":"rule","ltd.gi":"rule","mod.gi":"rule","org.gi":"rule","gl":"rule","co.gl":"rule","com.gl":"rule","edu.gl":"rule","net.gl":"rule","org.gl":"rule","gm":"rule","gn":"rule","ac.gn":"rule","com.gn":"rule","edu.gn":"rule","gov.gn":"rule","net.gn":"rule","org.gn":"rule","gov":"rule","gp":"rule","asso.gp":"rule","com.gp":"rule","edu.gp":"rule","mobi.gp":"rule","net.gp":"rule","org.gp":"rule","gq":"rule","gr":"rule","com.gr":"rule","edu.gr":"rule","gov.gr":"rule","net.gr":"rule","org.gr":"rule","gs":"rule","gt":"rule","com.gt":"rule","edu.gt":"rule","gob.gt":"rule","ind.gt":"rule","mil.gt":"rule","net.gt":"rule","org.gt":"rule","gu":"rule","com.gu":"rule","edu.gu":"rule","gov.gu":"rule","guam.gu":"rule","info.gu":"rule","net.gu":"rule","org.gu":"rule","web.gu":"rule","gw":"rule","gy":"rule","co.gy":"rule","com.gy":"rule","edu.gy":"rule","gov.gy":"rule","net.gy":"rule","org.gy":"rule","hk":"rule","com.hk":"rule","edu.hk":"rule","gov.hk":"rule","idv.hk":"rule","net.hk":"rule","org.hk":"rule","个人.hk":"rule","個人.hk":"rule","公司.hk":"rule","政府.hk":"rule","敎育.hk":"rule","教育.hk":"rule","箇人.hk":"rule","組織.hk":"rule","組织.hk":"rule","網絡.hk":"rule","網络.hk":"rule","组織.hk":"rule","组织.hk":"rule","网絡.hk":"rule","网络.hk":"rule","hm":"rule","hn":"rule","com.hn":"rule","edu.hn":"rule","gob.hn":"rule","mil.hn":"rule","net.hn":"rule","org.hn":"rule","hr":"rule","com.hr":"rule","from.hr":"rule","iz.hr":"rule","name.hr":"rule","ht":"rule","adult.ht":"rule","art.ht":"rule","asso.ht":"rule","com.ht":"rule","coop.ht":"rule","edu.ht":"rule","firm.ht":"rule","gouv.ht":"rule","info.ht":"rule","med.ht":"rule","net.ht":"rule","org.ht":"rule","perso.ht":"rule","pol.ht":"rule","pro.ht":"rule","rel.ht":"rule","shop.ht":"rule","hu":"rule","2000.hu":"rule","agrar.hu":"rule","bolt.hu":"rule","casino.hu":"rule","city.hu":"rule","co.hu":"rule","erotica.hu":"rule","erotika.hu":"rule","film.hu":"rule","forum.hu":"rule","games.hu":"rule","hotel.hu":"rule","info.hu":"rule","ingatlan.hu":"rule","jogasz.hu":"rule","konyvelo.hu":"rule","lakas.hu":"rule","media.hu":"rule","news.hu":"rule","org.hu":"rule","priv.hu":"rule","reklam.hu":"rule","sex.hu":"rule","shop.hu":"rule","sport.hu":"rule","suli.hu":"rule","szex.hu":"rule","tm.hu":"rule","tozsde.hu":"rule","utazas.hu":"rule","video.hu":"rule","id":"rule","ac.id":"rule","ai.id":"rule","biz.id":"rule","co.id":"rule","desa.id":"rule","go.id":"rule","kop.id":"rule","mil.id":"rule","my.id":"rule","net.id":"rule","or.id":"rule","ponpes.id":"rule","sch.id":"rule","web.id":"rule","ᬩᬮᬶ.id":"rule","ie":"rule","gov.ie":"rule","il":"rule","ac.il":"rule","co.il":"rule","gov.il":"rule","idf.il":"rule","k12.il":"rule","muni.il":"rule","net.il":"rule","org.il":"rule","ישראל":"rule","אקדמיה.ישראל":"rule","ישוב.ישראל":"rule","צהל.ישראל":"rule","ממשל.ישראל":"rule","im":"rule","ac.im":"rule","co.im":"rule","ltd.co.im":"rule","plc.co.im":"rule","com.im":"rule","net.im":"rule","org.im":"rule","tt.im":"rule","tv.im":"rule","in":"rule","5g.in":"rule","6g.in":"rule","ac.in":"rule","aero.in":"rule","ai.in":"rule","alumni.in":"rule","am.in":"rule","bank.in":"rule","bihar.in":"rule","biz.in":"rule","business.in":"rule","ca.in":"rule","cn.in":"rule","co.in":"rule","com.in":"rule","coop.in":"rule","cs.in":"rule","delhi.in":"rule","dr.in":"rule","edu.in":"rule","er.in":"rule","fin.in":"rule","firm.in":"rule","gen.in":"rule","gov.in":"rule","gujarat.in":"rule","ind.in":"rule","info.in":"rule","int.in":"rule","internet.in":"rule","io.in":"rule","me.in":"rule","mil.in":"rule","net.in":"rule","nic.in":"rule","org.in":"rule","pg.in":"rule","post.in":"rule","pro.in":"rule","res.in":"rule","school.in":"rule","travel.in":"rule","tv.in":"rule","ub.in":"rule","uk.in":"rule","up.in":"rule","us.in":"rule","info":"rule","int":"rule","eu.int":"rule","io":"rule","co.io":"rule","com.io":"rule","edu.io":"rule","gov.io":"rule","mil.io":"rule","net.io":"rule","nom.io":"rule","org.io":"rule","iq":"rule","com.iq":"rule","edu.iq":"rule","gov.iq":"rule","mil.iq":"rule","net.iq":"rule","org.iq":"rule","ir":"rule","ac.ir":"rule","co.ir":"rule","gov.ir":"rule","id.ir":"rule","net.ir":"rule","org.ir":"rule","sch.ir":"rule","ایران.ir":"rule","ايران.ir":"rule","is":"rule","it":"rule","edu.it":"rule","gov.it":"rule","abr.it":"rule","abruzzo.it":"rule","aosta-valley.it":"rule","aostavalley.it":"rule","bas.it":"rule","basilicata.it":"rule","cal.it":"rule","calabria.it":"rule","cam.it":"rule","campania.it":"rule","emilia-romagna.it":"rule","emiliaromagna.it":"rule","emr.it":"rule","friuli-v-giulia.it":"rule","friuli-ve-giulia.it":"rule","friuli-vegiulia.it":"rule","friuli-venezia-giulia.it":"rule","friuli-veneziagiulia.it":"rule","friuli-vgiulia.it":"rule","friuliv-giulia.it":"rule","friulive-giulia.it":"rule","friulivegiulia.it":"rule","friulivenezia-giulia.it":"rule","friuliveneziagiulia.it":"rule","friulivgiulia.it":"rule","fvg.it":"rule","laz.it":"rule","lazio.it":"rule","lig.it":"rule","liguria.it":"rule","lom.it":"rule","lombardia.it":"rule","lombardy.it":"rule","lucania.it":"rule","mar.it":"rule","marche.it":"rule","mol.it":"rule","molise.it":"rule","piedmont.it":"rule","piemonte.it":"rule","pmn.it":"rule","pug.it":"rule","puglia.it":"rule","sar.it":"rule","sardegna.it":"rule","sardinia.it":"rule","sic.it":"rule","sicilia.it":"rule","sicily.it":"rule","taa.it":"rule","tos.it":"rule","toscana.it":"rule","trentin-sud-tirol.it":"rule","trentin-süd-tirol.it":"rule","trentin-sudtirol.it":"rule","trentin-südtirol.it":"rule","trentin-sued-tirol.it":"rule","trentin-suedtirol.it":"rule","trentino-a-adige.it":"rule","trentino-aadige.it":"rule","trentino-alto-adige.it":"rule","trentino-altoadige.it":"rule","trentino-s-tirol.it":"rule","trentino-stirol.it":"rule","trentino-sud-tirol.it":"rule","trentino-süd-tirol.it":"rule","trentino-sudtirol.it":"rule","trentino-südtirol.it":"rule","trentino-sued-tirol.it":"rule","trentino-suedtirol.it":"rule","trentinoa-adige.it":"rule","trentinoaadige.it":"rule","trentinoalto-adige.it":"rule","trentinoaltoadige.it":"rule","trentinos-tirol.it":"rule","trentinostirol.it":"rule","trentinosud-tirol.it":"rule","trentinosüd-tirol.it":"rule","trentinosüdtirol.it":"rule","trentinosued-tirol.it":"rule","trentinosuedtirol.it":"rule","trentinsud-tirol.it":"rule","trentinsüd-tirol.it":"rule","trentinsudtirol.it":"rule","trentinsüdtirol.it":"rule","trentinsued-tirol.it":"rule","trentinsuedtirol.it":"rule","tuscany.it":"rule","umb.it":"rule","umbria.it":"rule","val-d-aosta.it":"rule","val-daosta.it":"rule","vald-aosta.it":"rule","valle-aosta.it":"rule","valle-d-aosta.it":"rule","valle-daosta.it":"rule","valleaosta.it":"rule","valled-aosta.it":"rule","valledaosta.it":"rule","vallee-aoste.it":"rule","vallée-aoste.it":"rule","vallee-d-aoste.it":"rule","vallée-d-aoste.it":"rule","valleeaoste.it":"rule","valléeaoste.it":"rule","valleedaoste.it":"rule","valléedaoste.it":"rule","vao.it":"rule","vda.it":"rule","ven.it":"rule","veneto.it":"rule","ag.it":"rule","agrigento.it":"rule","al.it":"rule","alessandria.it":"rule","alto-adige.it":"rule","altoadige.it":"rule","an.it":"rule","ancona.it":"rule","andria-barletta-trani.it":"rule","andria-trani-barletta.it":"rule","andriabarlettatrani.it":"rule","andriatranibarletta.it":"rule","ao.it":"rule","aosta.it":"rule","aoste.it":"rule","ap.it":"rule","aq.it":"rule","ar.it":"rule","arezzo.it":"rule","ascoli-piceno.it":"rule","ascolipiceno.it":"rule","asti.it":"rule","at.it":"rule","av.it":"rule","avellino.it":"rule","ba.it":"rule","balsan.it":"rule","balsan-sudtirol.it":"rule","balsan-südtirol.it":"rule","balsan-suedtirol.it":"rule","bari.it":"rule","barletta-trani-andria.it":"rule","barlettatraniandria.it":"rule","belluno.it":"rule","benevento.it":"rule","bergamo.it":"rule","bg.it":"rule","bi.it":"rule","biella.it":"rule","bl.it":"rule","bn.it":"rule","bo.it":"rule","bologna.it":"rule","bolzano.it":"rule","bolzano-altoadige.it":"rule","bozen.it":"rule","bozen-sudtirol.it":"rule","bozen-südtirol.it":"rule","bozen-suedtirol.it":"rule","br.it":"rule","brescia.it":"rule","brindisi.it":"rule","bs.it":"rule","bt.it":"rule","bulsan.it":"rule","bulsan-sudtirol.it":"rule","bulsan-südtirol.it":"rule","bulsan-suedtirol.it":"rule","bz.it":"rule","ca.it":"rule","cagliari.it":"rule","caltanissetta.it":"rule","campidano-medio.it":"rule","campidanomedio.it":"rule","campobasso.it":"rule","carbonia-iglesias.it":"rule","carboniaiglesias.it":"rule","carrara-massa.it":"rule","carraramassa.it":"rule","caserta.it":"rule","catania.it":"rule","catanzaro.it":"rule","cb.it":"rule","ce.it":"rule","cesena-forli.it":"rule","cesena-forlì.it":"rule","cesenaforli.it":"rule","cesenaforlì.it":"rule","ch.it":"rule","chieti.it":"rule","ci.it":"rule","cl.it":"rule","cn.it":"rule","co.it":"rule","como.it":"rule","cosenza.it":"rule","cr.it":"rule","cremona.it":"rule","crotone.it":"rule","cs.it":"rule","ct.it":"rule","cuneo.it":"rule","cz.it":"rule","dell-ogliastra.it":"rule","dellogliastra.it":"rule","en.it":"rule","enna.it":"rule","fc.it":"rule","fe.it":"rule","fermo.it":"rule","ferrara.it":"rule","fg.it":"rule","fi.it":"rule","firenze.it":"rule","florence.it":"rule","fm.it":"rule","foggia.it":"rule","forli-cesena.it":"rule","forlì-cesena.it":"rule","forlicesena.it":"rule","forlìcesena.it":"rule","fr.it":"rule","frosinone.it":"rule","ge.it":"rule","genoa.it":"rule","genova.it":"rule","go.it":"rule","gorizia.it":"rule","gr.it":"rule","grosseto.it":"rule","iglesias-carbonia.it":"rule","iglesiascarbonia.it":"rule","im.it":"rule","imperia.it":"rule","is.it":"rule","isernia.it":"rule","kr.it":"rule","la-spezia.it":"rule","laquila.it":"rule","laspezia.it":"rule","latina.it":"rule","lc.it":"rule","le.it":"rule","lecce.it":"rule","lecco.it":"rule","li.it":"rule","livorno.it":"rule","lo.it":"rule","lodi.it":"rule","lt.it":"rule","lu.it":"rule","lucca.it":"rule","macerata.it":"rule","mantova.it":"rule","massa-carrara.it":"rule","massacarrara.it":"rule","matera.it":"rule","mb.it":"rule","mc.it":"rule","me.it":"rule","medio-campidano.it":"rule","mediocampidano.it":"rule","messina.it":"rule","mi.it":"rule","milan.it":"rule","milano.it":"rule","mn.it":"rule","mo.it":"rule","modena.it":"rule","monza.it":"rule","monza-brianza.it":"rule","monza-e-della-brianza.it":"rule","monzabrianza.it":"rule","monzaebrianza.it":"rule","monzaedellabrianza.it":"rule","ms.it":"rule","mt.it":"rule","na.it":"rule","naples.it":"rule","napoli.it":"rule","no.it":"rule","novara.it":"rule","nu.it":"rule","nuoro.it":"rule","og.it":"rule","ogliastra.it":"rule","olbia-tempio.it":"rule","olbiatempio.it":"rule","or.it":"rule","oristano.it":"rule","ot.it":"rule","pa.it":"rule","padova.it":"rule","padua.it":"rule","palermo.it":"rule","parma.it":"rule","pavia.it":"rule","pc.it":"rule","pd.it":"rule","pe.it":"rule","perugia.it":"rule","pesaro-urbino.it":"rule","pesarourbino.it":"rule","pescara.it":"rule","pg.it":"rule","pi.it":"rule","piacenza.it":"rule","pisa.it":"rule","pistoia.it":"rule","pn.it":"rule","po.it":"rule","pordenone.it":"rule","potenza.it":"rule","pr.it":"rule","prato.it":"rule","pt.it":"rule","pu.it":"rule","pv.it":"rule","pz.it":"rule","ra.it":"rule","ragusa.it":"rule","ravenna.it":"rule","rc.it":"rule","re.it":"rule","reggio-calabria.it":"rule","reggio-emilia.it":"rule","reggiocalabria.it":"rule","reggioemilia.it":"rule","rg.it":"rule","ri.it":"rule","rieti.it":"rule","rimini.it":"rule","rm.it":"rule","rn.it":"rule","ro.it":"rule","roma.it":"rule","rome.it":"rule","rovigo.it":"rule","sa.it":"rule","salerno.it":"rule","sassari.it":"rule","savona.it":"rule","si.it":"rule","siena.it":"rule","siracusa.it":"rule","so.it":"rule","sondrio.it":"rule","sp.it":"rule","sr.it":"rule","ss.it":"rule","su.it":"rule","sud-sardegna.it":"rule","sudsardegna.it":"rule","südtirol.it":"rule","suedtirol.it":"rule","sv.it":"rule","ta.it":"rule","taranto.it":"rule","te.it":"rule","tempio-olbia.it":"rule","tempioolbia.it":"rule","teramo.it":"rule","terni.it":"rule","tn.it":"rule","to.it":"rule","torino.it":"rule","tp.it":"rule","tr.it":"rule","trani-andria-barletta.it":"rule","trani-barletta-andria.it":"rule","traniandriabarletta.it":"rule","tranibarlettaandria.it":"rule","trapani.it":"rule","trentino.it":"rule","trento.it":"rule","treviso.it":"rule","trieste.it":"rule","ts.it":"rule","turin.it":"rule","tv.it":"rule","ud.it":"rule","udine.it":"rule","urbino-pesaro.it":"rule","urbinopesaro.it":"rule","va.it":"rule","varese.it":"rule","vb.it":"rule","vc.it":"rule","ve.it":"rule","venezia.it":"rule","venice.it":"rule","verbania.it":"rule","verbano-cusio-ossola.it":"rule","vercelli.it":"rule","verona.it":"rule","vi.it":"rule","vibo-valentia.it":"rule","vibovalentia.it":"rule","vicenza.it":"rule","viterbo.it":"rule","vr.it":"rule","vs.it":"rule","vt.it":"rule","vv.it":"rule","je":"rule","co.je":"rule","net.je":"rule","org.je":"rule","jm":"wildcard","jo":"rule","agri.jo":"rule","ai.jo":"rule","com.jo":"rule","edu.jo":"rule","eng.jo":"rule","fm.jo":"rule","gov.jo":"rule","mil.jo":"rule","net.jo":"rule","org.jo":"rule","per.jo":"rule","phd.jo":"rule","sch.jo":"rule","tv.jo":"rule","jobs":"rule","jp":"rule","ac.jp":"rule","ad.jp":"rule","co.jp":"rule","ed.jp":"rule","go.jp":"rule","gr.jp":"rule","lg.jp":"rule","ne.jp":"rule","or.jp":"rule","aichi.jp":"rule","akita.jp":"rule","aomori.jp":"rule","chiba.jp":"rule","ehime.jp":"rule","fukui.jp":"rule","fukuoka.jp":"rule","fukushima.jp":"rule","gifu.jp":"rule","gunma.jp":"rule","hiroshima.jp":"rule","hokkaido.jp":"rule","hyogo.jp":"rule","ibaraki.jp":"rule","ishikawa.jp":"rule","iwate.jp":"rule","kagawa.jp":"rule","kagoshima.jp":"rule","kanagawa.jp":"rule","kochi.jp":"rule","kumamoto.jp":"rule","kyoto.jp":"rule","mie.jp":"rule","miyagi.jp":"rule","miyazaki.jp":"rule","nagano.jp":"rule","nagasaki.jp":"rule","nara.jp":"rule","niigata.jp":"rule","oita.jp":"rule","okayama.jp":"rule","okinawa.jp":"rule","osaka.jp":"rule","saga.jp":"rule","saitama.jp":"rule","shiga.jp":"rule","shimane.jp":"rule","shizuoka.jp":"rule","tochigi.jp":"rule","tokushima.jp":"rule","tokyo.jp":"rule","tottori.jp":"rule","toyama.jp":"rule","wakayama.jp":"rule","yamagata.jp":"rule","yamaguchi.jp":"rule","yamanashi.jp":"rule","三重.jp":"rule","京都.jp":"rule","佐賀.jp":"rule","兵庫.jp":"rule","北海道.jp":"rule","千葉.jp":"rule","和歌山.jp":"rule","埼玉.jp":"rule","大分.jp":"rule","大阪.jp":"rule","奈良.jp":"rule","宮城.jp":"rule","宮崎.jp":"rule","富山.jp":"rule","山口.jp":"rule","山形.jp":"rule","山梨.jp":"rule","岐阜.jp":"rule","岡山.jp":"rule","岩手.jp":"rule","島根.jp":"rule","広島.jp":"rule","徳島.jp":"rule","愛媛.jp":"rule","愛知.jp":"rule","新潟.jp":"rule","東京.jp":"rule","栃木.jp":"rule","沖縄.jp":"rule","滋賀.jp":"rule","熊本.jp":"rule","石川.jp":"rule","神奈川.jp":"rule","福井.jp":"rule","福岡.jp":"rule","福島.jp":"rule","秋田.jp":"rule","群馬.jp":"rule","茨城.jp":"rule","長崎.jp":"rule","長野.jp":"rule","青森.jp":"rule","静岡.jp":"rule","香川.jp":"rule","高知.jp":"rule","鳥取.jp":"rule","鹿児島.jp":"rule","kawasaki.jp":"wildcard","city.kawasaki.jp":"exception","kitakyushu.jp":"wildcard","city.kitakyushu.jp":"exception","kobe.jp":"wildcard","city.kobe.jp":"exception","nagoya.jp":"wildcard","city.nagoya.jp":"exception","sapporo.jp":"wildcard","city.sapporo.jp":"exception","sendai.jp":"wildcard","city.sendai.jp":"exception","yokohama.jp":"wildcard","city.yokohama.jp":"exception","aisai.aichi.jp":"rule","ama.aichi.jp":"rule","anjo.aichi.jp":"rule","asuke.aichi.jp":"rule","chiryu.aichi.jp":"rule","chita.aichi.jp":"rule","fuso.aichi.jp":"rule","gamagori.aichi.jp":"rule","handa.aichi.jp":"rule","hazu.aichi.jp":"rule","hekinan.aichi.jp":"rule","higashiura.aichi.jp":"rule","ichinomiya.aichi.jp":"rule","inazawa.aichi.jp":"rule","inuyama.aichi.jp":"rule","isshiki.aichi.jp":"rule","iwakura.aichi.jp":"rule","kanie.aichi.jp":"rule","kariya.aichi.jp":"rule","kasugai.aichi.jp":"rule","kira.aichi.jp":"rule","kiyosu.aichi.jp":"rule","komaki.aichi.jp":"rule","konan.aichi.jp":"rule","kota.aichi.jp":"rule","mihama.aichi.jp":"rule","miyoshi.aichi.jp":"rule","nishio.aichi.jp":"rule","nisshin.aichi.jp":"rule","obu.aichi.jp":"rule","oguchi.aichi.jp":"rule","oharu.aichi.jp":"rule","okazaki.aichi.jp":"rule","owariasahi.aichi.jp":"rule","seto.aichi.jp":"rule","shikatsu.aichi.jp":"rule","shinshiro.aichi.jp":"rule","shitara.aichi.jp":"rule","tahara.aichi.jp":"rule","takahama.aichi.jp":"rule","tobishima.aichi.jp":"rule","toei.aichi.jp":"rule","togo.aichi.jp":"rule","tokai.aichi.jp":"rule","tokoname.aichi.jp":"rule","toyoake.aichi.jp":"rule","toyohashi.aichi.jp":"rule","toyokawa.aichi.jp":"rule","toyone.aichi.jp":"rule","toyota.aichi.jp":"rule","tsushima.aichi.jp":"rule","yatomi.aichi.jp":"rule","akita.akita.jp":"rule","daisen.akita.jp":"rule","fujisato.akita.jp":"rule","gojome.akita.jp":"rule","hachirogata.akita.jp":"rule","happou.akita.jp":"rule","higashinaruse.akita.jp":"rule","honjo.akita.jp":"rule","honjyo.akita.jp":"rule","ikawa.akita.jp":"rule","kamikoani.akita.jp":"rule","kamioka.akita.jp":"rule","katagami.akita.jp":"rule","kazuno.akita.jp":"rule","kitaakita.akita.jp":"rule","kosaka.akita.jp":"rule","kyowa.akita.jp":"rule","misato.akita.jp":"rule","mitane.akita.jp":"rule","moriyoshi.akita.jp":"rule","nikaho.akita.jp":"rule","noshiro.akita.jp":"rule","odate.akita.jp":"rule","oga.akita.jp":"rule","ogata.akita.jp":"rule","semboku.akita.jp":"rule","yokote.akita.jp":"rule","yurihonjo.akita.jp":"rule","aomori.aomori.jp":"rule","gonohe.aomori.jp":"rule","hachinohe.aomori.jp":"rule","hashikami.aomori.jp":"rule","hiranai.aomori.jp":"rule","hirosaki.aomori.jp":"rule","itayanagi.aomori.jp":"rule","kuroishi.aomori.jp":"rule","misawa.aomori.jp":"rule","mutsu.aomori.jp":"rule","nakadomari.aomori.jp":"rule","noheji.aomori.jp":"rule","oirase.aomori.jp":"rule","owani.aomori.jp":"rule","rokunohe.aomori.jp":"rule","sannohe.aomori.jp":"rule","shichinohe.aomori.jp":"rule","shingo.aomori.jp":"rule","takko.aomori.jp":"rule","towada.aomori.jp":"rule","tsugaru.aomori.jp":"rule","tsuruta.aomori.jp":"rule","abiko.chiba.jp":"rule","asahi.chiba.jp":"rule","chonan.chiba.jp":"rule","chosei.chiba.jp":"rule","choshi.chiba.jp":"rule","chuo.chiba.jp":"rule","funabashi.chiba.jp":"rule","futtsu.chiba.jp":"rule","hanamigawa.chiba.jp":"rule","ichihara.chiba.jp":"rule","ichikawa.chiba.jp":"rule","ichinomiya.chiba.jp":"rule","inzai.chiba.jp":"rule","isumi.chiba.jp":"rule","kamagaya.chiba.jp":"rule","kamogawa.chiba.jp":"rule","kashiwa.chiba.jp":"rule","katori.chiba.jp":"rule","katsuura.chiba.jp":"rule","kimitsu.chiba.jp":"rule","kisarazu.chiba.jp":"rule","kozaki.chiba.jp":"rule","kujukuri.chiba.jp":"rule","kyonan.chiba.jp":"rule","matsudo.chiba.jp":"rule","midori.chiba.jp":"rule","mihama.chiba.jp":"rule","minamiboso.chiba.jp":"rule","mobara.chiba.jp":"rule","mutsuzawa.chiba.jp":"rule","nagara.chiba.jp":"rule","nagareyama.chiba.jp":"rule","narashino.chiba.jp":"rule","narita.chiba.jp":"rule","noda.chiba.jp":"rule","oamishirasato.chiba.jp":"rule","omigawa.chiba.jp":"rule","onjuku.chiba.jp":"rule","otaki.chiba.jp":"rule","sakae.chiba.jp":"rule","sakura.chiba.jp":"rule","shimofusa.chiba.jp":"rule","shirako.chiba.jp":"rule","shiroi.chiba.jp":"rule","shisui.chiba.jp":"rule","sodegaura.chiba.jp":"rule","sosa.chiba.jp":"rule","tako.chiba.jp":"rule","tateyama.chiba.jp":"rule","togane.chiba.jp":"rule","tohnosho.chiba.jp":"rule","tomisato.chiba.jp":"rule","urayasu.chiba.jp":"rule","yachimata.chiba.jp":"rule","yachiyo.chiba.jp":"rule","yokaichiba.chiba.jp":"rule","yokoshibahikari.chiba.jp":"rule","yotsukaido.chiba.jp":"rule","ainan.ehime.jp":"rule","honai.ehime.jp":"rule","ikata.ehime.jp":"rule","imabari.ehime.jp":"rule","iyo.ehime.jp":"rule","kamijima.ehime.jp":"rule","kihoku.ehime.jp":"rule","kumakogen.ehime.jp":"rule","masaki.ehime.jp":"rule","matsuno.ehime.jp":"rule","matsuyama.ehime.jp":"rule","namikata.ehime.jp":"rule","niihama.ehime.jp":"rule","ozu.ehime.jp":"rule","saijo.ehime.jp":"rule","seiyo.ehime.jp":"rule","shikokuchuo.ehime.jp":"rule","tobe.ehime.jp":"rule","toon.ehime.jp":"rule","uchiko.ehime.jp":"rule","uwajima.ehime.jp":"rule","yawatahama.ehime.jp":"rule","echizen.fukui.jp":"rule","eiheiji.fukui.jp":"rule","fukui.fukui.jp":"rule","ikeda.fukui.jp":"rule","katsuyama.fukui.jp":"rule","mihama.fukui.jp":"rule","minamiechizen.fukui.jp":"rule","obama.fukui.jp":"rule","ohi.fukui.jp":"rule","ono.fukui.jp":"rule","sabae.fukui.jp":"rule","sakai.fukui.jp":"rule","takahama.fukui.jp":"rule","tsuruga.fukui.jp":"rule","wakasa.fukui.jp":"rule","ashiya.fukuoka.jp":"rule","buzen.fukuoka.jp":"rule","chikugo.fukuoka.jp":"rule","chikuho.fukuoka.jp":"rule","chikujo.fukuoka.jp":"rule","chikushino.fukuoka.jp":"rule","chikuzen.fukuoka.jp":"rule","chuo.fukuoka.jp":"rule","dazaifu.fukuoka.jp":"rule","fukuchi.fukuoka.jp":"rule","hakata.fukuoka.jp":"rule","higashi.fukuoka.jp":"rule","hirokawa.fukuoka.jp":"rule","hisayama.fukuoka.jp":"rule","iizuka.fukuoka.jp":"rule","inatsuki.fukuoka.jp":"rule","kaho.fukuoka.jp":"rule","kasuga.fukuoka.jp":"rule","kasuya.fukuoka.jp":"rule","kawara.fukuoka.jp":"rule","keisen.fukuoka.jp":"rule","koga.fukuoka.jp":"rule","kurate.fukuoka.jp":"rule","kurogi.fukuoka.jp":"rule","kurume.fukuoka.jp":"rule","minami.fukuoka.jp":"rule","miyako.fukuoka.jp":"rule","miyama.fukuoka.jp":"rule","miyawaka.fukuoka.jp":"rule","mizumaki.fukuoka.jp":"rule","munakata.fukuoka.jp":"rule","nakagawa.fukuoka.jp":"rule","nakama.fukuoka.jp":"rule","nishi.fukuoka.jp":"rule","nogata.fukuoka.jp":"rule","ogori.fukuoka.jp":"rule","okagaki.fukuoka.jp":"rule","okawa.fukuoka.jp":"rule","oki.fukuoka.jp":"rule","omuta.fukuoka.jp":"rule","onga.fukuoka.jp":"rule","onojo.fukuoka.jp":"rule","oto.fukuoka.jp":"rule","saigawa.fukuoka.jp":"rule","sasaguri.fukuoka.jp":"rule","shingu.fukuoka.jp":"rule","shinyoshitomi.fukuoka.jp":"rule","shonai.fukuoka.jp":"rule","soeda.fukuoka.jp":"rule","sue.fukuoka.jp":"rule","tachiarai.fukuoka.jp":"rule","tagawa.fukuoka.jp":"rule","takata.fukuoka.jp":"rule","toho.fukuoka.jp":"rule","toyotsu.fukuoka.jp":"rule","tsuiki.fukuoka.jp":"rule","ukiha.fukuoka.jp":"rule","umi.fukuoka.jp":"rule","usui.fukuoka.jp":"rule","yamada.fukuoka.jp":"rule","yame.fukuoka.jp":"rule","yanagawa.fukuoka.jp":"rule","yukuhashi.fukuoka.jp":"rule","aizubange.fukushima.jp":"rule","aizumisato.fukushima.jp":"rule","aizuwakamatsu.fukushima.jp":"rule","asakawa.fukushima.jp":"rule","bandai.fukushima.jp":"rule","date.fukushima.jp":"rule","fukushima.fukushima.jp":"rule","furudono.fukushima.jp":"rule","futaba.fukushima.jp":"rule","hanawa.fukushima.jp":"rule","higashi.fukushima.jp":"rule","hirata.fukushima.jp":"rule","hirono.fukushima.jp":"rule","iitate.fukushima.jp":"rule","inawashiro.fukushima.jp":"rule","ishikawa.fukushima.jp":"rule","iwaki.fukushima.jp":"rule","izumizaki.fukushima.jp":"rule","kagamiishi.fukushima.jp":"rule","kaneyama.fukushima.jp":"rule","kawamata.fukushima.jp":"rule","kitakata.fukushima.jp":"rule","kitashiobara.fukushima.jp":"rule","koori.fukushima.jp":"rule","koriyama.fukushima.jp":"rule","kunimi.fukushima.jp":"rule","miharu.fukushima.jp":"rule","mishima.fukushima.jp":"rule","namie.fukushima.jp":"rule","nango.fukushima.jp":"rule","nishiaizu.fukushima.jp":"rule","nishigo.fukushima.jp":"rule","okuma.fukushima.jp":"rule","omotego.fukushima.jp":"rule","ono.fukushima.jp":"rule","otama.fukushima.jp":"rule","samegawa.fukushima.jp":"rule","shimogo.fukushima.jp":"rule","shirakawa.fukushima.jp":"rule","showa.fukushima.jp":"rule","soma.fukushima.jp":"rule","sukagawa.fukushima.jp":"rule","taishin.fukushima.jp":"rule","tamakawa.fukushima.jp":"rule","tanagura.fukushima.jp":"rule","tenei.fukushima.jp":"rule","yabuki.fukushima.jp":"rule","yamato.fukushima.jp":"rule","yamatsuri.fukushima.jp":"rule","yanaizu.fukushima.jp":"rule","yugawa.fukushima.jp":"rule","anpachi.gifu.jp":"rule","ena.gifu.jp":"rule","gifu.gifu.jp":"rule","ginan.gifu.jp":"rule","godo.gifu.jp":"rule","gujo.gifu.jp":"rule","hashima.gifu.jp":"rule","hichiso.gifu.jp":"rule","hida.gifu.jp":"rule","higashishirakawa.gifu.jp":"rule","ibigawa.gifu.jp":"rule","ikeda.gifu.jp":"rule","kakamigahara.gifu.jp":"rule","kani.gifu.jp":"rule","kasahara.gifu.jp":"rule","kasamatsu.gifu.jp":"rule","kawaue.gifu.jp":"rule","kitagata.gifu.jp":"rule","mino.gifu.jp":"rule","minokamo.gifu.jp":"rule","mitake.gifu.jp":"rule","mizunami.gifu.jp":"rule","motosu.gifu.jp":"rule","nakatsugawa.gifu.jp":"rule","ogaki.gifu.jp":"rule","sakahogi.gifu.jp":"rule","seki.gifu.jp":"rule","sekigahara.gifu.jp":"rule","shirakawa.gifu.jp":"rule","tajimi.gifu.jp":"rule","takayama.gifu.jp":"rule","tarui.gifu.jp":"rule","toki.gifu.jp":"rule","tomika.gifu.jp":"rule","wanouchi.gifu.jp":"rule","yamagata.gifu.jp":"rule","yaotsu.gifu.jp":"rule","yoro.gifu.jp":"rule","annaka.gunma.jp":"rule","chiyoda.gunma.jp":"rule","fujioka.gunma.jp":"rule","higashiagatsuma.gunma.jp":"rule","isesaki.gunma.jp":"rule","itakura.gunma.jp":"rule","kanna.gunma.jp":"rule","kanra.gunma.jp":"rule","katashina.gunma.jp":"rule","kawaba.gunma.jp":"rule","kiryu.gunma.jp":"rule","kusatsu.gunma.jp":"rule","maebashi.gunma.jp":"rule","meiwa.gunma.jp":"rule","midori.gunma.jp":"rule","minakami.gunma.jp":"rule","naganohara.gunma.jp":"rule","nakanojo.gunma.jp":"rule","nanmoku.gunma.jp":"rule","numata.gunma.jp":"rule","oizumi.gunma.jp":"rule","ora.gunma.jp":"rule","ota.gunma.jp":"rule","shibukawa.gunma.jp":"rule","shimonita.gunma.jp":"rule","shinto.gunma.jp":"rule","showa.gunma.jp":"rule","takasaki.gunma.jp":"rule","takayama.gunma.jp":"rule","tamamura.gunma.jp":"rule","tatebayashi.gunma.jp":"rule","tomioka.gunma.jp":"rule","tsukiyono.gunma.jp":"rule","tsumagoi.gunma.jp":"rule","ueno.gunma.jp":"rule","yoshioka.gunma.jp":"rule","asaminami.hiroshima.jp":"rule","daiwa.hiroshima.jp":"rule","etajima.hiroshima.jp":"rule","fuchu.hiroshima.jp":"rule","fukuyama.hiroshima.jp":"rule","hatsukaichi.hiroshima.jp":"rule","higashihiroshima.hiroshima.jp":"rule","hongo.hiroshima.jp":"rule","jinsekikogen.hiroshima.jp":"rule","kaita.hiroshima.jp":"rule","kui.hiroshima.jp":"rule","kumano.hiroshima.jp":"rule","kure.hiroshima.jp":"rule","mihara.hiroshima.jp":"rule","miyoshi.hiroshima.jp":"rule","naka.hiroshima.jp":"rule","onomichi.hiroshima.jp":"rule","osakikamijima.hiroshima.jp":"rule","otake.hiroshima.jp":"rule","saka.hiroshima.jp":"rule","sera.hiroshima.jp":"rule","seranishi.hiroshima.jp":"rule","shinichi.hiroshima.jp":"rule","shobara.hiroshima.jp":"rule","takehara.hiroshima.jp":"rule","abashiri.hokkaido.jp":"rule","abira.hokkaido.jp":"rule","aibetsu.hokkaido.jp":"rule","akabira.hokkaido.jp":"rule","akkeshi.hokkaido.jp":"rule","asahikawa.hokkaido.jp":"rule","ashibetsu.hokkaido.jp":"rule","ashoro.hokkaido.jp":"rule","assabu.hokkaido.jp":"rule","atsuma.hokkaido.jp":"rule","bibai.hokkaido.jp":"rule","biei.hokkaido.jp":"rule","bifuka.hokkaido.jp":"rule","bihoro.hokkaido.jp":"rule","biratori.hokkaido.jp":"rule","chippubetsu.hokkaido.jp":"rule","chitose.hokkaido.jp":"rule","date.hokkaido.jp":"rule","ebetsu.hokkaido.jp":"rule","embetsu.hokkaido.jp":"rule","eniwa.hokkaido.jp":"rule","erimo.hokkaido.jp":"rule","esan.hokkaido.jp":"rule","esashi.hokkaido.jp":"rule","fukagawa.hokkaido.jp":"rule","fukushima.hokkaido.jp":"rule","furano.hokkaido.jp":"rule","furubira.hokkaido.jp":"rule","haboro.hokkaido.jp":"rule","hakodate.hokkaido.jp":"rule","hamatonbetsu.hokkaido.jp":"rule","hidaka.hokkaido.jp":"rule","higashikagura.hokkaido.jp":"rule","higashikawa.hokkaido.jp":"rule","hiroo.hokkaido.jp":"rule","hokuryu.hokkaido.jp":"rule","hokuto.hokkaido.jp":"rule","honbetsu.hokkaido.jp":"rule","horokanai.hokkaido.jp":"rule","horonobe.hokkaido.jp":"rule","ikeda.hokkaido.jp":"rule","imakane.hokkaido.jp":"rule","ishikari.hokkaido.jp":"rule","iwamizawa.hokkaido.jp":"rule","iwanai.hokkaido.jp":"rule","kamifurano.hokkaido.jp":"rule","kamikawa.hokkaido.jp":"rule","kamishihoro.hokkaido.jp":"rule","kamisunagawa.hokkaido.jp":"rule","kamoenai.hokkaido.jp":"rule","kayabe.hokkaido.jp":"rule","kembuchi.hokkaido.jp":"rule","kikonai.hokkaido.jp":"rule","kimobetsu.hokkaido.jp":"rule","kitahiroshima.hokkaido.jp":"rule","kitami.hokkaido.jp":"rule","kiyosato.hokkaido.jp":"rule","koshimizu.hokkaido.jp":"rule","kunneppu.hokkaido.jp":"rule","kuriyama.hokkaido.jp":"rule","kuromatsunai.hokkaido.jp":"rule","kushiro.hokkaido.jp":"rule","kutchan.hokkaido.jp":"rule","kyowa.hokkaido.jp":"rule","mashike.hokkaido.jp":"rule","matsumae.hokkaido.jp":"rule","mikasa.hokkaido.jp":"rule","minamifurano.hokkaido.jp":"rule","mombetsu.hokkaido.jp":"rule","moseushi.hokkaido.jp":"rule","mukawa.hokkaido.jp":"rule","muroran.hokkaido.jp":"rule","naie.hokkaido.jp":"rule","nakagawa.hokkaido.jp":"rule","nakasatsunai.hokkaido.jp":"rule","nakatombetsu.hokkaido.jp":"rule","nanae.hokkaido.jp":"rule","nanporo.hokkaido.jp":"rule","nayoro.hokkaido.jp":"rule","nemuro.hokkaido.jp":"rule","niikappu.hokkaido.jp":"rule","niki.hokkaido.jp":"rule","nishiokoppe.hokkaido.jp":"rule","noboribetsu.hokkaido.jp":"rule","numata.hokkaido.jp":"rule","obihiro.hokkaido.jp":"rule","obira.hokkaido.jp":"rule","oketo.hokkaido.jp":"rule","okoppe.hokkaido.jp":"rule","otaru.hokkaido.jp":"rule","otobe.hokkaido.jp":"rule","otofuke.hokkaido.jp":"rule","otoineppu.hokkaido.jp":"rule","oumu.hokkaido.jp":"rule","ozora.hokkaido.jp":"rule","pippu.hokkaido.jp":"rule","rankoshi.hokkaido.jp":"rule","rebun.hokkaido.jp":"rule","rikubetsu.hokkaido.jp":"rule","rishiri.hokkaido.jp":"rule","rishirifuji.hokkaido.jp":"rule","saroma.hokkaido.jp":"rule","sarufutsu.hokkaido.jp":"rule","shakotan.hokkaido.jp":"rule","shari.hokkaido.jp":"rule","shibecha.hokkaido.jp":"rule","shibetsu.hokkaido.jp":"rule","shikabe.hokkaido.jp":"rule","shikaoi.hokkaido.jp":"rule","shimamaki.hokkaido.jp":"rule","shimizu.hokkaido.jp":"rule","shimokawa.hokkaido.jp":"rule","shinshinotsu.hokkaido.jp":"rule","shintoku.hokkaido.jp":"rule","shiranuka.hokkaido.jp":"rule","shiraoi.hokkaido.jp":"rule","shiriuchi.hokkaido.jp":"rule","sobetsu.hokkaido.jp":"rule","sunagawa.hokkaido.jp":"rule","taiki.hokkaido.jp":"rule","takasu.hokkaido.jp":"rule","takikawa.hokkaido.jp":"rule","takinoue.hokkaido.jp":"rule","teshikaga.hokkaido.jp":"rule","tobetsu.hokkaido.jp":"rule","tohma.hokkaido.jp":"rule","tomakomai.hokkaido.jp":"rule","tomari.hokkaido.jp":"rule","toya.hokkaido.jp":"rule","toyako.hokkaido.jp":"rule","toyotomi.hokkaido.jp":"rule","toyoura.hokkaido.jp":"rule","tsubetsu.hokkaido.jp":"rule","tsukigata.hokkaido.jp":"rule","urakawa.hokkaido.jp":"rule","urausu.hokkaido.jp":"rule","uryu.hokkaido.jp":"rule","utashinai.hokkaido.jp":"rule","wakkanai.hokkaido.jp":"rule","wassamu.hokkaido.jp":"rule","yakumo.hokkaido.jp":"rule","yoichi.hokkaido.jp":"rule","aioi.hyogo.jp":"rule","akashi.hyogo.jp":"rule","ako.hyogo.jp":"rule","amagasaki.hyogo.jp":"rule","aogaki.hyogo.jp":"rule","asago.hyogo.jp":"rule","ashiya.hyogo.jp":"rule","awaji.hyogo.jp":"rule","fukusaki.hyogo.jp":"rule","goshiki.hyogo.jp":"rule","harima.hyogo.jp":"rule","himeji.hyogo.jp":"rule","ichikawa.hyogo.jp":"rule","inagawa.hyogo.jp":"rule","itami.hyogo.jp":"rule","kakogawa.hyogo.jp":"rule","kamigori.hyogo.jp":"rule","kamikawa.hyogo.jp":"rule","kasai.hyogo.jp":"rule","kasuga.hyogo.jp":"rule","kawanishi.hyogo.jp":"rule","miki.hyogo.jp":"rule","minamiawaji.hyogo.jp":"rule","nishinomiya.hyogo.jp":"rule","nishiwaki.hyogo.jp":"rule","ono.hyogo.jp":"rule","sanda.hyogo.jp":"rule","sannan.hyogo.jp":"rule","sasayama.hyogo.jp":"rule","sayo.hyogo.jp":"rule","shingu.hyogo.jp":"rule","shinonsen.hyogo.jp":"rule","shiso.hyogo.jp":"rule","sumoto.hyogo.jp":"rule","taishi.hyogo.jp":"rule","taka.hyogo.jp":"rule","takarazuka.hyogo.jp":"rule","takasago.hyogo.jp":"rule","takino.hyogo.jp":"rule","tamba.hyogo.jp":"rule","tatsuno.hyogo.jp":"rule","toyooka.hyogo.jp":"rule","yabu.hyogo.jp":"rule","yashiro.hyogo.jp":"rule","yoka.hyogo.jp":"rule","yokawa.hyogo.jp":"rule","ami.ibaraki.jp":"rule","asahi.ibaraki.jp":"rule","bando.ibaraki.jp":"rule","chikusei.ibaraki.jp":"rule","daigo.ibaraki.jp":"rule","fujishiro.ibaraki.jp":"rule","hitachi.ibaraki.jp":"rule","hitachinaka.ibaraki.jp":"rule","hitachiomiya.ibaraki.jp":"rule","hitachiota.ibaraki.jp":"rule","ibaraki.ibaraki.jp":"rule","ina.ibaraki.jp":"rule","inashiki.ibaraki.jp":"rule","itako.ibaraki.jp":"rule","iwama.ibaraki.jp":"rule","joso.ibaraki.jp":"rule","kamisu.ibaraki.jp":"rule","kasama.ibaraki.jp":"rule","kashima.ibaraki.jp":"rule","kasumigaura.ibaraki.jp":"rule","koga.ibaraki.jp":"rule","miho.ibaraki.jp":"rule","mito.ibaraki.jp":"rule","moriya.ibaraki.jp":"rule","naka.ibaraki.jp":"rule","namegata.ibaraki.jp":"rule","oarai.ibaraki.jp":"rule","ogawa.ibaraki.jp":"rule","omitama.ibaraki.jp":"rule","ryugasaki.ibaraki.jp":"rule","sakai.ibaraki.jp":"rule","sakuragawa.ibaraki.jp":"rule","shimodate.ibaraki.jp":"rule","shimotsuma.ibaraki.jp":"rule","shirosato.ibaraki.jp":"rule","sowa.ibaraki.jp":"rule","suifu.ibaraki.jp":"rule","takahagi.ibaraki.jp":"rule","tamatsukuri.ibaraki.jp":"rule","tokai.ibaraki.jp":"rule","tomobe.ibaraki.jp":"rule","tone.ibaraki.jp":"rule","toride.ibaraki.jp":"rule","tsuchiura.ibaraki.jp":"rule","tsukuba.ibaraki.jp":"rule","uchihara.ibaraki.jp":"rule","ushiku.ibaraki.jp":"rule","yachiyo.ibaraki.jp":"rule","yamagata.ibaraki.jp":"rule","yawara.ibaraki.jp":"rule","yuki.ibaraki.jp":"rule","anamizu.ishikawa.jp":"rule","hakui.ishikawa.jp":"rule","hakusan.ishikawa.jp":"rule","kaga.ishikawa.jp":"rule","kahoku.ishikawa.jp":"rule","kanazawa.ishikawa.jp":"rule","kawakita.ishikawa.jp":"rule","komatsu.ishikawa.jp":"rule","nakanoto.ishikawa.jp":"rule","nanao.ishikawa.jp":"rule","nomi.ishikawa.jp":"rule","nonoichi.ishikawa.jp":"rule","noto.ishikawa.jp":"rule","shika.ishikawa.jp":"rule","suzu.ishikawa.jp":"rule","tsubata.ishikawa.jp":"rule","tsurugi.ishikawa.jp":"rule","uchinada.ishikawa.jp":"rule","wajima.ishikawa.jp":"rule","fudai.iwate.jp":"rule","fujisawa.iwate.jp":"rule","hanamaki.iwate.jp":"rule","hiraizumi.iwate.jp":"rule","hirono.iwate.jp":"rule","ichinohe.iwate.jp":"rule","ichinoseki.iwate.jp":"rule","iwaizumi.iwate.jp":"rule","iwate.iwate.jp":"rule","joboji.iwate.jp":"rule","kamaishi.iwate.jp":"rule","kanegasaki.iwate.jp":"rule","karumai.iwate.jp":"rule","kawai.iwate.jp":"rule","kitakami.iwate.jp":"rule","kuji.iwate.jp":"rule","kunohe.iwate.jp":"rule","kuzumaki.iwate.jp":"rule","miyako.iwate.jp":"rule","mizusawa.iwate.jp":"rule","morioka.iwate.jp":"rule","ninohe.iwate.jp":"rule","noda.iwate.jp":"rule","ofunato.iwate.jp":"rule","oshu.iwate.jp":"rule","otsuchi.iwate.jp":"rule","rikuzentakata.iwate.jp":"rule","shiwa.iwate.jp":"rule","shizukuishi.iwate.jp":"rule","sumita.iwate.jp":"rule","tanohata.iwate.jp":"rule","tono.iwate.jp":"rule","yahaba.iwate.jp":"rule","yamada.iwate.jp":"rule","ayagawa.kagawa.jp":"rule","higashikagawa.kagawa.jp":"rule","kanonji.kagawa.jp":"rule","kotohira.kagawa.jp":"rule","manno.kagawa.jp":"rule","marugame.kagawa.jp":"rule","mitoyo.kagawa.jp":"rule","naoshima.kagawa.jp":"rule","sanuki.kagawa.jp":"rule","tadotsu.kagawa.jp":"rule","takamatsu.kagawa.jp":"rule","tonosho.kagawa.jp":"rule","uchinomi.kagawa.jp":"rule","utazu.kagawa.jp":"rule","zentsuji.kagawa.jp":"rule","akune.kagoshima.jp":"rule","amami.kagoshima.jp":"rule","hioki.kagoshima.jp":"rule","isa.kagoshima.jp":"rule","isen.kagoshima.jp":"rule","izumi.kagoshima.jp":"rule","kagoshima.kagoshima.jp":"rule","kanoya.kagoshima.jp":"rule","kawanabe.kagoshima.jp":"rule","kinko.kagoshima.jp":"rule","kouyama.kagoshima.jp":"rule","makurazaki.kagoshima.jp":"rule","matsumoto.kagoshima.jp":"rule","minamitane.kagoshima.jp":"rule","nakatane.kagoshima.jp":"rule","nishinoomote.kagoshima.jp":"rule","satsumasendai.kagoshima.jp":"rule","soo.kagoshima.jp":"rule","tarumizu.kagoshima.jp":"rule","yusui.kagoshima.jp":"rule","aikawa.kanagawa.jp":"rule","atsugi.kanagawa.jp":"rule","ayase.kanagawa.jp":"rule","chigasaki.kanagawa.jp":"rule","ebina.kanagawa.jp":"rule","fujisawa.kanagawa.jp":"rule","hadano.kanagawa.jp":"rule","hakone.kanagawa.jp":"rule","hiratsuka.kanagawa.jp":"rule","isehara.kanagawa.jp":"rule","kaisei.kanagawa.jp":"rule","kamakura.kanagawa.jp":"rule","kiyokawa.kanagawa.jp":"rule","matsuda.kanagawa.jp":"rule","minamiashigara.kanagawa.jp":"rule","miura.kanagawa.jp":"rule","nakai.kanagawa.jp":"rule","ninomiya.kanagawa.jp":"rule","odawara.kanagawa.jp":"rule","oi.kanagawa.jp":"rule","oiso.kanagawa.jp":"rule","sagamihara.kanagawa.jp":"rule","samukawa.kanagawa.jp":"rule","tsukui.kanagawa.jp":"rule","yamakita.kanagawa.jp":"rule","yamato.kanagawa.jp":"rule","yokosuka.kanagawa.jp":"rule","yugawara.kanagawa.jp":"rule","zama.kanagawa.jp":"rule","zushi.kanagawa.jp":"rule","aki.kochi.jp":"rule","geisei.kochi.jp":"rule","hidaka.kochi.jp":"rule","higashitsuno.kochi.jp":"rule","ino.kochi.jp":"rule","kagami.kochi.jp":"rule","kami.kochi.jp":"rule","kitagawa.kochi.jp":"rule","kochi.kochi.jp":"rule","mihara.kochi.jp":"rule","motoyama.kochi.jp":"rule","muroto.kochi.jp":"rule","nahari.kochi.jp":"rule","nakamura.kochi.jp":"rule","nankoku.kochi.jp":"rule","nishitosa.kochi.jp":"rule","niyodogawa.kochi.jp":"rule","ochi.kochi.jp":"rule","okawa.kochi.jp":"rule","otoyo.kochi.jp":"rule","otsuki.kochi.jp":"rule","sakawa.kochi.jp":"rule","sukumo.kochi.jp":"rule","susaki.kochi.jp":"rule","tosa.kochi.jp":"rule","tosashimizu.kochi.jp":"rule","toyo.kochi.jp":"rule","tsuno.kochi.jp":"rule","umaji.kochi.jp":"rule","yasuda.kochi.jp":"rule","yusuhara.kochi.jp":"rule","amakusa.kumamoto.jp":"rule","arao.kumamoto.jp":"rule","aso.kumamoto.jp":"rule","choyo.kumamoto.jp":"rule","gyokuto.kumamoto.jp":"rule","kamiamakusa.kumamoto.jp":"rule","kikuchi.kumamoto.jp":"rule","kumamoto.kumamoto.jp":"rule","mashiki.kumamoto.jp":"rule","mifune.kumamoto.jp":"rule","minamata.kumamoto.jp":"rule","minamioguni.kumamoto.jp":"rule","nagasu.kumamoto.jp":"rule","nishihara.kumamoto.jp":"rule","oguni.kumamoto.jp":"rule","ozu.kumamoto.jp":"rule","sumoto.kumamoto.jp":"rule","takamori.kumamoto.jp":"rule","uki.kumamoto.jp":"rule","uto.kumamoto.jp":"rule","yamaga.kumamoto.jp":"rule","yamato.kumamoto.jp":"rule","yatsushiro.kumamoto.jp":"rule","ayabe.kyoto.jp":"rule","fukuchiyama.kyoto.jp":"rule","higashiyama.kyoto.jp":"rule","ide.kyoto.jp":"rule","ine.kyoto.jp":"rule","joyo.kyoto.jp":"rule","kameoka.kyoto.jp":"rule","kamo.kyoto.jp":"rule","kita.kyoto.jp":"rule","kizu.kyoto.jp":"rule","kumiyama.kyoto.jp":"rule","kyotamba.kyoto.jp":"rule","kyotanabe.kyoto.jp":"rule","kyotango.kyoto.jp":"rule","maizuru.kyoto.jp":"rule","minami.kyoto.jp":"rule","minamiyamashiro.kyoto.jp":"rule","miyazu.kyoto.jp":"rule","muko.kyoto.jp":"rule","nagaokakyo.kyoto.jp":"rule","nakagyo.kyoto.jp":"rule","nantan.kyoto.jp":"rule","oyamazaki.kyoto.jp":"rule","sakyo.kyoto.jp":"rule","seika.kyoto.jp":"rule","tanabe.kyoto.jp":"rule","uji.kyoto.jp":"rule","ujitawara.kyoto.jp":"rule","wazuka.kyoto.jp":"rule","yamashina.kyoto.jp":"rule","yawata.kyoto.jp":"rule","asahi.mie.jp":"rule","inabe.mie.jp":"rule","ise.mie.jp":"rule","kameyama.mie.jp":"rule","kawagoe.mie.jp":"rule","kiho.mie.jp":"rule","kisosaki.mie.jp":"rule","kiwa.mie.jp":"rule","komono.mie.jp":"rule","kumano.mie.jp":"rule","kuwana.mie.jp":"rule","matsusaka.mie.jp":"rule","meiwa.mie.jp":"rule","mihama.mie.jp":"rule","minamiise.mie.jp":"rule","misugi.mie.jp":"rule","miyama.mie.jp":"rule","nabari.mie.jp":"rule","shima.mie.jp":"rule","suzuka.mie.jp":"rule","tado.mie.jp":"rule","taiki.mie.jp":"rule","taki.mie.jp":"rule","tamaki.mie.jp":"rule","toba.mie.jp":"rule","tsu.mie.jp":"rule","udono.mie.jp":"rule","ureshino.mie.jp":"rule","watarai.mie.jp":"rule","yokkaichi.mie.jp":"rule","furukawa.miyagi.jp":"rule","higashimatsushima.miyagi.jp":"rule","ishinomaki.miyagi.jp":"rule","iwanuma.miyagi.jp":"rule","kakuda.miyagi.jp":"rule","kami.miyagi.jp":"rule","kawasaki.miyagi.jp":"rule","marumori.miyagi.jp":"rule","matsushima.miyagi.jp":"rule","minamisanriku.miyagi.jp":"rule","misato.miyagi.jp":"rule","murata.miyagi.jp":"rule","natori.miyagi.jp":"rule","ogawara.miyagi.jp":"rule","ohira.miyagi.jp":"rule","onagawa.miyagi.jp":"rule","osaki.miyagi.jp":"rule","rifu.miyagi.jp":"rule","semine.miyagi.jp":"rule","shibata.miyagi.jp":"rule","shichikashuku.miyagi.jp":"rule","shikama.miyagi.jp":"rule","shiogama.miyagi.jp":"rule","shiroishi.miyagi.jp":"rule","tagajo.miyagi.jp":"rule","taiwa.miyagi.jp":"rule","tome.miyagi.jp":"rule","tomiya.miyagi.jp":"rule","wakuya.miyagi.jp":"rule","watari.miyagi.jp":"rule","yamamoto.miyagi.jp":"rule","zao.miyagi.jp":"rule","aya.miyazaki.jp":"rule","ebino.miyazaki.jp":"rule","gokase.miyazaki.jp":"rule","hyuga.miyazaki.jp":"rule","kadogawa.miyazaki.jp":"rule","kawaminami.miyazaki.jp":"rule","kijo.miyazaki.jp":"rule","kitagawa.miyazaki.jp":"rule","kitakata.miyazaki.jp":"rule","kitaura.miyazaki.jp":"rule","kobayashi.miyazaki.jp":"rule","kunitomi.miyazaki.jp":"rule","kushima.miyazaki.jp":"rule","mimata.miyazaki.jp":"rule","miyakonojo.miyazaki.jp":"rule","miyazaki.miyazaki.jp":"rule","morotsuka.miyazaki.jp":"rule","nichinan.miyazaki.jp":"rule","nishimera.miyazaki.jp":"rule","nobeoka.miyazaki.jp":"rule","saito.miyazaki.jp":"rule","shiiba.miyazaki.jp":"rule","shintomi.miyazaki.jp":"rule","takaharu.miyazaki.jp":"rule","takanabe.miyazaki.jp":"rule","takazaki.miyazaki.jp":"rule","tsuno.miyazaki.jp":"rule","achi.nagano.jp":"rule","agematsu.nagano.jp":"rule","anan.nagano.jp":"rule","aoki.nagano.jp":"rule","asahi.nagano.jp":"rule","azumino.nagano.jp":"rule","chikuhoku.nagano.jp":"rule","chikuma.nagano.jp":"rule","chino.nagano.jp":"rule","fujimi.nagano.jp":"rule","hakuba.nagano.jp":"rule","hara.nagano.jp":"rule","hiraya.nagano.jp":"rule","iida.nagano.jp":"rule","iijima.nagano.jp":"rule","iiyama.nagano.jp":"rule","iizuna.nagano.jp":"rule","ikeda.nagano.jp":"rule","ikusaka.nagano.jp":"rule","ina.nagano.jp":"rule","karuizawa.nagano.jp":"rule","kawakami.nagano.jp":"rule","kiso.nagano.jp":"rule","kisofukushima.nagano.jp":"rule","kitaaiki.nagano.jp":"rule","komagane.nagano.jp":"rule","komoro.nagano.jp":"rule","matsukawa.nagano.jp":"rule","matsumoto.nagano.jp":"rule","miasa.nagano.jp":"rule","minamiaiki.nagano.jp":"rule","minamimaki.nagano.jp":"rule","minamiminowa.nagano.jp":"rule","minowa.nagano.jp":"rule","miyada.nagano.jp":"rule","miyota.nagano.jp":"rule","mochizuki.nagano.jp":"rule","nagano.nagano.jp":"rule","nagawa.nagano.jp":"rule","nagiso.nagano.jp":"rule","nakagawa.nagano.jp":"rule","nakano.nagano.jp":"rule","nozawaonsen.nagano.jp":"rule","obuse.nagano.jp":"rule","ogawa.nagano.jp":"rule","okaya.nagano.jp":"rule","omachi.nagano.jp":"rule","omi.nagano.jp":"rule","ookuwa.nagano.jp":"rule","ooshika.nagano.jp":"rule","otaki.nagano.jp":"rule","otari.nagano.jp":"rule","sakae.nagano.jp":"rule","sakaki.nagano.jp":"rule","saku.nagano.jp":"rule","sakuho.nagano.jp":"rule","shimosuwa.nagano.jp":"rule","shinanomachi.nagano.jp":"rule","shiojiri.nagano.jp":"rule","suwa.nagano.jp":"rule","suzaka.nagano.jp":"rule","takagi.nagano.jp":"rule","takamori.nagano.jp":"rule","takayama.nagano.jp":"rule","tateshina.nagano.jp":"rule","tatsuno.nagano.jp":"rule","togakushi.nagano.jp":"rule","togura.nagano.jp":"rule","tomi.nagano.jp":"rule","ueda.nagano.jp":"rule","wada.nagano.jp":"rule","yamagata.nagano.jp":"rule","yamanouchi.nagano.jp":"rule","yasaka.nagano.jp":"rule","yasuoka.nagano.jp":"rule","chijiwa.nagasaki.jp":"rule","futsu.nagasaki.jp":"rule","goto.nagasaki.jp":"rule","hasami.nagasaki.jp":"rule","hirado.nagasaki.jp":"rule","iki.nagasaki.jp":"rule","isahaya.nagasaki.jp":"rule","kawatana.nagasaki.jp":"rule","kuchinotsu.nagasaki.jp":"rule","matsuura.nagasaki.jp":"rule","nagasaki.nagasaki.jp":"rule","obama.nagasaki.jp":"rule","omura.nagasaki.jp":"rule","oseto.nagasaki.jp":"rule","saikai.nagasaki.jp":"rule","sasebo.nagasaki.jp":"rule","seihi.nagasaki.jp":"rule","shimabara.nagasaki.jp":"rule","shinkamigoto.nagasaki.jp":"rule","togitsu.nagasaki.jp":"rule","tsushima.nagasaki.jp":"rule","unzen.nagasaki.jp":"rule","ando.nara.jp":"rule","gose.nara.jp":"rule","heguri.nara.jp":"rule","higashiyoshino.nara.jp":"rule","ikaruga.nara.jp":"rule","ikoma.nara.jp":"rule","kamikitayama.nara.jp":"rule","kanmaki.nara.jp":"rule","kashiba.nara.jp":"rule","kashihara.nara.jp":"rule","katsuragi.nara.jp":"rule","kawai.nara.jp":"rule","kawakami.nara.jp":"rule","kawanishi.nara.jp":"rule","koryo.nara.jp":"rule","kurotaki.nara.jp":"rule","mitsue.nara.jp":"rule","miyake.nara.jp":"rule","nara.nara.jp":"rule","nosegawa.nara.jp":"rule","oji.nara.jp":"rule","ouda.nara.jp":"rule","oyodo.nara.jp":"rule","sakurai.nara.jp":"rule","sango.nara.jp":"rule","shimoichi.nara.jp":"rule","shimokitayama.nara.jp":"rule","shinjo.nara.jp":"rule","soni.nara.jp":"rule","takatori.nara.jp":"rule","tawaramoto.nara.jp":"rule","tenkawa.nara.jp":"rule","tenri.nara.jp":"rule","uda.nara.jp":"rule","yamatokoriyama.nara.jp":"rule","yamatotakada.nara.jp":"rule","yamazoe.nara.jp":"rule","yoshino.nara.jp":"rule","aga.niigata.jp":"rule","agano.niigata.jp":"rule","gosen.niigata.jp":"rule","itoigawa.niigata.jp":"rule","izumozaki.niigata.jp":"rule","joetsu.niigata.jp":"rule","kamo.niigata.jp":"rule","kariwa.niigata.jp":"rule","kashiwazaki.niigata.jp":"rule","minamiuonuma.niigata.jp":"rule","mitsuke.niigata.jp":"rule","muika.niigata.jp":"rule","murakami.niigata.jp":"rule","myoko.niigata.jp":"rule","nagaoka.niigata.jp":"rule","niigata.niigata.jp":"rule","ojiya.niigata.jp":"rule","omi.niigata.jp":"rule","sado.niigata.jp":"rule","sanjo.niigata.jp":"rule","seiro.niigata.jp":"rule","seirou.niigata.jp":"rule","sekikawa.niigata.jp":"rule","shibata.niigata.jp":"rule","tagami.niigata.jp":"rule","tainai.niigata.jp":"rule","tochio.niigata.jp":"rule","tokamachi.niigata.jp":"rule","tsubame.niigata.jp":"rule","tsunan.niigata.jp":"rule","uonuma.niigata.jp":"rule","yahiko.niigata.jp":"rule","yoita.niigata.jp":"rule","yuzawa.niigata.jp":"rule","beppu.oita.jp":"rule","bungoono.oita.jp":"rule","bungotakada.oita.jp":"rule","hasama.oita.jp":"rule","hiji.oita.jp":"rule","himeshima.oita.jp":"rule","hita.oita.jp":"rule","kamitsue.oita.jp":"rule","kokonoe.oita.jp":"rule","kuju.oita.jp":"rule","kunisaki.oita.jp":"rule","kusu.oita.jp":"rule","oita.oita.jp":"rule","saiki.oita.jp":"rule","taketa.oita.jp":"rule","tsukumi.oita.jp":"rule","usa.oita.jp":"rule","usuki.oita.jp":"rule","yufu.oita.jp":"rule","akaiwa.okayama.jp":"rule","asakuchi.okayama.jp":"rule","bizen.okayama.jp":"rule","hayashima.okayama.jp":"rule","ibara.okayama.jp":"rule","kagamino.okayama.jp":"rule","kasaoka.okayama.jp":"rule","kibichuo.okayama.jp":"rule","kumenan.okayama.jp":"rule","kurashiki.okayama.jp":"rule","maniwa.okayama.jp":"rule","misaki.okayama.jp":"rule","nagi.okayama.jp":"rule","niimi.okayama.jp":"rule","nishiawakura.okayama.jp":"rule","okayama.okayama.jp":"rule","satosho.okayama.jp":"rule","setouchi.okayama.jp":"rule","shinjo.okayama.jp":"rule","shoo.okayama.jp":"rule","soja.okayama.jp":"rule","takahashi.okayama.jp":"rule","tamano.okayama.jp":"rule","tsuyama.okayama.jp":"rule","wake.okayama.jp":"rule","yakage.okayama.jp":"rule","aguni.okinawa.jp":"rule","ginowan.okinawa.jp":"rule","ginoza.okinawa.jp":"rule","gushikami.okinawa.jp":"rule","haebaru.okinawa.jp":"rule","higashi.okinawa.jp":"rule","hirara.okinawa.jp":"rule","iheya.okinawa.jp":"rule","ishigaki.okinawa.jp":"rule","ishikawa.okinawa.jp":"rule","itoman.okinawa.jp":"rule","izena.okinawa.jp":"rule","kadena.okinawa.jp":"rule","kin.okinawa.jp":"rule","kitadaito.okinawa.jp":"rule","kitanakagusuku.okinawa.jp":"rule","kumejima.okinawa.jp":"rule","kunigami.okinawa.jp":"rule","minamidaito.okinawa.jp":"rule","motobu.okinawa.jp":"rule","nago.okinawa.jp":"rule","naha.okinawa.jp":"rule","nakagusuku.okinawa.jp":"rule","nakijin.okinawa.jp":"rule","nanjo.okinawa.jp":"rule","nishihara.okinawa.jp":"rule","ogimi.okinawa.jp":"rule","okinawa.okinawa.jp":"rule","onna.okinawa.jp":"rule","shimoji.okinawa.jp":"rule","taketomi.okinawa.jp":"rule","tarama.okinawa.jp":"rule","tokashiki.okinawa.jp":"rule","tomigusuku.okinawa.jp":"rule","tonaki.okinawa.jp":"rule","urasoe.okinawa.jp":"rule","uruma.okinawa.jp":"rule","yaese.okinawa.jp":"rule","yomitan.okinawa.jp":"rule","yonabaru.okinawa.jp":"rule","yonaguni.okinawa.jp":"rule","zamami.okinawa.jp":"rule","abeno.osaka.jp":"rule","chihayaakasaka.osaka.jp":"rule","chuo.osaka.jp":"rule","daito.osaka.jp":"rule","fujiidera.osaka.jp":"rule","habikino.osaka.jp":"rule","hannan.osaka.jp":"rule","higashiosaka.osaka.jp":"rule","higashisumiyoshi.osaka.jp":"rule","higashiyodogawa.osaka.jp":"rule","hirakata.osaka.jp":"rule","ibaraki.osaka.jp":"rule","ikeda.osaka.jp":"rule","izumi.osaka.jp":"rule","izumiotsu.osaka.jp":"rule","izumisano.osaka.jp":"rule","kadoma.osaka.jp":"rule","kaizuka.osaka.jp":"rule","kanan.osaka.jp":"rule","kashiwara.osaka.jp":"rule","katano.osaka.jp":"rule","kawachinagano.osaka.jp":"rule","kishiwada.osaka.jp":"rule","kita.osaka.jp":"rule","kumatori.osaka.jp":"rule","matsubara.osaka.jp":"rule","minato.osaka.jp":"rule","minoh.osaka.jp":"rule","misaki.osaka.jp":"rule","moriguchi.osaka.jp":"rule","neyagawa.osaka.jp":"rule","nishi.osaka.jp":"rule","nose.osaka.jp":"rule","osakasayama.osaka.jp":"rule","sakai.osaka.jp":"rule","sayama.osaka.jp":"rule","sennan.osaka.jp":"rule","settsu.osaka.jp":"rule","shijonawate.osaka.jp":"rule","shimamoto.osaka.jp":"rule","suita.osaka.jp":"rule","tadaoka.osaka.jp":"rule","taishi.osaka.jp":"rule","tajiri.osaka.jp":"rule","takaishi.osaka.jp":"rule","takatsuki.osaka.jp":"rule","tondabayashi.osaka.jp":"rule","toyonaka.osaka.jp":"rule","toyono.osaka.jp":"rule","yao.osaka.jp":"rule","ariake.saga.jp":"rule","arita.saga.jp":"rule","fukudomi.saga.jp":"rule","genkai.saga.jp":"rule","hamatama.saga.jp":"rule","hizen.saga.jp":"rule","imari.saga.jp":"rule","kamimine.saga.jp":"rule","kanzaki.saga.jp":"rule","karatsu.saga.jp":"rule","kashima.saga.jp":"rule","kitagata.saga.jp":"rule","kitahata.saga.jp":"rule","kiyama.saga.jp":"rule","kouhoku.saga.jp":"rule","kyuragi.saga.jp":"rule","nishiarita.saga.jp":"rule","ogi.saga.jp":"rule","omachi.saga.jp":"rule","ouchi.saga.jp":"rule","saga.saga.jp":"rule","shiroishi.saga.jp":"rule","taku.saga.jp":"rule","tara.saga.jp":"rule","tosu.saga.jp":"rule","yoshinogari.saga.jp":"rule","arakawa.saitama.jp":"rule","asaka.saitama.jp":"rule","chichibu.saitama.jp":"rule","fujimi.saitama.jp":"rule","fujimino.saitama.jp":"rule","fukaya.saitama.jp":"rule","hanno.saitama.jp":"rule","hanyu.saitama.jp":"rule","hasuda.saitama.jp":"rule","hatogaya.saitama.jp":"rule","hatoyama.saitama.jp":"rule","hidaka.saitama.jp":"rule","higashichichibu.saitama.jp":"rule","higashimatsuyama.saitama.jp":"rule","honjo.saitama.jp":"rule","ina.saitama.jp":"rule","iruma.saitama.jp":"rule","iwatsuki.saitama.jp":"rule","kamiizumi.saitama.jp":"rule","kamikawa.saitama.jp":"rule","kamisato.saitama.jp":"rule","kasukabe.saitama.jp":"rule","kawagoe.saitama.jp":"rule","kawaguchi.saitama.jp":"rule","kawajima.saitama.jp":"rule","kazo.saitama.jp":"rule","kitamoto.saitama.jp":"rule","koshigaya.saitama.jp":"rule","kounosu.saitama.jp":"rule","kuki.saitama.jp":"rule","kumagaya.saitama.jp":"rule","matsubushi.saitama.jp":"rule","minano.saitama.jp":"rule","misato.saitama.jp":"rule","miyashiro.saitama.jp":"rule","miyoshi.saitama.jp":"rule","moroyama.saitama.jp":"rule","nagatoro.saitama.jp":"rule","namegawa.saitama.jp":"rule","niiza.saitama.jp":"rule","ogano.saitama.jp":"rule","ogawa.saitama.jp":"rule","ogose.saitama.jp":"rule","okegawa.saitama.jp":"rule","omiya.saitama.jp":"rule","otaki.saitama.jp":"rule","ranzan.saitama.jp":"rule","ryokami.saitama.jp":"rule","saitama.saitama.jp":"rule","sakado.saitama.jp":"rule","satte.saitama.jp":"rule","sayama.saitama.jp":"rule","shiki.saitama.jp":"rule","shiraoka.saitama.jp":"rule","soka.saitama.jp":"rule","sugito.saitama.jp":"rule","toda.saitama.jp":"rule","tokigawa.saitama.jp":"rule","tokorozawa.saitama.jp":"rule","tsurugashima.saitama.jp":"rule","urawa.saitama.jp":"rule","warabi.saitama.jp":"rule","yashio.saitama.jp":"rule","yokoze.saitama.jp":"rule","yono.saitama.jp":"rule","yorii.saitama.jp":"rule","yoshida.saitama.jp":"rule","yoshikawa.saitama.jp":"rule","yoshimi.saitama.jp":"rule","aisho.shiga.jp":"rule","gamo.shiga.jp":"rule","higashiomi.shiga.jp":"rule","hikone.shiga.jp":"rule","koka.shiga.jp":"rule","konan.shiga.jp":"rule","kosei.shiga.jp":"rule","koto.shiga.jp":"rule","kusatsu.shiga.jp":"rule","maibara.shiga.jp":"rule","moriyama.shiga.jp":"rule","nagahama.shiga.jp":"rule","nishiazai.shiga.jp":"rule","notogawa.shiga.jp":"rule","omihachiman.shiga.jp":"rule","otsu.shiga.jp":"rule","ritto.shiga.jp":"rule","ryuoh.shiga.jp":"rule","takashima.shiga.jp":"rule","takatsuki.shiga.jp":"rule","torahime.shiga.jp":"rule","toyosato.shiga.jp":"rule","yasu.shiga.jp":"rule","akagi.shimane.jp":"rule","ama.shimane.jp":"rule","gotsu.shimane.jp":"rule","hamada.shimane.jp":"rule","higashiizumo.shimane.jp":"rule","hikawa.shimane.jp":"rule","hikimi.shimane.jp":"rule","izumo.shimane.jp":"rule","kakinoki.shimane.jp":"rule","masuda.shimane.jp":"rule","matsue.shimane.jp":"rule","misato.shimane.jp":"rule","nishinoshima.shimane.jp":"rule","ohda.shimane.jp":"rule","okinoshima.shimane.jp":"rule","okuizumo.shimane.jp":"rule","shimane.shimane.jp":"rule","tamayu.shimane.jp":"rule","tsuwano.shimane.jp":"rule","unnan.shimane.jp":"rule","yakumo.shimane.jp":"rule","yasugi.shimane.jp":"rule","yatsuka.shimane.jp":"rule","arai.shizuoka.jp":"rule","atami.shizuoka.jp":"rule","fuji.shizuoka.jp":"rule","fujieda.shizuoka.jp":"rule","fujikawa.shizuoka.jp":"rule","fujinomiya.shizuoka.jp":"rule","fukuroi.shizuoka.jp":"rule","gotemba.shizuoka.jp":"rule","haibara.shizuoka.jp":"rule","hamamatsu.shizuoka.jp":"rule","higashiizu.shizuoka.jp":"rule","ito.shizuoka.jp":"rule","iwata.shizuoka.jp":"rule","izu.shizuoka.jp":"rule","izunokuni.shizuoka.jp":"rule","kakegawa.shizuoka.jp":"rule","kannami.shizuoka.jp":"rule","kawanehon.shizuoka.jp":"rule","kawazu.shizuoka.jp":"rule","kikugawa.shizuoka.jp":"rule","kosai.shizuoka.jp":"rule","makinohara.shizuoka.jp":"rule","matsuzaki.shizuoka.jp":"rule","minamiizu.shizuoka.jp":"rule","mishima.shizuoka.jp":"rule","morimachi.shizuoka.jp":"rule","nishiizu.shizuoka.jp":"rule","numazu.shizuoka.jp":"rule","omaezaki.shizuoka.jp":"rule","shimada.shizuoka.jp":"rule","shimizu.shizuoka.jp":"rule","shimoda.shizuoka.jp":"rule","shizuoka.shizuoka.jp":"rule","susono.shizuoka.jp":"rule","yaizu.shizuoka.jp":"rule","yoshida.shizuoka.jp":"rule","ashikaga.tochigi.jp":"rule","bato.tochigi.jp":"rule","haga.tochigi.jp":"rule","ichikai.tochigi.jp":"rule","iwafune.tochigi.jp":"rule","kaminokawa.tochigi.jp":"rule","kanuma.tochigi.jp":"rule","karasuyama.tochigi.jp":"rule","kuroiso.tochigi.jp":"rule","mashiko.tochigi.jp":"rule","mibu.tochigi.jp":"rule","moka.tochigi.jp":"rule","motegi.tochigi.jp":"rule","nasu.tochigi.jp":"rule","nasushiobara.tochigi.jp":"rule","nikko.tochigi.jp":"rule","nishikata.tochigi.jp":"rule","nogi.tochigi.jp":"rule","ohira.tochigi.jp":"rule","ohtawara.tochigi.jp":"rule","oyama.tochigi.jp":"rule","sakura.tochigi.jp":"rule","sano.tochigi.jp":"rule","shimotsuke.tochigi.jp":"rule","shioya.tochigi.jp":"rule","takanezawa.tochigi.jp":"rule","tochigi.tochigi.jp":"rule","tsuga.tochigi.jp":"rule","ujiie.tochigi.jp":"rule","utsunomiya.tochigi.jp":"rule","yaita.tochigi.jp":"rule","aizumi.tokushima.jp":"rule","anan.tokushima.jp":"rule","ichiba.tokushima.jp":"rule","itano.tokushima.jp":"rule","kainan.tokushima.jp":"rule","komatsushima.tokushima.jp":"rule","matsushige.tokushima.jp":"rule","mima.tokushima.jp":"rule","minami.tokushima.jp":"rule","miyoshi.tokushima.jp":"rule","mugi.tokushima.jp":"rule","nakagawa.tokushima.jp":"rule","naruto.tokushima.jp":"rule","sanagochi.tokushima.jp":"rule","shishikui.tokushima.jp":"rule","tokushima.tokushima.jp":"rule","wajiki.tokushima.jp":"rule","adachi.tokyo.jp":"rule","akiruno.tokyo.jp":"rule","akishima.tokyo.jp":"rule","aogashima.tokyo.jp":"rule","arakawa.tokyo.jp":"rule","bunkyo.tokyo.jp":"rule","chiyoda.tokyo.jp":"rule","chofu.tokyo.jp":"rule","chuo.tokyo.jp":"rule","edogawa.tokyo.jp":"rule","fuchu.tokyo.jp":"rule","fussa.tokyo.jp":"rule","hachijo.tokyo.jp":"rule","hachioji.tokyo.jp":"rule","hamura.tokyo.jp":"rule","higashikurume.tokyo.jp":"rule","higashimurayama.tokyo.jp":"rule","higashiyamato.tokyo.jp":"rule","hino.tokyo.jp":"rule","hinode.tokyo.jp":"rule","hinohara.tokyo.jp":"rule","inagi.tokyo.jp":"rule","itabashi.tokyo.jp":"rule","katsushika.tokyo.jp":"rule","kita.tokyo.jp":"rule","kiyose.tokyo.jp":"rule","kodaira.tokyo.jp":"rule","koganei.tokyo.jp":"rule","kokubunji.tokyo.jp":"rule","komae.tokyo.jp":"rule","koto.tokyo.jp":"rule","kouzushima.tokyo.jp":"rule","kunitachi.tokyo.jp":"rule","machida.tokyo.jp":"rule","meguro.tokyo.jp":"rule","minato.tokyo.jp":"rule","mitaka.tokyo.jp":"rule","mizuho.tokyo.jp":"rule","musashimurayama.tokyo.jp":"rule","musashino.tokyo.jp":"rule","nakano.tokyo.jp":"rule","nerima.tokyo.jp":"rule","ogasawara.tokyo.jp":"rule","okutama.tokyo.jp":"rule","ome.tokyo.jp":"rule","oshima.tokyo.jp":"rule","ota.tokyo.jp":"rule","setagaya.tokyo.jp":"rule","shibuya.tokyo.jp":"rule","shinagawa.tokyo.jp":"rule","shinjuku.tokyo.jp":"rule","suginami.tokyo.jp":"rule","sumida.tokyo.jp":"rule","tachikawa.tokyo.jp":"rule","taito.tokyo.jp":"rule","tama.tokyo.jp":"rule","toshima.tokyo.jp":"rule","chizu.tottori.jp":"rule","hino.tottori.jp":"rule","kawahara.tottori.jp":"rule","koge.tottori.jp":"rule","kotoura.tottori.jp":"rule","misasa.tottori.jp":"rule","nanbu.tottori.jp":"rule","nichinan.tottori.jp":"rule","sakaiminato.tottori.jp":"rule","tottori.tottori.jp":"rule","wakasa.tottori.jp":"rule","yazu.tottori.jp":"rule","yonago.tottori.jp":"rule","asahi.toyama.jp":"rule","fuchu.toyama.jp":"rule","fukumitsu.toyama.jp":"rule","funahashi.toyama.jp":"rule","himi.toyama.jp":"rule","imizu.toyama.jp":"rule","inami.toyama.jp":"rule","johana.toyama.jp":"rule","kamiichi.toyama.jp":"rule","kurobe.toyama.jp":"rule","nakaniikawa.toyama.jp":"rule","namerikawa.toyama.jp":"rule","nanto.toyama.jp":"rule","nyuzen.toyama.jp":"rule","oyabe.toyama.jp":"rule","taira.toyama.jp":"rule","takaoka.toyama.jp":"rule","tateyama.toyama.jp":"rule","toga.toyama.jp":"rule","tonami.toyama.jp":"rule","toyama.toyama.jp":"rule","unazuki.toyama.jp":"rule","uozu.toyama.jp":"rule","yamada.toyama.jp":"rule","arida.wakayama.jp":"rule","aridagawa.wakayama.jp":"rule","gobo.wakayama.jp":"rule","hashimoto.wakayama.jp":"rule","hidaka.wakayama.jp":"rule","hirogawa.wakayama.jp":"rule","inami.wakayama.jp":"rule","iwade.wakayama.jp":"rule","kainan.wakayama.jp":"rule","kamitonda.wakayama.jp":"rule","katsuragi.wakayama.jp":"rule","kimino.wakayama.jp":"rule","kinokawa.wakayama.jp":"rule","kitayama.wakayama.jp":"rule","koya.wakayama.jp":"rule","koza.wakayama.jp":"rule","kozagawa.wakayama.jp":"rule","kudoyama.wakayama.jp":"rule","kushimoto.wakayama.jp":"rule","mihama.wakayama.jp":"rule","misato.wakayama.jp":"rule","nachikatsuura.wakayama.jp":"rule","shingu.wakayama.jp":"rule","shirahama.wakayama.jp":"rule","taiji.wakayama.jp":"rule","tanabe.wakayama.jp":"rule","wakayama.wakayama.jp":"rule","yuasa.wakayama.jp":"rule","yura.wakayama.jp":"rule","asahi.yamagata.jp":"rule","funagata.yamagata.jp":"rule","higashine.yamagata.jp":"rule","iide.yamagata.jp":"rule","kahoku.yamagata.jp":"rule","kaminoyama.yamagata.jp":"rule","kaneyama.yamagata.jp":"rule","kawanishi.yamagata.jp":"rule","mamurogawa.yamagata.jp":"rule","mikawa.yamagata.jp":"rule","murayama.yamagata.jp":"rule","nagai.yamagata.jp":"rule","nakayama.yamagata.jp":"rule","nanyo.yamagata.jp":"rule","nishikawa.yamagata.jp":"rule","obanazawa.yamagata.jp":"rule","oe.yamagata.jp":"rule","oguni.yamagata.jp":"rule","ohkura.yamagata.jp":"rule","oishida.yamagata.jp":"rule","sagae.yamagata.jp":"rule","sakata.yamagata.jp":"rule","sakegawa.yamagata.jp":"rule","shinjo.yamagata.jp":"rule","shirataka.yamagata.jp":"rule","shonai.yamagata.jp":"rule","takahata.yamagata.jp":"rule","tendo.yamagata.jp":"rule","tozawa.yamagata.jp":"rule","tsuruoka.yamagata.jp":"rule","yamagata.yamagata.jp":"rule","yamanobe.yamagata.jp":"rule","yonezawa.yamagata.jp":"rule","yuza.yamagata.jp":"rule","abu.yamaguchi.jp":"rule","hagi.yamaguchi.jp":"rule","hikari.yamaguchi.jp":"rule","hofu.yamaguchi.jp":"rule","iwakuni.yamaguchi.jp":"rule","kudamatsu.yamaguchi.jp":"rule","mitou.yamaguchi.jp":"rule","nagato.yamaguchi.jp":"rule","oshima.yamaguchi.jp":"rule","shimonoseki.yamaguchi.jp":"rule","shunan.yamaguchi.jp":"rule","tabuse.yamaguchi.jp":"rule","tokuyama.yamaguchi.jp":"rule","toyota.yamaguchi.jp":"rule","ube.yamaguchi.jp":"rule","yuu.yamaguchi.jp":"rule","chuo.yamanashi.jp":"rule","doshi.yamanashi.jp":"rule","fuefuki.yamanashi.jp":"rule","fujikawa.yamanashi.jp":"rule","fujikawaguchiko.yamanashi.jp":"rule","fujiyoshida.yamanashi.jp":"rule","hayakawa.yamanashi.jp":"rule","hokuto.yamanashi.jp":"rule","ichikawamisato.yamanashi.jp":"rule","kai.yamanashi.jp":"rule","kofu.yamanashi.jp":"rule","koshu.yamanashi.jp":"rule","kosuge.yamanashi.jp":"rule","minami-alps.yamanashi.jp":"rule","minobu.yamanashi.jp":"rule","nakamichi.yamanashi.jp":"rule","nanbu.yamanashi.jp":"rule","narusawa.yamanashi.jp":"rule","nirasaki.yamanashi.jp":"rule","nishikatsura.yamanashi.jp":"rule","oshino.yamanashi.jp":"rule","otsuki.yamanashi.jp":"rule","showa.yamanashi.jp":"rule","tabayama.yamanashi.jp":"rule","tsuru.yamanashi.jp":"rule","uenohara.yamanashi.jp":"rule","yamanakako.yamanashi.jp":"rule","yamanashi.yamanashi.jp":"rule","ke":"rule","ac.ke":"rule","co.ke":"rule","go.ke":"rule","info.ke":"rule","me.ke":"rule","mobi.ke":"rule","ne.ke":"rule","or.ke":"rule","sc.ke":"rule","kg":"rule","com.kg":"rule","edu.kg":"rule","gov.kg":"rule","mil.kg":"rule","net.kg":"rule","org.kg":"rule","kh":"rule","com.kh":"rule","edu.kh":"rule","gov.kh":"rule","net.kh":"rule","org.kh":"rule","ki":"rule","biz.ki":"rule","com.ki":"rule","edu.ki":"rule","gov.ki":"rule","info.ki":"rule","net.ki":"rule","org.ki":"rule","km":"rule","ass.km":"rule","com.km":"rule","edu.km":"rule","gov.km":"rule","mil.km":"rule","nom.km":"rule","org.km":"rule","prd.km":"rule","tm.km":"rule","asso.km":"rule","coop.km":"rule","gouv.km":"rule","medecin.km":"rule","notaires.km":"rule","pharmaciens.km":"rule","presse.km":"rule","veterinaire.km":"rule","kn":"rule","edu.kn":"rule","gov.kn":"rule","net.kn":"rule","org.kn":"rule","kp":"rule","com.kp":"rule","edu.kp":"rule","gov.kp":"rule","org.kp":"rule","rep.kp":"rule","tra.kp":"rule","kr":"rule","ac.kr":"rule","ai.kr":"rule","co.kr":"rule","es.kr":"rule","go.kr":"rule","hs.kr":"rule","io.kr":"rule","it.kr":"rule","kg.kr":"rule","me.kr":"rule","mil.kr":"rule","ms.kr":"rule","ne.kr":"rule","or.kr":"rule","pe.kr":"rule","re.kr":"rule","sc.kr":"rule","busan.kr":"rule","chungbuk.kr":"rule","chungnam.kr":"rule","daegu.kr":"rule","daejeon.kr":"rule","gangwon.kr":"rule","gwangju.kr":"rule","gyeongbuk.kr":"rule","gyeonggi.kr":"rule","gyeongnam.kr":"rule","incheon.kr":"rule","jeju.kr":"rule","jeonbuk.kr":"rule","jeonnam.kr":"rule","seoul.kr":"rule","ulsan.kr":"rule","kw":"rule","com.kw":"rule","edu.kw":"rule","emb.kw":"rule","gov.kw":"rule","ind.kw":"rule","net.kw":"rule","org.kw":"rule","ky":"rule","com.ky":"rule","edu.ky":"rule","net.ky":"rule","org.ky":"rule","kz":"rule","com.kz":"rule","edu.kz":"rule","gov.kz":"rule","mil.kz":"rule","net.kz":"rule","org.kz":"rule","la":"rule","com.la":"rule","edu.la":"rule","gov.la":"rule","info.la":"rule","int.la":"rule","net.la":"rule","org.la":"rule","per.la":"rule","lb":"rule","com.lb":"rule","edu.lb":"rule","gov.lb":"rule","net.lb":"rule","org.lb":"rule","lc":"rule","co.lc":"rule","com.lc":"rule","edu.lc":"rule","gov.lc":"rule","net.lc":"rule","org.lc":"rule","li":"rule","lk":"rule","ac.lk":"rule","assn.lk":"rule","com.lk":"rule","edu.lk":"rule","gov.lk":"rule","grp.lk":"rule","hotel.lk":"rule","int.lk":"rule","ltd.lk":"rule","net.lk":"rule","ngo.lk":"rule","org.lk":"rule","sch.lk":"rule","soc.lk":"rule","web.lk":"rule","lr":"rule","com.lr":"rule","edu.lr":"rule","gov.lr":"rule","net.lr":"rule","org.lr":"rule","ls":"rule","ac.ls":"rule","biz.ls":"rule","co.ls":"rule","edu.ls":"rule","gov.ls":"rule","info.ls":"rule","net.ls":"rule","org.ls":"rule","sc.ls":"rule","lt":"rule","gov.lt":"rule","lu":"rule","lv":"rule","asn.lv":"rule","com.lv":"rule","conf.lv":"rule","edu.lv":"rule","gov.lv":"rule","id.lv":"rule","mil.lv":"rule","net.lv":"rule","org.lv":"rule","ly":"rule","com.ly":"rule","edu.ly":"rule","gov.ly":"rule","id.ly":"rule","med.ly":"rule","net.ly":"rule","org.ly":"rule","plc.ly":"rule","sch.ly":"rule","ma":"rule","ac.ma":"rule","co.ma":"rule","gov.ma":"rule","net.ma":"rule","org.ma":"rule","press.ma":"rule","mc":"rule","asso.mc":"rule","tm.mc":"rule","md":"rule","me":"rule","ac.me":"rule","co.me":"rule","edu.me":"rule","gov.me":"rule","its.me":"rule","net.me":"rule","org.me":"rule","priv.me":"rule","mg":"rule","co.mg":"rule","com.mg":"rule","edu.mg":"rule","gov.mg":"rule","mil.mg":"rule","nom.mg":"rule","org.mg":"rule","prd.mg":"rule","mh":"rule","mil":"rule","mk":"rule","com.mk":"rule","edu.mk":"rule","gov.mk":"rule","inf.mk":"rule","name.mk":"rule","net.mk":"rule","org.mk":"rule","ml":"rule","ac.ml":"rule","art.ml":"rule","asso.ml":"rule","com.ml":"rule","edu.ml":"rule","gouv.ml":"rule","gov.ml":"rule","info.ml":"rule","inst.ml":"rule","net.ml":"rule","org.ml":"rule","pr.ml":"rule","presse.ml":"rule","mm":"wildcard","mn":"rule","edu.mn":"rule","gov.mn":"rule","org.mn":"rule","mo":"rule","com.mo":"rule","edu.mo":"rule","gov.mo":"rule","net.mo":"rule","org.mo":"rule","mobi":"rule","mp":"rule","mq":"rule","mr":"rule","gov.mr":"rule","ms":"rule","com.ms":"rule","edu.ms":"rule","gov.ms":"rule","net.ms":"rule","org.ms":"rule","mt":"rule","com.mt":"rule","edu.mt":"rule","net.mt":"rule","org.mt":"rule","mu":"rule","ac.mu":"rule","co.mu":"rule","com.mu":"rule","gov.mu":"rule","net.mu":"rule","or.mu":"rule","org.mu":"rule","museum":"rule","mv":"rule","aero.mv":"rule","biz.mv":"rule","com.mv":"rule","coop.mv":"rule","edu.mv":"rule","gov.mv":"rule","info.mv":"rule","int.mv":"rule","mil.mv":"rule","museum.mv":"rule","name.mv":"rule","net.mv":"rule","org.mv":"rule","pro.mv":"rule","mw":"rule","ac.mw":"rule","biz.mw":"rule","co.mw":"rule","com.mw":"rule","coop.mw":"rule","edu.mw":"rule","gov.mw":"rule","int.mw":"rule","net.mw":"rule","org.mw":"rule","mx":"rule","com.mx":"rule","edu.mx":"rule","gob.mx":"rule","net.mx":"rule","org.mx":"rule","my":"rule","biz.my":"rule","com.my":"rule","edu.my":"rule","gov.my":"rule","mil.my":"rule","name.my":"rule","net.my":"rule","org.my":"rule","mz":"rule","ac.mz":"rule","adv.mz":"rule","co.mz":"rule","edu.mz":"rule","gov.mz":"rule","mil.mz":"rule","net.mz":"rule","org.mz":"rule","na":"rule","alt.na":"rule","co.na":"rule","com.na":"rule","gov.na":"rule","net.na":"rule","org.na":"rule","name":"rule","nc":"rule","asso.nc":"rule","nom.nc":"rule","ne":"rule","net":"rule","nf":"rule","arts.nf":"rule","com.nf":"rule","firm.nf":"rule","info.nf":"rule","net.nf":"rule","other.nf":"rule","per.nf":"rule","rec.nf":"rule","store.nf":"rule","web.nf":"rule","ng":"rule","com.ng":"rule","edu.ng":"rule","gov.ng":"rule","i.ng":"rule","mil.ng":"rule","mobi.ng":"rule","name.ng":"rule","net.ng":"rule","org.ng":"rule","sch.ng":"rule","ni":"rule","ac.ni":"rule","biz.ni":"rule","co.ni":"rule","com.ni":"rule","edu.ni":"rule","gob.ni":"rule","in.ni":"rule","info.ni":"rule","int.ni":"rule","mil.ni":"rule","net.ni":"rule","nom.ni":"rule","org.ni":"rule","web.ni":"rule","nl":"rule","no":"rule","fhs.no":"rule","folkebibl.no":"rule","fylkesbibl.no":"rule","gielda.no":"rule","herad.no":"rule","idrett.no":"rule","kommune.no":"rule","museum.no":"rule","priv.no":"rule","suohkan.no":"rule","tjielte.no":"rule","uenorge.no":"rule","vgs.no":"rule","dep.no":"rule","mil.no":"rule","stat.no":"rule","aa.no":"rule","ah.no":"rule","bu.no":"rule","fm.no":"rule","hl.no":"rule","hm.no":"rule","jan-mayen.no":"rule","mr.no":"rule","nl.no":"rule","nt.no":"rule","of.no":"rule","ol.no":"rule","oslo.no":"rule","rl.no":"rule","sf.no":"rule","st.no":"rule","svalbard.no":"rule","tm.no":"rule","tr.no":"rule","va.no":"rule","vf.no":"rule","gs.aa.no":"rule","gs.ah.no":"rule","gs.bu.no":"rule","gs.fm.no":"rule","gs.hl.no":"rule","gs.hm.no":"rule","gs.jan-mayen.no":"rule","gs.mr.no":"rule","gs.nl.no":"rule","gs.nt.no":"rule","gs.of.no":"rule","gs.ol.no":"rule","gs.oslo.no":"rule","gs.rl.no":"rule","gs.sf.no":"rule","gs.st.no":"rule","gs.svalbard.no":"rule","gs.tm.no":"rule","gs.tr.no":"rule","gs.va.no":"rule","gs.vf.no":"rule","akrehamn.no":"rule","åkrehamn.no":"rule","algard.no":"rule","ålgård.no":"rule","arna.no":"rule","bronnoysund.no":"rule","brønnøysund.no":"rule","brumunddal.no":"rule","bryne.no":"rule","drobak.no":"rule","drøbak.no":"rule","egersund.no":"rule","fetsund.no":"rule","floro.no":"rule","florø.no":"rule","fredrikstad.no":"rule","hokksund.no":"rule","honefoss.no":"rule","hønefoss.no":"rule","jessheim.no":"rule","jorpeland.no":"rule","jørpeland.no":"rule","kirkenes.no":"rule","kopervik.no":"rule","krokstadelva.no":"rule","langevag.no":"rule","langevåg.no":"rule","leirvik.no":"rule","mjondalen.no":"rule","mjøndalen.no":"rule","mo-i-rana.no":"rule","mosjoen.no":"rule","mosjøen.no":"rule","nesoddtangen.no":"rule","orkanger.no":"rule","osoyro.no":"rule","osøyro.no":"rule","raholt.no":"rule","råholt.no":"rule","sandnessjoen.no":"rule","sandnessjøen.no":"rule","skedsmokorset.no":"rule","slattum.no":"rule","spjelkavik.no":"rule","stathelle.no":"rule","stavern.no":"rule","stjordalshalsen.no":"rule","stjørdalshalsen.no":"rule","tananger.no":"rule","tranby.no":"rule","vossevangen.no":"rule","aarborte.no":"rule","aejrie.no":"rule","afjord.no":"rule","åfjord.no":"rule","agdenes.no":"rule","nes.akershus.no":"rule","aknoluokta.no":"rule","ákŋoluokta.no":"rule","al.no":"rule","ål.no":"rule","alaheadju.no":"rule","álaheadju.no":"rule","alesund.no":"rule","ålesund.no":"rule","alstahaug.no":"rule","alta.no":"rule","áltá.no":"rule","alvdal.no":"rule","amli.no":"rule","åmli.no":"rule","amot.no":"rule","åmot.no":"rule","andasuolo.no":"rule","andebu.no":"rule","andoy.no":"rule","andøy.no":"rule","ardal.no":"rule","årdal.no":"rule","aremark.no":"rule","arendal.no":"rule","ås.no":"rule","aseral.no":"rule","åseral.no":"rule","asker.no":"rule","askim.no":"rule","askoy.no":"rule","askøy.no":"rule","askvoll.no":"rule","asnes.no":"rule","åsnes.no":"rule","audnedal.no":"rule","aukra.no":"rule","aure.no":"rule","aurland.no":"rule","aurskog-holand.no":"rule","aurskog-høland.no":"rule","austevoll.no":"rule","austrheim.no":"rule","averoy.no":"rule","averøy.no":"rule","badaddja.no":"rule","bådåddjå.no":"rule","bærum.no":"rule","bahcavuotna.no":"rule","báhcavuotna.no":"rule","bahccavuotna.no":"rule","báhccavuotna.no":"rule","baidar.no":"rule","báidár.no":"rule","bajddar.no":"rule","bájddar.no":"rule","balat.no":"rule","bálát.no":"rule","balestrand.no":"rule","ballangen.no":"rule","balsfjord.no":"rule","bamble.no":"rule","bardu.no":"rule","barum.no":"rule","batsfjord.no":"rule","båtsfjord.no":"rule","bearalvahki.no":"rule","bearalváhki.no":"rule","beardu.no":"rule","beiarn.no":"rule","berg.no":"rule","bergen.no":"rule","berlevag.no":"rule","berlevåg.no":"rule","bievat.no":"rule","bievát.no":"rule","bindal.no":"rule","birkenes.no":"rule","bjerkreim.no":"rule","bjugn.no":"rule","bodo.no":"rule","bodø.no":"rule","bokn.no":"rule","bomlo.no":"rule","bømlo.no":"rule","bremanger.no":"rule","bronnoy.no":"rule","brønnøy.no":"rule","budejju.no":"rule","nes.buskerud.no":"rule","bygland.no":"rule","bykle.no":"rule","cahcesuolo.no":"rule","čáhcesuolo.no":"rule","davvenjarga.no":"rule","davvenjárga.no":"rule","davvesiida.no":"rule","deatnu.no":"rule","dielddanuorri.no":"rule","divtasvuodna.no":"rule","divttasvuotna.no":"rule","donna.no":"rule","dønna.no":"rule","dovre.no":"rule","drammen.no":"rule","drangedal.no":"rule","dyroy.no":"rule","dyrøy.no":"rule","eid.no":"rule","eidfjord.no":"rule","eidsberg.no":"rule","eidskog.no":"rule","eidsvoll.no":"rule","eigersund.no":"rule","elverum.no":"rule","enebakk.no":"rule","engerdal.no":"rule","etne.no":"rule","etnedal.no":"rule","evenassi.no":"rule","evenášši.no":"rule","evenes.no":"rule","evje-og-hornnes.no":"rule","farsund.no":"rule","fauske.no":"rule","fedje.no":"rule","fet.no":"rule","finnoy.no":"rule","finnøy.no":"rule","fitjar.no":"rule","fjaler.no":"rule","fjell.no":"rule","fla.no":"rule","flå.no":"rule","flakstad.no":"rule","flatanger.no":"rule","flekkefjord.no":"rule","flesberg.no":"rule","flora.no":"rule","folldal.no":"rule","forde.no":"rule","førde.no":"rule","forsand.no":"rule","fosnes.no":"rule","fræna.no":"rule","frana.no":"rule","frogn.no":"rule","froland.no":"rule","frosta.no":"rule","froya.no":"rule","frøya.no":"rule","fuoisku.no":"rule","fuossko.no":"rule","fusa.no":"rule","fyresdal.no":"rule","gaivuotna.no":"rule","gáivuotna.no":"rule","galsa.no":"rule","gálsá.no":"rule","gamvik.no":"rule","gangaviika.no":"rule","gáŋgaviika.no":"rule","gaular.no":"rule","gausdal.no":"rule","giehtavuoatna.no":"rule","gildeskal.no":"rule","gildeskål.no":"rule","giske.no":"rule","gjemnes.no":"rule","gjerdrum.no":"rule","gjerstad.no":"rule","gjesdal.no":"rule","gjovik.no":"rule","gjøvik.no":"rule","gloppen.no":"rule","gol.no":"rule","gran.no":"rule","grane.no":"rule","granvin.no":"rule","gratangen.no":"rule","grimstad.no":"rule","grong.no":"rule","grue.no":"rule","gulen.no":"rule","guovdageaidnu.no":"rule","ha.no":"rule","hå.no":"rule","habmer.no":"rule","hábmer.no":"rule","hadsel.no":"rule","hægebostad.no":"rule","hagebostad.no":"rule","halden.no":"rule","halsa.no":"rule","hamar.no":"rule","hamaroy.no":"rule","hamarøy.no":"rule","hammarfeasta.no":"rule","hámmárfeasta.no":"rule","hammerfest.no":"rule","hapmir.no":"rule","hápmir.no":"rule","haram.no":"rule","hareid.no":"rule","harstad.no":"rule","hasvik.no":"rule","hattfjelldal.no":"rule","haugesund.no":"rule","os.hedmark.no":"rule","valer.hedmark.no":"rule","våler.hedmark.no":"rule","hemne.no":"rule","hemnes.no":"rule","hemsedal.no":"rule","hitra.no":"rule","hjartdal.no":"rule","hjelmeland.no":"rule","hobol.no":"rule","hobøl.no":"rule","hof.no":"rule","hol.no":"rule","hole.no":"rule","holmestrand.no":"rule","holtalen.no":"rule","holtålen.no":"rule","os.hordaland.no":"rule","hornindal.no":"rule","horten.no":"rule","hoyanger.no":"rule","høyanger.no":"rule","hoylandet.no":"rule","høylandet.no":"rule","hurdal.no":"rule","hurum.no":"rule","hvaler.no":"rule","hyllestad.no":"rule","ibestad.no":"rule","inderoy.no":"rule","inderøy.no":"rule","iveland.no":"rule","ivgu.no":"rule","jevnaker.no":"rule","jolster.no":"rule","jølster.no":"rule","jondal.no":"rule","kafjord.no":"rule","kåfjord.no":"rule","karasjohka.no":"rule","kárášjohka.no":"rule","karasjok.no":"rule","karlsoy.no":"rule","karlsøy.no":"rule","karmoy.no":"rule","karmøy.no":"rule","kautokeino.no":"rule","klabu.no":"rule","klæbu.no":"rule","klepp.no":"rule","kongsberg.no":"rule","kongsvinger.no":"rule","kraanghke.no":"rule","kråanghke.no":"rule","kragero.no":"rule","kragerø.no":"rule","kristiansand.no":"rule","kristiansund.no":"rule","krodsherad.no":"rule","krødsherad.no":"rule","kvæfjord.no":"rule","kvænangen.no":"rule","kvafjord.no":"rule","kvalsund.no":"rule","kvam.no":"rule","kvanangen.no":"rule","kvinesdal.no":"rule","kvinnherad.no":"rule","kviteseid.no":"rule","kvitsoy.no":"rule","kvitsøy.no":"rule","laakesvuemie.no":"rule","lærdal.no":"rule","lahppi.no":"rule","láhppi.no":"rule","lardal.no":"rule","larvik.no":"rule","lavagis.no":"rule","lavangen.no":"rule","leangaviika.no":"rule","leaŋgaviika.no":"rule","lebesby.no":"rule","leikanger.no":"rule","leirfjord.no":"rule","leka.no":"rule","leksvik.no":"rule","lenvik.no":"rule","lerdal.no":"rule","lesja.no":"rule","levanger.no":"rule","lier.no":"rule","lierne.no":"rule","lillehammer.no":"rule","lillesand.no":"rule","lindas.no":"rule","lindås.no":"rule","lindesnes.no":"rule","loabat.no":"rule","loabát.no":"rule","lodingen.no":"rule","lødingen.no":"rule","lom.no":"rule","loppa.no":"rule","lorenskog.no":"rule","lørenskog.no":"rule","loten.no":"rule","løten.no":"rule","lund.no":"rule","lunner.no":"rule","luroy.no":"rule","lurøy.no":"rule","luster.no":"rule","lyngdal.no":"rule","lyngen.no":"rule","malatvuopmi.no":"rule","málatvuopmi.no":"rule","malselv.no":"rule","målselv.no":"rule","malvik.no":"rule","mandal.no":"rule","marker.no":"rule","marnardal.no":"rule","masfjorden.no":"rule","masoy.no":"rule","måsøy.no":"rule","matta-varjjat.no":"rule","mátta-várjjat.no":"rule","meland.no":"rule","meldal.no":"rule","melhus.no":"rule","meloy.no":"rule","meløy.no":"rule","meraker.no":"rule","meråker.no":"rule","midsund.no":"rule","midtre-gauldal.no":"rule","moareke.no":"rule","moåreke.no":"rule","modalen.no":"rule","modum.no":"rule","molde.no":"rule","heroy.more-og-romsdal.no":"rule","sande.more-og-romsdal.no":"rule","herøy.møre-og-romsdal.no":"rule","sande.møre-og-romsdal.no":"rule","moskenes.no":"rule","moss.no":"rule","muosat.no":"rule","muosát.no":"rule","naamesjevuemie.no":"rule","nååmesjevuemie.no":"rule","nærøy.no":"rule","namdalseid.no":"rule","namsos.no":"rule","namsskogan.no":"rule","nannestad.no":"rule","naroy.no":"rule","narviika.no":"rule","narvik.no":"rule","naustdal.no":"rule","navuotna.no":"rule","návuotna.no":"rule","nedre-eiker.no":"rule","nesna.no":"rule","nesodden.no":"rule","nesseby.no":"rule","nesset.no":"rule","nissedal.no":"rule","nittedal.no":"rule","nord-aurdal.no":"rule","nord-fron.no":"rule","nord-odal.no":"rule","norddal.no":"rule","nordkapp.no":"rule","bo.nordland.no":"rule","bø.nordland.no":"rule","heroy.nordland.no":"rule","herøy.nordland.no":"rule","nordre-land.no":"rule","nordreisa.no":"rule","nore-og-uvdal.no":"rule","notodden.no":"rule","notteroy.no":"rule","nøtterøy.no":"rule","odda.no":"rule","oksnes.no":"rule","øksnes.no":"rule","omasvuotna.no":"rule","oppdal.no":"rule","oppegard.no":"rule","oppegård.no":"rule","orkdal.no":"rule","orland.no":"rule","ørland.no":"rule","orskog.no":"rule","ørskog.no":"rule","orsta.no":"rule","ørsta.no":"rule","osen.no":"rule","osteroy.no":"rule","osterøy.no":"rule","valer.ostfold.no":"rule","våler.østfold.no":"rule","ostre-toten.no":"rule","østre-toten.no":"rule","overhalla.no":"rule","ovre-eiker.no":"rule","øvre-eiker.no":"rule","oyer.no":"rule","øyer.no":"rule","oygarden.no":"rule","øygarden.no":"rule","oystre-slidre.no":"rule","øystre-slidre.no":"rule","porsanger.no":"rule","porsangu.no":"rule","porsáŋgu.no":"rule","porsgrunn.no":"rule","rade.no":"rule","råde.no":"rule","radoy.no":"rule","radøy.no":"rule","rælingen.no":"rule","rahkkeravju.no":"rule","ráhkkerávju.no":"rule","raisa.no":"rule","ráisa.no":"rule","rakkestad.no":"rule","ralingen.no":"rule","rana.no":"rule","randaberg.no":"rule","rauma.no":"rule","re.no":"rule","rendalen.no":"rule","rennebu.no":"rule","rennesoy.no":"rule","rennesøy.no":"rule","rindal.no":"rule","ringebu.no":"rule","ringerike.no":"rule","ringsaker.no":"rule","risor.no":"rule","risør.no":"rule","rissa.no":"rule","roan.no":"rule","rodoy.no":"rule","rødøy.no":"rule","rollag.no":"rule","romsa.no":"rule","romskog.no":"rule","rømskog.no":"rule","roros.no":"rule","røros.no":"rule","rost.no":"rule","røst.no":"rule","royken.no":"rule","røyken.no":"rule","royrvik.no":"rule","røyrvik.no":"rule","ruovat.no":"rule","rygge.no":"rule","salangen.no":"rule","salat.no":"rule","sálat.no":"rule","sálát.no":"rule","saltdal.no":"rule","samnanger.no":"rule","sandefjord.no":"rule","sandnes.no":"rule","sandoy.no":"rule","sandøy.no":"rule","sarpsborg.no":"rule","sauda.no":"rule","sauherad.no":"rule","sel.no":"rule","selbu.no":"rule","selje.no":"rule","seljord.no":"rule","siellak.no":"rule","sigdal.no":"rule","siljan.no":"rule","sirdal.no":"rule","skanit.no":"rule","skánit.no":"rule","skanland.no":"rule","skånland.no":"rule","skaun.no":"rule","skedsmo.no":"rule","ski.no":"rule","skien.no":"rule","skierva.no":"rule","skiervá.no":"rule","skiptvet.no":"rule","skjak.no":"rule","skjåk.no":"rule","skjervoy.no":"rule","skjervøy.no":"rule","skodje.no":"rule","smola.no":"rule","smøla.no":"rule","snaase.no":"rule","snåase.no":"rule","snasa.no":"rule","snåsa.no":"rule","snillfjord.no":"rule","snoasa.no":"rule","sogndal.no":"rule","sogne.no":"rule","søgne.no":"rule","sokndal.no":"rule","sola.no":"rule","solund.no":"rule","somna.no":"rule","sømna.no":"rule","sondre-land.no":"rule","søndre-land.no":"rule","songdalen.no":"rule","sor-aurdal.no":"rule","sør-aurdal.no":"rule","sor-fron.no":"rule","sør-fron.no":"rule","sor-odal.no":"rule","sør-odal.no":"rule","sor-varanger.no":"rule","sør-varanger.no":"rule","sorfold.no":"rule","sørfold.no":"rule","sorreisa.no":"rule","sørreisa.no":"rule","sortland.no":"rule","sorum.no":"rule","sørum.no":"rule","spydeberg.no":"rule","stange.no":"rule","stavanger.no":"rule","steigen.no":"rule","steinkjer.no":"rule","stjordal.no":"rule","stjørdal.no":"rule","stokke.no":"rule","stor-elvdal.no":"rule","stord.no":"rule","stordal.no":"rule","storfjord.no":"rule","strand.no":"rule","stranda.no":"rule","stryn.no":"rule","sula.no":"rule","suldal.no":"rule","sund.no":"rule","sunndal.no":"rule","surnadal.no":"rule","sveio.no":"rule","svelvik.no":"rule","sykkylven.no":"rule","tana.no":"rule","bo.telemark.no":"rule","bø.telemark.no":"rule","time.no":"rule","tingvoll.no":"rule","tinn.no":"rule","tjeldsund.no":"rule","tjome.no":"rule","tjøme.no":"rule","tokke.no":"rule","tolga.no":"rule","tonsberg.no":"rule","tønsberg.no":"rule","torsken.no":"rule","træna.no":"rule","trana.no":"rule","tranoy.no":"rule","tranøy.no":"rule","troandin.no":"rule","trogstad.no":"rule","trøgstad.no":"rule","tromsa.no":"rule","tromso.no":"rule","tromsø.no":"rule","trondheim.no":"rule","trysil.no":"rule","tvedestrand.no":"rule","tydal.no":"rule","tynset.no":"rule","tysfjord.no":"rule","tysnes.no":"rule","tysvær.no":"rule","tysvar.no":"rule","ullensaker.no":"rule","ullensvang.no":"rule","ulstein.no":"rule","ulvik.no":"rule","unjarga.no":"rule","unjárga.no":"rule","utsira.no":"rule","vaapste.no":"rule","vadso.no":"rule","vadsø.no":"rule","værøy.no":"rule","vaga.no":"rule","vågå.no":"rule","vagan.no":"rule","vågan.no":"rule","vagsoy.no":"rule","vågsøy.no":"rule","vaksdal.no":"rule","valle.no":"rule","vang.no":"rule","vanylven.no":"rule","vardo.no":"rule","vardø.no":"rule","varggat.no":"rule","várggát.no":"rule","varoy.no":"rule","vefsn.no":"rule","vega.no":"rule","vegarshei.no":"rule","vegårshei.no":"rule","vennesla.no":"rule","verdal.no":"rule","verran.no":"rule","vestby.no":"rule","sande.vestfold.no":"rule","vestnes.no":"rule","vestre-slidre.no":"rule","vestre-toten.no":"rule","vestvagoy.no":"rule","vestvågøy.no":"rule","vevelstad.no":"rule","vik.no":"rule","vikna.no":"rule","vindafjord.no":"rule","voagat.no":"rule","volda.no":"rule","voss.no":"rule","np":"wildcard","nr":"rule","biz.nr":"rule","com.nr":"rule","edu.nr":"rule","gov.nr":"rule","info.nr":"rule","net.nr":"rule","org.nr":"rule","nu":"rule","nz":"rule","ac.nz":"rule","co.nz":"rule","cri.nz":"rule","geek.nz":"rule","gen.nz":"rule","govt.nz":"rule","health.nz":"rule","iwi.nz":"rule","kiwi.nz":"rule","maori.nz":"rule","māori.nz":"rule","mil.nz":"rule","net.nz":"rule","org.nz":"rule","parliament.nz":"rule","school.nz":"rule","om":"rule","co.om":"rule","com.om":"rule","edu.om":"rule","gov.om":"rule","med.om":"rule","museum.om":"rule","net.om":"rule","org.om":"rule","pro.om":"rule","onion":"rule","org":"rule","pa":"rule","abo.pa":"rule","ac.pa":"rule","com.pa":"rule","edu.pa":"rule","gob.pa":"rule","ing.pa":"rule","med.pa":"rule","net.pa":"rule","nom.pa":"rule","org.pa":"rule","sld.pa":"rule","pe":"rule","com.pe":"rule","edu.pe":"rule","gob.pe":"rule","mil.pe":"rule","net.pe":"rule","nom.pe":"rule","org.pe":"rule","pf":"rule","com.pf":"rule","edu.pf":"rule","org.pf":"rule","pg":"wildcard","ph":"rule","com.ph":"rule","edu.ph":"rule","gov.ph":"rule","i.ph":"rule","mil.ph":"rule","net.ph":"rule","ngo.ph":"rule","org.ph":"rule","pk":"rule","ac.pk":"rule","biz.pk":"rule","com.pk":"rule","edu.pk":"rule","fam.pk":"rule","gkp.pk":"rule","gob.pk":"rule","gog.pk":"rule","gok.pk":"rule","gop.pk":"rule","gos.pk":"rule","gov.pk":"rule","net.pk":"rule","org.pk":"rule","web.pk":"rule","pl":"rule","com.pl":"rule","net.pl":"rule","org.pl":"rule","agro.pl":"rule","aid.pl":"rule","atm.pl":"rule","auto.pl":"rule","biz.pl":"rule","edu.pl":"rule","gmina.pl":"rule","gsm.pl":"rule","info.pl":"rule","mail.pl":"rule","media.pl":"rule","miasta.pl":"rule","mil.pl":"rule","nieruchomosci.pl":"rule","nom.pl":"rule","pc.pl":"rule","powiat.pl":"rule","priv.pl":"rule","realestate.pl":"rule","rel.pl":"rule","sex.pl":"rule","shop.pl":"rule","sklep.pl":"rule","sos.pl":"rule","szkola.pl":"rule","targi.pl":"rule","tm.pl":"rule","tourism.pl":"rule","travel.pl":"rule","turystyka.pl":"rule","gov.pl":"rule","ap.gov.pl":"rule","griw.gov.pl":"rule","ic.gov.pl":"rule","is.gov.pl":"rule","kmpsp.gov.pl":"rule","konsulat.gov.pl":"rule","kppsp.gov.pl":"rule","kwp.gov.pl":"rule","kwpsp.gov.pl":"rule","mup.gov.pl":"rule","mw.gov.pl":"rule","oia.gov.pl":"rule","oirm.gov.pl":"rule","oke.gov.pl":"rule","oow.gov.pl":"rule","oschr.gov.pl":"rule","oum.gov.pl":"rule","pa.gov.pl":"rule","pinb.gov.pl":"rule","piw.gov.pl":"rule","po.gov.pl":"rule","pr.gov.pl":"rule","psp.gov.pl":"rule","psse.gov.pl":"rule","pup.gov.pl":"rule","rzgw.gov.pl":"rule","sa.gov.pl":"rule","sdn.gov.pl":"rule","sko.gov.pl":"rule","so.gov.pl":"rule","sr.gov.pl":"rule","starostwo.gov.pl":"rule","ug.gov.pl":"rule","ugim.gov.pl":"rule","um.gov.pl":"rule","umig.gov.pl":"rule","upow.gov.pl":"rule","uppo.gov.pl":"rule","us.gov.pl":"rule","uw.gov.pl":"rule","uzs.gov.pl":"rule","wif.gov.pl":"rule","wiih.gov.pl":"rule","winb.gov.pl":"rule","wios.gov.pl":"rule","witd.gov.pl":"rule","wiw.gov.pl":"rule","wkz.gov.pl":"rule","wsa.gov.pl":"rule","wskr.gov.pl":"rule","wsse.gov.pl":"rule","wuoz.gov.pl":"rule","wzmiuw.gov.pl":"rule","zp.gov.pl":"rule","zpisdn.gov.pl":"rule","augustow.pl":"rule","babia-gora.pl":"rule","bedzin.pl":"rule","beskidy.pl":"rule","bialowieza.pl":"rule","bialystok.pl":"rule","bielawa.pl":"rule","bieszczady.pl":"rule","boleslawiec.pl":"rule","bydgoszcz.pl":"rule","bytom.pl":"rule","cieszyn.pl":"rule","czeladz.pl":"rule","czest.pl":"rule","dlugoleka.pl":"rule","elblag.pl":"rule","elk.pl":"rule","glogow.pl":"rule","gniezno.pl":"rule","gorlice.pl":"rule","grajewo.pl":"rule","ilawa.pl":"rule","jaworzno.pl":"rule","jelenia-gora.pl":"rule","jgora.pl":"rule","kalisz.pl":"rule","karpacz.pl":"rule","kartuzy.pl":"rule","kaszuby.pl":"rule","katowice.pl":"rule","kazimierz-dolny.pl":"rule","kepno.pl":"rule","ketrzyn.pl":"rule","klodzko.pl":"rule","kobierzyce.pl":"rule","kolobrzeg.pl":"rule","konin.pl":"rule","konskowola.pl":"rule","kutno.pl":"rule","lapy.pl":"rule","lebork.pl":"rule","legnica.pl":"rule","lezajsk.pl":"rule","limanowa.pl":"rule","lomza.pl":"rule","lowicz.pl":"rule","lubin.pl":"rule","lukow.pl":"rule","malbork.pl":"rule","malopolska.pl":"rule","mazowsze.pl":"rule","mazury.pl":"rule","mielec.pl":"rule","mielno.pl":"rule","mragowo.pl":"rule","naklo.pl":"rule","nowaruda.pl":"rule","nysa.pl":"rule","olawa.pl":"rule","olecko.pl":"rule","olkusz.pl":"rule","olsztyn.pl":"rule","opoczno.pl":"rule","opole.pl":"rule","ostroda.pl":"rule","ostroleka.pl":"rule","ostrowiec.pl":"rule","ostrowwlkp.pl":"rule","pila.pl":"rule","pisz.pl":"rule","podhale.pl":"rule","podlasie.pl":"rule","polkowice.pl":"rule","pomorskie.pl":"rule","pomorze.pl":"rule","prochowice.pl":"rule","pruszkow.pl":"rule","przeworsk.pl":"rule","pulawy.pl":"rule","radom.pl":"rule","rawa-maz.pl":"rule","rybnik.pl":"rule","rzeszow.pl":"rule","sanok.pl":"rule","sejny.pl":"rule","skoczow.pl":"rule","slask.pl":"rule","slupsk.pl":"rule","sosnowiec.pl":"rule","stalowa-wola.pl":"rule","starachowice.pl":"rule","stargard.pl":"rule","suwalki.pl":"rule","swidnica.pl":"rule","swiebodzin.pl":"rule","swinoujscie.pl":"rule","szczecin.pl":"rule","szczytno.pl":"rule","tarnobrzeg.pl":"rule","tgory.pl":"rule","turek.pl":"rule","tychy.pl":"rule","ustka.pl":"rule","walbrzych.pl":"rule","warmia.pl":"rule","warszawa.pl":"rule","waw.pl":"rule","wegrow.pl":"rule","wielun.pl":"rule","wlocl.pl":"rule","wloclawek.pl":"rule","wodzislaw.pl":"rule","wolomin.pl":"rule","wroclaw.pl":"rule","zachpomor.pl":"rule","zagan.pl":"rule","zarow.pl":"rule","zgora.pl":"rule","zgorzelec.pl":"rule","pm":"rule","pn":"rule","co.pn":"rule","edu.pn":"rule","gov.pn":"rule","net.pn":"rule","org.pn":"rule","post":"rule","pr":"rule","biz.pr":"rule","com.pr":"rule","edu.pr":"rule","gov.pr":"rule","info.pr":"rule","isla.pr":"rule","name.pr":"rule","net.pr":"rule","org.pr":"rule","pro.pr":"rule","ac.pr":"rule","est.pr":"rule","prof.pr":"rule","pro":"rule","aaa.pro":"rule","aca.pro":"rule","acct.pro":"rule","avocat.pro":"rule","bar.pro":"rule","cpa.pro":"rule","eng.pro":"rule","jur.pro":"rule","law.pro":"rule","med.pro":"rule","recht.pro":"rule","ps":"rule","com.ps":"rule","edu.ps":"rule","gov.ps":"rule","net.ps":"rule","org.ps":"rule","plo.ps":"rule","sec.ps":"rule","pt":"rule","com.pt":"rule","edu.pt":"rule","gov.pt":"rule","int.pt":"rule","net.pt":"rule","nome.pt":"rule","org.pt":"rule","publ.pt":"rule","pw":"rule","gov.pw":"rule","py":"rule","com.py":"rule","coop.py":"rule","edu.py":"rule","gov.py":"rule","mil.py":"rule","net.py":"rule","org.py":"rule","qa":"rule","com.qa":"rule","edu.qa":"rule","gov.qa":"rule","mil.qa":"rule","name.qa":"rule","net.qa":"rule","org.qa":"rule","sch.qa":"rule","re":"rule","asso.re":"rule","com.re":"rule","ro":"rule","arts.ro":"rule","com.ro":"rule","firm.ro":"rule","info.ro":"rule","nom.ro":"rule","nt.ro":"rule","org.ro":"rule","rec.ro":"rule","store.ro":"rule","tm.ro":"rule","www.ro":"rule","rs":"rule","ac.rs":"rule","co.rs":"rule","edu.rs":"rule","gov.rs":"rule","in.rs":"rule","org.rs":"rule","ru":"rule","rw":"rule","ac.rw":"rule","co.rw":"rule","coop.rw":"rule","gov.rw":"rule","mil.rw":"rule","net.rw":"rule","org.rw":"rule","sa":"rule","com.sa":"rule","edu.sa":"rule","gov.sa":"rule","med.sa":"rule","net.sa":"rule","org.sa":"rule","pub.sa":"rule","sch.sa":"rule","sb":"rule","com.sb":"rule","edu.sb":"rule","gov.sb":"rule","net.sb":"rule","org.sb":"rule","sc":"rule","com.sc":"rule","edu.sc":"rule","gov.sc":"rule","net.sc":"rule","org.sc":"rule","sd":"rule","com.sd":"rule","edu.sd":"rule","gov.sd":"rule","info.sd":"rule","med.sd":"rule","net.sd":"rule","org.sd":"rule","tv.sd":"rule","se":"rule","a.se":"rule","ac.se":"rule","b.se":"rule","bd.se":"rule","brand.se":"rule","c.se":"rule","d.se":"rule","e.se":"rule","f.se":"rule","fh.se":"rule","fhsk.se":"rule","fhv.se":"rule","g.se":"rule","h.se":"rule","i.se":"rule","k.se":"rule","komforb.se":"rule","kommunalforbund.se":"rule","komvux.se":"rule","l.se":"rule","lanbib.se":"rule","m.se":"rule","n.se":"rule","naturbruksgymn.se":"rule","o.se":"rule","org.se":"rule","p.se":"rule","parti.se":"rule","pp.se":"rule","press.se":"rule","r.se":"rule","s.se":"rule","t.se":"rule","tm.se":"rule","u.se":"rule","w.se":"rule","x.se":"rule","y.se":"rule","z.se":"rule","sg":"rule","com.sg":"rule","edu.sg":"rule","gov.sg":"rule","net.sg":"rule","org.sg":"rule","sh":"rule","com.sh":"rule","gov.sh":"rule","mil.sh":"rule","net.sh":"rule","org.sh":"rule","si":"rule","sj":"rule","sk":"rule","org.sk":"rule","sl":"rule","com.sl":"rule","edu.sl":"rule","gov.sl":"rule","net.sl":"rule","org.sl":"rule","sm":"rule","sn":"rule","art.sn":"rule","com.sn":"rule","edu.sn":"rule","gouv.sn":"rule","org.sn":"rule","univ.sn":"rule","so":"rule","com.so":"rule","edu.so":"rule","gov.so":"rule","me.so":"rule","net.so":"rule","org.so":"rule","sr":"rule","ss":"rule","biz.ss":"rule","co.ss":"rule","com.ss":"rule","edu.ss":"rule","gov.ss":"rule","me.ss":"rule","net.ss":"rule","org.ss":"rule","sch.ss":"rule","st":"rule","co.st":"rule","com.st":"rule","consulado.st":"rule","edu.st":"rule","embaixada.st":"rule","mil.st":"rule","net.st":"rule","org.st":"rule","principe.st":"rule","saotome.st":"rule","store.st":"rule","su":"rule","sv":"rule","com.sv":"rule","edu.sv":"rule","gob.sv":"rule","org.sv":"rule","red.sv":"rule","sx":"rule","gov.sx":"rule","sy":"rule","com.sy":"rule","edu.sy":"rule","gov.sy":"rule","mil.sy":"rule","net.sy":"rule","org.sy":"rule","sz":"rule","ac.sz":"rule","co.sz":"rule","org.sz":"rule","tc":"rule","td":"rule","tel":"rule","tf":"rule","tg":"rule","th":"rule","ac.th":"rule","co.th":"rule","go.th":"rule","in.th":"rule","mi.th":"rule","net.th":"rule","or.th":"rule","tj":"rule","biz.tj":"rule","co.tj":"rule","com.tj":"rule","edu.tj":"rule","go.tj":"rule","gov.tj":"rule","int.tj":"rule","mil.tj":"rule","name.tj":"rule","net.tj":"rule","nic.tj":"rule","org.tj":"rule","test.tj":"rule","web.tj":"rule","tk":"rule","tl":"rule","gov.tl":"rule","tm":"rule","co.tm":"rule","com.tm":"rule","edu.tm":"rule","gov.tm":"rule","mil.tm":"rule","net.tm":"rule","nom.tm":"rule","org.tm":"rule","tn":"rule","com.tn":"rule","ens.tn":"rule","fin.tn":"rule","gov.tn":"rule","ind.tn":"rule","info.tn":"rule","intl.tn":"rule","mincom.tn":"rule","nat.tn":"rule","net.tn":"rule","org.tn":"rule","perso.tn":"rule","tourism.tn":"rule","to":"rule","com.to":"rule","edu.to":"rule","gov.to":"rule","mil.to":"rule","net.to":"rule","org.to":"rule","tr":"rule","av.tr":"rule","bbs.tr":"rule","bel.tr":"rule","biz.tr":"rule","com.tr":"rule","dr.tr":"rule","edu.tr":"rule","gen.tr":"rule","gov.tr":"rule","info.tr":"rule","k12.tr":"rule","kep.tr":"rule","mil.tr":"rule","name.tr":"rule","net.tr":"rule","org.tr":"rule","pol.tr":"rule","tel.tr":"rule","tsk.tr":"rule","tv.tr":"rule","web.tr":"rule","nc.tr":"rule","gov.nc.tr":"rule","tt":"rule","biz.tt":"rule","co.tt":"rule","com.tt":"rule","edu.tt":"rule","gov.tt":"rule","info.tt":"rule","mil.tt":"rule","name.tt":"rule","net.tt":"rule","org.tt":"rule","pro.tt":"rule","tv":"rule","tw":"rule","club.tw":"rule","com.tw":"rule","ebiz.tw":"rule","edu.tw":"rule","game.tw":"rule","gov.tw":"rule","idv.tw":"rule","mil.tw":"rule","net.tw":"rule","org.tw":"rule","tz":"rule","ac.tz":"rule","co.tz":"rule","go.tz":"rule","hotel.tz":"rule","info.tz":"rule","me.tz":"rule","mil.tz":"rule","mobi.tz":"rule","ne.tz":"rule","or.tz":"rule","sc.tz":"rule","tv.tz":"rule","ua":"rule","com.ua":"rule","edu.ua":"rule","gov.ua":"rule","in.ua":"rule","net.ua":"rule","org.ua":"rule","cherkassy.ua":"rule","cherkasy.ua":"rule","chernigov.ua":"rule","chernihiv.ua":"rule","chernivtsi.ua":"rule","chernovtsy.ua":"rule","ck.ua":"rule","cn.ua":"rule","cr.ua":"rule","crimea.ua":"rule","cv.ua":"rule","dn.ua":"rule","dnepropetrovsk.ua":"rule","dnipropetrovsk.ua":"rule","donetsk.ua":"rule","dp.ua":"rule","if.ua":"rule","ivano-frankivsk.ua":"rule","kh.ua":"rule","kharkiv.ua":"rule","kharkov.ua":"rule","kherson.ua":"rule","khmelnitskiy.ua":"rule","khmelnytskyi.ua":"rule","kiev.ua":"rule","kirovograd.ua":"rule","km.ua":"rule","kr.ua":"rule","kropyvnytskyi.ua":"rule","krym.ua":"rule","ks.ua":"rule","kv.ua":"rule","kyiv.ua":"rule","lg.ua":"rule","lt.ua":"rule","lugansk.ua":"rule","luhansk.ua":"rule","lutsk.ua":"rule","lv.ua":"rule","lviv.ua":"rule","mk.ua":"rule","mykolaiv.ua":"rule","nikolaev.ua":"rule","od.ua":"rule","odesa.ua":"rule","odessa.ua":"rule","pl.ua":"rule","poltava.ua":"rule","rivne.ua":"rule","rovno.ua":"rule","rv.ua":"rule","sb.ua":"rule","sebastopol.ua":"rule","sevastopol.ua":"rule","sm.ua":"rule","sumy.ua":"rule","te.ua":"rule","ternopil.ua":"rule","uz.ua":"rule","uzhgorod.ua":"rule","uzhhorod.ua":"rule","vinnica.ua":"rule","vinnytsia.ua":"rule","vn.ua":"rule","volyn.ua":"rule","yalta.ua":"rule","zakarpattia.ua":"rule","zaporizhzhe.ua":"rule","zaporizhzhia.ua":"rule","zhitomir.ua":"rule","zhytomyr.ua":"rule","zp.ua":"rule","zt.ua":"rule","ug":"rule","ac.ug":"rule","co.ug":"rule","com.ug":"rule","edu.ug":"rule","go.ug":"rule","gov.ug":"rule","mil.ug":"rule","ne.ug":"rule","or.ug":"rule","org.ug":"rule","sc.ug":"rule","us.ug":"rule","uk":"rule","ac.uk":"rule","co.uk":"rule","gov.uk":"rule","ltd.uk":"rule","me.uk":"rule","net.uk":"rule","nhs.uk":"rule","org.uk":"rule","plc.uk":"rule","police.uk":"rule","sch.uk":"wildcard","us":"rule","dni.us":"rule","isa.us":"rule","nsn.us":"rule","ak.us":"rule","al.us":"rule","ar.us":"rule","as.us":"rule","az.us":"rule","ca.us":"rule","co.us":"rule","ct.us":"rule","dc.us":"rule","de.us":"rule","fl.us":"rule","ga.us":"rule","gu.us":"rule","hi.us":"rule","ia.us":"rule","id.us":"rule","il.us":"rule","in.us":"rule","ks.us":"rule","ky.us":"rule","la.us":"rule","ma.us":"rule","md.us":"rule","me.us":"rule","mi.us":"rule","mn.us":"rule","mo.us":"rule","ms.us":"rule","mt.us":"rule","nc.us":"rule","nd.us":"rule","ne.us":"rule","nh.us":"rule","nj.us":"rule","nm.us":"rule","nv.us":"rule","ny.us":"rule","oh.us":"rule","ok.us":"rule","or.us":"rule","pa.us":"rule","pr.us":"rule","ri.us":"rule","sc.us":"rule","sd.us":"rule","tn.us":"rule","tx.us":"rule","ut.us":"rule","va.us":"rule","vi.us":"rule","vt.us":"rule","wa.us":"rule","wi.us":"rule","wv.us":"rule","wy.us":"rule","k12.ak.us":"rule","k12.al.us":"rule","k12.ar.us":"rule","k12.as.us":"rule","k12.az.us":"rule","k12.ca.us":"rule","k12.co.us":"rule","k12.ct.us":"rule","k12.dc.us":"rule","k12.fl.us":"rule","k12.ga.us":"rule","k12.gu.us":"rule","k12.ia.us":"rule","k12.id.us":"rule","k12.il.us":"rule","k12.in.us":"rule","k12.ks.us":"rule","k12.ky.us":"rule","k12.la.us":"rule","k12.ma.us":"rule","k12.md.us":"rule","k12.me.us":"rule","k12.mi.us":"rule","k12.mn.us":"rule","k12.mo.us":"rule","k12.ms.us":"rule","k12.mt.us":"rule","k12.nc.us":"rule","k12.ne.us":"rule","k12.nh.us":"rule","k12.nj.us":"rule","k12.nm.us":"rule","k12.nv.us":"rule","k12.ny.us":"rule","k12.oh.us":"rule","k12.ok.us":"rule","k12.or.us":"rule","k12.pa.us":"rule","k12.pr.us":"rule","k12.sc.us":"rule","k12.tn.us":"rule","k12.tx.us":"rule","k12.ut.us":"rule","k12.va.us":"rule","k12.vi.us":"rule","k12.vt.us":"rule","k12.wa.us":"rule","k12.wi.us":"rule","cc.ak.us":"rule","lib.ak.us":"rule","cc.al.us":"rule","lib.al.us":"rule","cc.ar.us":"rule","lib.ar.us":"rule","cc.as.us":"rule","lib.as.us":"rule","cc.az.us":"rule","lib.az.us":"rule","cc.ca.us":"rule","lib.ca.us":"rule","cc.co.us":"rule","lib.co.us":"rule","cc.ct.us":"rule","lib.ct.us":"rule","cc.dc.us":"rule","lib.dc.us":"rule","cc.de.us":"rule","cc.fl.us":"rule","lib.fl.us":"rule","cc.ga.us":"rule","lib.ga.us":"rule","cc.gu.us":"rule","lib.gu.us":"rule","cc.hi.us":"rule","lib.hi.us":"rule","cc.ia.us":"rule","lib.ia.us":"rule","cc.id.us":"rule","lib.id.us":"rule","cc.il.us":"rule","lib.il.us":"rule","cc.in.us":"rule","lib.in.us":"rule","cc.ks.us":"rule","lib.ks.us":"rule","cc.ky.us":"rule","lib.ky.us":"rule","cc.la.us":"rule","lib.la.us":"rule","cc.ma.us":"rule","lib.ma.us":"rule","cc.md.us":"rule","lib.md.us":"rule","cc.me.us":"rule","lib.me.us":"rule","cc.mi.us":"rule","lib.mi.us":"rule","cc.mn.us":"rule","lib.mn.us":"rule","cc.mo.us":"rule","lib.mo.us":"rule","cc.ms.us":"rule","cc.mt.us":"rule","lib.mt.us":"rule","cc.nc.us":"rule","lib.nc.us":"rule","cc.ne.us":"rule","lib.ne.us":"rule","cc.nh.us":"rule","lib.nh.us":"rule","cc.nj.us":"rule","lib.nj.us":"rule","cc.nm.us":"rule","lib.nm.us":"rule","cc.nv.us":"rule","lib.nv.us":"rule","cc.ny.us":"rule","lib.ny.us":"rule","cc.oh.us":"rule","lib.oh.us":"rule","cc.ok.us":"rule","lib.ok.us":"rule","cc.or.us":"rule","lib.or.us":"rule","cc.pa.us":"rule","lib.pa.us":"rule","cc.pr.us":"rule","lib.pr.us":"rule","cc.ri.us":"rule","lib.ri.us":"rule","cc.sc.us":"rule","lib.sc.us":"rule","cc.sd.us":"rule","lib.sd.us":"rule","cc.tn.us":"rule","lib.tn.us":"rule","cc.tx.us":"rule","lib.tx.us":"rule","cc.ut.us":"rule","lib.ut.us":"rule","cc.va.us":"rule","lib.va.us":"rule","cc.vi.us":"rule","lib.vi.us":"rule","cc.vt.us":"rule","lib.vt.us":"rule","cc.wa.us":"rule","lib.wa.us":"rule","cc.wi.us":"rule","lib.wi.us":"rule","cc.wv.us":"rule","cc.wy.us":"rule","k12.wy.us":"rule","lib.wy.us":"rule","chtr.k12.ma.us":"rule","paroch.k12.ma.us":"rule","pvt.k12.ma.us":"rule","ann-arbor.mi.us":"rule","cog.mi.us":"rule","dst.mi.us":"rule","eaton.mi.us":"rule","gen.mi.us":"rule","mus.mi.us":"rule","tec.mi.us":"rule","washtenaw.mi.us":"rule","uy":"rule","com.uy":"rule","edu.uy":"rule","gub.uy":"rule","mil.uy":"rule","net.uy":"rule","org.uy":"rule","uz":"rule","co.uz":"rule","com.uz":"rule","net.uz":"rule","org.uz":"rule","va":"rule","vc":"rule","com.vc":"rule","edu.vc":"rule","gov.vc":"rule","mil.vc":"rule","net.vc":"rule","org.vc":"rule","ve":"rule","arts.ve":"rule","bib.ve":"rule","co.ve":"rule","com.ve":"rule","e12.ve":"rule","edu.ve":"rule","emprende.ve":"rule","firm.ve":"rule","gob.ve":"rule","gov.ve":"rule","ia.ve":"rule","info.ve":"rule","int.ve":"rule","mil.ve":"rule","net.ve":"rule","nom.ve":"rule","org.ve":"rule","rar.ve":"rule","rec.ve":"rule","store.ve":"rule","tec.ve":"rule","web.ve":"rule","vg":"rule","edu.vg":"rule","vi":"rule","co.vi":"rule","com.vi":"rule","k12.vi":"rule","net.vi":"rule","org.vi":"rule","vn":"rule","ac.vn":"rule","ai.vn":"rule","biz.vn":"rule","com.vn":"rule","edu.vn":"rule","gov.vn":"rule","health.vn":"rule","id.vn":"rule","info.vn":"rule","int.vn":"rule","io.vn":"rule","name.vn":"rule","net.vn":"rule","org.vn":"rule","pro.vn":"rule","angiang.vn":"rule","bacgiang.vn":"rule","backan.vn":"rule","baclieu.vn":"rule","bacninh.vn":"rule","baria-vungtau.vn":"rule","bentre.vn":"rule","binhdinh.vn":"rule","binhduong.vn":"rule","binhphuoc.vn":"rule","binhthuan.vn":"rule","camau.vn":"rule","cantho.vn":"rule","caobang.vn":"rule","daklak.vn":"rule","daknong.vn":"rule","danang.vn":"rule","dienbien.vn":"rule","dongnai.vn":"rule","dongthap.vn":"rule","gialai.vn":"rule","hagiang.vn":"rule","haiduong.vn":"rule","haiphong.vn":"rule","hanam.vn":"rule","hanoi.vn":"rule","hatinh.vn":"rule","haugiang.vn":"rule","hoabinh.vn":"rule","hue.vn":"rule","hungyen.vn":"rule","khanhhoa.vn":"rule","kiengiang.vn":"rule","kontum.vn":"rule","laichau.vn":"rule","lamdong.vn":"rule","langson.vn":"rule","laocai.vn":"rule","longan.vn":"rule","namdinh.vn":"rule","nghean.vn":"rule","ninhbinh.vn":"rule","ninhthuan.vn":"rule","phutho.vn":"rule","phuyen.vn":"rule","quangbinh.vn":"rule","quangnam.vn":"rule","quangngai.vn":"rule","quangninh.vn":"rule","quangtri.vn":"rule","soctrang.vn":"rule","sonla.vn":"rule","tayninh.vn":"rule","thaibinh.vn":"rule","thainguyen.vn":"rule","thanhhoa.vn":"rule","thanhphohochiminh.vn":"rule","thuathienhue.vn":"rule","tiengiang.vn":"rule","travinh.vn":"rule","tuyenquang.vn":"rule","vinhlong.vn":"rule","vinhphuc.vn":"rule","yenbai.vn":"rule","vu":"rule","com.vu":"rule","edu.vu":"rule","net.vu":"rule","org.vu":"rule","wf":"rule","ws":"rule","com.ws":"rule","edu.ws":"rule","gov.ws":"rule","net.ws":"rule","org.ws":"rule","yt":"rule","امارات":"rule","հայ":"rule","বাংলা":"rule","бг":"rule","البحرين":"rule","бел":"rule","中国":"rule","中國":"rule","الجزائر":"rule","مصر":"rule","ею":"rule","ευ":"rule","موريتانيا":"rule","გე":"rule","ελ":"rule","香港":"rule","個人.香港":"rule","公司.香港":"rule","政府.香港":"rule","教育.香港":"rule","組織.香港":"rule","網絡.香港":"rule","ಭಾರತ":"rule","ଭାରତ":"rule","ভাৰত":"rule","भारतम्":"rule","भारोत":"rule","ڀارت":"rule","ഭാരതം":"rule","भारत":"rule","بارت":"rule","بھارت":"rule","భారత్":"rule","ભારત":"rule","ਭਾਰਤ":"rule","ভারত":"rule","இந்தியா":"rule","ایران":"rule","ايران":"rule","عراق":"rule","الاردن":"rule","한국":"rule","қаз":"rule","ລາວ":"rule","ලංකා":"rule","இலங்கை":"rule","المغرب":"rule","мкд":"rule","мон":"rule","澳門":"rule","澳门":"rule","مليسيا":"rule","عمان":"rule","پاکستان":"rule","پاكستان":"rule","فلسطين":"rule","срб":"rule","ак.срб":"rule","обр.срб":"rule","од.срб":"rule","орг.срб":"rule","пр.срб":"rule","упр.срб":"rule","рф":"rule","قطر":"rule","السعودية":"rule","السعودیة":"rule","السعودیۃ":"rule","السعوديه":"rule","سودان":"rule","新加坡":"rule","சிங்கப்பூர்":"rule","سورية":"rule","سوريا":"rule","ไทย":"rule","ทหาร.ไทย":"rule","ธุรกิจ.ไทย":"rule","เน็ต.ไทย":"rule","รัฐบาล.ไทย":"rule","ศึกษา.ไทย":"rule","องค์กร.ไทย":"rule","تونس":"rule","台灣":"rule","台湾":"rule","臺灣":"rule","укр":"rule","اليمن":"rule","xxx":"rule","ye":"rule","com.ye":"rule","edu.ye":"rule","gov.ye":"rule","mil.ye":"rule","net.ye":"rule","org.ye":"rule","ac.za":"rule","agric.za":"rule","alt.za":"rule","co.za":"rule","edu.za":"rule","gov.za":"rule","grondar.za":"rule","law.za":"rule","mil.za":"rule","net.za":"rule","ngo.za":"rule","nic.za":"rule","nis.za":"rule","nom.za":"rule","org.za":"rule","school.za":"rule","tm.za":"rule","web.za":"rule","zm":"rule","ac.zm":"rule","biz.zm":"rule","co.zm":"rule","com.zm":"rule","edu.zm":"rule","gov.zm":"rule","info.zm":"rule","mil.zm":"rule","net.zm":"rule","org.zm":"rule","sch.zm":"rule","zw":"rule","ac.zw":"rule","co.zw":"rule","gov.zw":"rule","mil.zw":"rule","org.zw":"rule","aaa":"rule","aarp":"rule","abb":"rule","abbott":"rule","abbvie":"rule","abc":"rule","able":"rule","abogado":"rule","abudhabi":"rule","academy":"rule","accenture":"rule","accountant":"rule","accountants":"rule","aco":"rule","actor":"rule","ads":"rule","adult":"rule","aeg":"rule","aetna":"rule","afl":"rule","africa":"rule","agakhan":"rule","agency":"rule","aig":"rule","airbus":"rule","airforce":"rule","airtel":"rule","akdn":"rule","alibaba":"rule","alipay":"rule","allfinanz":"rule","allstate":"rule","ally":"rule","alsace":"rule","alstom":"rule","amazon":"rule","americanexpress":"rule","americanfamily":"rule","amex":"rule","amfam":"rule","amica":"rule","amsterdam":"rule","analytics":"rule","android":"rule","anquan":"rule","anz":"rule","aol":"rule","apartments":"rule","app":"rule","apple":"rule","aquarelle":"rule","arab":"rule","aramco":"rule","archi":"rule","army":"rule","art":"rule","arte":"rule","asda":"rule","associates":"rule","athleta":"rule","attorney":"rule","auction":"rule","audi":"rule","audible":"rule","audio":"rule","auspost":"rule","author":"rule","auto":"rule","autos":"rule","aws":"rule","axa":"rule","azure":"rule","baby":"rule","baidu":"rule","banamex":"rule","band":"rule","bank":"rule","bar":"rule","barcelona":"rule","barclaycard":"rule","barclays":"rule","barefoot":"rule","bargains":"rule","baseball":"rule","basketball":"rule","bauhaus":"rule","bayern":"rule","bbc":"rule","bbt":"rule","bbva":"rule","bcg":"rule","bcn":"rule","beats":"rule","beauty":"rule","beer":"rule","berlin":"rule","best":"rule","bestbuy":"rule","bet":"rule","bharti":"rule","bible":"rule","bid":"rule","bike":"rule","bing":"rule","bingo":"rule","bio":"rule","black":"rule","blackfriday":"rule","blockbuster":"rule","blog":"rule","bloomberg":"rule","blue":"rule","bms":"rule","bmw":"rule","bnpparibas":"rule","boats":"rule","boehringer":"rule","bofa":"rule","bom":"rule","bond":"rule","boo":"rule","book":"rule","booking":"rule","bosch":"rule","bostik":"rule","boston":"rule","bot":"rule","boutique":"rule","box":"rule","bradesco":"rule","bridgestone":"rule","broadway":"rule","broker":"rule","brother":"rule","brussels":"rule","build":"rule","builders":"rule","business":"rule","buy":"rule","buzz":"rule","bzh":"rule","cab":"rule","cafe":"rule","cal":"rule","call":"rule","calvinklein":"rule","cam":"rule","camera":"rule","camp":"rule","canon":"rule","capetown":"rule","capital":"rule","capitalone":"rule","car":"rule","caravan":"rule","cards":"rule","care":"rule","career":"rule","careers":"rule","cars":"rule","casa":"rule","case":"rule","cash":"rule","casino":"rule","catering":"rule","catholic":"rule","cba":"rule","cbn":"rule","cbre":"rule","center":"rule","ceo":"rule","cern":"rule","cfa":"rule","cfd":"rule","chanel":"rule","channel":"rule","charity":"rule","chase":"rule","chat":"rule","cheap":"rule","chintai":"rule","christmas":"rule","chrome":"rule","church":"rule","cipriani":"rule","circle":"rule","cisco":"rule","citadel":"rule","citi":"rule","citic":"rule","city":"rule","claims":"rule","cleaning":"rule","click":"rule","clinic":"rule","clinique":"rule","clothing":"rule","cloud":"rule","club":"rule","clubmed":"rule","coach":"rule","codes":"rule","coffee":"rule","college":"rule","cologne":"rule","commbank":"rule","community":"rule","company":"rule","compare":"rule","computer":"rule","comsec":"rule","condos":"rule","construction":"rule","consulting":"rule","contact":"rule","contractors":"rule","cooking":"rule","cool":"rule","corsica":"rule","country":"rule","coupon":"rule","coupons":"rule","courses":"rule","cpa":"rule","credit":"rule","creditcard":"rule","creditunion":"rule","cricket":"rule","crown":"rule","crs":"rule","cruise":"rule","cruises":"rule","cuisinella":"rule","cymru":"rule","cyou":"rule","dad":"rule","dance":"rule","data":"rule","date":"rule","dating":"rule","datsun":"rule","day":"rule","dclk":"rule","dds":"rule","deal":"rule","dealer":"rule","deals":"rule","degree":"rule","delivery":"rule","dell":"rule","deloitte":"rule","delta":"rule","democrat":"rule","dental":"rule","dentist":"rule","desi":"rule","design":"rule","dev":"rule","dhl":"rule","diamonds":"rule","diet":"rule","digital":"rule","direct":"rule","directory":"rule","discount":"rule","discover":"rule","dish":"rule","diy":"rule","dnp":"rule","docs":"rule","doctor":"rule","dog":"rule","domains":"rule","dot":"rule","download":"rule","drive":"rule","dtv":"rule","dubai":"rule","dupont":"rule","durban":"rule","dvag":"rule","dvr":"rule","earth":"rule","eat":"rule","eco":"rule","edeka":"rule","education":"rule","email":"rule","emerck":"rule","energy":"rule","engineer":"rule","engineering":"rule","enterprises":"rule","epson":"rule","equipment":"rule","ericsson":"rule","erni":"rule","esq":"rule","estate":"rule","eurovision":"rule","eus":"rule","events":"rule","exchange":"rule","expert":"rule","exposed":"rule","express":"rule","extraspace":"rule","fage":"rule","fail":"rule","fairwinds":"rule","faith":"rule","family":"rule","fan":"rule","fans":"rule","farm":"rule","farmers":"rule","fashion":"rule","fast":"rule","fedex":"rule","feedback":"rule","ferrari":"rule","ferrero":"rule","fidelity":"rule","fido":"rule","film":"rule","final":"rule","finance":"rule","financial":"rule","fire":"rule","firestone":"rule","firmdale":"rule","fish":"rule","fishing":"rule","fit":"rule","fitness":"rule","flickr":"rule","flights":"rule","flir":"rule","florist":"rule","flowers":"rule","fly":"rule","foo":"rule","food":"rule","football":"rule","ford":"rule","forex":"rule","forsale":"rule","forum":"rule","foundation":"rule","fox":"rule","free":"rule","fresenius":"rule","frl":"rule","frogans":"rule","frontier":"rule","ftr":"rule","fujitsu":"rule","fun":"rule","fund":"rule","furniture":"rule","futbol":"rule","fyi":"rule","gal":"rule","gallery":"rule","gallo":"rule","gallup":"rule","game":"rule","games":"rule","gap":"rule","garden":"rule","gay":"rule","gbiz":"rule","gdn":"rule","gea":"rule","gent":"rule","genting":"rule","george":"rule","ggee":"rule","gift":"rule","gifts":"rule","gives":"rule","giving":"rule","glass":"rule","gle":"rule","global":"rule","globo":"rule","gmail":"rule","gmbh":"rule","gmo":"rule","gmx":"rule","godaddy":"rule","gold":"rule","goldpoint":"rule","golf":"rule","goodyear":"rule","goog":"rule","google":"rule","gop":"rule","got":"rule","grainger":"rule","graphics":"rule","gratis":"rule","green":"rule","gripe":"rule","grocery":"rule","group":"rule","gucci":"rule","guge":"rule","guide":"rule","guitars":"rule","guru":"rule","hair":"rule","hamburg":"rule","hangout":"rule","haus":"rule","hbo":"rule","hdfc":"rule","hdfcbank":"rule","health":"rule","healthcare":"rule","help":"rule","helsinki":"rule","here":"rule","hermes":"rule","hiphop":"rule","hisamitsu":"rule","hitachi":"rule","hiv":"rule","hkt":"rule","hockey":"rule","holdings":"rule","holiday":"rule","homedepot":"rule","homegoods":"rule","homes":"rule","homesense":"rule","honda":"rule","horse":"rule","hospital":"rule","host":"rule","hosting":"rule","hot":"rule","hotel":"rule","hotels":"rule","hotmail":"rule","house":"rule","how":"rule","hsbc":"rule","hughes":"rule","hyatt":"rule","hyundai":"rule","ibm":"rule","icbc":"rule","ice":"rule","icu":"rule","ieee":"rule","ifm":"rule","ikano":"rule","imamat":"rule","imdb":"rule","immo":"rule","immobilien":"rule","inc":"rule","industries":"rule","infiniti":"rule","ing":"rule","ink":"rule","institute":"rule","insurance":"rule","insure":"rule","international":"rule","intuit":"rule","investments":"rule","ipiranga":"rule","irish":"rule","ismaili":"rule","ist":"rule","istanbul":"rule","itau":"rule","itv":"rule","jaguar":"rule","java":"rule","jcb":"rule","jeep":"rule","jetzt":"rule","jewelry":"rule","jio":"rule","jll":"rule","jmp":"rule","jnj":"rule","joburg":"rule","jot":"rule","joy":"rule","jpmorgan":"rule","jprs":"rule","juegos":"rule","juniper":"rule","kaufen":"rule","kddi":"rule","kerryhotels":"rule","kerryproperties":"rule","kfh":"rule","kia":"rule","kids":"rule","kim":"rule","kindle":"rule","kitchen":"rule","kiwi":"rule","koeln":"rule","komatsu":"rule","kosher":"rule","kpmg":"rule","kpn":"rule","krd":"rule","kred":"rule","kuokgroup":"rule","kyoto":"rule","lacaixa":"rule","lamborghini":"rule","lamer":"rule","land":"rule","landrover":"rule","lanxess":"rule","lasalle":"rule","lat":"rule","latino":"rule","latrobe":"rule","law":"rule","lawyer":"rule","lds":"rule","lease":"rule","leclerc":"rule","lefrak":"rule","legal":"rule","lego":"rule","lexus":"rule","lgbt":"rule","lidl":"rule","life":"rule","lifeinsurance":"rule","lifestyle":"rule","lighting":"rule","like":"rule","lilly":"rule","limited":"rule","limo":"rule","lincoln":"rule","link":"rule","live":"rule","living":"rule","llc":"rule","llp":"rule","loan":"rule","loans":"rule","locker":"rule","locus":"rule","lol":"rule","london":"rule","lotte":"rule","lotto":"rule","love":"rule","lpl":"rule","lplfinancial":"rule","ltd":"rule","ltda":"rule","lundbeck":"rule","luxe":"rule","luxury":"rule","madrid":"rule","maif":"rule","maison":"rule","makeup":"rule","man":"rule","management":"rule","mango":"rule","map":"rule","market":"rule","marketing":"rule","markets":"rule","marriott":"rule","marshalls":"rule","mattel":"rule","mba":"rule","mckinsey":"rule","med":"rule","media":"rule","meet":"rule","melbourne":"rule","meme":"rule","memorial":"rule","men":"rule","menu":"rule","merck":"rule","merckmsd":"rule","miami":"rule","microsoft":"rule","mini":"rule","mint":"rule","mit":"rule","mitsubishi":"rule","mlb":"rule","mls":"rule","mma":"rule","mobile":"rule","moda":"rule","moe":"rule","moi":"rule","mom":"rule","monash":"rule","money":"rule","monster":"rule","mormon":"rule","mortgage":"rule","moscow":"rule","moto":"rule","motorcycles":"rule","mov":"rule","movie":"rule","msd":"rule","mtn":"rule","mtr":"rule","music":"rule","nab":"rule","nagoya":"rule","navy":"rule","nba":"rule","nec":"rule","netbank":"rule","netflix":"rule","network":"rule","neustar":"rule","new":"rule","news":"rule","next":"rule","nextdirect":"rule","nexus":"rule","nfl":"rule","ngo":"rule","nhk":"rule","nico":"rule","nike":"rule","nikon":"rule","ninja":"rule","nissan":"rule","nissay":"rule","nokia":"rule","norton":"rule","now":"rule","nowruz":"rule","nowtv":"rule","nra":"rule","nrw":"rule","ntt":"rule","nyc":"rule","obi":"rule","observer":"rule","office":"rule","okinawa":"rule","olayan":"rule","olayangroup":"rule","ollo":"rule","omega":"rule","one":"rule","ong":"rule","onl":"rule","online":"rule","ooo":"rule","open":"rule","oracle":"rule","orange":"rule","organic":"rule","origins":"rule","osaka":"rule","otsuka":"rule","ott":"rule","ovh":"rule","page":"rule","panasonic":"rule","paris":"rule","pars":"rule","partners":"rule","parts":"rule","party":"rule","pay":"rule","pccw":"rule","pet":"rule","pfizer":"rule","pharmacy":"rule","phd":"rule","philips":"rule","phone":"rule","photo":"rule","photography":"rule","photos":"rule","physio":"rule","pics":"rule","pictet":"rule","pictures":"rule","pid":"rule","pin":"rule","ping":"rule","pink":"rule","pioneer":"rule","pizza":"rule","place":"rule","play":"rule","playstation":"rule","plumbing":"rule","plus":"rule","pnc":"rule","pohl":"rule","poker":"rule","politie":"rule","porn":"rule","praxi":"rule","press":"rule","prime":"rule","prod":"rule","productions":"rule","prof":"rule","progressive":"rule","promo":"rule","properties":"rule","property":"rule","protection":"rule","pru":"rule","prudential":"rule","pub":"rule","pwc":"rule","qpon":"rule","quebec":"rule","quest":"rule","racing":"rule","radio":"rule","read":"rule","realestate":"rule","realtor":"rule","realty":"rule","recipes":"rule","red":"rule","redumbrella":"rule","rehab":"rule","reise":"rule","reisen":"rule","reit":"rule","reliance":"rule","ren":"rule","rent":"rule","rentals":"rule","repair":"rule","report":"rule","republican":"rule","rest":"rule","restaurant":"rule","review":"rule","reviews":"rule","rexroth":"rule","rich":"rule","richardli":"rule","ricoh":"rule","ril":"rule","rio":"rule","rip":"rule","rocks":"rule","rodeo":"rule","rogers":"rule","room":"rule","rsvp":"rule","rugby":"rule","ruhr":"rule","run":"rule","rwe":"rule","ryukyu":"rule","saarland":"rule","safe":"rule","safety":"rule","sakura":"rule","sale":"rule","salon":"rule","samsclub":"rule","samsung":"rule","sandvik":"rule","sandvikcoromant":"rule","sanofi":"rule","sap":"rule","sarl":"rule","sas":"rule","save":"rule","saxo":"rule","sbi":"rule","sbs":"rule","scb":"rule","schaeffler":"rule","schmidt":"rule","scholarships":"rule","school":"rule","schule":"rule","schwarz":"rule","science":"rule","scot":"rule","search":"rule","seat":"rule","secure":"rule","security":"rule","seek":"rule","select":"rule","sener":"rule","services":"rule","seven":"rule","sew":"rule","sex":"rule","sexy":"rule","sfr":"rule","shangrila":"rule","sharp":"rule","shell":"rule","shia":"rule","shiksha":"rule","shoes":"rule","shop":"rule","shopping":"rule","shouji":"rule","show":"rule","silk":"rule","sina":"rule","singles":"rule","site":"rule","ski":"rule","skin":"rule","sky":"rule","skype":"rule","sling":"rule","smart":"rule","smile":"rule","sncf":"rule","soccer":"rule","social":"rule","softbank":"rule","software":"rule","sohu":"rule","solar":"rule","solutions":"rule","song":"rule","sony":"rule","soy":"rule","spa":"rule","space":"rule","sport":"rule","spot":"rule","srl":"rule","stada":"rule","staples":"rule","star":"rule","statebank":"rule","statefarm":"rule","stc":"rule","stcgroup":"rule","stockholm":"rule","storage":"rule","store":"rule","stream":"rule","studio":"rule","study":"rule","style":"rule","sucks":"rule","supplies":"rule","supply":"rule","support":"rule","surf":"rule","surgery":"rule","suzuki":"rule","swatch":"rule","swiss":"rule","sydney":"rule","systems":"rule","tab":"rule","taipei":"rule","talk":"rule","taobao":"rule","target":"rule","tatamotors":"rule","tatar":"rule","tattoo":"rule","tax":"rule","taxi":"rule","tci":"rule","tdk":"rule","team":"rule","tech":"rule","technology":"rule","temasek":"rule","tennis":"rule","teva":"rule","thd":"rule","theater":"rule","theatre":"rule","tiaa":"rule","tickets":"rule","tienda":"rule","tips":"rule","tires":"rule","tirol":"rule","tjmaxx":"rule","tjx":"rule","tkmaxx":"rule","tmall":"rule","today":"rule","tokyo":"rule","tools":"rule","top":"rule","toray":"rule","toshiba":"rule","total":"rule","tours":"rule","town":"rule","toyota":"rule","toys":"rule","trade":"rule","trading":"rule","training":"rule","travel":"rule","travelers":"rule","travelersinsurance":"rule","trust":"rule","trv":"rule","tube":"rule","tui":"rule","tunes":"rule","tushu":"rule","tvs":"rule","ubank":"rule","ubs":"rule","unicom":"rule","university":"rule","uno":"rule","uol":"rule","ups":"rule","vacations":"rule","vana":"rule","vanguard":"rule","vegas":"rule","ventures":"rule","verisign":"rule","versicherung":"rule","vet":"rule","viajes":"rule","video":"rule","vig":"rule","viking":"rule","villas":"rule","vin":"rule","vip":"rule","virgin":"rule","visa":"rule","vision":"rule","viva":"rule","vivo":"rule","vlaanderen":"rule","vodka":"rule","volvo":"rule","vote":"rule","voting":"rule","voto":"rule","voyage":"rule","wales":"rule","walmart":"rule","walter":"rule","wang":"rule","wanggou":"rule","watch":"rule","watches":"rule","weather":"rule","weatherchannel":"rule","web":"rule","webcam":"rule","weber":"rule","website":"rule","wed":"rule","wedding":"rule","weibo":"rule","weir":"rule","whoswho":"rule","wien":"rule","wiki":"rule","williamhill":"rule","win":"rule","windows":"rule","wine":"rule","winners":"rule","wme":"rule","woodside":"rule","work":"rule","works":"rule","world":"rule","wow":"rule","wtc":"rule","wtf":"rule","xbox":"rule","xerox":"rule","xihuan":"rule","xin":"rule","कॉम":"rule","セール":"rule","佛山":"rule","慈善":"rule","集团":"rule","在线":"rule","点看":"rule","คอม":"rule","八卦":"rule","موقع":"rule","公益":"rule","公司":"rule","香格里拉":"rule","网站":"rule","移动":"rule","我爱你":"rule","москва":"rule","католик":"rule","онлайн":"rule","сайт":"rule","联通":"rule","קום":"rule","时尚":"rule","微博":"rule","淡马锡":"rule","ファッション":"rule","орг":"rule","नेट":"rule","ストア":"rule","アマゾン":"rule","삼성":"rule","商标":"rule","商店":"rule","商城":"rule","дети":"rule","ポイント":"rule","新闻":"rule","家電":"rule","كوم":"rule","中文网":"rule","中信":"rule","娱乐":"rule","谷歌":"rule","電訊盈科":"rule","购物":"rule","クラウド":"rule","通販":"rule","网店":"rule","संगठन":"rule","餐厅":"rule","网络":"rule","ком":"rule","亚马逊":"rule","食品":"rule","飞利浦":"rule","手机":"rule","ارامكو":"rule","العليان":"rule","بازار":"rule","ابوظبي":"rule","كاثوليك":"rule","همراه":"rule","닷컴":"rule","政府":"rule","شبكة":"rule","بيتك":"rule","عرب":"rule","机构":"rule","组织机构":"rule","健康":"rule","招聘":"rule","рус":"rule","大拿":"rule","みんな":"rule","グーグル":"rule","世界":"rule","書籍":"rule","网址":"rule","닷넷":"rule","コム":"rule","天主教":"rule","游戏":"rule","vermögensberater":"rule","vermögensberatung":"rule","企业":"rule","信息":"rule","嘉里大酒店":"rule","嘉里":"rule","广东":"rule","政务":"rule","xyz":"rule","yachts":"rule","yahoo":"rule","yamaxun":"rule","yandex":"rule","yodobashi":"rule","yoga":"rule","yokohama":"rule","you":"rule","youtube":"rule","yun":"rule","zappos":"rule","zara":"rule","zero":"rule","zip":"rule","zone":"rule","zuerich":"rule","co.krd":"rule","edu.krd":"rule","art.pl":"rule","gliwice.pl":"rule","krakow.pl":"rule","poznan.pl":"rule","wroc.pl":"rule","zakopane.pl":"rule","cc.ua":"rule","inf.ua":"rule","ltd.ua":"rule","611.to":"rule","a2hosted.com":"rule","cpserver.com":"rule","activetrail.biz":"rule","adaptable.app":"rule","myaddr.dev":"rule","myaddr.io":"rule","dyn.addr.tools":"rule","myaddr.tools":"rule","adobeaemcloud.com":"rule","dev.adobeaemcloud.com":"wildcard","aem.live":"rule","hlx.live":"rule","adobeaemcloud.net":"rule","aem.network":"rule","aem.page":"rule","hlx.page":"rule","aem.reviews":"rule","adobeio-static.net":"rule","adobeioruntime.net":"rule","africa.com":"rule","auiusercontent.com":"wildcard","beep.pl":"rule","aiven.app":"rule","aivencloud.com":"rule","akadns.net":"rule","akamai.net":"rule","akamai-staging.net":"rule","akamaiedge.net":"rule","akamaiedge-staging.net":"rule","akamaihd.net":"rule","akamaihd-staging.net":"rule","akamaiorigin.net":"rule","akamaiorigin-staging.net":"rule","akamaized.net":"rule","akamaized-staging.net":"rule","edgekey.net":"rule","edgekey-staging.net":"rule","edgesuite.net":"rule","edgesuite-staging.net":"rule","barsy.ca":"rule","compute.estate":"wildcard","alces.network":"wildcard","alibabacloudcs.com":"rule","ms.fun":"rule","ms.show":"rule","kasserver.com":"rule","altervista.org":"rule","alwaysdata.net":"rule","myamaze.net":"rule","execute-api.cn-north-1.amazonaws.com.cn":"rule","execute-api.cn-northwest-1.amazonaws.com.cn":"rule","execute-api.af-south-1.amazonaws.com":"rule","execute-api.ap-east-1.amazonaws.com":"rule","execute-api.ap-northeast-1.amazonaws.com":"rule","execute-api.ap-northeast-2.amazonaws.com":"rule","execute-api.ap-northeast-3.amazonaws.com":"rule","execute-api.ap-south-1.amazonaws.com":"rule","execute-api.ap-south-2.amazonaws.com":"rule","execute-api.ap-southeast-1.amazonaws.com":"rule","execute-api.ap-southeast-2.amazonaws.com":"rule","execute-api.ap-southeast-3.amazonaws.com":"rule","execute-api.ap-southeast-4.amazonaws.com":"rule","execute-api.ap-southeast-5.amazonaws.com":"rule","execute-api.ca-central-1.amazonaws.com":"rule","execute-api.ca-west-1.amazonaws.com":"rule","execute-api.eu-central-1.amazonaws.com":"rule","execute-api.eu-central-2.amazonaws.com":"rule","execute-api.eu-north-1.amazonaws.com":"rule","execute-api.eu-south-1.amazonaws.com":"rule","execute-api.eu-south-2.amazonaws.com":"rule","execute-api.eu-west-1.amazonaws.com":"rule","execute-api.eu-west-2.amazonaws.com":"rule","execute-api.eu-west-3.amazonaws.com":"rule","execute-api.il-central-1.amazonaws.com":"rule","execute-api.me-central-1.amazonaws.com":"rule","execute-api.me-south-1.amazonaws.com":"rule","execute-api.sa-east-1.amazonaws.com":"rule","execute-api.us-east-1.amazonaws.com":"rule","execute-api.us-east-2.amazonaws.com":"rule","execute-api.us-gov-east-1.amazonaws.com":"rule","execute-api.us-gov-west-1.amazonaws.com":"rule","execute-api.us-west-1.amazonaws.com":"rule","execute-api.us-west-2.amazonaws.com":"rule","cloudfront.net":"rule","auth.af-south-1.amazoncognito.com":"rule","auth.ap-east-1.amazoncognito.com":"rule","auth.ap-northeast-1.amazoncognito.com":"rule","auth.ap-northeast-2.amazoncognito.com":"rule","auth.ap-northeast-3.amazoncognito.com":"rule","auth.ap-south-1.amazoncognito.com":"rule","auth.ap-south-2.amazoncognito.com":"rule","auth.ap-southeast-1.amazoncognito.com":"rule","auth.ap-southeast-2.amazoncognito.com":"rule","auth.ap-southeast-3.amazoncognito.com":"rule","auth.ap-southeast-4.amazoncognito.com":"rule","auth.ap-southeast-5.amazoncognito.com":"rule","auth.ap-southeast-7.amazoncognito.com":"rule","auth.ca-central-1.amazoncognito.com":"rule","auth.ca-west-1.amazoncognito.com":"rule","auth.eu-central-1.amazoncognito.com":"rule","auth.eu-central-2.amazoncognito.com":"rule","auth.eu-north-1.amazoncognito.com":"rule","auth.eu-south-1.amazoncognito.com":"rule","auth.eu-south-2.amazoncognito.com":"rule","auth.eu-west-1.amazoncognito.com":"rule","auth.eu-west-2.amazoncognito.com":"rule","auth.eu-west-3.amazoncognito.com":"rule","auth.il-central-1.amazoncognito.com":"rule","auth.me-central-1.amazoncognito.com":"rule","auth.me-south-1.amazoncognito.com":"rule","auth.mx-central-1.amazoncognito.com":"rule","auth.sa-east-1.amazoncognito.com":"rule","auth.us-east-1.amazoncognito.com":"rule","auth-fips.us-east-1.amazoncognito.com":"rule","auth.us-east-2.amazoncognito.com":"rule","auth-fips.us-east-2.amazoncognito.com":"rule","auth-fips.us-gov-east-1.amazoncognito.com":"rule","auth-fips.us-gov-west-1.amazoncognito.com":"rule","auth.us-west-1.amazoncognito.com":"rule","auth-fips.us-west-1.amazoncognito.com":"rule","auth.us-west-2.amazoncognito.com":"rule","auth-fips.us-west-2.amazoncognito.com":"rule","auth.cognito-idp.eusc-de-east-1.on.amazonwebservices.eu":"rule","compute.amazonaws.com.cn":"wildcard","compute.amazonaws.com":"wildcard","compute-1.amazonaws.com":"wildcard","us-east-1.amazonaws.com":"rule","emrappui-prod.cn-north-1.amazonaws.com.cn":"rule","emrnotebooks-prod.cn-north-1.amazonaws.com.cn":"rule","emrstudio-prod.cn-north-1.amazonaws.com.cn":"rule","emrappui-prod.cn-northwest-1.amazonaws.com.cn":"rule","emrnotebooks-prod.cn-northwest-1.amazonaws.com.cn":"rule","emrstudio-prod.cn-northwest-1.amazonaws.com.cn":"rule","emrappui-prod.af-south-1.amazonaws.com":"rule","emrnotebooks-prod.af-south-1.amazonaws.com":"rule","emrstudio-prod.af-south-1.amazonaws.com":"rule","emrappui-prod.ap-east-1.amazonaws.com":"rule","emrnotebooks-prod.ap-east-1.amazonaws.com":"rule","emrstudio-prod.ap-east-1.amazonaws.com":"rule","emrappui-prod.ap-northeast-1.amazonaws.com":"rule","emrnotebooks-prod.ap-northeast-1.amazonaws.com":"rule","emrstudio-prod.ap-northeast-1.amazonaws.com":"rule","emrappui-prod.ap-northeast-2.amazonaws.com":"rule","emrnotebooks-prod.ap-northeast-2.amazonaws.com":"rule","emrstudio-prod.ap-northeast-2.amazonaws.com":"rule","emrappui-prod.ap-northeast-3.amazonaws.com":"rule","emrnotebooks-prod.ap-northeast-3.amazonaws.com":"rule","emrstudio-prod.ap-northeast-3.amazonaws.com":"rule","emrappui-prod.ap-south-1.amazonaws.com":"rule","emrnotebooks-prod.ap-south-1.amazonaws.com":"rule","emrstudio-prod.ap-south-1.amazonaws.com":"rule","emrappui-prod.ap-south-2.amazonaws.com":"rule","emrnotebooks-prod.ap-south-2.amazonaws.com":"rule","emrstudio-prod.ap-south-2.amazonaws.com":"rule","emrappui-prod.ap-southeast-1.amazonaws.com":"rule","emrnotebooks-prod.ap-southeast-1.amazonaws.com":"rule","emrstudio-prod.ap-southeast-1.amazonaws.com":"rule","emrappui-prod.ap-southeast-2.amazonaws.com":"rule","emrnotebooks-prod.ap-southeast-2.amazonaws.com":"rule","emrstudio-prod.ap-southeast-2.amazonaws.com":"rule","emrappui-prod.ap-southeast-3.amazonaws.com":"rule","emrnotebooks-prod.ap-southeast-3.amazonaws.com":"rule","emrstudio-prod.ap-southeast-3.amazonaws.com":"rule","emrappui-prod.ap-southeast-4.amazonaws.com":"rule","emrnotebooks-prod.ap-southeast-4.amazonaws.com":"rule","emrstudio-prod.ap-southeast-4.amazonaws.com":"rule","emrappui-prod.ca-central-1.amazonaws.com":"rule","emrnotebooks-prod.ca-central-1.amazonaws.com":"rule","emrstudio-prod.ca-central-1.amazonaws.com":"rule","emrappui-prod.ca-west-1.amazonaws.com":"rule","emrnotebooks-prod.ca-west-1.amazonaws.com":"rule","emrstudio-prod.ca-west-1.amazonaws.com":"rule","emrappui-prod.eu-central-1.amazonaws.com":"rule","emrnotebooks-prod.eu-central-1.amazonaws.com":"rule","emrstudio-prod.eu-central-1.amazonaws.com":"rule","emrappui-prod.eu-central-2.amazonaws.com":"rule","emrnotebooks-prod.eu-central-2.amazonaws.com":"rule","emrstudio-prod.eu-central-2.amazonaws.com":"rule","emrappui-prod.eu-north-1.amazonaws.com":"rule","emrnotebooks-prod.eu-north-1.amazonaws.com":"rule","emrstudio-prod.eu-north-1.amazonaws.com":"rule","emrappui-prod.eu-south-1.amazonaws.com":"rule","emrnotebooks-prod.eu-south-1.amazonaws.com":"rule","emrstudio-prod.eu-south-1.amazonaws.com":"rule","emrappui-prod.eu-south-2.amazonaws.com":"rule","emrnotebooks-prod.eu-south-2.amazonaws.com":"rule","emrstudio-prod.eu-south-2.amazonaws.com":"rule","emrappui-prod.eu-west-1.amazonaws.com":"rule","emrnotebooks-prod.eu-west-1.amazonaws.com":"rule","emrstudio-prod.eu-west-1.amazonaws.com":"rule","emrappui-prod.eu-west-2.amazonaws.com":"rule","emrnotebooks-prod.eu-west-2.amazonaws.com":"rule","emrstudio-prod.eu-west-2.amazonaws.com":"rule","emrappui-prod.eu-west-3.amazonaws.com":"rule","emrnotebooks-prod.eu-west-3.amazonaws.com":"rule","emrstudio-prod.eu-west-3.amazonaws.com":"rule","emrappui-prod.il-central-1.amazonaws.com":"rule","emrnotebooks-prod.il-central-1.amazonaws.com":"rule","emrstudio-prod.il-central-1.amazonaws.com":"rule","emrappui-prod.me-central-1.amazonaws.com":"rule","emrnotebooks-prod.me-central-1.amazonaws.com":"rule","emrstudio-prod.me-central-1.amazonaws.com":"rule","emrappui-prod.me-south-1.amazonaws.com":"rule","emrnotebooks-prod.me-south-1.amazonaws.com":"rule","emrstudio-prod.me-south-1.amazonaws.com":"rule","emrappui-prod.sa-east-1.amazonaws.com":"rule","emrnotebooks-prod.sa-east-1.amazonaws.com":"rule","emrstudio-prod.sa-east-1.amazonaws.com":"rule","emrappui-prod.us-east-1.amazonaws.com":"rule","emrnotebooks-prod.us-east-1.amazonaws.com":"rule","emrstudio-prod.us-east-1.amazonaws.com":"rule","emrappui-prod.us-east-2.amazonaws.com":"rule","emrnotebooks-prod.us-east-2.amazonaws.com":"rule","emrstudio-prod.us-east-2.amazonaws.com":"rule","emrappui-prod.us-gov-east-1.amazonaws.com":"rule","emrnotebooks-prod.us-gov-east-1.amazonaws.com":"rule","emrstudio-prod.us-gov-east-1.amazonaws.com":"rule","emrappui-prod.us-gov-west-1.amazonaws.com":"rule","emrnotebooks-prod.us-gov-west-1.amazonaws.com":"rule","emrstudio-prod.us-gov-west-1.amazonaws.com":"rule","emrappui-prod.us-west-1.amazonaws.com":"rule","emrnotebooks-prod.us-west-1.amazonaws.com":"rule","emrstudio-prod.us-west-1.amazonaws.com":"rule","emrappui-prod.us-west-2.amazonaws.com":"rule","emrnotebooks-prod.us-west-2.amazonaws.com":"rule","emrstudio-prod.us-west-2.amazonaws.com":"rule","airflow.af-south-1.on.aws":"wildcard","airflow.ap-east-1.on.aws":"wildcard","airflow.ap-northeast-1.on.aws":"wildcard","airflow.ap-northeast-2.on.aws":"wildcard","airflow.ap-northeast-3.on.aws":"wildcard","airflow.ap-south-1.on.aws":"wildcard","airflow.ap-south-2.on.aws":"wildcard","airflow.ap-southeast-1.on.aws":"wildcard","airflow.ap-southeast-2.on.aws":"wildcard","airflow.ap-southeast-3.on.aws":"wildcard","airflow.ap-southeast-4.on.aws":"wildcard","airflow.ap-southeast-5.on.aws":"wildcard","airflow.ca-central-1.on.aws":"wildcard","airflow.ca-west-1.on.aws":"wildcard","airflow.eu-central-1.on.aws":"wildcard","airflow.eu-central-2.on.aws":"wildcard","airflow.eu-north-1.on.aws":"wildcard","airflow.eu-south-1.on.aws":"wildcard","airflow.eu-south-2.on.aws":"wildcard","airflow.eu-west-1.on.aws":"wildcard","airflow.eu-west-2.on.aws":"wildcard","airflow.eu-west-3.on.aws":"wildcard","airflow.il-central-1.on.aws":"wildcard","airflow.me-central-1.on.aws":"wildcard","airflow.me-south-1.on.aws":"wildcard","airflow.sa-east-1.on.aws":"wildcard","airflow.us-east-1.on.aws":"wildcard","airflow.us-east-2.on.aws":"wildcard","airflow.us-west-1.on.aws":"wildcard","airflow.us-west-2.on.aws":"wildcard","cn-north-1.airflow.amazonaws.com.cn":"wildcard","cn-northwest-1.airflow.amazonaws.com.cn":"wildcard","airflow.cn-north-1.on.amazonwebservices.com.cn":"wildcard","airflow.cn-northwest-1.on.amazonwebservices.com.cn":"wildcard","af-south-1.airflow.amazonaws.com":"wildcard","ap-east-1.airflow.amazonaws.com":"wildcard","ap-northeast-1.airflow.amazonaws.com":"wildcard","ap-northeast-2.airflow.amazonaws.com":"wildcard","ap-northeast-3.airflow.amazonaws.com":"wildcard","ap-south-1.airflow.amazonaws.com":"wildcard","ap-south-2.airflow.amazonaws.com":"wildcard","ap-southeast-1.airflow.amazonaws.com":"wildcard","ap-southeast-2.airflow.amazonaws.com":"wildcard","ap-southeast-3.airflow.amazonaws.com":"wildcard","ap-southeast-4.airflow.amazonaws.com":"wildcard","ap-southeast-5.airflow.amazonaws.com":"wildcard","ap-southeast-7.airflow.amazonaws.com":"wildcard","ca-central-1.airflow.amazonaws.com":"wildcard","ca-west-1.airflow.amazonaws.com":"wildcard","eu-central-1.airflow.amazonaws.com":"wildcard","eu-central-2.airflow.amazonaws.com":"wildcard","eu-north-1.airflow.amazonaws.com":"wildcard","eu-south-1.airflow.amazonaws.com":"wildcard","eu-south-2.airflow.amazonaws.com":"wildcard","eu-west-1.airflow.amazonaws.com":"wildcard","eu-west-2.airflow.amazonaws.com":"wildcard","eu-west-3.airflow.amazonaws.com":"wildcard","il-central-1.airflow.amazonaws.com":"wildcard","me-central-1.airflow.amazonaws.com":"wildcard","me-south-1.airflow.amazonaws.com":"wildcard","sa-east-1.airflow.amazonaws.com":"wildcard","us-east-1.airflow.amazonaws.com":"wildcard","us-east-2.airflow.amazonaws.com":"wildcard","us-west-1.airflow.amazonaws.com":"wildcard","us-west-2.airflow.amazonaws.com":"wildcard","rds.cn-north-1.amazonaws.com.cn":"wildcard","rds.cn-northwest-1.amazonaws.com.cn":"wildcard","af-south-1.rds.amazonaws.com":"wildcard","ap-east-1.rds.amazonaws.com":"wildcard","ap-east-2.rds.amazonaws.com":"wildcard","ap-northeast-1.rds.amazonaws.com":"wildcard","ap-northeast-2.rds.amazonaws.com":"wildcard","ap-northeast-3.rds.amazonaws.com":"wildcard","ap-south-1.rds.amazonaws.com":"wildcard","ap-south-2.rds.amazonaws.com":"wildcard","ap-southeast-1.rds.amazonaws.com":"wildcard","ap-southeast-2.rds.amazonaws.com":"wildcard","ap-southeast-3.rds.amazonaws.com":"wildcard","ap-southeast-4.rds.amazonaws.com":"wildcard","ap-southeast-5.rds.amazonaws.com":"wildcard","ap-southeast-6.rds.amazonaws.com":"wildcard","ap-southeast-7.rds.amazonaws.com":"wildcard","ca-central-1.rds.amazonaws.com":"wildcard","ca-west-1.rds.amazonaws.com":"wildcard","eu-central-1.rds.amazonaws.com":"wildcard","eu-central-2.rds.amazonaws.com":"wildcard","eu-west-1.rds.amazonaws.com":"wildcard","eu-west-2.rds.amazonaws.com":"wildcard","eu-west-3.rds.amazonaws.com":"wildcard","il-central-1.rds.amazonaws.com":"wildcard","me-central-1.rds.amazonaws.com":"wildcard","me-south-1.rds.amazonaws.com":"wildcard","mx-central-1.rds.amazonaws.com":"wildcard","sa-east-1.rds.amazonaws.com":"wildcard","us-east-1.rds.amazonaws.com":"wildcard","us-east-2.rds.amazonaws.com":"wildcard","us-gov-east-1.rds.amazonaws.com":"wildcard","us-gov-west-1.rds.amazonaws.com":"wildcard","us-northeast-1.rds.amazonaws.com":"wildcard","us-west-1.rds.amazonaws.com":"wildcard","us-west-2.rds.amazonaws.com":"wildcard","s3.dualstack.cn-north-1.amazonaws.com.cn":"rule","s3-accesspoint.dualstack.cn-north-1.amazonaws.com.cn":"rule","s3-website.dualstack.cn-north-1.amazonaws.com.cn":"rule","s3.cn-north-1.amazonaws.com.cn":"rule","s3-accesspoint.cn-north-1.amazonaws.com.cn":"rule","s3-deprecated.cn-north-1.amazonaws.com.cn":"rule","s3-object-lambda.cn-north-1.amazonaws.com.cn":"rule","s3-website.cn-north-1.amazonaws.com.cn":"rule","s3.dualstack.cn-northwest-1.amazonaws.com.cn":"rule","s3-accesspoint.dualstack.cn-northwest-1.amazonaws.com.cn":"rule","s3.cn-northwest-1.amazonaws.com.cn":"rule","s3-accesspoint.cn-northwest-1.amazonaws.com.cn":"rule","s3-object-lambda.cn-northwest-1.amazonaws.com.cn":"rule","s3-website.cn-northwest-1.amazonaws.com.cn":"rule","s3.dualstack.af-south-1.amazonaws.com":"rule","s3-accesspoint.dualstack.af-south-1.amazonaws.com":"rule","s3-website.dualstack.af-south-1.amazonaws.com":"rule","s3.af-south-1.amazonaws.com":"rule","s3-accesspoint.af-south-1.amazonaws.com":"rule","s3-object-lambda.af-south-1.amazonaws.com":"rule","s3-website.af-south-1.amazonaws.com":"rule","s3.dualstack.ap-east-1.amazonaws.com":"rule","s3-accesspoint.dualstack.ap-east-1.amazonaws.com":"rule","s3.ap-east-1.amazonaws.com":"rule","s3-accesspoint.ap-east-1.amazonaws.com":"rule","s3-object-lambda.ap-east-1.amazonaws.com":"rule","s3-website.ap-east-1.amazonaws.com":"rule","s3.dualstack.ap-northeast-1.amazonaws.com":"rule","s3-accesspoint.dualstack.ap-northeast-1.amazonaws.com":"rule","s3-website.dualstack.ap-northeast-1.amazonaws.com":"rule","s3.ap-northeast-1.amazonaws.com":"rule","s3-accesspoint.ap-northeast-1.amazonaws.com":"rule","s3-object-lambda.ap-northeast-1.amazonaws.com":"rule","s3-website.ap-northeast-1.amazonaws.com":"rule","s3.dualstack.ap-northeast-2.amazonaws.com":"rule","s3-accesspoint.dualstack.ap-northeast-2.amazonaws.com":"rule","s3-website.dualstack.ap-northeast-2.amazonaws.com":"rule","s3.ap-northeast-2.amazonaws.com":"rule","s3-accesspoint.ap-northeast-2.amazonaws.com":"rule","s3-object-lambda.ap-northeast-2.amazonaws.com":"rule","s3-website.ap-northeast-2.amazonaws.com":"rule","s3.dualstack.ap-northeast-3.amazonaws.com":"rule","s3-accesspoint.dualstack.ap-northeast-3.amazonaws.com":"rule","s3-website.dualstack.ap-northeast-3.amazonaws.com":"rule","s3.ap-northeast-3.amazonaws.com":"rule","s3-accesspoint.ap-northeast-3.amazonaws.com":"rule","s3-object-lambda.ap-northeast-3.amazonaws.com":"rule","s3-website.ap-northeast-3.amazonaws.com":"rule","s3.dualstack.ap-south-1.amazonaws.com":"rule","s3-accesspoint.dualstack.ap-south-1.amazonaws.com":"rule","s3-website.dualstack.ap-south-1.amazonaws.com":"rule","s3.ap-south-1.amazonaws.com":"rule","s3-accesspoint.ap-south-1.amazonaws.com":"rule","s3-object-lambda.ap-south-1.amazonaws.com":"rule","s3-website.ap-south-1.amazonaws.com":"rule","s3.dualstack.ap-south-2.amazonaws.com":"rule","s3-accesspoint.dualstack.ap-south-2.amazonaws.com":"rule","s3-website.dualstack.ap-south-2.amazonaws.com":"rule","s3.ap-south-2.amazonaws.com":"rule","s3-accesspoint.ap-south-2.amazonaws.com":"rule","s3-object-lambda.ap-south-2.amazonaws.com":"rule","s3-website.ap-south-2.amazonaws.com":"rule","s3.dualstack.ap-southeast-1.amazonaws.com":"rule","s3-accesspoint.dualstack.ap-southeast-1.amazonaws.com":"rule","s3-website.dualstack.ap-southeast-1.amazonaws.com":"rule","s3.ap-southeast-1.amazonaws.com":"rule","s3-accesspoint.ap-southeast-1.amazonaws.com":"rule","s3-object-lambda.ap-southeast-1.amazonaws.com":"rule","s3-website.ap-southeast-1.amazonaws.com":"rule","s3.dualstack.ap-southeast-2.amazonaws.com":"rule","s3-accesspoint.dualstack.ap-southeast-2.amazonaws.com":"rule","s3-website.dualstack.ap-southeast-2.amazonaws.com":"rule","s3.ap-southeast-2.amazonaws.com":"rule","s3-accesspoint.ap-southeast-2.amazonaws.com":"rule","s3-object-lambda.ap-southeast-2.amazonaws.com":"rule","s3-website.ap-southeast-2.amazonaws.com":"rule","s3.dualstack.ap-southeast-3.amazonaws.com":"rule","s3-accesspoint.dualstack.ap-southeast-3.amazonaws.com":"rule","s3-website.dualstack.ap-southeast-3.amazonaws.com":"rule","s3.ap-southeast-3.amazonaws.com":"rule","s3-accesspoint.ap-southeast-3.amazonaws.com":"rule","s3-object-lambda.ap-southeast-3.amazonaws.com":"rule","s3-website.ap-southeast-3.amazonaws.com":"rule","s3.dualstack.ap-southeast-4.amazonaws.com":"rule","s3-accesspoint.dualstack.ap-southeast-4.amazonaws.com":"rule","s3-website.dualstack.ap-southeast-4.amazonaws.com":"rule","s3.ap-southeast-4.amazonaws.com":"rule","s3-accesspoint.ap-southeast-4.amazonaws.com":"rule","s3-object-lambda.ap-southeast-4.amazonaws.com":"rule","s3-website.ap-southeast-4.amazonaws.com":"rule","s3.dualstack.ap-southeast-5.amazonaws.com":"rule","s3-accesspoint.dualstack.ap-southeast-5.amazonaws.com":"rule","s3-website.dualstack.ap-southeast-5.amazonaws.com":"rule","s3.ap-southeast-5.amazonaws.com":"rule","s3-accesspoint.ap-southeast-5.amazonaws.com":"rule","s3-deprecated.ap-southeast-5.amazonaws.com":"rule","s3-object-lambda.ap-southeast-5.amazonaws.com":"rule","s3-website.ap-southeast-5.amazonaws.com":"rule","s3.dualstack.ca-central-1.amazonaws.com":"rule","s3-accesspoint.dualstack.ca-central-1.amazonaws.com":"rule","s3-accesspoint-fips.dualstack.ca-central-1.amazonaws.com":"rule","s3-fips.dualstack.ca-central-1.amazonaws.com":"rule","s3-website.dualstack.ca-central-1.amazonaws.com":"rule","s3.ca-central-1.amazonaws.com":"rule","s3-accesspoint.ca-central-1.amazonaws.com":"rule","s3-accesspoint-fips.ca-central-1.amazonaws.com":"rule","s3-fips.ca-central-1.amazonaws.com":"rule","s3-object-lambda.ca-central-1.amazonaws.com":"rule","s3-website.ca-central-1.amazonaws.com":"rule","s3.dualstack.ca-west-1.amazonaws.com":"rule","s3-accesspoint.dualstack.ca-west-1.amazonaws.com":"rule","s3-accesspoint-fips.dualstack.ca-west-1.amazonaws.com":"rule","s3-fips.dualstack.ca-west-1.amazonaws.com":"rule","s3-website.dualstack.ca-west-1.amazonaws.com":"rule","s3.ca-west-1.amazonaws.com":"rule","s3-accesspoint.ca-west-1.amazonaws.com":"rule","s3-accesspoint-fips.ca-west-1.amazonaws.com":"rule","s3-fips.ca-west-1.amazonaws.com":"rule","s3-object-lambda.ca-west-1.amazonaws.com":"rule","s3-website.ca-west-1.amazonaws.com":"rule","s3.dualstack.eu-central-1.amazonaws.com":"rule","s3-accesspoint.dualstack.eu-central-1.amazonaws.com":"rule","s3-website.dualstack.eu-central-1.amazonaws.com":"rule","s3.eu-central-1.amazonaws.com":"rule","s3-accesspoint.eu-central-1.amazonaws.com":"rule","s3-object-lambda.eu-central-1.amazonaws.com":"rule","s3-website.eu-central-1.amazonaws.com":"rule","s3.dualstack.eu-central-2.amazonaws.com":"rule","s3-accesspoint.dualstack.eu-central-2.amazonaws.com":"rule","s3-website.dualstack.eu-central-2.amazonaws.com":"rule","s3.eu-central-2.amazonaws.com":"rule","s3-accesspoint.eu-central-2.amazonaws.com":"rule","s3-object-lambda.eu-central-2.amazonaws.com":"rule","s3-website.eu-central-2.amazonaws.com":"rule","s3.dualstack.eu-north-1.amazonaws.com":"rule","s3-accesspoint.dualstack.eu-north-1.amazonaws.com":"rule","s3.eu-north-1.amazonaws.com":"rule","s3-accesspoint.eu-north-1.amazonaws.com":"rule","s3-object-lambda.eu-north-1.amazonaws.com":"rule","s3-website.eu-north-1.amazonaws.com":"rule","s3.dualstack.eu-south-1.amazonaws.com":"rule","s3-accesspoint.dualstack.eu-south-1.amazonaws.com":"rule","s3-website.dualstack.eu-south-1.amazonaws.com":"rule","s3.eu-south-1.amazonaws.com":"rule","s3-accesspoint.eu-south-1.amazonaws.com":"rule","s3-object-lambda.eu-south-1.amazonaws.com":"rule","s3-website.eu-south-1.amazonaws.com":"rule","s3.dualstack.eu-south-2.amazonaws.com":"rule","s3-accesspoint.dualstack.eu-south-2.amazonaws.com":"rule","s3-website.dualstack.eu-south-2.amazonaws.com":"rule","s3.eu-south-2.amazonaws.com":"rule","s3-accesspoint.eu-south-2.amazonaws.com":"rule","s3-object-lambda.eu-south-2.amazonaws.com":"rule","s3-website.eu-south-2.amazonaws.com":"rule","s3.dualstack.eu-west-1.amazonaws.com":"rule","s3-accesspoint.dualstack.eu-west-1.amazonaws.com":"rule","s3-website.dualstack.eu-west-1.amazonaws.com":"rule","s3.eu-west-1.amazonaws.com":"rule","s3-accesspoint.eu-west-1.amazonaws.com":"rule","s3-deprecated.eu-west-1.amazonaws.com":"rule","s3-object-lambda.eu-west-1.amazonaws.com":"rule","s3-website.eu-west-1.amazonaws.com":"rule","s3.dualstack.eu-west-2.amazonaws.com":"rule","s3-accesspoint.dualstack.eu-west-2.amazonaws.com":"rule","s3.eu-west-2.amazonaws.com":"rule","s3-accesspoint.eu-west-2.amazonaws.com":"rule","s3-object-lambda.eu-west-2.amazonaws.com":"rule","s3-website.eu-west-2.amazonaws.com":"rule","s3.dualstack.eu-west-3.amazonaws.com":"rule","s3-accesspoint.dualstack.eu-west-3.amazonaws.com":"rule","s3-website.dualstack.eu-west-3.amazonaws.com":"rule","s3.eu-west-3.amazonaws.com":"rule","s3-accesspoint.eu-west-3.amazonaws.com":"rule","s3-object-lambda.eu-west-3.amazonaws.com":"rule","s3-website.eu-west-3.amazonaws.com":"rule","s3.dualstack.il-central-1.amazonaws.com":"rule","s3-accesspoint.dualstack.il-central-1.amazonaws.com":"rule","s3-website.dualstack.il-central-1.amazonaws.com":"rule","s3.il-central-1.amazonaws.com":"rule","s3-accesspoint.il-central-1.amazonaws.com":"rule","s3-object-lambda.il-central-1.amazonaws.com":"rule","s3-website.il-central-1.amazonaws.com":"rule","s3.dualstack.me-central-1.amazonaws.com":"rule","s3-accesspoint.dualstack.me-central-1.amazonaws.com":"rule","s3-website.dualstack.me-central-1.amazonaws.com":"rule","s3.me-central-1.amazonaws.com":"rule","s3-accesspoint.me-central-1.amazonaws.com":"rule","s3-object-lambda.me-central-1.amazonaws.com":"rule","s3-website.me-central-1.amazonaws.com":"rule","s3.dualstack.me-south-1.amazonaws.com":"rule","s3-accesspoint.dualstack.me-south-1.amazonaws.com":"rule","s3.me-south-1.amazonaws.com":"rule","s3-accesspoint.me-south-1.amazonaws.com":"rule","s3-object-lambda.me-south-1.amazonaws.com":"rule","s3-website.me-south-1.amazonaws.com":"rule","s3.amazonaws.com":"rule","s3-1.amazonaws.com":"rule","s3-ap-east-1.amazonaws.com":"rule","s3-ap-northeast-1.amazonaws.com":"rule","s3-ap-northeast-2.amazonaws.com":"rule","s3-ap-northeast-3.amazonaws.com":"rule","s3-ap-south-1.amazonaws.com":"rule","s3-ap-southeast-1.amazonaws.com":"rule","s3-ap-southeast-2.amazonaws.com":"rule","s3-ca-central-1.amazonaws.com":"rule","s3-eu-central-1.amazonaws.com":"rule","s3-eu-north-1.amazonaws.com":"rule","s3-eu-west-1.amazonaws.com":"rule","s3-eu-west-2.amazonaws.com":"rule","s3-eu-west-3.amazonaws.com":"rule","s3-external-1.amazonaws.com":"rule","s3-fips-us-gov-east-1.amazonaws.com":"rule","s3-fips-us-gov-west-1.amazonaws.com":"rule","mrap.accesspoint.s3-global.amazonaws.com":"rule","s3-me-south-1.amazonaws.com":"rule","s3-sa-east-1.amazonaws.com":"rule","s3-us-east-2.amazonaws.com":"rule","s3-us-gov-east-1.amazonaws.com":"rule","s3-us-gov-west-1.amazonaws.com":"rule","s3-us-west-1.amazonaws.com":"rule","s3-us-west-2.amazonaws.com":"rule","s3-website-ap-northeast-1.amazonaws.com":"rule","s3-website-ap-southeast-1.amazonaws.com":"rule","s3-website-ap-southeast-2.amazonaws.com":"rule","s3-website-eu-west-1.amazonaws.com":"rule","s3-website-sa-east-1.amazonaws.com":"rule","s3-website-us-east-1.amazonaws.com":"rule","s3-website-us-gov-west-1.amazonaws.com":"rule","s3-website-us-west-1.amazonaws.com":"rule","s3-website-us-west-2.amazonaws.com":"rule","s3.dualstack.sa-east-1.amazonaws.com":"rule","s3-accesspoint.dualstack.sa-east-1.amazonaws.com":"rule","s3-website.dualstack.sa-east-1.amazonaws.com":"rule","s3.sa-east-1.amazonaws.com":"rule","s3-accesspoint.sa-east-1.amazonaws.com":"rule","s3-object-lambda.sa-east-1.amazonaws.com":"rule","s3-website.sa-east-1.amazonaws.com":"rule","s3.dualstack.us-east-1.amazonaws.com":"rule","s3-accesspoint.dualstack.us-east-1.amazonaws.com":"rule","s3-accesspoint-fips.dualstack.us-east-1.amazonaws.com":"rule","s3-fips.dualstack.us-east-1.amazonaws.com":"rule","s3-website.dualstack.us-east-1.amazonaws.com":"rule","s3.us-east-1.amazonaws.com":"rule","s3-accesspoint.us-east-1.amazonaws.com":"rule","s3-accesspoint-fips.us-east-1.amazonaws.com":"rule","s3-deprecated.us-east-1.amazonaws.com":"rule","s3-fips.us-east-1.amazonaws.com":"rule","s3-object-lambda.us-east-1.amazonaws.com":"rule","s3-website.us-east-1.amazonaws.com":"rule","s3.dualstack.us-east-2.amazonaws.com":"rule","s3-accesspoint.dualstack.us-east-2.amazonaws.com":"rule","s3-accesspoint-fips.dualstack.us-east-2.amazonaws.com":"rule","s3-fips.dualstack.us-east-2.amazonaws.com":"rule","s3-website.dualstack.us-east-2.amazonaws.com":"rule","s3.us-east-2.amazonaws.com":"rule","s3-accesspoint.us-east-2.amazonaws.com":"rule","s3-accesspoint-fips.us-east-2.amazonaws.com":"rule","s3-deprecated.us-east-2.amazonaws.com":"rule","s3-fips.us-east-2.amazonaws.com":"rule","s3-object-lambda.us-east-2.amazonaws.com":"rule","s3-website.us-east-2.amazonaws.com":"rule","s3.dualstack.us-gov-east-1.amazonaws.com":"rule","s3-accesspoint.dualstack.us-gov-east-1.amazonaws.com":"rule","s3-accesspoint-fips.dualstack.us-gov-east-1.amazonaws.com":"rule","s3-fips.dualstack.us-gov-east-1.amazonaws.com":"rule","s3-website.dualstack.us-gov-east-1.amazonaws.com":"rule","s3.us-gov-east-1.amazonaws.com":"rule","s3-accesspoint.us-gov-east-1.amazonaws.com":"rule","s3-accesspoint-fips.us-gov-east-1.amazonaws.com":"rule","s3-fips.us-gov-east-1.amazonaws.com":"rule","s3-object-lambda.us-gov-east-1.amazonaws.com":"rule","s3-website.us-gov-east-1.amazonaws.com":"rule","s3.dualstack.us-gov-west-1.amazonaws.com":"rule","s3-accesspoint.dualstack.us-gov-west-1.amazonaws.com":"rule","s3-accesspoint-fips.dualstack.us-gov-west-1.amazonaws.com":"rule","s3-fips.dualstack.us-gov-west-1.amazonaws.com":"rule","s3-website.dualstack.us-gov-west-1.amazonaws.com":"rule","s3.us-gov-west-1.amazonaws.com":"rule","s3-accesspoint.us-gov-west-1.amazonaws.com":"rule","s3-accesspoint-fips.us-gov-west-1.amazonaws.com":"rule","s3-fips.us-gov-west-1.amazonaws.com":"rule","s3-object-lambda.us-gov-west-1.amazonaws.com":"rule","s3-website.us-gov-west-1.amazonaws.com":"rule","s3.dualstack.us-west-1.amazonaws.com":"rule","s3-accesspoint.dualstack.us-west-1.amazonaws.com":"rule","s3-accesspoint-fips.dualstack.us-west-1.amazonaws.com":"rule","s3-fips.dualstack.us-west-1.amazonaws.com":"rule","s3-website.dualstack.us-west-1.amazonaws.com":"rule","s3.us-west-1.amazonaws.com":"rule","s3-accesspoint.us-west-1.amazonaws.com":"rule","s3-accesspoint-fips.us-west-1.amazonaws.com":"rule","s3-fips.us-west-1.amazonaws.com":"rule","s3-object-lambda.us-west-1.amazonaws.com":"rule","s3-website.us-west-1.amazonaws.com":"rule","s3.dualstack.us-west-2.amazonaws.com":"rule","s3-accesspoint.dualstack.us-west-2.amazonaws.com":"rule","s3-accesspoint-fips.dualstack.us-west-2.amazonaws.com":"rule","s3-fips.dualstack.us-west-2.amazonaws.com":"rule","s3-website.dualstack.us-west-2.amazonaws.com":"rule","s3.us-west-2.amazonaws.com":"rule","s3-accesspoint.us-west-2.amazonaws.com":"rule","s3-accesspoint-fips.us-west-2.amazonaws.com":"rule","s3-deprecated.us-west-2.amazonaws.com":"rule","s3-fips.us-west-2.amazonaws.com":"rule","s3-object-lambda.us-west-2.amazonaws.com":"rule","s3-website.us-west-2.amazonaws.com":"rule","labeling.ap-northeast-1.sagemaker.aws":"rule","labeling.ap-northeast-2.sagemaker.aws":"rule","labeling.ap-south-1.sagemaker.aws":"rule","labeling.ap-southeast-1.sagemaker.aws":"rule","labeling.ap-southeast-2.sagemaker.aws":"rule","labeling.ca-central-1.sagemaker.aws":"rule","labeling.eu-central-1.sagemaker.aws":"rule","labeling.eu-west-1.sagemaker.aws":"rule","labeling.eu-west-2.sagemaker.aws":"rule","labeling.us-east-1.sagemaker.aws":"rule","labeling.us-east-2.sagemaker.aws":"rule","labeling.us-west-2.sagemaker.aws":"rule","notebook.af-south-1.sagemaker.aws":"rule","notebook.ap-east-1.sagemaker.aws":"rule","notebook.ap-northeast-1.sagemaker.aws":"rule","notebook.ap-northeast-2.sagemaker.aws":"rule","notebook.ap-northeast-3.sagemaker.aws":"rule","notebook.ap-south-1.sagemaker.aws":"rule","notebook.ap-south-2.sagemaker.aws":"rule","notebook.ap-southeast-1.sagemaker.aws":"rule","notebook.ap-southeast-2.sagemaker.aws":"rule","notebook.ap-southeast-3.sagemaker.aws":"rule","notebook.ap-southeast-4.sagemaker.aws":"rule","notebook.ca-central-1.sagemaker.aws":"rule","notebook-fips.ca-central-1.sagemaker.aws":"rule","notebook.ca-west-1.sagemaker.aws":"rule","notebook-fips.ca-west-1.sagemaker.aws":"rule","notebook.eu-central-1.sagemaker.aws":"rule","notebook.eu-central-2.sagemaker.aws":"rule","notebook.eu-north-1.sagemaker.aws":"rule","notebook.eu-south-1.sagemaker.aws":"rule","notebook.eu-south-2.sagemaker.aws":"rule","notebook.eu-west-1.sagemaker.aws":"rule","notebook.eu-west-2.sagemaker.aws":"rule","notebook.eu-west-3.sagemaker.aws":"rule","notebook.il-central-1.sagemaker.aws":"rule","notebook.me-central-1.sagemaker.aws":"rule","notebook.me-south-1.sagemaker.aws":"rule","notebook.sa-east-1.sagemaker.aws":"rule","notebook.us-east-1.sagemaker.aws":"rule","notebook-fips.us-east-1.sagemaker.aws":"rule","notebook.us-east-2.sagemaker.aws":"rule","notebook-fips.us-east-2.sagemaker.aws":"rule","notebook.us-gov-east-1.sagemaker.aws":"rule","notebook-fips.us-gov-east-1.sagemaker.aws":"rule","notebook.us-gov-west-1.sagemaker.aws":"rule","notebook-fips.us-gov-west-1.sagemaker.aws":"rule","notebook.us-west-1.sagemaker.aws":"rule","notebook-fips.us-west-1.sagemaker.aws":"rule","notebook.us-west-2.sagemaker.aws":"rule","notebook-fips.us-west-2.sagemaker.aws":"rule","notebook.cn-north-1.sagemaker.com.cn":"rule","notebook.cn-northwest-1.sagemaker.com.cn":"rule","studio.af-south-1.sagemaker.aws":"rule","studio.ap-east-1.sagemaker.aws":"rule","studio.ap-northeast-1.sagemaker.aws":"rule","studio.ap-northeast-2.sagemaker.aws":"rule","studio.ap-northeast-3.sagemaker.aws":"rule","studio.ap-south-1.sagemaker.aws":"rule","studio.ap-southeast-1.sagemaker.aws":"rule","studio.ap-southeast-2.sagemaker.aws":"rule","studio.ap-southeast-3.sagemaker.aws":"rule","studio.ca-central-1.sagemaker.aws":"rule","studio.eu-central-1.sagemaker.aws":"rule","studio.eu-central-2.sagemaker.aws":"rule","studio.eu-north-1.sagemaker.aws":"rule","studio.eu-south-1.sagemaker.aws":"rule","studio.eu-south-2.sagemaker.aws":"rule","studio.eu-west-1.sagemaker.aws":"rule","studio.eu-west-2.sagemaker.aws":"rule","studio.eu-west-3.sagemaker.aws":"rule","studio.il-central-1.sagemaker.aws":"rule","studio.me-central-1.sagemaker.aws":"rule","studio.me-south-1.sagemaker.aws":"rule","studio.sa-east-1.sagemaker.aws":"rule","studio.us-east-1.sagemaker.aws":"rule","studio.us-east-2.sagemaker.aws":"rule","studio.us-gov-east-1.sagemaker.aws":"rule","studio-fips.us-gov-east-1.sagemaker.aws":"rule","studio.us-gov-west-1.sagemaker.aws":"rule","studio-fips.us-gov-west-1.sagemaker.aws":"rule","studio.us-west-1.sagemaker.aws":"rule","studio.us-west-2.sagemaker.aws":"rule","studio.cn-north-1.sagemaker.com.cn":"rule","studio.cn-northwest-1.sagemaker.com.cn":"rule","experiments.sagemaker.aws":"wildcard","analytics-gateway.ap-northeast-1.amazonaws.com":"rule","analytics-gateway.ap-northeast-2.amazonaws.com":"rule","analytics-gateway.ap-south-1.amazonaws.com":"rule","analytics-gateway.ap-southeast-1.amazonaws.com":"rule","analytics-gateway.ap-southeast-2.amazonaws.com":"rule","analytics-gateway.eu-central-1.amazonaws.com":"rule","analytics-gateway.eu-west-1.amazonaws.com":"rule","analytics-gateway.us-east-1.amazonaws.com":"rule","analytics-gateway.us-east-2.amazonaws.com":"rule","analytics-gateway.us-west-2.amazonaws.com":"rule","amplifyapp.com":"rule","awsapprunner.com":"wildcard","webview-assets.aws-cloud9.af-south-1.amazonaws.com":"rule","vfs.cloud9.af-south-1.amazonaws.com":"rule","webview-assets.cloud9.af-south-1.amazonaws.com":"rule","webview-assets.aws-cloud9.ap-east-1.amazonaws.com":"rule","vfs.cloud9.ap-east-1.amazonaws.com":"rule","webview-assets.cloud9.ap-east-1.amazonaws.com":"rule","webview-assets.aws-cloud9.ap-northeast-1.amazonaws.com":"rule","vfs.cloud9.ap-northeast-1.amazonaws.com":"rule","webview-assets.cloud9.ap-northeast-1.amazonaws.com":"rule","webview-assets.aws-cloud9.ap-northeast-2.amazonaws.com":"rule","vfs.cloud9.ap-northeast-2.amazonaws.com":"rule","webview-assets.cloud9.ap-northeast-2.amazonaws.com":"rule","webview-assets.aws-cloud9.ap-northeast-3.amazonaws.com":"rule","vfs.cloud9.ap-northeast-3.amazonaws.com":"rule","webview-assets.cloud9.ap-northeast-3.amazonaws.com":"rule","webview-assets.aws-cloud9.ap-south-1.amazonaws.com":"rule","vfs.cloud9.ap-south-1.amazonaws.com":"rule","webview-assets.cloud9.ap-south-1.amazonaws.com":"rule","webview-assets.aws-cloud9.ap-southeast-1.amazonaws.com":"rule","vfs.cloud9.ap-southeast-1.amazonaws.com":"rule","webview-assets.cloud9.ap-southeast-1.amazonaws.com":"rule","webview-assets.aws-cloud9.ap-southeast-2.amazonaws.com":"rule","vfs.cloud9.ap-southeast-2.amazonaws.com":"rule","webview-assets.cloud9.ap-southeast-2.amazonaws.com":"rule","webview-assets.aws-cloud9.ca-central-1.amazonaws.com":"rule","vfs.cloud9.ca-central-1.amazonaws.com":"rule","webview-assets.cloud9.ca-central-1.amazonaws.com":"rule","webview-assets.aws-cloud9.eu-central-1.amazonaws.com":"rule","vfs.cloud9.eu-central-1.amazonaws.com":"rule","webview-assets.cloud9.eu-central-1.amazonaws.com":"rule","webview-assets.aws-cloud9.eu-north-1.amazonaws.com":"rule","vfs.cloud9.eu-north-1.amazonaws.com":"rule","webview-assets.cloud9.eu-north-1.amazonaws.com":"rule","webview-assets.aws-cloud9.eu-south-1.amazonaws.com":"rule","vfs.cloud9.eu-south-1.amazonaws.com":"rule","webview-assets.cloud9.eu-south-1.amazonaws.com":"rule","webview-assets.aws-cloud9.eu-west-1.amazonaws.com":"rule","vfs.cloud9.eu-west-1.amazonaws.com":"rule","webview-assets.cloud9.eu-west-1.amazonaws.com":"rule","webview-assets.aws-cloud9.eu-west-2.amazonaws.com":"rule","vfs.cloud9.eu-west-2.amazonaws.com":"rule","webview-assets.cloud9.eu-west-2.amazonaws.com":"rule","webview-assets.aws-cloud9.eu-west-3.amazonaws.com":"rule","vfs.cloud9.eu-west-3.amazonaws.com":"rule","webview-assets.cloud9.eu-west-3.amazonaws.com":"rule","webview-assets.aws-cloud9.il-central-1.amazonaws.com":"rule","vfs.cloud9.il-central-1.amazonaws.com":"rule","webview-assets.aws-cloud9.me-south-1.amazonaws.com":"rule","vfs.cloud9.me-south-1.amazonaws.com":"rule","webview-assets.cloud9.me-south-1.amazonaws.com":"rule","webview-assets.aws-cloud9.sa-east-1.amazonaws.com":"rule","vfs.cloud9.sa-east-1.amazonaws.com":"rule","webview-assets.cloud9.sa-east-1.amazonaws.com":"rule","webview-assets.aws-cloud9.us-east-1.amazonaws.com":"rule","vfs.cloud9.us-east-1.amazonaws.com":"rule","webview-assets.cloud9.us-east-1.amazonaws.com":"rule","webview-assets.aws-cloud9.us-east-2.amazonaws.com":"rule","vfs.cloud9.us-east-2.amazonaws.com":"rule","webview-assets.cloud9.us-east-2.amazonaws.com":"rule","webview-assets.aws-cloud9.us-west-1.amazonaws.com":"rule","vfs.cloud9.us-west-1.amazonaws.com":"rule","webview-assets.cloud9.us-west-1.amazonaws.com":"rule","webview-assets.aws-cloud9.us-west-2.amazonaws.com":"rule","vfs.cloud9.us-west-2.amazonaws.com":"rule","webview-assets.cloud9.us-west-2.amazonaws.com":"rule","awsapps.com":"rule","cn-north-1.eb.amazonaws.com.cn":"rule","cn-northwest-1.eb.amazonaws.com.cn":"rule","elasticbeanstalk.com":"rule","af-south-1.elasticbeanstalk.com":"rule","ap-east-1.elasticbeanstalk.com":"rule","ap-northeast-1.elasticbeanstalk.com":"rule","ap-northeast-2.elasticbeanstalk.com":"rule","ap-northeast-3.elasticbeanstalk.com":"rule","ap-south-1.elasticbeanstalk.com":"rule","ap-southeast-1.elasticbeanstalk.com":"rule","ap-southeast-2.elasticbeanstalk.com":"rule","ap-southeast-3.elasticbeanstalk.com":"rule","ap-southeast-5.elasticbeanstalk.com":"rule","ap-southeast-7.elasticbeanstalk.com":"rule","ca-central-1.elasticbeanstalk.com":"rule","eu-central-1.elasticbeanstalk.com":"rule","eu-north-1.elasticbeanstalk.com":"rule","eu-south-1.elasticbeanstalk.com":"rule","eu-south-2.elasticbeanstalk.com":"rule","eu-west-1.elasticbeanstalk.com":"rule","eu-west-2.elasticbeanstalk.com":"rule","eu-west-3.elasticbeanstalk.com":"rule","il-central-1.elasticbeanstalk.com":"rule","me-central-1.elasticbeanstalk.com":"rule","me-south-1.elasticbeanstalk.com":"rule","sa-east-1.elasticbeanstalk.com":"rule","us-east-1.elasticbeanstalk.com":"rule","us-east-2.elasticbeanstalk.com":"rule","us-gov-east-1.elasticbeanstalk.com":"rule","us-gov-west-1.elasticbeanstalk.com":"rule","us-west-1.elasticbeanstalk.com":"rule","us-west-2.elasticbeanstalk.com":"rule","elb.amazonaws.com.cn":"wildcard","elb.amazonaws.com":"wildcard","awsglobalaccelerator.com":"rule","lambda-url.af-south-1.on.aws":"rule","lambda-url.ap-east-1.on.aws":"rule","lambda-url.ap-northeast-1.on.aws":"rule","lambda-url.ap-northeast-2.on.aws":"rule","lambda-url.ap-northeast-3.on.aws":"rule","lambda-url.ap-south-1.on.aws":"rule","lambda-url.ap-southeast-1.on.aws":"rule","lambda-url.ap-southeast-2.on.aws":"rule","lambda-url.ap-southeast-3.on.aws":"rule","lambda-url.ca-central-1.on.aws":"rule","lambda-url.eu-central-1.on.aws":"rule","lambda-url.eu-north-1.on.aws":"rule","lambda-url.eu-south-1.on.aws":"rule","lambda-url.eu-west-1.on.aws":"rule","lambda-url.eu-west-2.on.aws":"rule","lambda-url.eu-west-3.on.aws":"rule","lambda-url.me-south-1.on.aws":"rule","lambda-url.sa-east-1.on.aws":"rule","lambda-url.us-east-1.on.aws":"rule","lambda-url.us-east-2.on.aws":"rule","lambda-url.us-west-1.on.aws":"rule","lambda-url.us-west-2.on.aws":"rule","private.repost.aws":"wildcard","transfer-webapp.af-south-1.on.aws":"rule","transfer-webapp.ap-east-1.on.aws":"rule","transfer-webapp.ap-northeast-1.on.aws":"rule","transfer-webapp.ap-northeast-2.on.aws":"rule","transfer-webapp.ap-northeast-3.on.aws":"rule","transfer-webapp.ap-south-1.on.aws":"rule","transfer-webapp.ap-south-2.on.aws":"rule","transfer-webapp.ap-southeast-1.on.aws":"rule","transfer-webapp.ap-southeast-2.on.aws":"rule","transfer-webapp.ap-southeast-3.on.aws":"rule","transfer-webapp.ap-southeast-4.on.aws":"rule","transfer-webapp.ap-southeast-5.on.aws":"rule","transfer-webapp.ap-southeast-7.on.aws":"rule","transfer-webapp.ca-central-1.on.aws":"rule","transfer-webapp.ca-west-1.on.aws":"rule","transfer-webapp.eu-central-1.on.aws":"rule","transfer-webapp.eu-central-2.on.aws":"rule","transfer-webapp.eu-north-1.on.aws":"rule","transfer-webapp.eu-south-1.on.aws":"rule","transfer-webapp.eu-south-2.on.aws":"rule","transfer-webapp.eu-west-1.on.aws":"rule","transfer-webapp.eu-west-2.on.aws":"rule","transfer-webapp.eu-west-3.on.aws":"rule","transfer-webapp.il-central-1.on.aws":"rule","transfer-webapp.me-central-1.on.aws":"rule","transfer-webapp.me-south-1.on.aws":"rule","transfer-webapp.mx-central-1.on.aws":"rule","transfer-webapp.sa-east-1.on.aws":"rule","transfer-webapp.us-east-1.on.aws":"rule","transfer-webapp.us-east-2.on.aws":"rule","transfer-webapp.us-gov-east-1.on.aws":"rule","transfer-webapp-fips.us-gov-east-1.on.aws":"rule","transfer-webapp.us-gov-west-1.on.aws":"rule","transfer-webapp-fips.us-gov-west-1.on.aws":"rule","transfer-webapp.us-west-1.on.aws":"rule","transfer-webapp.us-west-2.on.aws":"rule","transfer-webapp.cn-north-1.on.amazonwebservices.com.cn":"rule","transfer-webapp.cn-northwest-1.on.amazonwebservices.com.cn":"rule","eero.online":"rule","eero-stage.online":"rule","opentunnel.xyz":"rule","antagonist.cloud":"rule","claude.app":"rule","apigee.io":"rule","panel.dev":"rule","siiites.com":"rule","int.apple":"rule","cloud.int.apple":"wildcard","r.cloud.int.apple":"wildcard","ap-north-1.r.cloud.int.apple":"wildcard","ap-south-1.r.cloud.int.apple":"wildcard","ap-south-2.r.cloud.int.apple":"wildcard","eu-central-1.r.cloud.int.apple":"wildcard","eu-north-1.r.cloud.int.apple":"wildcard","us-central-1.r.cloud.int.apple":"wildcard","us-central-2.r.cloud.int.apple":"wildcard","us-east-1.r.cloud.int.apple":"wildcard","us-east-2.r.cloud.int.apple":"wildcard","us-west-1.r.cloud.int.apple":"wildcard","us-west-2.r.cloud.int.apple":"wildcard","us-west-3.r.cloud.int.apple":"wildcard","appspacehosted.com":"rule","appspaceusercontent.com":"rule","appudo.net":"rule","appwrite.global":"rule","appwrite.network":"rule","appwrite.run":"wildcard","on-aptible.com":"rule","f5.si":"rule","arvanedge.ir":"rule","user.aseinet.ne.jp":"rule","gv.vc":"rule","d.gv.vc":"rule","user.party.eus":"rule","pimienta.org":"rule","poivron.org":"rule","potager.org":"rule","sweetpepper.org":"rule","myasustor.com":"rule","atlassian-3p.com":"wildcard","atlassian-3p-us-gov-mod.com":"wildcard","atlassian-isolated-3p.com":"wildcard","cdn.prod.atlassian-dev.net":"rule","myfritz.link":"rule","myfritz.net":"rule","awdev.ca":"wildcard","advisor.ws":"wildcard","ecommerce-shop.pl":"rule","b-data.io":"rule","balena-devices.com":"rule","base.ec":"rule","official.ec":"rule","buyshop.jp":"rule","fashionstore.jp":"rule","handcrafted.jp":"rule","kawaiishop.jp":"rule","supersale.jp":"rule","theshop.jp":"rule","shopselect.net":"rule","base.shop":"rule","beagleboard.io":"rule","bearblog.dev":"rule","beget.app":"wildcard","begetcdn.cloud":"wildcard","pages.gay":"rule","bnr.la":"rule","bitbucket.io":"rule","blackbaudcdn.net":"rule","of.je":"rule","square.site":"rule","bluebite.io":"rule","boomla.net":"rule","boutir.com":"rule","boxfuse.io":"rule","square7.ch":"rule","bplaced.com":"rule","bplaced.de":"rule","square7.de":"rule","bplaced.net":"rule","square7.net":"rule","brave.app":"rule","s.brave.app":"wildcard","brave.dev":"rule","s.brave.dev":"wildcard","brave.io":"rule","s.brave.io":"wildcard","shop.brendly.ba":"rule","shop.brendly.hr":"rule","shop.brendly.rs":"rule","browsersafetymark.io":"rule","radio.am":"rule","radio.fm":"rule","cdn.bubble.io":"rule","bubbleapps.io":"rule","bwcloud-os-instance.de":"wildcard","cafjs.com":"rule","canva-apps.cn":"rule","my.canvasite.cn":"rule","khsj.cn":"rule","canva-apps.com":"rule","canva-hosted-embed.com":"rule","canvacode.com":"rule","rice-labs.com":"rule","canva.link":"rule","canva.run":"rule","my.canva.site":"rule","drr.ac":"rule","uwu.ai":"rule","carrd.co":"rule","crd.co":"rule","ju.mp":"rule","api.gov.uk":"rule","cdn77-storage.com":"rule","rsc.contentproxy9.cz":"rule","r.cdn77.net":"rule","cdn77-ssl.net":"rule","c.cdn77.org":"rule","rsc.cdn77.org":"rule","ssl.origin.cdn77-secure.org":"rule","za.bz":"rule","br.com":"rule","cn.com":"rule","de.com":"rule","eu.com":"rule","jpn.com":"rule","mex.com":"rule","ru.com":"rule","sa.com":"rule","uk.com":"rule","us.com":"rule","za.com":"rule","com.de":"rule","gb.net":"rule","hu.net":"rule","jp.net":"rule","se.net":"rule","uk.net":"rule","ae.org":"rule","com.se":"rule","cx.ua":"rule","discourse.diy":"rule","discourse.group":"rule","discourse.team":"rule","clerk.app":"rule","clerkstage.app":"rule","lcl.dev":"wildcard","lclstage.dev":"wildcard","stg.dev":"wildcard","stgstage.dev":"wildcard","cleverapps.cc":"rule","services.clever-cloud.com":"wildcard","cleverapps.io":"rule","cleverapps.tech":"rule","clickrising.net":"rule","cloudns.asia":"rule","cloudns.be":"rule","cloud-ip.biz":"rule","cloudns.biz":"rule","cloud-ip.cc":"rule","cloudns.cc":"rule","cloudns.ch":"rule","cloudns.cl":"rule","cloudns.club":"rule","abrdns.com":"rule","dnsabr.com":"rule","ip-ddns.com":"rule","cloudns.cx":"rule","cloudns.eu":"rule","cloudns.in":"rule","cloudns.info":"rule","ddns-ip.net":"rule","dns-cloud.net":"rule","dns-dynamic.net":"rule","cloudns.nz":"rule","cloudns.org":"rule","ip-dynamic.org":"rule","cloudns.ph":"rule","cloudns.pro":"rule","cloudns.pw":"rule","cloudns.us":"rule","c66.me":"rule","cloud66.ws":"rule","jdevcloud.com":"rule","wpdevcloud.com":"rule","cloudaccess.host":"rule","freesite.host":"rule","cloudaccess.net":"rule","cloudbeesusercontent.io":"rule","cloudera.site":"wildcard","cloudflare.app":"rule","cf-ipfs.com":"rule","cloudflare-ipfs.com":"rule","trycloudflare.com":"rule","pages.dev":"rule","r2.dev":"rule","workers.dev":"rule","cloudflare.net":"rule","cdn.cloudflare.net":"rule","cdn.cloudflareanycast.net":"rule","cdn.cloudflarecn.net":"rule","cdn.cloudflareglobal.net":"rule","cust.cloudscale.ch":"rule","objects.lpg.cloudscale.ch":"rule","objects.rma.cloudscale.ch":"rule","lpg.objectstorage.ch":"rule","rma.objectstorage.ch":"rule","wnext.app":"rule","cnpy.gdn":"rule","otap.co":"wildcard","co.ca":"rule","co.com":"rule","sch.ac":"rule","dev.cv":"rule","store.cv":"rule","codeberg.page":"rule","csb.app":"rule","preview.csb.app":"rule","co.nl":"rule","co.no":"rule","devinapps.com":"wildcard","webhosting.be":"rule","prvw.eu":"rule","hosting-cluster.nl":"rule","ctfcloud.net":"rule","convex.app":"rule","convex.cloud":"rule","eu-west-1.convex.cloud":"rule","us-east-1.convex.cloud":"rule","convex.site":"rule","eu-west-1.convex.site":"rule","us-east-1.convex.site":"rule","ac.ru":"rule","edu.ru":"rule","gov.ru":"rule","int.ru":"rule","mil.ru":"rule","corespeed.app":"rule","dyn.cosidns.de":"rule","dnsupdater.de":"rule","dynamisches-dns.de":"rule","internet-dns.de":"rule","l-o-g-i-n.de":"rule","dynamic-dns.info":"rule","feste-ip.net":"rule","knx-server.net":"rule","static-access.net":"rule","craft.me":"rule","realm.cz":"rule","cfolks.pl":"rule","cyon.link":"rule","cyon.site":"rule","biz.dk":"rule","co.dk":"rule","firm.dk":"rule","reg.dk":"rule","store.dk":"rule","dyndns.dappnode.io":"rule","builtwithdark.com":"rule","darklang.io":"rule","demo.datadetect.com":"rule","instance.datadetect.com":"rule","edgestack.me":"rule","dattolocal.com":"rule","dattorelay.com":"rule","dattoweb.com":"rule","mydatto.com":"rule","dattolocal.net":"rule","mydatto.net":"rule","ddnss.de":"rule","dyn.ddnss.de":"rule","dyndns.ddnss.de":"rule","dyn-ip24.de":"rule","dyndns1.de":"rule","home-webserver.de":"rule","dyn.home-webserver.de":"rule","myhome-server.de":"rule","ddnss.org":"rule","debian.net":"rule","definima.io":"rule","definima.net":"rule","deno.dev":"rule","deno-staging.dev":"rule","deno.net":"rule","sandbox.deno.net":"rule","deployagent.com":"rule","piebox.site":"rule","deployagent.space":"rule","dedyn.io":"rule","deuxfleurs.eu":"rule","deuxfleurs.page":"rule","at.ply.gg":"wildcard","d6.ply.gg":"rule","joinmc.link":"rule","playit.plus":"rule","at.playit.plus":"wildcard","with.playit.plus":"rule","icp0.io":"rule","raw.icp0.io":"wildcard","icp1.io":"rule","raw.icp1.io":"wildcard","icp.net":"wildcard","caffeine.site":"rule","caffeine.xyz":"rule","mybox.company":"rule","intouch.email":"rule","mybox.me":"rule","mybox.page":"rule","dfirma.pl":"rule","dkonto.pl":"rule","you2.pl":"rule","ondigitalocean.app":"rule","digitaloceanspaces.com":"wildcard","qzz.io":"rule","us.kg":"rule","xx.kg":"rule","dpdns.org":"rule","discordsays.com":"rule","discordsez.com":"rule","jozi.biz":"rule","ccwu.cc":"rule","cc.cd":"rule","us.ci":"rule","de5.net":"rule","dnshome.at":"rule","resolve.bar":"rule","ddns.berlin":"rule","dnshome.cloud":"rule","ddnssec.de":"rule","dnshome.de":"rule","dyndnssec.de":"rule","heimdns.de":"rule","srvdns.de":"rule","dnshome.eu":"rule","dnshome.it":"rule","dyn.now":"rule","heimdns.online":"rule","ddns.wtf":"rule","online.th":"rule","shop.th":"rule","co.scot":"rule","me.scot":"rule","org.scot":"rule","drayddns.com":"rule","shoparena.pl":"rule","dreamhosters.com":"rule","durumis.com":"rule","duckdns.org":"rule","dy.fi":"rule","tunk.org":"rule","dyndns.biz":"rule","for-better.biz":"rule","for-more.biz":"rule","for-some.biz":"rule","for-the.biz":"rule","selfip.biz":"rule","webhop.biz":"rule","ftpaccess.cc":"rule","game-server.cc":"rule","myphotos.cc":"rule","scrapping.cc":"rule","blogdns.com":"rule","cechire.com":"rule","dnsalias.com":"rule","dnsdojo.com":"rule","doesntexist.com":"rule","dontexist.com":"rule","doomdns.com":"rule","dyn-o-saur.com":"rule","dynalias.com":"rule","dyndns-at-home.com":"rule","dyndns-at-work.com":"rule","dyndns-blog.com":"rule","dyndns-free.com":"rule","dyndns-home.com":"rule","dyndns-ip.com":"rule","dyndns-mail.com":"rule","dyndns-office.com":"rule","dyndns-pics.com":"rule","dyndns-remote.com":"rule","dyndns-server.com":"rule","dyndns-web.com":"rule","dyndns-wiki.com":"rule","dyndns-work.com":"rule","est-a-la-maison.com":"rule","est-a-la-masion.com":"rule","est-le-patron.com":"rule","est-mon-blogueur.com":"rule","from-ak.com":"rule","from-al.com":"rule","from-ar.com":"rule","from-ca.com":"rule","from-ct.com":"rule","from-dc.com":"rule","from-de.com":"rule","from-fl.com":"rule","from-ga.com":"rule","from-hi.com":"rule","from-ia.com":"rule","from-id.com":"rule","from-il.com":"rule","from-in.com":"rule","from-ks.com":"rule","from-ky.com":"rule","from-ma.com":"rule","from-md.com":"rule","from-mi.com":"rule","from-mn.com":"rule","from-mo.com":"rule","from-ms.com":"rule","from-mt.com":"rule","from-nc.com":"rule","from-nd.com":"rule","from-ne.com":"rule","from-nh.com":"rule","from-nj.com":"rule","from-nm.com":"rule","from-nv.com":"rule","from-oh.com":"rule","from-ok.com":"rule","from-or.com":"rule","from-pa.com":"rule","from-pr.com":"rule","from-ri.com":"rule","from-sc.com":"rule","from-sd.com":"rule","from-tn.com":"rule","from-tx.com":"rule","from-ut.com":"rule","from-va.com":"rule","from-vt.com":"rule","from-wa.com":"rule","from-wi.com":"rule","from-wv.com":"rule","from-wy.com":"rule","getmyip.com":"rule","gotdns.com":"rule","hobby-site.com":"rule","homelinux.com":"rule","homeunix.com":"rule","iamallama.com":"rule","is-a-anarchist.com":"rule","is-a-blogger.com":"rule","is-a-bookkeeper.com":"rule","is-a-bulls-fan.com":"rule","is-a-caterer.com":"rule","is-a-chef.com":"rule","is-a-conservative.com":"rule","is-a-cpa.com":"rule","is-a-cubicle-slave.com":"rule","is-a-democrat.com":"rule","is-a-designer.com":"rule","is-a-doctor.com":"rule","is-a-financialadvisor.com":"rule","is-a-geek.com":"rule","is-a-green.com":"rule","is-a-guru.com":"rule","is-a-hard-worker.com":"rule","is-a-hunter.com":"rule","is-a-landscaper.com":"rule","is-a-lawyer.com":"rule","is-a-liberal.com":"rule","is-a-libertarian.com":"rule","is-a-llama.com":"rule","is-a-musician.com":"rule","is-a-nascarfan.com":"rule","is-a-nurse.com":"rule","is-a-painter.com":"rule","is-a-personaltrainer.com":"rule","is-a-photographer.com":"rule","is-a-player.com":"rule","is-a-republican.com":"rule","is-a-rockstar.com":"rule","is-a-socialist.com":"rule","is-a-student.com":"rule","is-a-teacher.com":"rule","is-a-techie.com":"rule","is-a-therapist.com":"rule","is-an-accountant.com":"rule","is-an-actor.com":"rule","is-an-actress.com":"rule","is-an-anarchist.com":"rule","is-an-artist.com":"rule","is-an-engineer.com":"rule","is-an-entertainer.com":"rule","is-certified.com":"rule","is-gone.com":"rule","is-into-anime.com":"rule","is-into-cars.com":"rule","is-into-cartoons.com":"rule","is-into-games.com":"rule","is-leet.com":"rule","is-not-certified.com":"rule","is-slick.com":"rule","is-uberleet.com":"rule","is-with-theband.com":"rule","isa-geek.com":"rule","isa-hockeynut.com":"rule","issmarterthanyou.com":"rule","likes-pie.com":"rule","likescandy.com":"rule","neat-url.com":"rule","saves-the-whales.com":"rule","selfip.com":"rule","sells-for-less.com":"rule","sells-for-u.com":"rule","servebbs.com":"rule","simple-url.com":"rule","space-to-rent.com":"rule","teaches-yoga.com":"rule","writesthisblog.com":"rule","ath.cx":"rule","fuettertdasnetz.de":"rule","isteingeek.de":"rule","istmein.de":"rule","lebtimnetz.de":"rule","leitungsen.de":"rule","traeumtgerade.de":"rule","barrel-of-knowledge.info":"rule","barrell-of-knowledge.info":"rule","dyndns.info":"rule","for-our.info":"rule","groks-the.info":"rule","groks-this.info":"rule","here-for-more.info":"rule","knowsitall.info":"rule","selfip.info":"rule","webhop.info":"rule","forgot.her.name":"rule","forgot.his.name":"rule","at-band-camp.net":"rule","blogdns.net":"rule","broke-it.net":"rule","buyshouses.net":"rule","dnsalias.net":"rule","dnsdojo.net":"rule","does-it.net":"rule","dontexist.net":"rule","dynalias.net":"rule","dynathome.net":"rule","endofinternet.net":"rule","from-az.net":"rule","from-co.net":"rule","from-la.net":"rule","from-ny.net":"rule","gets-it.net":"rule","ham-radio-op.net":"rule","homeftp.net":"rule","homeip.net":"rule","homelinux.net":"rule","homeunix.net":"rule","in-the-band.net":"rule","is-a-chef.net":"rule","is-a-geek.net":"rule","isa-geek.net":"rule","kicks-ass.net":"rule","office-on-the.net":"rule","podzone.net":"rule","scrapper-site.net":"rule","selfip.net":"rule","sells-it.net":"rule","servebbs.net":"rule","serveftp.net":"rule","thruhere.net":"rule","webhop.net":"rule","merseine.nu":"rule","mine.nu":"rule","shacknet.nu":"rule","blogdns.org":"rule","blogsite.org":"rule","boldlygoingnowhere.org":"rule","dnsalias.org":"rule","dnsdojo.org":"rule","doesntexist.org":"rule","dontexist.org":"rule","doomdns.org":"rule","dvrdns.org":"rule","dynalias.org":"rule","dyndns.org":"rule","go.dyndns.org":"rule","home.dyndns.org":"rule","endofinternet.org":"rule","endoftheinternet.org":"rule","from-me.org":"rule","game-host.org":"rule","gotdns.org":"rule","hobby-site.org":"rule","homedns.org":"rule","homeftp.org":"rule","homelinux.org":"rule","homeunix.org":"rule","is-a-bruinsfan.org":"rule","is-a-candidate.org":"rule","is-a-celticsfan.org":"rule","is-a-chef.org":"rule","is-a-geek.org":"rule","is-a-knight.org":"rule","is-a-linux-user.org":"rule","is-a-patsfan.org":"rule","is-a-soxfan.org":"rule","is-found.org":"rule","is-lost.org":"rule","is-saved.org":"rule","is-very-bad.org":"rule","is-very-evil.org":"rule","is-very-good.org":"rule","is-very-nice.org":"rule","is-very-sweet.org":"rule","isa-geek.org":"rule","kicks-ass.org":"rule","misconfused.org":"rule","podzone.org":"rule","readmyblog.org":"rule","selfip.org":"rule","sellsyourhome.org":"rule","servebbs.org":"rule","serveftp.org":"rule","servegame.org":"rule","stuff-4-sale.org":"rule","webhop.org":"rule","better-than.tv":"rule","dyndns.tv":"rule","on-the-web.tv":"rule","worse-than.tv":"rule","is-by.us":"rule","land-4-sale.us":"rule","stuff-4-sale.us":"rule","dyndns.ws":"rule","mypets.ws":"rule","1cooldns.com":"rule","bumbleshrimp.com":"rule","ddnsfree.com":"rule","ddnsgeek.com":"rule","ddnsguru.com":"rule","dynuddns.com":"rule","dynuhosting.com":"rule","giize.com":"rule","gleeze.com":"rule","kozow.com":"rule","loseyourip.com":"rule","ooguy.com":"rule","pivohosting.com":"rule","theworkpc.com":"rule","wiredbladehosting.com":"rule","casacam.net":"rule","dynu.net":"rule","dynuddns.net":"rule","mysynology.net":"rule","opik.net":"rule","spryt.net":"rule","accesscam.org":"rule","camdvr.org":"rule","freeddns.org":"rule","mywire.org":"rule","roxa.org":"rule","webredirect.org":"rule","myddns.rocks":"rule","dynv6.net":"rule","e4.cz":"rule","easypanel.app":"rule","easypanel.host":"rule","ewp.live":"wildcard","twmail.cc":"rule","twmail.net":"rule","twmail.org":"rule","mymailer.com.tw":"rule","url.tw":"rule","at.emf.camp":"rule","rt.ht":"rule","elementor.cloud":"rule","elementor.cool":"rule","emergent.cloud":"rule","preview.emergentagent.com":"rule","emergent.host":"rule","mytuleap.com":"rule","tuleap-partners.com":"rule","encr.app":"rule","frontend.encr.app":"rule","encoreapi.com":"rule","lp.dev":"rule","api.lp.dev":"rule","objects.lp.dev":"rule","eu.encoway.cloud":"rule","eu.org":"rule","al.eu.org":"rule","asso.eu.org":"rule","at.eu.org":"rule","au.eu.org":"rule","be.eu.org":"rule","bg.eu.org":"rule","ca.eu.org":"rule","cd.eu.org":"rule","ch.eu.org":"rule","cn.eu.org":"rule","cy.eu.org":"rule","cz.eu.org":"rule","de.eu.org":"rule","dk.eu.org":"rule","edu.eu.org":"rule","ee.eu.org":"rule","es.eu.org":"rule","fi.eu.org":"rule","fr.eu.org":"rule","gr.eu.org":"rule","hr.eu.org":"rule","hu.eu.org":"rule","ie.eu.org":"rule","il.eu.org":"rule","in.eu.org":"rule","int.eu.org":"rule","is.eu.org":"rule","it.eu.org":"rule","jp.eu.org":"rule","kr.eu.org":"rule","lt.eu.org":"rule","lu.eu.org":"rule","lv.eu.org":"rule","me.eu.org":"rule","mk.eu.org":"rule","mt.eu.org":"rule","my.eu.org":"rule","net.eu.org":"rule","ng.eu.org":"rule","nl.eu.org":"rule","no.eu.org":"rule","nz.eu.org":"rule","pl.eu.org":"rule","pt.eu.org":"rule","ro.eu.org":"rule","ru.eu.org":"rule","se.eu.org":"rule","si.eu.org":"rule","sk.eu.org":"rule","tr.eu.org":"rule","uk.eu.org":"rule","us.eu.org":"rule","eurodir.ru":"rule","eu-1.evennode.com":"rule","eu-2.evennode.com":"rule","eu-3.evennode.com":"rule","eu-4.evennode.com":"rule","us-1.evennode.com":"rule","us-2.evennode.com":"rule","us-3.evennode.com":"rule","us-4.evennode.com":"rule","relay.evervault.app":"rule","relay.evervault.dev":"rule","exe.xyz":"rule","expo.app":"rule","on.expo.app":"rule","staging.expo.app":"rule","on.staging.expo.app":"rule","fspages.org":"rule","ru.net":"rule","adygeya.ru":"rule","bashkiria.ru":"rule","bir.ru":"rule","cbg.ru":"rule","com.ru":"rule","dagestan.ru":"rule","grozny.ru":"rule","kalmykia.ru":"rule","kustanai.ru":"rule","marine.ru":"rule","mordovia.ru":"rule","msk.ru":"rule","mytis.ru":"rule","nalchik.ru":"rule","nov.ru":"rule","pyatigorsk.ru":"rule","spb.ru":"rule","vladikavkaz.ru":"rule","vladimir.ru":"rule","abkhazia.su":"rule","adygeya.su":"rule","aktyubinsk.su":"rule","arkhangelsk.su":"rule","armenia.su":"rule","ashgabad.su":"rule","azerbaijan.su":"rule","balashov.su":"rule","bashkiria.su":"rule","bryansk.su":"rule","bukhara.su":"rule","chimkent.su":"rule","dagestan.su":"rule","east-kazakhstan.su":"rule","exnet.su":"rule","georgia.su":"rule","grozny.su":"rule","ivanovo.su":"rule","jambyl.su":"rule","kalmykia.su":"rule","kaluga.su":"rule","karacol.su":"rule","karaganda.su":"rule","karelia.su":"rule","khakassia.su":"rule","krasnodar.su":"rule","kurgan.su":"rule","kustanai.su":"rule","lenug.su":"rule","mangyshlak.su":"rule","mordovia.su":"rule","msk.su":"rule","murmansk.su":"rule","nalchik.su":"rule","navoi.su":"rule","north-kazakhstan.su":"rule","nov.su":"rule","obninsk.su":"rule","penza.su":"rule","pokrovsk.su":"rule","sochi.su":"rule","spb.su":"rule","tashkent.su":"rule","termez.su":"rule","togliatti.su":"rule","troitsk.su":"rule","tselinograd.su":"rule","tula.su":"rule","tuva.su":"rule","vladikavkaz.su":"rule","vladimir.su":"rule","vologda.su":"rule","channelsdvr.net":"rule","u.channelsdvr.net":"rule","edgecompute.app":"rule","fastly-edge.com":"rule","fastly-terrarium.com":"rule","freetls.fastly.net":"rule","map.fastly.net":"rule","a.prod.fastly.net":"rule","global.prod.fastly.net":"rule","a.ssl.fastly.net":"rule","b.ssl.fastly.net":"rule","global.ssl.fastly.net":"rule","fastlylb.net":"rule","map.fastlylb.net":"rule","user.fm":"wildcard","fastvps-server.com":"rule","fastvps.host":"rule","myfast.host":"rule","fastvps.site":"rule","myfast.space":"rule","conn.uk":"rule","copro.uk":"rule","hosp.uk":"rule","fedorainfracloud.org":"rule","fedorapeople.org":"rule","cloud.fedoraproject.org":"rule","app.os.fedoraproject.org":"rule","app.os.stg.fedoraproject.org":"rule","mydobiss.com":"rule","fh-muenster.io":"rule","payload.dev":"rule","figma.site":"rule","figma-gov.site":"rule","preview.site":"rule","filegear.me":"rule","firebaseapp.com":"rule","fldrv.com":"rule","on-fleek.app":"rule","flutterflow.app":"rule","sprites.app":"rule","fly.dev":"rule","e2b.app":"rule","framer.ai":"rule","framer.app":"rule","framercanvas.com":"rule","framer.media":"rule","framer.photos":"rule","framer.website":"rule","framer.wiki":"rule","0e.vc":"wildcard","freebox-os.com":"rule","freeboxos.com":"rule","fbx-os.fr":"rule","fbxos.fr":"rule","freebox-os.fr":"rule","freeboxos.fr":"rule","freedesktop.org":"rule","freemyip.com":"rule","frusky.de":"wildcard","wien.funkfeuer.at":"rule","daemon.asia":"rule","dix.asia":"rule","mydns.bz":"rule","0am.jp":"rule","0g0.jp":"rule","0j0.jp":"rule","0t0.jp":"rule","mydns.jp":"rule","pgw.jp":"rule","wjg.jp":"rule","keyword-on.net":"rule","live-on.net":"rule","server-on.net":"rule","mydns.tw":"rule","mydns.vc":"rule","futurecms.at":"wildcard","ex.futurecms.at":"wildcard","in.futurecms.at":"wildcard","futurehosting.at":"rule","futuremailing.at":"rule","ex.ortsinfo.at":"wildcard","kunden.ortsinfo.at":"wildcard","statics.cloud":"wildcard","gadget.app":"rule","gadget.host":"rule","aliases121.com":"rule","campaign.gov.uk":"rule","service.gov.uk":"rule","independent-commission.uk":"rule","independent-inquest.uk":"rule","independent-inquiry.uk":"rule","independent-panel.uk":"rule","independent-review.uk":"rule","public-inquiry.uk":"rule","royal-commission.uk":"rule","gehirn.ne.jp":"rule","usercontent.jp":"rule","gentapps.com":"rule","gentlentapis.com":"rule","cdn-edges.net":"rule","gsj.bz":"rule","gitbook.io":"rule","github.app":"rule","githubusercontent.com":"rule","githubpreview.dev":"rule","github.io":"rule","gitlab.io":"rule","gitapp.si":"rule","gitpage.si":"rule","nog.community":"rule","co.ro":"rule","shop.ro":"rule","lolipop.io":"rule","angry.jp":"rule","babyblue.jp":"rule","babymilk.jp":"rule","backdrop.jp":"rule","bambina.jp":"rule","bitter.jp":"rule","blush.jp":"rule","boo.jp":"rule","boy.jp":"rule","boyfriend.jp":"rule","but.jp":"rule","candypop.jp":"rule","capoo.jp":"rule","catfood.jp":"rule","cheap.jp":"rule","chicappa.jp":"rule","chillout.jp":"rule","chips.jp":"rule","chowder.jp":"rule","chu.jp":"rule","ciao.jp":"rule","cocotte.jp":"rule","coolblog.jp":"rule","cranky.jp":"rule","cutegirl.jp":"rule","daa.jp":"rule","deca.jp":"rule","deci.jp":"rule","digick.jp":"rule","egoism.jp":"rule","fakefur.jp":"rule","fem.jp":"rule","flier.jp":"rule","floppy.jp":"rule","fool.jp":"rule","frenchkiss.jp":"rule","girlfriend.jp":"rule","girly.jp":"rule","gloomy.jp":"rule","gonna.jp":"rule","greater.jp":"rule","hacca.jp":"rule","heavy.jp":"rule","her.jp":"rule","hiho.jp":"rule","hippy.jp":"rule","holy.jp":"rule","hungry.jp":"rule","icurus.jp":"rule","itigo.jp":"rule","jellybean.jp":"rule","kikirara.jp":"rule","kill.jp":"rule","kilo.jp":"rule","kuron.jp":"rule","littlestar.jp":"rule","lolipopmc.jp":"rule","lolitapunk.jp":"rule","lomo.jp":"rule","lovepop.jp":"rule","lovesick.jp":"rule","main.jp":"rule","mods.jp":"rule","mond.jp":"rule","mongolian.jp":"rule","moo.jp":"rule","namaste.jp":"rule","nikita.jp":"rule","nobushi.jp":"rule","noor.jp":"rule","oops.jp":"rule","parallel.jp":"rule","parasite.jp":"rule","pecori.jp":"rule","peewee.jp":"rule","penne.jp":"rule","pepper.jp":"rule","perma.jp":"rule","pigboat.jp":"rule","pinoko.jp":"rule","punyu.jp":"rule","pupu.jp":"rule","pussycat.jp":"rule","pya.jp":"rule","raindrop.jp":"rule","readymade.jp":"rule","sadist.jp":"rule","schoolbus.jp":"rule","secret.jp":"rule","staba.jp":"rule","stripper.jp":"rule","sub.jp":"rule","sunnyday.jp":"rule","thick.jp":"rule","tonkotsu.jp":"rule","under.jp":"rule","upper.jp":"rule","velvet.jp":"rule","verse.jp":"rule","versus.jp":"rule","vivian.jp":"rule","watson.jp":"rule","weblike.jp":"rule","whitesnow.jp":"rule","zombie.jp":"rule","heteml.net":"rule","vibehost.space":"rule","graphic.design":"rule","goip.de":"rule","hosted.app":"wildcard","run.app":"wildcard","mtls.run.app":"wildcard","web.app":"rule","0emm.com":"wildcard","appspot.com":"rule","r.appspot.com":"wildcard","blogspot.com":"rule","codespot.com":"rule","googleapis.com":"rule","googlecode.com":"rule","pagespeedmobilizer.com":"rule","withgoogle.com":"rule","withyoutube.com":"rule","gateway.dev":"wildcard","cloud.goog":"rule","translate.goog":"rule","usercontent.goog":"wildcard","cloudfunctions.net":"rule","goupile.fr":"rule","pymnt.uk":"rule","gov.nl":"rule","grafana-dev.net":"rule","grayjayleagues.com":"rule","grebedoc.dev":"rule","günstigbestellen.de":"rule","günstigliefern.de":"rule","gv.uy":"rule","hackclub.app":"rule","häkkinen.fi":"rule","hashbang.sh":"rule","hasura.app":"rule","hasura-app.io":"rule","hatenablog.com":"rule","hatenadiary.com":"rule","hateblo.jp":"rule","hatenablog.jp":"rule","hatenadiary.jp":"rule","hatenadiary.org":"rule","pages.it.hs-heilbronn.de":"rule","pages-research.it.hs-heilbronn.de":"rule","heiyu.space":"rule","helioho.st":"rule","heliohost.us":"rule","hepforge.org":"rule","onhercules.app":"rule","hercules-app.com":"rule","hercules-dev.com":"rule","herokuapp.com":"rule","heyflow.page":"rule","heyflow.site":"rule","ravendb.cloud":"rule","ravendb.community":"rule","development.run":"rule","ravendb.run":"rule","hidns.co":"rule","hidns.vip":"rule","homesklep.pl":"rule","kin.one":"wildcard","id.pub":"wildcard","kin.pub":"wildcard","seprox.hooc.me":"rule","hoplix.shop":"rule","orx.biz":"rule","biz.ng":"rule","co.biz.ng":"rule","dl.biz.ng":"rule","go.biz.ng":"rule","lg.biz.ng":"rule","on.biz.ng":"rule","col.ng":"rule","firm.ng":"rule","gen.ng":"rule","ltd.ng":"rule","ngo.ng":"rule","plc.ng":"rule","hstgr.cloud":"rule","hostyhosting.io":"rule","hf.space":"rule","static.hf.space":"rule","hypernode.io":"rule","iobb.net":"rule","co.cz":"rule","moonscale.io":"wildcard","moonscale.net":"rule","gr.com":"rule","iki.fi":"rule","ibxos.it":"rule","iliadboxos.it":"rule","imagine.diy":"rule","imagine-proxy.work":"rule","smushcdn.com":"rule","wphostedmail.com":"rule","wpmucdn.com":"rule","tempurl.host":"rule","wpmudev.host":"rule","dyn-berlin.de":"rule","in-berlin.de":"rule","in-brb.de":"rule","in-butter.de":"rule","in-dsl.de":"rule","in-vpn.de":"rule","in-dsl.net":"rule","in-vpn.net":"rule","in-dsl.org":"rule","in-vpn.org":"rule","oninferno.net":"rule","info.cx":"rule","ac.leg.br":"rule","al.leg.br":"rule","am.leg.br":"rule","ap.leg.br":"rule","ba.leg.br":"rule","ce.leg.br":"rule","df.leg.br":"rule","es.leg.br":"rule","go.leg.br":"rule","ma.leg.br":"rule","mg.leg.br":"rule","ms.leg.br":"rule","mt.leg.br":"rule","pa.leg.br":"rule","pb.leg.br":"rule","pe.leg.br":"rule","pi.leg.br":"rule","pr.leg.br":"rule","rj.leg.br":"rule","rn.leg.br":"rule","ro.leg.br":"rule","rr.leg.br":"rule","rs.leg.br":"rule","sc.leg.br":"rule","se.leg.br":"rule","sp.leg.br":"rule","to.leg.br":"rule","pixolino.com":"rule","na4u.ru":"rule","botdash.app":"rule","botdash.dev":"rule","botdash.gg":"rule","botdash.net":"rule","botda.sh":"rule","botdash.xyz":"rule","apps-1and1.com":"rule","live-website.com":"rule","webspace-host.com":"rule","apps-1and1.net":"rule","websitebuilder.online":"rule","app-ionos.space":"rule","iopsys.se":"rule","inbrowser.dev":"wildcard","dweb.link":"wildcard","inbrowser.link":"wildcard","ipifony.net":"rule","home64.de":"rule","ipv64.de":"rule","ipv64.net":"rule","ir.md":"rule","is-a-good.dev":"rule","iservschule.de":"rule","mein-iserv.de":"rule","schuldock.de":"rule","schulplattform.de":"rule","schulserver.de":"rule","test-iserv.de":"rule","iserv.dev":"rule","iserv.host":"rule","ispmanager.name":"rule","mel.cloudlets.com.au":"rule","cloud.interhostsolutions.be":"rule","alp1.ae.flow.ch":"rule","appengine.flow.ch":"rule","es-1.axarnet.cloud":"rule","diadem.cloud":"rule","vip.jelastic.cloud":"rule","jele.cloud":"rule","it1.eur.aruba.jenv-aruba.cloud":"rule","it1.jenv-aruba.cloud":"rule","keliweb.cloud":"rule","cs.keliweb.cloud":"rule","oxa.cloud":"rule","tn.oxa.cloud":"rule","uk.oxa.cloud":"rule","primetel.cloud":"rule","uk.primetel.cloud":"rule","ca.reclaim.cloud":"rule","uk.reclaim.cloud":"rule","us.reclaim.cloud":"rule","ch.trendhosting.cloud":"rule","de.trendhosting.cloud":"rule","jele.club":"rule","dopaas.com":"rule","paas.hosted-by-previder.com":"rule","rag-cloud.hosteur.com":"rule","rag-cloud-ch.hosteur.com":"rule","jcloud.ik-server.com":"rule","jcloud-ver-jpc.ik-server.com":"rule","demo.jelastic.com":"rule","paas.massivegrid.com":"rule","jed.wafaicloud.com":"rule","ryd.wafaicloud.com":"rule","j.scaleforce.com.cy":"rule","jelastic.dogado.eu":"rule","fi.cloudplatform.fi":"rule","demo.datacenter.fi":"rule","paas.datacenter.fi":"rule","jele.host":"rule","mircloud.host":"rule","paas.beebyte.io":"rule","sekd1.beebyteapp.io":"rule","jele.io":"rule","jc.neen.it":"rule","jcloud.kz":"rule","cloudjiffy.net":"rule","fra1-de.cloudjiffy.net":"rule","west1-us.cloudjiffy.net":"rule","jls-sto1.elastx.net":"rule","jls-sto2.elastx.net":"rule","jls-sto3.elastx.net":"rule","fr-1.paas.massivegrid.net":"rule","lon-1.paas.massivegrid.net":"rule","lon-2.paas.massivegrid.net":"rule","ny-1.paas.massivegrid.net":"rule","ny-2.paas.massivegrid.net":"rule","sg-1.paas.massivegrid.net":"rule","jelastic.saveincloud.net":"rule","nordeste-idc.saveincloud.net":"rule","j.scaleforce.net":"rule","sdscloud.pl":"rule","unicloud.pl":"rule","mircloud.ru":"rule","enscaled.sg":"rule","jele.site":"rule","jelastic.team":"rule","orangecloud.tn":"rule","j.layershift.co.uk":"rule","phx.enscaled.us":"rule","mircloud.us":"rule","myjino.ru":"rule","hosting.myjino.ru":"wildcard","landing.myjino.ru":"wildcard","spectrum.myjino.ru":"wildcard","vps.myjino.ru":"wildcard","jote.cloud":"rule","jotelulu.cloud":"rule","eu1-plenit.com":"rule","la1-plenit.com":"rule","us1-plenit.com":"rule","webadorsite.com":"rule","jouwweb.site":"rule","js.org":"rule","elastic.k2.cloud":"rule","lb.ru-msk.k2.cloud":"rule","s3.ru-msk.k2.cloud":"rule","website.ru-msk.k2.cloud":"rule","lb.ru-spb.k2.cloud":"rule","s3.ru-spb.k2.cloud":"rule","website.ru-spb.k2.cloud":"rule","s3.k2.cloud":"rule","website.k2.cloud":"rule","kaas.gg":"rule","khplay.nl":"rule","kapsi.fi":"rule","kdns.fr":"rule","ezproxy.kuleuven.be":"rule","kuleuven.cloud":"rule","keenetic.io":"rule","keenetic.link":"rule","keenetic.name":"rule","keenetic.pro":"rule","ae.kg":"rule","keymachine.de":"rule","kiloapps.ai":"rule","kiloapps.io":"rule","kinghost.net":"rule","uni5.net":"rule","knightpoint.systems":"rule","koobin.events":"rule","webthings.io":"rule","krellian.net":"rule","oya.to":"rule","co.de":"rule","shiptoday.app":"rule","shiptoday.build":"rule","laravel.cloud":"rule","on-forge.com":"rule","on-vapor.com":"rule","git-repos.de":"rule","lcube-server.de":"rule","svn-repos.de":"rule","leadpages.co":"rule","lpages.co":"rule","lpusercontent.com":"rule","leapcell.app":"rule","leapcell.dev":"rule","leapcell.online":"rule","liara.run":"rule","iran.liara.run":"rule","libp2p.direct":"rule","runcontainers.dev":"rule","co.business":"rule","co.education":"rule","co.events":"rule","co.financial":"rule","co.network":"rule","co.place":"rule","co.technology":"rule","linkyard-cloud.ch":"rule","linkyard.cloud":"rule","members.linode.com":"rule","nodebalancer.linode.com":"wildcard","linodeobjects.com":"wildcard","ip.linodeusercontent.com":"rule","we.bs":"rule","filegear-sg.me":"rule","ggff.net":"rule","user.localcert.dev":"wildcard","localtonet.com":"rule","localto.net":"wildcard","lodz.pl":"rule","pabianice.pl":"rule","plock.pl":"rule","sieradz.pl":"rule","skierniewice.pl":"rule","zgierz.pl":"rule","loginline.app":"rule","loginline.dev":"rule","loginline.io":"rule","loginline.services":"rule","loginline.site":"rule","lohmus.me":"rule","lovable.app":"rule","lovableproject.com":"rule","lovable.run":"rule","lovable.sh":"rule","krasnik.pl":"rule","leczna.pl":"rule","lubartow.pl":"rule","lublin.pl":"rule","poniatowa.pl":"rule","swidnik.pl":"rule","glug.org.uk":"rule","lug.org.uk":"rule","lugs.org.uk":"rule","barsy.bg":"rule","barsy.club":"rule","barsycenter.com":"rule","barsyonline.com":"rule","barsy.de":"rule","barsy.dev":"rule","barsy.eu":"rule","barsy.gr":"rule","barsy.in":"rule","barsy.info":"rule","barsy.io":"rule","barsy.me":"rule","barsy.menu":"rule","barsyonline.menu":"rule","barsy.mobi":"rule","barsy.net":"rule","barsy.online":"rule","barsy.org":"rule","barsy.pro":"rule","barsy.pub":"rule","barsy.ro":"rule","barsy.rs":"rule","barsy.shop":"rule","barsyonline.shop":"rule","barsy.site":"rule","barsy.store":"rule","barsy.support":"rule","barsy.uk":"rule","barsy.co.uk":"rule","barsyonline.co.uk":"rule","lutrausercontent.com":"wildcard","luyani.app":"rule","luyani.net":"rule","magentosite.cloud":"wildcard","magicpatterns.app":"rule","magicpatternsapp.com":"rule","hb.cldmail.ru":"rule","matlab.cloud":"rule","modelscape.com":"rule","mwcloudnonprod.com":"rule","polyspace.com":"rule","mayfirst.info":"rule","mcdir.me":"rule","mcdir.ru":"rule","vps.mcdir.ru":"rule","mcpre.ru":"rule","mediatech.by":"rule","mediatech.dev":"rule","hra.health":"rule","medusajs.app":"rule","miniserver.com":"rule","memset.net":"rule","messerli.app":"rule","atmeta.com":"rule","apps.fbsbx.com":"rule","metaaiusercontent.com":"wildcard","cloud.metacentrum.cz":"wildcard","custom.metacentrum.cz":"rule","flt.cloud.muni.cz":"rule","usr.cloud.muni.cz":"rule","meteorapp.com":"rule","eu.meteorapp.com":"rule","co.pl":"rule","azurecontainer.io":"wildcard","azure-api.net":"rule","azure-mobile.net":"rule","azureedge.net":"rule","azurefd.net":"rule","azurestaticapps.net":"rule","1.azurestaticapps.net":"rule","2.azurestaticapps.net":"rule","3.azurestaticapps.net":"rule","4.azurestaticapps.net":"rule","5.azurestaticapps.net":"rule","6.azurestaticapps.net":"rule","7.azurestaticapps.net":"rule","centralus.azurestaticapps.net":"rule","eastasia.azurestaticapps.net":"rule","eastus2.azurestaticapps.net":"rule","westeurope.azurestaticapps.net":"rule","westus2.azurestaticapps.net":"rule","azurewebsites.net":"rule","cloudapp.net":"rule","trafficmanager.net":"rule","blob.core.usgovcloudapi.net":"rule","file.core.usgovcloudapi.net":"rule","web.core.usgovcloudapi.net":"rule","servicebus.usgovcloudapi.net":"rule","usgovcloudapp.net":"rule","usgovtrafficmanager.net":"rule","blob.core.windows.net":"rule","file.core.windows.net":"rule","web.core.windows.net":"rule","servicebus.windows.net":"rule","azure-api.us":"rule","azurewebsites.us":"rule","routingthecloud.com":"rule","sn.mynetname.net":"rule","routingthecloud.net":"rule","routingthecloud.org":"rule","same-app.com":"rule","same-preview.com":"rule","csx.cc":"rule","miren.app":"rule","miren.systems":"rule","mydbserver.com":"rule","webspaceconfig.de":"rule","mittwald.info":"rule","mittwaldserver.info":"rule","typo3server.info":"rule","project.space":"rule","mkm.fan":"rule","mocha.app":"rule","mochausercontent.com":"rule","mocha-sandbox.dev":"rule","modx.dev":"rule","bmoattachments.org":"rule","net.ru":"rule","org.ru":"rule","pp.ru":"rule","my.be":"rule","hostedpi.com":"rule","caracal.mythic-beasts.com":"rule","customer.mythic-beasts.com":"rule","fentiger.mythic-beasts.com":"rule","lynx.mythic-beasts.com":"rule","ocelot.mythic-beasts.com":"rule","oncilla.mythic-beasts.com":"rule","onza.mythic-beasts.com":"rule","sphinx.mythic-beasts.com":"rule","vs.mythic-beasts.com":"rule","x.mythic-beasts.com":"rule","yali.mythic-beasts.com":"rule","cust.retrosnub.co.uk":"rule","ui.nabu.casa":"rule","needle.run":"rule","co.site":"rule","cloud.nospamproxy.com":"rule","o365.cloud.nospamproxy.com":"rule","netlib.re":"rule","netlify.app":"rule","4u.com":"rule","nfshost.com":"rule","ipfs.nftstorage.link":"rule","ngo.us":"rule","ngrok.app":"rule","ngrok-free.app":"rule","ngrok.dev":"rule","ngrok-free.dev":"rule","ngrok.io":"rule","ap.ngrok.io":"rule","au.ngrok.io":"rule","eu.ngrok.io":"rule","in.ngrok.io":"rule","jp.ngrok.io":"rule","sa.ngrok.io":"rule","us.ngrok.io":"rule","ngrok.pizza":"rule","ngrok.pro":"rule","torun.pl":"rule","nh-serv.co.uk":"rule","nimsite.uk":"rule","mmafan.biz":"rule","myftp.biz":"rule","no-ip.biz":"rule","no-ip.ca":"rule","fantasyleague.cc":"rule","gotdns.ch":"rule","3utilities.com":"rule","blogsyte.com":"rule","ciscofreak.com":"rule","damnserver.com":"rule","ddnsking.com":"rule","ditchyourip.com":"rule","dnsiskinky.com":"rule","dynns.com":"rule","geekgalaxy.com":"rule","health-carereform.com":"rule","homesecuritymac.com":"rule","homesecuritypc.com":"rule","myactivedirectory.com":"rule","mysecuritycamera.com":"rule","myvnc.com":"rule","net-freaks.com":"rule","onthewifi.com":"rule","point2this.com":"rule","quicksytes.com":"rule","securitytactics.com":"rule","servebeer.com":"rule","servecounterstrike.com":"rule","serveexchange.com":"rule","serveftp.com":"rule","servegame.com":"rule","servehalflife.com":"rule","servehttp.com":"rule","servehumour.com":"rule","serveirc.com":"rule","servemp3.com":"rule","servep2p.com":"rule","servepics.com":"rule","servequake.com":"rule","servesarcasm.com":"rule","stufftoread.com":"rule","unusualperson.com":"rule","workisboring.com":"rule","dvrcam.info":"rule","ilovecollege.info":"rule","no-ip.info":"rule","brasilia.me":"rule","ddns.me":"rule","dnsfor.me":"rule","hopto.me":"rule","loginto.me":"rule","noip.me":"rule","webhop.me":"rule","bounceme.net":"rule","ddns.net":"rule","eating-organic.net":"rule","mydissent.net":"rule","myeffect.net":"rule","mymediapc.net":"rule","mypsx.net":"rule","mysecuritycamera.net":"rule","nhlfan.net":"rule","no-ip.net":"rule","pgafan.net":"rule","privatizehealthinsurance.net":"rule","redirectme.net":"rule","serveblog.net":"rule","serveminecraft.net":"rule","sytes.net":"rule","cable-modem.org":"rule","collegefan.org":"rule","couchpotatofries.org":"rule","hopto.org":"rule","mlbfan.org":"rule","myftp.org":"rule","mysecuritycamera.org":"rule","nflfan.org":"rule","no-ip.org":"rule","read-books.org":"rule","ufcfan.org":"rule","zapto.org":"rule","no-ip.co.uk":"rule","golffan.us":"rule","noip.us":"rule","pointto.us":"rule","stage.nodeart.io":"rule","developer.app":"wildcard","noop.app":"rule","northflank.app":"wildcard","build.run":"wildcard","code.run":"wildcard","database.run":"wildcard","migration.run":"wildcard","aberdeen.wa.us":"rule","bainbridge-isl.wa.us":"rule","bellevue.wa.us":"rule","bremerton.wa.us":"rule","centralia.wa.us":"rule","chehalis.wa.us":"rule","forks.wa.us":"rule","gig-harbor.wa.us":"rule","hoquiam.wa.us":"rule","keyport.wa.us":"rule","kingston.wa.us":"rule","olympia.wa.us":"rule","port-angeles.wa.us":"rule","port-ludlow.wa.us":"rule","port-orchard.wa.us":"rule","port-townsend.wa.us":"rule","poulsbo.wa.us":"rule","redmond.wa.us":"rule","renton.wa.us":"rule","sea.wa.us":"rule","seattle.wa.us":"rule","sequim.wa.us":"rule","shelton.wa.us":"rule","silverdale.wa.us":"rule","yarrow-point.wa.us":"rule","noticeable.news":"rule","notion.site":"rule","dnsking.ch":"rule","mypi.co":"rule","myiphost.com":"rule","forumz.info":"rule","soundcast.me":"rule","tcp4.me":"rule","dnsup.net":"rule","hicam.net":"rule","now-dns.net":"rule","ownip.net":"rule","vpndns.net":"rule","dynserv.org":"rule","now-dns.org":"rule","x443.pw":"rule","ntdll.top":"rule","freeddns.us":"rule","nsupdate.info":"rule","nerdpol.ovh":"rule","prvcy.page":"rule","observablehq.cloud":"rule","static.observableusercontent.com":"rule","omg.lol":"rule","cloudycluster.net":"rule","omniwe.site":"rule","123webseite.at":"rule","123website.be":"rule","simplesite.com.br":"rule","123website.ch":"rule","simplesite.com":"rule","123webseite.de":"rule","123hjemmeside.dk":"rule","123miweb.es":"rule","123kotisivu.fi":"rule","123siteweb.fr":"rule","simplesite.gr":"rule","123homepage.it":"rule","123website.lu":"rule","123website.nl":"rule","123hjemmeside.no":"rule","service.one":"rule","website.one":"rule","simplesite.pl":"rule","123paginaweb.pt":"rule","123minsida.se":"rule","onid.ca":"rule","is-a-fullstack.dev":"rule","is-cool.dev":"rule","is-not-a.dev":"rule","localplayer.dev":"rule","is-local.org":"rule","opensocial.site":"rule","oaiusercontent.com":"wildcard","chatgpt.site":"rule","opencraft.hosting":"rule","16-b.it":"rule","32-b.it":"rule","64-b.it":"rule","orsites.com":"rule","operaunite.com":"rule","customer-oci.com":"wildcard","oci.customer-oci.com":"wildcard","ocp.customer-oci.com":"wildcard","ocs.customer-oci.com":"wildcard","oraclecloudapps.com":"wildcard","oraclegovcloudapps.com":"wildcard","oraclegovcloudapps.uk":"wildcard","tech.orange":"rule","can.re":"rule","authgear-staging.com":"rule","authgearapps.com":"rule","outsystemscloud.com":"rule","hosting.ovh.net":"wildcard","webpaas.ovh.net":"wildcard","ownprovider.com":"rule","own.pm":"rule","owo.codes":"wildcard","ox.rs":"rule","oy.lc":"rule","pgfog.com":"rule","gotpantheon.com":"rule","pantheonsite.io":"rule","paywhirl.com":"wildcard","xmit.co":"wildcard","xmit.dev":"rule","madethis.site":"rule","srv.us":"rule","gh.srv.us":"rule","gl.srv.us":"rule","mypep.link":"rule","pplx.app":"rule","perspecta.cloud":"rule","forgeblocks.com":"rule","id.forgerock.io":"rule","support.site":"rule","on-web.fr":"rule","upsun.app":"wildcard","upsunapp.com":"rule","ent.platform.sh":"rule","eu.platform.sh":"rule","us.platform.sh":"rule","platformsh.site":"wildcard","tst.site":"wildcard","playcode.site":"rule","pley.games":"rule","onporter.run":"rule","co.bn":"rule","postman-echo.com":"rule","pstmn.io":"rule","mock.pstmn.io":"rule","httpbin.org":"rule","prequalifyme.today":"rule","xen.prgmr.com":"rule","priv.at":"rule","c01.kr":"rule","eliv-api.kr":"rule","eliv-cdn.kr":"rule","eliv-dns.kr":"rule","mmv.kr":"rule","vki.kr":"rule","dev.project-study.com":"rule","platter-app.dev":"rule","e.id":"rule","chirurgiens-dentistes-en-france.fr":"rule","byen.site":"rule","nyc.mn":"rule","cn.st":"wildcard","pubtls.org":"rule","puter.app":"rule","puter.site":"rule","puter.work":"rule","pythonanywhere.com":"rule","eu.pythonanywhere.com":"rule","qa2.com":"rule","qcx.io":"rule","sys.qcx.io":"wildcard","myqnapcloud.cn":"rule","alpha-myqnapcloud.com":"rule","dev-myqnapcloud.com":"rule","mycloudnas.com":"rule","mynascloud.com":"rule","myqnapcloud.com":"rule","qoto.io":"rule","qualifioapp.com":"rule","ladesk.com":"rule","qualyhqpartner.com":"wildcard","qualyhqportal.com":"wildcard","qbuser.com":"rule","quipelements.com":"wildcard","vapor.cloud":"rule","vaporcloud.io":"rule","rackmaze.com":"rule","rackmaze.net":"rule","cloudsite.builders":"rule","myradweb.net":"rule","servername.us":"rule","web.in":"rule","in.net":"rule","myrdbx.io":"rule","site.rb-hosting.io":"rule","up.railway.app":"rule","on-rancher.cloud":"wildcard","on-k3s.io":"wildcard","on-rio.io":"wildcard","ravpage.co.il":"rule","readthedocs-hosted.com":"rule","readthedocs.io":"rule","rhcloud.com":"rule","instances.spawn.cc":"rule","clusters.rdpa.co":"wildcard","srvrless.rdpa.co":"wildcard","onrender.com":"rule","app.render.com":"rule","replit.app":"rule","id.replit.app":"rule","firewalledreplit.co":"rule","id.firewalledreplit.co":"rule","repl.co":"rule","id.repl.co":"rule","replit.dev":"rule","archer.replit.dev":"rule","bones.replit.dev":"rule","canary.replit.dev":"rule","global.replit.dev":"rule","hacker.replit.dev":"rule","id.replit.dev":"rule","janeway.replit.dev":"rule","kim.replit.dev":"rule","kira.replit.dev":"rule","kirk.replit.dev":"rule","odo.replit.dev":"rule","paris.replit.dev":"rule","picard.replit.dev":"rule","pike.replit.dev":"rule","prerelease.replit.dev":"rule","reed.replit.dev":"rule","riker.replit.dev":"rule","sisko.replit.dev":"rule","spock.replit.dev":"rule","staging.replit.dev":"rule","sulu.replit.dev":"rule","tarpit.replit.dev":"rule","teams.replit.dev":"rule","tucker.replit.dev":"rule","wesley.replit.dev":"rule","worf.replit.dev":"rule","repl.run":"rule","resindevice.io":"rule","devices.resinstaging.io":"rule","adimo.co.uk":"rule","itcouldbewor.se":"rule","aus.basketball":"rule","nz.basketball":"rule","subsc-pay.com":"rule","subsc-pay.net":"rule","git-pages.rit.edu":"rule","rocky.page":"rule","rub.de":"rule","ruhr-uni-bochum.de":"rule","io.noc.ruhr-uni-bochum.de":"rule","биз.рус":"rule","ком.рус":"rule","крым.рус":"rule","мир.рус":"rule","мск.рус":"rule","орг.рус":"rule","самара.рус":"rule","сочи.рус":"rule","спб.рус":"rule","я.рус":"rule","ras.ru":"rule","nyat.app":"rule","180r.com":"rule","dojin.com":"rule","sakuratan.com":"rule","sakuraweb.com":"rule","x0.com":"rule","2-d.jp":"rule","bona.jp":"rule","crap.jp":"rule","daynight.jp":"rule","eek.jp":"rule","flop.jp":"rule","halfmoon.jp":"rule","jeez.jp":"rule","matrix.jp":"rule","mimoza.jp":"rule","ivory.ne.jp":"rule","mail-box.ne.jp":"rule","mints.ne.jp":"rule","mokuren.ne.jp":"rule","opal.ne.jp":"rule","sakura.ne.jp":"rule","sumomo.ne.jp":"rule","topaz.ne.jp":"rule","netgamers.jp":"rule","nyanta.jp":"rule","o0o0.jp":"rule","rdy.jp":"rule","rgr.jp":"rule","rulez.jp":"rule","s3.isk01.sakurastorage.jp":"rule","s3.isk02.sakurastorage.jp":"rule","saloon.jp":"rule","sblo.jp":"rule","skr.jp":"rule","tank.jp":"rule","uh-oh.jp":"rule","undo.jp":"rule","rs.webaccel.jp":"rule","user.webaccel.jp":"rule","websozai.jp":"rule","xii.jp":"rule","squares.net":"rule","jpn.org":"rule","kirara.st":"rule","x0.to":"rule","from.tv":"rule","sakura.tv":"rule","builder.code.com":"wildcard","dev-builder.code.com":"wildcard","stg-builder.code.com":"wildcard","001.test.code-builder-stg.platform.salesforce.com":"wildcard","aa.crm.dev":"wildcard","ab.crm.dev":"wildcard","ac.crm.dev":"wildcard","ad.crm.dev":"wildcard","ae.crm.dev":"wildcard","af.crm.dev":"wildcard","ci.crm.dev":"wildcard","d.crm.dev":"wildcard","pa.crm.dev":"wildcard","pb.crm.dev":"wildcard","pc.crm.dev":"wildcard","pd.crm.dev":"wildcard","pe.crm.dev":"wildcard","pf.crm.dev":"wildcard","w.crm.dev":"wildcard","wa.crm.dev":"wildcard","wb.crm.dev":"wildcard","wc.crm.dev":"wildcard","wd.crm.dev":"wildcard","we.crm.dev":"wildcard","wf.crm.dev":"wildcard","sandcats.io":"rule","sav.case":"rule","logoip.com":"rule","logoip.de":"rule","fr-par-1.baremetal.scw.cloud":"rule","fr-par-2.baremetal.scw.cloud":"rule","nl-ams-1.baremetal.scw.cloud":"rule","cockpit.fr-par.scw.cloud":"rule","ddl.fr-par.scw.cloud":"rule","dtwh.fr-par.scw.cloud":"rule","fnc.fr-par.scw.cloud":"rule","functions.fnc.fr-par.scw.cloud":"rule","ifr.fr-par.scw.cloud":"rule","k8s.fr-par.scw.cloud":"rule","nodes.k8s.fr-par.scw.cloud":"rule","kafk.fr-par.scw.cloud":"rule","mgdb.fr-par.scw.cloud":"rule","rdb.fr-par.scw.cloud":"rule","s3.fr-par.scw.cloud":"rule","s3-website.fr-par.scw.cloud":"rule","scbl.fr-par.scw.cloud":"rule","whm.fr-par.scw.cloud":"rule","priv.instances.scw.cloud":"rule","pub.instances.scw.cloud":"rule","k8s.scw.cloud":"rule","cockpit.nl-ams.scw.cloud":"rule","ddl.nl-ams.scw.cloud":"rule","dtwh.nl-ams.scw.cloud":"rule","ifr.nl-ams.scw.cloud":"rule","k8s.nl-ams.scw.cloud":"rule","nodes.k8s.nl-ams.scw.cloud":"rule","kafk.nl-ams.scw.cloud":"rule","mgdb.nl-ams.scw.cloud":"rule","rdb.nl-ams.scw.cloud":"rule","s3.nl-ams.scw.cloud":"rule","s3-website.nl-ams.scw.cloud":"rule","scbl.nl-ams.scw.cloud":"rule","whm.nl-ams.scw.cloud":"rule","cockpit.pl-waw.scw.cloud":"rule","ddl.pl-waw.scw.cloud":"rule","dtwh.pl-waw.scw.cloud":"rule","ifr.pl-waw.scw.cloud":"rule","k8s.pl-waw.scw.cloud":"rule","nodes.k8s.pl-waw.scw.cloud":"rule","kafk.pl-waw.scw.cloud":"rule","mgdb.pl-waw.scw.cloud":"rule","rdb.pl-waw.scw.cloud":"rule","s3.pl-waw.scw.cloud":"rule","s3-website.pl-waw.scw.cloud":"rule","scbl.pl-waw.scw.cloud":"rule","scalebook.scw.cloud":"rule","smartlabeling.scw.cloud":"rule","dedibox.fr":"rule","schokokeks.net":"rule","gov.scot":"rule","service.gov.scot":"rule","mygov.scot":"rule","scrysec.com":"rule","client.scrypted.io":"rule","firewall-gateway.com":"rule","firewall-gateway.de":"rule","my-gateway.de":"rule","my-router.de":"rule","spdns.de":"rule","spdns.eu":"rule","firewall-gateway.net":"rule","my-firewall.org":"rule","myfirewall.org":"rule","spdns.org":"rule","seidat.net":"rule","sellfy.store":"rule","minisite.ms":"rule","senseering.net":"rule","servebolt.cloud":"rule","biz.ua":"rule","co.ua":"rule","pp.ua":"rule","as.sh.cn":"rule","vicp.fun":"rule","yicp.fun":"rule","zicp.fun":"rule","sheezy.games":"rule","myshopblocks.com":"rule","myshopify.com":"rule","shopitsite.com":"rule","shopware.shop":"rule","shopware.store":"rule","mo-siemens.io":"rule","1kapp.com":"rule","appchizi.com":"rule","applinzi.com":"rule","sinaapp.com":"rule","vipsinaapp.com":"rule","siteleaf.net":"rule","small-web.org":"rule","aeroport.fr":"rule","avocat.fr":"rule","chambagri.fr":"rule","chirurgiens-dentistes.fr":"rule","experts-comptables.fr":"rule","medecin.fr":"rule","notaires.fr":"rule","pharmacien.fr":"rule","port.fr":"rule","veterinaire.fr":"rule","vp4.me":"rule","snowflake.app":"wildcard","privatelink.snowflake.app":"wildcard","streamlit.app":"rule","streamlitapp.com":"rule","try-snowplow.com":"rule","mafelo.net":"rule","sol.site":"rule","playstation-cloud.com":"rule","srht.site":"rule","apps.lair.io":"rule","stolos.io":"wildcard","4.at":"rule","my.at":"rule","my.de":"rule","nxa.eu":"wildcard","nx.gw":"rule","spawnbase.app":"rule","customer.speedpartner.de":"rule","myspreadshop.at":"rule","myspreadshop.com.au":"rule","myspreadshop.be":"rule","myspreadshop.ca":"rule","myspreadshop.ch":"rule","myspreadshop.com":"rule","myspreadshop.de":"rule","myspreadshop.dk":"rule","myspreadshop.es":"rule","myspreadshop.fi":"rule","myspreadshop.fr":"rule","myspreadshop.ie":"rule","myspreadshop.it":"rule","myspreadshop.net":"rule","myspreadshop.nl":"rule","myspreadshop.no":"rule","myspreadshop.pl":"rule","myspreadshop.se":"rule","myspreadshop.co.uk":"rule","w-corp-staticblitz.com":"rule","w-credentialless-staticblitz.com":"rule","w-staticblitz.com":"rule","bolt.host":"rule","stackhero-network.com":"rule","runs.onstackit.cloud":"rule","stackit.gg":"rule","stackit.rocks":"rule","stackit.run":"rule","stackit.zone":"rule","sryze.cc":"rule","indevs.in":"rule","musician.io":"rule","novecore.site":"rule","statichost.page":"rule","feedback.ac":"rule","forms.ac":"rule","assessments.cx":"rule","calculators.cx":"rule","funnels.cx":"rule","paynow.cx":"rule","quizzes.cx":"rule","researched.cx":"rule","tests.cx":"rule","surveys.so":"rule","ipfs.storacha.link":"rule","ipfs.w3s.link":"rule","storebase.store":"rule","strapiapp.com":"rule","media.strapiapp.com":"rule","vps-host.net":"rule","atl.jelastic.vps-host.net":"rule","njs.jelastic.vps-host.net":"rule","ric.jelastic.vps-host.net":"rule","streak-link.com":"rule","streaklinks.com":"rule","streakusercontent.com":"rule","soc.srcf.net":"rule","user.srcf.net":"rule","utwente.io":"rule","temp-dns.com":"rule","supabase.co":"rule","realtime.supabase.co":"rule","storage.supabase.co":"rule","supabase.in":"rule","supabase.net":"rule","syncloud.it":"rule","dscloud.biz":"rule","direct.quickconnect.cn":"rule","dsmynas.com":"rule","familyds.com":"rule","diskstation.me":"rule","dscloud.me":"rule","i234.me":"rule","myds.me":"rule","synology.me":"rule","dscloud.mobi":"rule","dsmynas.net":"rule","familyds.net":"rule","dsmynas.org":"rule","familyds.org":"rule","direct.quickconnect.to":"rule","vpnplus.to":"rule","mytabit.com":"rule","mytabit.co.il":"rule","tabitorder.co.il":"rule","taifun-dns.de":"rule","erp.dev":"rule","web.erp.dev":"rule","ts.net":"rule","c.ts.net":"wildcard","gda.pl":"rule","gdansk.pl":"rule","gdynia.pl":"rule","med.pl":"rule","sopot.pl":"rule","taveusercontent.com":"rule","p.tawk.email":"rule","p.tawkto.email":"rule","tche.br":"rule","site.tb-hosting.com":"rule","directwp.eu":"rule","ec.cc":"rule","eu.cc":"rule","gu.cc":"rule","uk.cc":"rule","us.cc":"rule","edugit.io":"rule","s3.teckids.org":"rule","telebit.app":"rule","telebit.io":"rule","telebit.xyz":"wildcard","teleport.sh":"rule","firenet.ch":"wildcard","svc.firenet.ch":"wildcard","reservd.com":"rule","thingdustdata.com":"rule","cust.dev.thingdust.io":"rule","reservd.dev.thingdust.io":"rule","cust.disrec.thingdust.io":"rule","reservd.disrec.thingdust.io":"rule","cust.prod.thingdust.io":"rule","cust.testing.thingdust.io":"rule","reservd.testing.thingdust.io":"rule","tickets.io":"rule","t3.storage.dev":"rule","t3.storageapi.dev":"rule","arvo.network":"rule","azimuth.network":"rule","tlon.network":"rule","torproject.net":"rule","pages.torproject.net":"rule","townnews-staging.com":"rule","12hp.at":"rule","2ix.at":"rule","4lima.at":"rule","lima-city.at":"rule","12hp.ch":"rule","2ix.ch":"rule","4lima.ch":"rule","lima-city.ch":"rule","trafficplex.cloud":"rule","de.cool":"rule","12hp.de":"rule","2ix.de":"rule","4lima.de":"rule","lima-city.de":"rule","1337.pictures":"rule","clan.rip":"rule","lima-city.rocks":"rule","webspace.rocks":"rule","lima.zone":"rule","transurl.be":"wildcard","transurl.eu":"wildcard","site.transip.me":"rule","transurl.nl":"wildcard","triton.zone":"wildcard","tunnelmole.net":"rule","tuxfamily.org":"rule","typedream.app":"rule","pro.typeform.com":"rule","uber.space":"rule","hk.com":"rule","inc.hk":"rule","ltd.hk":"rule","hk.org":"rule","it.com":"rule","umso.co":"rule","unison-services.cloud":"rule","virtual-user.de":"rule","virtualuser.de":"rule","obj.ag":"rule","name.pm":"rule","sch.tf":"rule","biz.wf":"rule","sch.wf":"rule","org.yt":"rule","rs.ba":"rule","bielsko.pl":"rule","urown.cloud":"rule","dnsupdate.info":"rule","us.org":"rule","v.ua":"rule","val.run":"rule","web.val.run":"rule","vercel.app":"rule","v0.build":"rule","vercel.dev":"rule","vusercontent.net":"rule","vercel.run":"rule","now.sh":"rule","2038.io":"rule","v-info.info":"rule","vistablog.ir":"rule","deus-canvas.com":"rule","vivenushop.com":"rule","vivenushop.dev":"rule","voorloper.cloud":"rule","vultrobjects.com":"wildcard","wafflecell.com":"rule","wal.app":"rule","wasmer.app":"rule","webflow.io":"rule","webflowtest.io":"rule","webhare.dev":"wildcard","hotelwithflight.com":"rule","reserve-online.net":"rule","book.online":"rule","cprapid.com":"rule","pleskns.com":"rule","wp2.host":"rule","pdns.page":"rule","plesk.page":"rule","cpanel.site":"rule","wpsquared.site":"rule","wadl.top":"wildcard","remotewd.com":"rule","box.ca":"rule","pages.wiardweb.com":"rule","toolforge.org":"rule","wmcloud.org":"rule","beta.wmcloud.org":"rule","wmflabs.org":"rule","vps.hrsn.au":"rule","hrsn.dev":"rule","is-a.dev":"rule","localcert.net":"rule","windsurf.app":"rule","windsurf.build":"rule","drive-platform.com":"rule","drive-platform.io":"rule","panel.gg":"rule","daemon.panel.gg":"rule","base44.app":"rule","base44-sandbox.com":"rule","wixsite.com":"rule","wixstudio.com":"rule","editorx.io":"rule","wixstudio.io":"rule","wix.run":"rule","messwithdns.com":"rule","woltlab-demo.com":"rule","myforum.community":"rule","community-pro.de":"rule","diskussionsbereich.de":"rule","community-pro.net":"rule","meinforum.net":"rule","affinitylottery.org.uk":"rule","raffleentry.org.uk":"rule","weeklylottery.org.uk":"rule","wpenginepowered.com":"rule","js.wpenginepowered.com":"rule","grok.me":"rule","xenonconnect.de":"wildcard","half.host":"rule","xnbay.com":"rule","u2.xnbay.com":"rule","u2-local.xnbay.com":"rule","cistron.nl":"rule","demon.nl":"rule","xs4all.space":"rule","xtooldevice.com":"rule","yandexcloud.net":"rule","storage.yandexcloud.net":"rule","website.yandexcloud.net":"rule","sourcecraft.site":"rule","official.academy":"rule","yolasite.com":"rule","ynh.fr":"rule","nohost.me":"rule","noho.st":"rule","za.net":"rule","za.org":"rule","zap.cloud":"rule","zeabur.app":"rule","zerops.app":"wildcard","prg1-zerops.zone":"rule","zerops.zone":"wildcard","bss.design":"rule","basicserver.io":"rule","virtualserver.io":"rule","enterprisecloud.nu":"rule","zone.id":"rule","nett.to":"rule","zabc.net":"rule"},
-  ),
-)
-
-;// CONCATENATED MODULE: ./src/github-meta-ip-ranges.js
-/**
- * Vendored, PINNED copy of the published GitHub infrastructure IP ranges the
- * Runtime Review contract consumes: `contract/github-meta-ip-ranges.json` in
- * garnet-org/runtime-review-testbed (contract v6.10.0, testbed main b2fa17a,
- * retrieved 2026-08-08 from https://api.github.com/meta).
- *
- * Contract data, not heuristics — the same class as the public suffix list.
- * Only the `web` and `api` service blocks are vendored: the provable-rotation
- * join (contract comment.rotationJoin) keys on those blocks and never on the
- * `actions` block, which is runner address space where a same-process address
- * substitution is not proof. Refresh by committing new bytes; never fetched at
- * render time.
- *
- * Shipped as a JS module (not .json) so the ncc bundle carries the data
- * without relying on asset relocation.
- */
-
-/** @type {{ source: string, retrieved: string, web: string[], api: string[] }} */
-const GITHUB_META_IP_RANGES = {
-    source: "https://api.github.com/meta",
-    retrieved: "2026-08-08",
-    web: [
-        "192.30.252.0/22",
-        "185.199.108.0/22",
-        "140.82.112.0/20",
-        "143.55.64.0/20",
-        "2a0a:a440::/29",
-        "2606:50c0::/32",
-        "20.201.28.151/32",
-        "20.205.243.166/32",
-        "20.87.245.0/32",
-        "4.237.22.38/32",
-        "4.228.31.150/32",
-        "20.207.73.82/32",
-        "20.27.177.113/32",
-        "20.200.245.247/32",
-        "20.175.192.147/32",
-        "20.233.83.145/32",
-        "20.29.134.23/32",
-        "20.199.39.232/32",
-        "20.217.135.5/32",
-        "4.225.11.194/32",
-        "4.208.26.197/32",
-        "20.26.156.215/32",
-        "172.182.252.133/32",
-        "4.249.131.164/32",
-        "48.202.248.40/32",
-        "48.204.201.5/32",
-    ],
-    api: [
-        "192.30.252.0/22",
-        "185.199.108.0/22",
-        "140.82.112.0/20",
-        "143.55.64.0/20",
-        "2a0a:a440::/29",
-        "2606:50c0::/32",
-        "20.201.28.148/32",
-        "20.205.243.168/32",
-        "20.87.245.6/32",
-        "4.237.22.34/32",
-        "4.228.31.149/32",
-        "20.207.73.85/32",
-        "20.27.177.116/32",
-        "20.200.245.245/32",
-        "20.175.192.149/32",
-        "20.233.83.146/32",
-        "20.29.134.17/32",
-        "20.199.39.228/32",
-        "20.217.135.0/32",
-        "4.225.11.201/32",
-        "4.208.26.200/32",
-        "20.26.156.210/32",
-        "172.182.252.137/32",
-        "4.249.131.166/32",
-        "48.202.248.39/32",
-        "48.204.201.2/32",
-    ],
 }
 
 ;// CONCATENATED MODULE: ./src/runtime-review.js
 /**
- * Garnet execution comment — reference renderer for contract v6.8.0.
+ * Garnet Step Summary renderer — the job's full receipt. The Action renders
+ * only this surface; the Garnet App posts the PR comment, fork PRs included
+ * (through the `garnet-run-*` relay artifact, see ./run-artifact.js).
  *
- * Vendored from the locked reference renderer in
- * garnet-org/runtime-review-testbed (cmd/garnet-runtime-review/review.mjs at
- * commit 814d4d328f679f40b4546918a1c3bf347101413f, then aligned to the
- * v6.7.0 contract at commit be91e8a0752e6e44759ae93b2b7db7710f3e428e —
- * contract/vocab.json + docs/ux-contract.md; the testbed's v6.7.0 renderer
- * had not landed at vendoring time, so this implementation follows the
- * contract directly) with two mechanical changes: the CLI plumbing section
- * is dropped (the action drives the renderer from src/post.js) and
- * CONTRACT_VOCAB is imported from the vendored
- * ./runtime-review-vocab.js instead of a filesystem read.
- *
- * Three projections of the same selected record set: the GitHub PR comment,
- * the GitHub job Step Summary, and the public Run Profile (HTML/JSON —
- * contract carried here as machine-readable policy data; the page itself is
- * served by the Garnet app).
+ * Ported from the reference renderer in garnet-org/runtime-review-testbed,
+ * whose `main` is the single reference for the renderer, vocabulary and
+ * goldens. CONTRACT_VOCAB is imported from the vendored
+ * ./runtime-review-vocab.js.
  *
  * v6.5.0 record model:
  *   - One destination association = one `network.egress.peers[]` item × one
@@ -159594,17 +159513,16 @@ const GITHUB_META_IP_RANGES = {
  *     with lineage `unknown (not recorded)`.
  *   - The record is egress-centric — it is NOT a process inventory; a
  *     process that made no recorded egress may not appear.
- *   - The evidence model is lossless; the comment projection deduplicates
- *     destination identities so capture multiplicity never becomes comparison
- *     churn.
+ *   - The evidence model is lossless; the chain table collapses repeated
+ *     destination names within a chain, the chains fold keeps every one.
  *   - `arguments`/argv and `executable` paths are embargoed: never captured
  *     into the render model, never emitted on any surface.
  *   - Typography is attribution, not trust: a lineage recorded under a
  *     GitHub step below `Runner.Worker` is bold; runner scaffolding is italic.
  *     A recorded detection always overrides de-emphasis.
- *   - Deterministic factual notes only: `(dns resolver)`, `(instance
- *     metadata)`, and record-backed `detection: <kind>` values other than
- *     `flow`.
+ *   - Deterministic factual notes only: `(Cloud IMDS)`, `(github infra)`,
+ *     and, behind the `show_detections` opt-in, record-backed
+ *     `detection: <kind>` values other than `flow`.
  *   - Counts are mechanical and qualified. Sensor telemetry is preserved
  *     verbatim and never aliased to renderer-derived destinations or flows.
  *   - Timestamps come from `profile.timestamp` only, rendered
@@ -159621,13 +159539,6 @@ const GITHUB_META_IP_RANGES = {
 
 
 
-
-
-
-
-// ---------------------------------------------------------------------------
-// Model typedefs (checkJs) — the v6.6.1 record/review model.
-// ---------------------------------------------------------------------------
 
 /**
  * One destination association: one recorded egress peer × one proc_tree.
@@ -159648,7 +159559,6 @@ const GITHUB_META_IP_RANGES = {
  *   executable: string
  * }} ReviewEdge
  */
-
 /**
  * @typedef {{
  *   timestamp: string
@@ -159659,7 +159569,6 @@ const GITHUB_META_IP_RANGES = {
  *   result: string
  * }} AssertionEvidence
  */
-
 /**
  * @typedef {{
  *   class_id: string
@@ -159669,14 +159578,12 @@ const GITHUB_META_IP_RANGES = {
  *   evidence: AssertionEvidence[]
  * }} JobAssertion
  */
-
 /**
  * @typedef {{
  *   total_domains: number | null
  *   total_connections: number | null
  * }} JobTelemetry
  */
-
 /**
  * @typedef {{
  *   associations: number
@@ -159687,7 +159594,6 @@ const GITHUB_META_IP_RANGES = {
  *   flows: number
  * }} EdgeCounts
  */
-
 /**
  * One job's summarized record (the output of `summarizeProfile`).
  * @typedef {{
@@ -159704,6 +159610,10 @@ const GITHUB_META_IP_RANGES = {
  *   ref: string
  *   pr_url: string
  *   actor: string
+ *   run_attempt: string
+ *   event_name: string
+ *   runner_os: string
+ *   runner_arch: string
  *   job_index: string
  *   flow_count: number
  *   telemetry: JobTelemetry
@@ -159712,24 +159622,9 @@ const GITHUB_META_IP_RANGES = {
  *   counts: EdgeCounts
  * }} JobSummary
  */
-
 /**
  * @typedef {JobSummary & { id: number, job_url: string }} ReviewJob
  */
-
-/**
- * @typedef {{
- *   name: string
- *   workflow: string
- *   job_index: string
- *   edges: ReviewEdge[]
- * }} PreviousJob
- */
-
-/**
- * @typedef {{ previousSha: string, previousJobs: PreviousJob[] }} ReviewComparison
- */
-
 /**
  * @typedef {{
  *   repo: string
@@ -159739,33 +159634,9 @@ const GITHUB_META_IP_RANGES = {
  *   appMode: boolean
  *   recordedThrough: string
  *   jobs: ReviewJob[]
- *   comparison: ReviewComparison | null
  *   counts: { jobs: number, associations: number, destinations: number }
  * }} RunReview
  */
-
-/**
- * Per-job comparison delta over comment-visible chains.
- * @typedef {{
- *   addedIds: Set<string>
- *   removedIds: Set<string>
- *   added: Set<string>
- *   removed: ReviewEdge[]
- *   addedCount: number
- *   removedCount: number
- *   backgroundAddedCount: number
- *   backgroundRemovedCount: number
- *   rotations: Map<string, string>
- * }} EdgeDelta
- */
-
-/**
- * @typedef {EdgeDelta & {
- *   names: Map<string, string>
- * }} JobDelta
- */
-
-
 /**
  * Shared-prefix lineage tree node for the comment tree.
  * @typedef {{
@@ -159779,76 +159650,34 @@ const GITHUB_META_IP_RANGES = {
  *   executables: Set<string>
  * }} TreeNode
  */
-
 /**
  * One lineage-first Step Summary row.
  * @typedef {{ edge: ReviewEdge, associations: ReviewEdge[] }} LineageRow
  */
 
-/** Canonical sticky marker. */
-const RUNTIME_REVIEW_MARKER = "<!-- garnet-runtime-review -->"
-
-/** Self-marker: identifies THIS renderer's own comments for update/delete. */
-const COMMENT_MARKER = "<!-- garnet-run-profile -->"
-
-/**
- * Stable marker for the testbed-only "after" projection. It deliberately
- * shares no exact marker with the App or Action fallback, so each owner can
- * update only its own PR comment.
- */
-const REFERENCE_MOCKUP_MARKER = "<!-- garnet-reference-renderer-mockup -->"
-
 /** Exact emitted vocabulary — byte-locked by contract/vocab.json. */
 const VOCAB = {
-  headlineLead: runtime_review_vocab_CONTRACT_VOCAB.copy.headlineLead,
-  stepSummaryHeading: runtime_review_vocab_CONTRACT_VOCAB.copy.stepSummaryHeading,
-  artifact: runtime_review_vocab_CONTRACT_VOCAB.copy.artifact,
-  permalinkLabel: runtime_review_vocab_CONTRACT_VOCAB.copy.permalinkLabel,
-  emptyPeers: runtime_review_vocab_CONTRACT_VOCAB.copy.emptyPeers,
-  noRunProfile: runtime_review_vocab_CONTRACT_VOCAB.copy.noRunProfile,
-  unknownLineage: runtime_review_vocab_CONTRACT_VOCAB.copy.unknownLineage,
-  noChange: runtime_review_vocab_CONTRACT_VOCAB.copy.noChange,
-  terminalNetwork: runtime_review_vocab_CONTRACT_VOCAB.copy.terminalNetwork,
-  sinceWord: runtime_review_vocab_CONTRACT_VOCAB.copy.sinceWord,
-  vanishedJobsLabel: runtime_review_vocab_CONTRACT_VOCAB.copy.vanishedJobsLabel,
-  jobsLineChanged: runtime_review_vocab_CONTRACT_VOCAB.copy.jobsLineChanged,
-  jobsLineUnchanged: runtime_review_vocab_CONTRACT_VOCAB.copy.jobsLineUnchanged,
-  jobsLineNoOutbound: runtime_review_vocab_CONTRACT_VOCAB.copy.jobsLineNoOutbound,
-  jobsLineVanished: runtime_review_vocab_CONTRACT_VOCAB.copy.jobsLineVanished,
-  machineSummaryMarker: runtime_review_vocab_CONTRACT_VOCAB.copy.machineSummaryMarker,
-  explainerLabel: runtime_review_vocab_CONTRACT_VOCAB.copy.explainerLabel,
-  explainerReadingLine: runtime_review_vocab_CONTRACT_VOCAB.copy.explainerReadingLine,
-  explainerComparisonLine: runtime_review_vocab_CONTRACT_VOCAB.copy.explainerComparisonLine,
-  explainerBackgroundSegment: runtime_review_vocab_CONTRACT_VOCAB.copy.explainerBackgroundSegment,
-  runnerBackground: runtime_review_vocab_CONTRACT_VOCAB.copy.runnerBackground,
-  explainerLegendLine: runtime_review_vocab_CONTRACT_VOCAB.copy.explainerLegendLine,
-  explainerCalloutPath: runtime_review_vocab_CONTRACT_VOCAB.copy.explainerCalloutPath,
-  explainerCalloutActed: runtime_review_vocab_CONTRACT_VOCAB.copy.explainerCalloutActed,
-  explainerCalloutAction: runtime_review_vocab_CONTRACT_VOCAB.copy.explainerCalloutAction,
-  whatIsGarnetLabel: runtime_review_vocab_CONTRACT_VOCAB.copy.whatIsGarnetLabel,
-  whatIsGarnetUrl: runtime_review_vocab_CONTRACT_VOCAB.copy.whatIsGarnetUrl,
+  stepSummaryHeading: CONTRACT_VOCAB.copy.stepSummaryHeading,
+  permalinkLabel: CONTRACT_VOCAB.copy.permalinkLabel,
+  emptyPeers: CONTRACT_VOCAB.copy.emptyPeers,
+  unknownLineage: CONTRACT_VOCAB.copy.unknownLineage,
+  terminalNetwork: CONTRACT_VOCAB.copy.terminalNetwork,
 }
 
-/** PR comment serialized UTF-8 byte budget (GitHub hard cap is 65,536). */
-const SIZE_BUDGET = runtime_review_vocab_CONTRACT_VOCAB.mediumLimits.prCommentBudget
-
-/** Changed folds render open only while at most this many jobs changed. */
-const FOLD_OPEN_BUDGET = runtime_review_vocab_CONTRACT_VOCAB.comment.foldOpenBudget
-
 /** Step Summary hard limit (1 MiB). */
-const STEP_SUMMARY_BUDGET = runtime_review_vocab_CONTRACT_VOCAB.mediumLimits.stepSummaryHardLimit
+const STEP_SUMMARY_BUDGET = CONTRACT_VOCAB.mediumLimits.stepSummaryHardLimit
 
-/** Loopback matcher for the dns-resolver note (anchored — never a suffix). */
-const LOOPBACK_RE = new RegExp(runtime_review_vocab_CONTRACT_VOCAB.notes.dnsResolver.loopbackPattern)
+/** Loopback matcher for resolver exclusion (anchored — never a suffix). */
+const LOOPBACK_RE = new RegExp(CONTRACT_VOCAB.notes.dnsResolver.loopbackPattern)
 
 /** The standardized cloud IMDS constant — never vendor-specific addresses. */
-const IMDS_ADDRESSES = new Set(runtime_review_vocab_CONTRACT_VOCAB.notes.instanceMetadata.addresses)
+const IMDS_ADDRESSES = new Set(CONTRACT_VOCAB.notes.instanceMetadata.addresses)
 
 /** Contract-locked GitHub-infrastructure name suffixes — never extended here. */
-const GITHUB_INFRA_SUFFIXES = runtime_review_vocab_CONTRACT_VOCAB.notes.githubInfrastructure.nameSuffixes
+const GITHUB_INFRA_SUFFIXES = CONTRACT_VOCAB.notes.githubInfrastructure.nameSuffixes
 
 /** Truncated infrastructure suffixes — match only a single label before the suffix. */
-const GITHUB_INFRA_TRUNCATED_SUFFIXES = runtime_review_vocab_CONTRACT_VOCAB.notes.githubInfrastructure.truncatedSuffixes
+const GITHUB_INFRA_TRUNCATED_SUFFIXES = CONTRACT_VOCAB.notes.githubInfrastructure.truncatedSuffixes
 
 /**
  * A recorded name is GitHub infrastructure when it ends with a locked domain
@@ -159872,18 +159701,21 @@ function isGithubInfraName(name) {
 }
 
 /** Contract-locked Garnet sensor name suffixes. */
-const GARNET_SENSOR_SUFFIXES = runtime_review_vocab_CONTRACT_VOCAB.notes.garnetSensor.nameSuffixes
+const GARNET_SENSOR_SUFFIXES = CONTRACT_VOCAB.notes.garnetSensor.nameSuffixes
 
 // ---------------------------------------------------------------------------
 // Escaping — every record-sourced string is attacker-controlled.
 // ---------------------------------------------------------------------------
 
 /**
- * Strip control characters from any record-sourced string.
+ * Strip control characters from any record-sourced string: C0/C1 controls,
+ * bidi embeddings, overrides and isolates, zero-width characters, the BOM
+ * and line/paragraph separators. Each can make a rendered name read as
+ * something other than what was recorded.
  * @param {unknown} value
  */
 const stripControl = (value) =>
-  String(value ?? "").replace(/[\u0000-\u0008\u000B-\u001F\u007F]/g, "")
+  String(value ?? "").replace(/[\u0000-\u0008\u000B-\u001F\u007F-\u009F\u200B-\u200F\u2028-\u202E\u2060-\u2069\uFEFF]/g, "")
 
 /**
  * Escape a value destined for INSIDE an HTML element. Three-plus backtick
@@ -159933,16 +159765,29 @@ const escapeCode = (value) =>
 const escapeCodeCell = (value) => escapeCode(value).replaceAll("|", "\\|")
 
 /**
- * Escape a value destined for HTML inside a GFM table cell.
+ * Escape a value destined for HTML inside a GFM table cell. GitHub still parses
+ * Markdown inside inline HTML such as `<code>`, so recorded names would
+ * otherwise render links, emphasis, autolinks, and @mentions.
  * @param {unknown} value
  */
-const escapeHtmlCell = (value) => escapeHtml(value).replaceAll("|", "\\|")
+const escapeHtmlCell = (value) => neutralizeInlineMarkdown(escapeHtml(value)).replaceAll("|", "\\|")
+
+/**
+ * Replaces Markdown-active punctuation with numeric entities. Run it after HTML
+ * escaping so the entities are not themselves escaped.
+ * @param {string} value
+ */
+function neutralizeInlineMarkdown(value) {
+  return value
+    .replace(/[\\`*_~\[\]:@]/g, (character) => `&#${character.charCodeAt(0)};`)
+    .replaceAll("www.", "www&#46;")
+}
 
 /**
  * Bound a captured (attacker-controllable) label to `max` chars with a
  * middle ellipsis, preserving head+tail so it stays identifiable while a
  * crafted payload buried mid-string cannot survive or inflate token cost.
- * Full untruncated values remain in the Run Profile / API.
+ * Full untruncated values remain in the Execution Profile / API.
  * @param {unknown} value
  * @param {number} [max]
  */
@@ -159959,13 +159804,9 @@ const truncateMiddle = (value, max = 64) => {
  * @param {unknown} value
  */
 function escapeMarkdownCell(value) {
-  return stripControl(value)
-    .replaceAll("\\", "\\\\")
+  const html = stripControl(value).replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;")
+  return neutralizeInlineMarkdown(html)
     .replaceAll("|", "\\|")
-    .replaceAll("`", "\\`")
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
     .replace(/[\r\n]+/g, " ")
 }
 
@@ -160008,39 +159849,34 @@ const numericPort = (value) => {
 
 /**
  * Deterministic factual notes for one association:
- *   - `dns resolver` — loopback remote_address AND a remote_ports value with
- *     numeric port 53.
- *   - `cloud metadata` — remote_address is exactly the standardized IMDS
+ *   - dns-resolver note — retired by the contract (empty text); loopback
+ *     remote_address AND a remote_ports value with numeric port 53.
+ *   - `Cloud IMDS` — remote_address is exactly the standardized IMDS
  *     addresses.
  *   - `github infra` — the primary recorded remote name ends with a
  *     contract-locked GitHub infrastructure suffix.
  *   - `garnet sensor` — the primary recorded remote name is `garnet.ai` or
  *     ends with `.garnet.ai`.
- *   - `detection: <kind>` — every non-empty recorded detection except `flow`.
+ *   - `detection: <kind>` — every non-empty recorded detection except `flow`,
+ *     only when the caller opts in (the `show_detections` input).
  * @param {ReviewEdge} edge
  * @param {{ detections?: boolean }} [options]
  */
-function edgeNotes(edge, { detections = true } = {}) {
+function edgeNotes(edge, { detections = false } = {}) {
   /** @type {string[]} */
   const notes = []
-  if (
-    LOOPBACK_RE.test(edge.remote_address) &&
-    edge.remote_ports.some((p) => numericPort(p) === 53)
-  ) {
-    notes.push(runtime_review_vocab_CONTRACT_VOCAB.notes.dnsResolver.text)
-  }
   if (IMDS_ADDRESSES.has(edge.remote_address)) {
-    notes.push(runtime_review_vocab_CONTRACT_VOCAB.notes.instanceMetadata.text)
+    notes.push(CONTRACT_VOCAB.notes.instanceMetadata.text)
   }
   const primaryName = canonicalRecordedName(edge.remote_names ?? [])
   if (isGithubInfraName(primaryName)) {
-    notes.push(runtime_review_vocab_CONTRACT_VOCAB.notes.githubInfrastructure.text)
+    notes.push(CONTRACT_VOCAB.notes.githubInfrastructure.text)
   }
   if (
     primaryName === "garnet.ai" ||
     GARNET_SENSOR_SUFFIXES.some((/** @type {string} */ s) => primaryName.endsWith(s))
   ) {
-    notes.push(runtime_review_vocab_CONTRACT_VOCAB.notes.garnetSensor.text)
+    notes.push(CONTRACT_VOCAB.notes.garnetSensor.text)
   }
   if (!detections) return notes
   for (const detection of (edge.detections || [])
@@ -160286,6 +160122,10 @@ function summarizeProfile(profile) {
     ref: String(github.ref || ""),
     pr_url: pullRequestURL(github),
     actor: String(github.triggering_actor || github.actor || ""),
+    run_attempt: String(github.run_attempt || ""),
+    event_name: String(github.event_name || ""),
+    runner_os: String(github.runner_os || ""),
+    runner_arch: String(github.runner_arch || ""),
     job_index:
       github.job_index !== undefined && github.job_index !== null
         ? String(github.job_index)
@@ -160348,41 +160188,6 @@ function edgeCounts(edges, flowCount) {
 }
 
 /**
- * Runtime telemetry comparison. This never throws: historical records may
- * legitimately disagree with the projection. CI separately hard-fails Gate T
- * for the pinned fixtures expected to satisfy the invariant.
- * @param {ReviewJob | JobSummary} job
- * @returns {{ metric: string, sensor: number, derived: number, derivedLabel: string }[]}
- */
-function telemetryDiscrepancies(job) {
-  /** @type {{ metric: string, sensor: number, derived: number, derivedLabel: string }[]} */
-  const discrepancies = []
-  if (
-    job.telemetry.total_connections !== null &&
-    job.telemetry.total_connections !== job.counts.flows
-  ) {
-    discrepancies.push({
-      metric: "Connections",
-      sensor: job.telemetry.total_connections,
-      derived: job.counts.flows,
-      derivedLabel: "recorded flows",
-    })
-  }
-  if (
-    job.telemetry.total_domains !== null &&
-    job.telemetry.total_domains !== job.counts.primary_names
-  ) {
-    discrepancies.push({
-      metric: "Unique domains",
-      sensor: job.telemetry.total_domains,
-      derived: job.counts.primary_names,
-      derivedLabel: "distinct primary remote names",
-    })
-  }
-  return discrepancies
-}
-
-/**
  * A loosely-typed incoming job record accepted by `buildRunReview`.
  * @typedef {Record<string, any>} JobRecordInput
  */
@@ -160390,8 +160195,7 @@ function telemetryDiscrepancies(job) {
 /**
  * Build the review model from job records.
  * @param {{repo?: string, sha?: string, commitUrl?: string, appUrl?: string,
- *          appMode?: boolean, jobs: (JobRecordInput | null | undefined)[],
- *          previousSha?: string, previousJobs?: (JobRecordInput | null | undefined)[] | null}} input
+ *          appMode?: boolean, jobs: (JobRecordInput | null | undefined)[]}} input
  * @returns {RunReview}
  */
 function buildRunReview(input) {
@@ -160413,6 +160217,10 @@ function buildRunReview(input) {
       ref: String(j.ref || ""),
       pr_url: String(j.pr_url || ""),
       actor: String(j.actor || ""),
+      run_attempt: String(j.run_attempt || ""),
+      event_name: String(j.event_name || ""),
+      runner_os: String(j.runner_os || ""),
+      runner_arch: String(j.runner_arch || ""),
       job_index: String(j.job_index || ""),
       flow_count: Number(j.flow_count || 0),
       telemetry: {
@@ -160426,7 +160234,7 @@ function buildRunReview(input) {
             : null,
       },
       assertions: Array.isArray(j.assertions) ? j.assertions : [],
-      edges: (j.edges || []).slice().sort(edgeComparator),
+      edges: (j.edges || []).filter((/** @type {ReviewEdge} */ edge) => !isLoopbackResolver(edge)).sort(edgeComparator),
     }))
     .map((j) => ({ ...j, counts: edgeCounts(j.edges, j.flow_count) }))
     // Canonical job order: alphabetic by `workflow / job`.
@@ -160456,26 +160264,6 @@ function buildRunReview(input) {
   const stamps = jobs.map((j) => formatTimestamp(j.timestamp)).filter((s) => s !== "")
   const recordedThrough = stamps.length > 0 ? (stamps.sort()[stamps.length - 1] ?? "") : ""
 
-  // Optional execution comparison: the previous profiled commit's job
-  // records (Phase-1 wiring supplies them; without them every fold renders
-  // the snapshot tree). Comparison is computed over comment-visible chains.
-  const previousSha = String(input.previousSha || "")
-  /** @type {PreviousJob[] | null} */
-  const previousJobs = Array.isArray(input.previousJobs)
-    ? input.previousJobs
-        .filter((j) => j !== null && j !== undefined)
-        .map((j) => ({
-          name: String(j.name || ""),
-          workflow: String(j.workflow || ""),
-          job_index: j.job_index === undefined || j.job_index === null ? "" : String(j.job_index),
-          edges: (j.edges || []).slice().sort(edgeComparator),
-        }))
-    : null
-  const comparison =
-    previousSha !== "" && previousJobs !== null
-      ? { previousSha, previousJobs }
-      : null
-
   const destinationUnion = new Set()
   for (const j of jobs) {
     for (const e of j.edges) {
@@ -160491,7 +160279,6 @@ function buildRunReview(input) {
     appMode: input.appMode !== false,
     recordedThrough,
     jobs,
-    comparison,
     counts: {
       jobs: jobs.length,
       associations: jobs.reduce((n, j) => n + j.counts.associations, 0),
@@ -160499,75 +160286,11 @@ function buildRunReview(input) {
     },
   }
 
-  // Comparison reviews order jobs by decision relevance: destination
-  // change, no change, then jobs with no outbound
-  // destinations. Canonical alphabetic order holds within each tier;
-  // snapshot reviews keep it outright.
-  if (review.comparison !== null) {
-    const { tiers } = changeAccounting(review)
-    const canonicalIndex = new Map(review.jobs.map((j, i) => [j.id, i]))
-    review.jobs = [...review.jobs].sort(
-      (a, b) =>
-        (tiers.get(a.id) ?? 0) - (tiers.get(b.id) ?? 0) ||
-        (canonicalIndex.get(a.id) ?? 0) - (canonicalIndex.get(b.id) ?? 0),
-    )
-  }
   return review
 }
 
-/**
- * Stable JSON-serializable review model (the review-model golden surface).
- * @param {RunReview} review
- */
-function exportReviewModel(review) {
-  return {
-    contractVersion: CONTRACT_VOCAB.version,
-    repo: review.repo,
-    sha: review.sha,
-    commitUrl: review.commitUrl,
-    appUrl: review.appUrl,
-    appMode: review.appMode,
-    recordedThrough: review.recordedThrough,
-    counts: review.counts,
-    jobs: review.jobs.map((j) => ({
-      name: j.name,
-      workflow: j.workflow,
-      run_id: j.run_id,
-      run_url: j.run_url,
-      job_url: j.job_url,
-      profile_id: j.profile_id,
-      uuid: j.uuid,
-      timestamp: j.timestamp,
-      repository: j.repository,
-      sha: j.sha,
-      ref: j.ref,
-      actor: j.actor,
-      job_index: j.job_index,
-      flow_count: j.flow_count,
-      telemetry: j.telemetry,
-      telemetryDiscrepancies: telemetryDiscrepancies(j),
-      assertions: j.assertions,
-      counts: j.counts,
-      edges: j.edges.map((e) => ({
-        remote_address: e.remote_address,
-        remote_names: e.remote_names,
-        remote_ports: e.remote_ports,
-        protocol: e.protocol,
-        result: e.result,
-        detections: e.detections,
-        lineage_recorded: e.lineage_recorded,
-        pid: e.pid,
-        process: e.process,
-        ancestry: e.ancestry,
-        github_step: e.github_step,
-        notes: edgeNotes(e),
-      })),
-    })),
-  }
-}
-
 // ---------------------------------------------------------------------------
-// Public Run Profile — selector and publication policy (contract data; the
+// Public Execution Profile — selector and publication policy (contract data; the
 // page is served by the Garnet app, this repo locks the policy + URLs).
 // ---------------------------------------------------------------------------
 
@@ -160581,20 +160304,6 @@ function exportReviewModel(review) {
 function profilePermalink(job, appUrl, utmMedium) {
   if (!job.run_id || !job.profile_id || !appUrl) return ""
   return `${appUrl}/public/runs/${encodeURIComponent(String(job.run_id))}?profile=${encodeURIComponent(String(job.profile_id))}&utm_source=github&utm_medium=${utmMedium}`
-}
-
-// ---------------------------------------------------------------------------
-// PR comment.
-// ---------------------------------------------------------------------------
-
-/**
- * A non-flow detection overrides runner-scaffolding de-emphasis.
- * @param {ReviewEdge} edge
- */
-function hasRecordedDetection(edge) {
-  return (edge.detections || []).some(
-    (value) => value !== "" && value.toLowerCase() !== "flow",
-  )
 }
 
 /**
@@ -160614,20 +160323,9 @@ const renderNote = (note) =>
  */
 function defangHostname(value) {
   const v = String(value ?? "")
+  if (/^\d{1,3}(\.\d{1,3}){3}$/.test(v)) return v.replace(/\.(?=[^.]*$)/, "[.]")
   if (v === "" || isAddressLike(v) || !v.includes(".")) return v
   return v.replace(/\.(?=[^.]*$)/, "[.]")
-}
-
-/**
- * PR-comment destination display: domain-first — the canonical recorded
- * name is the identity, a bare IP only when no name is recorded. Hostnames
- * are defanged on this surface. No ports, no protocol, address annotation,
- * or secondary-name annotation on the comment.
- * @param {ReviewEdge} edge
- * @param {(value: unknown) => string} escape
- */
-function commentDestinationDisplay(edge, escape) {
-  return escape(defangHostname(truncateMiddle(edgePrimaryDestination(edge))))
 }
 
 /**
@@ -160673,19 +160371,6 @@ function edgeProcessPath(edge) {
   const ancestry = (edge.ancestry || []).filter((part) => part !== "")
   if (ancestry.length > 0) return ancestry
   return [edge.process || VOCAB.unknownLineage]
-}
-
-/**
- * Comment-tree path: recorded ancestry rooted at `Runner.Worker` when the
- * lineage descends from it (the scaffolding prefix above the worker is
- * attribution-noise on the comment; the full path stays in the Step Summary
- * and the Execution Profile).
- * @param {ReviewEdge} edge
- */
-function commentTreePath(edge) {
-  const path = edgeProcessPath(edge)
-  const workerIndex = path.indexOf("Runner.Worker")
-  return workerIndex > 0 ? path.slice(workerIndex) : path
 }
 
 /**
@@ -160753,258 +160438,17 @@ function addressNameMap(...edgeSets) {
 }
 
 /**
- * One representative edge per destination identity, named edges preferred.
- * @param {ReviewEdge[]} edges
- * @param {Map<string, string>} [names]
- * @returns {ReviewEdge[]}
+ * Compare normalized destination identities.
+ * @param {ReviewEdge} a
+ * @param {ReviewEdge} b
+ * @param {Map<string, string>} names
  */
-function dedupeDestinationEdges(edges, names = addressNameMap(edges)) {
-  /** @type {Map<string, ReviewEdge>} */
-  const representatives = new Map()
-  for (const edge of [...edges].sort(edgeComparator)) {
-    const key = destinationIdentity(edge, names)
-    const current = representatives.get(key)
-    const named = edge.remote_names.some((name) => name !== "")
-    const currentNamed = current?.remote_names.some((name) => name !== "")
-    if (!current || (named && !currentNamed)) representatives.set(key, edge)
-  }
-  return [...representatives.values()].sort((a, b) => {
-    const ka = destinationIdentity(a, names)
-    const kb = destinationIdentity(b, names)
-    return ka < kb ? -1 : ka > kb ? 1 : edgeComparator(a, b)
-  })
-}
-
-/**
- * A job's comment-visible destination projection: every recorded chain —
- * no attribution partition — rendered one row per destination identity;
- * capture multiplicity (distinct chains to the same identity) stays in the
- * evidence register. A bare-address representative whose address is named
- * elsewhere in the same record renders under that name — the identity's
- * name is captured evidence, not an invention.
- * @param {ReviewEdge[]} edges
- * @returns {ReviewEdge[]}
- */
-function commentEdges(edges) {
-  const names = addressNameMap(edges)
-  const unify = (/** @type {ReviewEdge} */ edge) => {
-    if (edge.remote_names.some((name) => name !== "")) return edge
-    const name = names.get(edge.remote_address)
-    return name ? { ...edge, remote_names: [name] } : edge
-  }
-  return dedupeDestinationEdges(edges, names).map(unify)
-}
-
-/**
- * @param {string} [name]
- * @returns {TreeNode}
- */
-function makeTreeNode(name = "") {
-  return {
-    name,
-    children: [],
-    childByKey: new Map(),
-    associations: [],
-    pids: new Set(),
-    processes: new Set(),
-    steps: new Set(),
-    executables: new Set(),
-  }
-}
-
-/**
- * Add one destination association to a shared-prefix lineage tree. Nodes
- * are keyed by recorded process name along the lineage path; PID-distinct
- * capture stays in the evidence register (the comment tree renders one row
- * per destination identity).
- * @param {TreeNode} root
- * @param {ReviewEdge} edge
- */
-function addAssociationToTree(root, edge) {
-  const path = commentTreePath(edge)
-  let node = root
-  path.forEach((name, index) => {
-    const terminal = index === path.length - 1
-    const key = JSON.stringify([name])
-    let child = node.childByKey.get(key)
-    if (!child) {
-      child = makeTreeNode(name)
-      node.childByKey.set(key, child)
-      node.children.push(child)
-    }
-    node = child
-    if (terminal) {
-      node.associations.push(edge)
-      if (edge.pid !== "") node.pids.add(edge.pid)
-      if (edge.process !== "") node.processes.add(edge.process)
-      if (edge.github_step !== "") node.steps.add(edge.github_step)
-      if (edge.executable !== "") node.executables.add(edge.executable)
-    }
-  })
-}
-
-/**
- * @param {ReviewEdge[]} edges
- * @returns {TreeNode}
- */
-function treeForAssociations(edges) {
-  const root = makeTreeNode()
-  for (const edge of dedupeDestinationEdges(edges)) addAssociationToTree(root, edge)
-  coalescePrefixTerminalNodes(root)
-  return root
-}
-
-/**
- * @param {TreeNode} target
- * @param {TreeNode} source
- */
-function mergeTreeNode(target, source) {
-  target.associations.push(...source.associations)
-  for (const pid of source.pids) target.pids.add(pid)
-  for (const process of source.processes) target.processes.add(process)
-  for (const step of source.steps) target.steps.add(step)
-  for (const executable of source.executables) target.executables.add(executable)
-}
-
-/**
- * If a process both has its own egress and appears as the prefix of deeper
- * lineage, render it once with destination leaves and child processes.
- * @param {TreeNode} node
- */
-function coalescePrefixTerminalNodes(node) {
-  for (const child of node.children) coalescePrefixTerminalNodes(child)
-  /** @type {Map<string, TreeNode[]>} */
-  const grouped = new Map()
-  for (const child of node.children) {
-    const group = grouped.get(child.name) || []
-    group.push(child)
-    grouped.set(child.name, group)
-  }
-  for (const group of grouped.values()) {
-    const branch = group.find((child) => child.children.length > 0)
-    if (!branch) continue
-    for (const child of group) {
-      if (child !== branch && child.children.length === 0) mergeTreeNode(branch, child)
-    }
-  }
-  node.children = node.children.filter((child) => {
-    const group = grouped.get(child.name) || []
-    const branch = group.find((candidate) => candidate.children.length > 0)
-    return !branch || child === branch || child.children.length > 0
-  })
-}
-
-/**
- * Display-only process name: a trailing run of 4+ digits is provisioning
- * noise (provjobd1326539233 → provjobd) and strips from the comment tree;
- * the record, Step Summary, model JSON, and chain identity keep the raw name.
- * @param {unknown} name
- */
-function displayProcessName(name) {
-  const stripped = String(name ?? "").replace(/\d{4,}$/, "")
-  return stripped === "" ? String(name ?? "") : stripped
-}
-
-/**
- * @param {TreeNode} node
- * @param {{ steps?: boolean, inheritedSteps?: Set<string> }} [options]
- */
-function processNodeLine(node, { steps = true, inheritedSteps = new Set() } = {}) {
-  const escaped = escapeHtml(truncateMiddle(displayProcessName(completedNodeName(node))))
-  // Bold marks the process that acted: an observed action sits directly
-  // beneath it. Decoration only; the terminal itself carries the fact.
-  const body = node.associations.length > 0 ? `<strong>${escaped}</strong>` : escaped
-  // PID + command identity is Step Summary-only; the comment tree shows
-  // process names alone. A real recorded step renders as a bracket
-  // annotation — additive context that never determines structure.
-  const step = steps
-    ? annotatedStepNames(node, inheritedSteps)
-        .map((name) => ` <em>(step: &quot;${escapeHtml(truncateMiddle(name))}&quot;)</em>`)
-        .join("")
-    : ""
-  const provenance = ranFromNote(node.executables)
-  const ranFrom = provenance !== "" ? ` ${renderNote(provenance)}` : ""
-  return `${body}${step}${ranFrom}`
-}
-
-/**
- * Recorded step names on a node, sentinel excluded, deterministically
- * ordered. Steps are additive decoration: a tree rendered with and without
- * them has identical structure, counts, ordering, and comparison.
- * @param {TreeNode} node
- */
-function recordedStepNames(node) {
-  return [...new Set([...node.steps].map(stepAnnotationName))].filter((name) => name !== "").sort()
-}
-
-/**
- * A step annotation renders once per path, on the shallowest process line
- * where that recorded step applies: descendants with the same recorded step
- * inherit it silently, and a descendant whose recorded step differs renders
- * its own.
- * @param {TreeNode} node
- * @param {Set<string>} inherited
- */
-function annotatedStepNames(node, inherited) {
-  return recordedStepNames(node).filter((name) => !inherited.has(name))
-}
-
-/**
- * A workload root descends through `Runner.Worker` or bears a recorded step
- * anywhere in its subtree; every other recorded root (e.g. systemd) is
- * runner infrastructure. Structural facts only — names of destinations or
- * deeper processes never classify.
- * @param {TreeNode} node
- * @returns {boolean}
- */
-function isWorkloadRoot(node) {
-  if (node.name === "Runner.Worker") return true
-  // Unrecorded lineage attributes to the workload: an unprovable line never
-  // quiets a count, so its root never carries the boundary label either.
-  if (node.name === VOCAB.unknownLineage) return true
-  if (recordedStepNames(node).length > 0) return true
-  return node.children.some(isWorkloadRoot)
-}
-
-/**
- * Root order within a job block: workload roots render before
- * infrastructure-rooted ones so the signal is never buried below runner
- * plumbing — snapshot and comparison alike; canonical order holds within
- * each group.
- * @param {TreeNode[]} children
- * @returns {TreeNode[]}
- */
-function orderedJobRoots(children) {
-  return [...children.filter(isWorkloadRoot), ...children.filter((child) => !isWorkloadRoot(child))]
-}
-
-/**
- * @param {TreeNode} node
- * @param {Set<string>} inherited
- */
-function inheritSteps(node, inherited) {
-  const names = recordedStepNames(node)
-  if (names.length === 0) return inherited
-  return new Set([...inherited, ...names])
-}
-
-/**
- * Display-only completion of a kernel-comm-truncated recorded name (exactly
- * 15 bytes): completed only when the record itself carries the full string —
- * the node's recorded executable basenames extend the truncated name to one
- * unique longer name. The raw recorded name stays in the model, marker, and
- * Step Summary; no completion ever comes from outside the profile.
- * @param {TreeNode} node
- */
-function completedNodeName(node) {
-  const name = String(node.name ?? "")
-  if (Buffer.byteLength(name, "utf8") !== 15) return name
-  const candidates = new Set(
-    [...node.executables]
-      .map((path) => path.slice(path.lastIndexOf("/") + 1))
-      .filter((base) => base.length > name.length && base.startsWith(name)),
-  )
-  return candidates.size === 1 ? [...candidates][0] : name
+function compareDestinationIdentities(a, b, names) {
+  const identityA = destinationIdentity(a, names)
+  const identityB = destinationIdentity(b, names)
+  if (identityA < identityB) return -1
+  if (identityA > identityB) return 1
+  return 0
 }
 
 /**
@@ -161014,7 +160458,7 @@ function completedNodeName(node) {
  * @param {Set<string>} executables
  */
 function ranFromNote(executables) {
-  const provenance = runtime_review_vocab_CONTRACT_VOCAB.notes.executableProvenance
+  const provenance = CONTRACT_VOCAB.notes.executableProvenance
   for (const executable of [...executables].sort()) {
     if (!provenance.tempDirPrefixes.some((/** @type {string} */ prefix) => executable.startsWith(prefix))) continue
     const dir = executable.slice(0, executable.lastIndexOf("/"))
@@ -161023,606 +160467,11 @@ function ranFromNote(executables) {
   }
   return ""
 }
-
-/**
- * @param {ReviewEdge} edge
- * @param {boolean} detections
- * @param {boolean} [defang]
- */
-function destinationLeafLine(edge, detections, defang = true) {
-  // Observed actions render as shaped terminals — `○ <destination>` for
-  // network; box-drawing characters carry structure, geometric terminals
-  // carry evidence.
-  const display = defang
-    ? commentDestinationDisplay(edge, escapeHtml)
-    : escapeHtml(truncateMiddle(edgePrimaryDestination(edge)))
-  const parts = [VOCAB.terminalNetwork, display]
-  for (const note of edgeNotes(edge, { detections })) parts.push(renderNote(note))
-  return parts.join(" ")
-}
-
-/**
- * @param {TreeNode} node
- * @param {string} prefix
- * @param {string[]} lines
- * @param {{ destinations: boolean, steps?: boolean, detections?: boolean, defang?: boolean, inheritedSteps?: Set<string> }} options
- */
-function renderTreeChildren(node, prefix, lines, { destinations, steps = true, detections = false, defang = true, inheritedSteps = new Set() }) {
-  /** @type {({ kind: "process", child: TreeNode } | { kind: "destination", edge: ReviewEdge })[]} */
-  const entries = [
-    ...node.children.map((child) => ({ kind: /** @type {"process"} */ ("process"), child })),
-    ...(destinations
-      ? node.associations.map((edge) => ({ kind: /** @type {"destination"} */ ("destination"), edge }))
-      : []),
-  ]
-  entries.forEach((entry, index) => {
-    const last = index === entries.length - 1
-    const branch = last ? "└─ " : "├─ "
-    const childPrefix = `${prefix}${last ? "   " : "│  "}`
-    if (entry.kind === "process") {
-      lines.push(`${prefix}${branch}${processNodeLine(entry.child, { steps, inheritedSteps })}`)
-      renderTreeChildren(entry.child, childPrefix, lines, {
-        destinations,
-        steps,
-        detections,
-        defang,
-        inheritedSteps: inheritSteps(entry.child, inheritedSteps),
-      })
-    } else {
-      lines.push(`${prefix}${branch}${destinationLeafLine(entry.edge, detections, defang)}`)
-    }
-  })
-}
-
-/**
- * Render a job's lossless shared-prefix lineage tree. Destination leaves stay
- * attached to the terminal recorded process; no ×N grouping or trust labels.
- * @param {ReviewJob} job
- * @param {ReviewEdge[]} [edges]
- * @param {{ defang?: boolean }} [opts]
- */
-function renderJobTree(job, edges = job.edges, opts = {}) {
-  /** @type {string[]} */
-  const lines = []
-  const root = treeForAssociations(edges)
-  // One block holds every recorded root; independent recorded ancestry
-  // roots are separated by one blank line — whitespace means independent
-  // recorded roots in the same job, never another category.
-  orderedJobRoots(root.children).forEach((child, index) => {
-    if (index > 0) lines.push("")
-    lines.push(processNodeLine(child, { steps: true }))
-    renderTreeChildren(child, "", lines, {
-      destinations: true,
-      steps: true,
-      defang: opts.defang !== false,
-      inheritedSteps: inheritSteps(child, new Set()),
-    })
-  })
-  return lines.join("\n")
-}
-
-// ---------------------------------------------------------------------------
-// Execution comparison — in-fold marked tree. The tree walk is the same
-// as the snapshot tree; a line is marked `+` iff it was not present in the
-// previous record and `−` iff absent from the current one — a new chain
-// marks its whole branch from the divergence point, a new destination under
-// existing lineage marks only the leaf. Rendered inside a ```diff fence with
-// one `@@ <previous> (previous) vs <head> (current) @@` header.
-// ---------------------------------------------------------------------------
-
-/**
- * Plain-text (fence-safe) node/leaf text — no HTML, backticks neutralized.
- * @param {unknown} value
- */
-const fenceText = (value) =>
-  stripControl(value).replace(/`/g, "ʼ").replace(/[\r\n]+/g, " ").trim()
-
-/**
- * Per-job comparison against the same job in the previous profiled commit:
- * one identity-set diff over the whole job's destination projection — no
- * partition, no equivalence heuristics, no quieting layer.
- * @param {ReviewEdge[]} headEdges
- * @param {ReviewEdge[]} previousEdges
- * @returns {EdgeDelta}
- */
-function compareJobEdges(headEdges, previousEdges) {
-  const names = addressNameMap(headEdges, previousEdges)
-  const headIds = new Set(headEdges.map((edge) => destinationIdentity(edge, names)))
-  const prevIds = new Set(previousEdges.map((edge) => destinationIdentity(edge, names)))
-  const addedIds = new Set([...headIds].filter((id) => !prevIds.has(id)))
-  const removedIds = new Set([...prevIds].filter((id) => !headIds.has(id)))
-  // Provable-rotation join (contract comment.rotationJoin): a −/+ pair is one
-  // rotating GitHub infrastructure identity when the owning recorded process
-  // is the same and both recorded addresses sit in the same published GitHub
-  // service block — either two bare-address identities (a lease rotation) or
-  // two named identities sharing one registrable domain (a pool
-  // reassignment). A joined pair is unmarked and uncounted, and the current
-  // line carries the identity it replaced. Data, not heuristics: the ranges
-  // and the public-suffix rules are vendored contract bytes, and anything
-  // unprovable stays an honest −/+.
-  /** @type {Map<string, string>} */
-  const rotations = new Map()
-  /**
-   * Join candidates on one side, grouped by [owning process, block, domain].
-   * @param {ReviewEdge[]} edges
-   * @param {Set<string>} ids
-   * @returns {Map<string, Map<string, ReviewEdge>>}
-   */
-  function rotationCandidates(edges, ids) {
-    /** @type {Map<string, Map<string, ReviewEdge>>} */
-    const byGroup = new Map()
-    for (const edge of [...edges].sort(edgeComparator)) {
-      const id = destinationIdentity(edge, names)
-      if (!ids.has(id)) continue
-      // An address-like identity is bare even when the record aliases the
-      // address to itself in remote_names — live captures do exactly that.
-      const bare = isAddressLike(id)
-      const domain = bare ? "" : registrableDomain(id)
-      if (!bare && domain === "") continue
-      const block = githubInfraBlock(edge.remote_address)
-      if (block === "") continue
-      const path = commentTreePath(edge)
-      const owner = path[path.length - 1] ?? ""
-      const key = JSON.stringify([owner, block, domain])
-      let group = byGroup.get(key)
-      if (group === undefined) {
-        group = new Map()
-        byGroup.set(key, group)
-      }
-      if (!group.has(id)) group.set(id, edge)
-    }
-    return byGroup
-  }
-  const removedGroups = rotationCandidates(previousEdges, removedIds)
-  const addedGroups = rotationCandidates(headEdges, addedIds)
-  // Deterministic pairing: groups in sorted key order, identities in sorted
-  // order, and every identity joins at most once.
-  for (const key of [...removedGroups.keys()].sort()) {
-    const addedGroup = addedGroups.get(key)
-    if (addedGroup === undefined) continue
-    const removedGroup = removedGroups.get(key)
-    if (removedGroup === undefined) continue
-    const removedList = [...removedGroup.keys()].filter((id) => removedIds.has(id)).sort()
-    const addedList = [...addedGroup.keys()].filter((id) => addedIds.has(id)).sort()
-    const pairs = Math.min(removedList.length, addedList.length)
-    for (let index = 0; index < pairs; index += 1) {
-      const addedID = addedList[index] ?? ""
-      const removedID = removedList[index] ?? ""
-      rotations.set(addedID, removedID)
-      addedIds.delete(addedID)
-      removedIds.delete(removedID)
-    }
-  }
-  /** @type {Map<string, ReviewEdge>} */
-  const removedByID = new Map()
-  for (const edge of [...previousEdges].sort(edgeComparator)) {
-    const id = destinationIdentity(edge, names)
-    if (removedIds.has(id) && !removedByID.has(id)) removedByID.set(id, edge)
-  }
-  // Delta partition (contract comment.deltaPartition): each added/removed
-  // identity attributes to the workload or to the runner background by the
-  // structural root rule. The headline counts are workload-attributed only;
-  // background movement keeps its own quiet counts. Every identity stays in
-  // addedIds/removedIds, so every mark still renders — only count placement
-  // partitions, never visibility.
-  const headWorkload = workloadIdentitySet(headEdges, names)
-  const previousWorkload = workloadIdentitySet(previousEdges, names)
-  const workloadAdded = [...addedIds].filter((id) => headWorkload.has(id))
-  const workloadRemoved = [...removedIds].filter((id) => previousWorkload.has(id))
-  return {
-    addedIds,
-    removedIds,
-    added: addedIds,
-    removed: [...removedByID.values()],
-    addedCount: workloadAdded.length,
-    removedCount: workloadRemoved.length,
-    backgroundAddedCount: addedIds.size - workloadAdded.length,
-    backgroundRemovedCount: removedIds.size - workloadRemoved.length,
-    rotations,
-  }
-}
-
-/**
- * Workload attribution of destination identities on one side of a job
- * comparison (contract comment.deltaPartition). Edges group by recorded
- * root; a root attributes to the workload when any of its edges descends
- * through `Runner.Worker` or bears a recorded step — the same structural
- * rule as rootOrdering. Unrecorded lineage attributes to the workload: an
- * unprovable line never quiets a count. An identity is workload-attributed
- * when any of its edges is. Names of destinations, processes, hostnames, or
- * domains never classify.
- * @param {ReviewEdge[]} edges
- * @param {Map<string, string>} names
- * @returns {Set<string>}
- */
-function workloadIdentitySet(edges, names) {
-  /** @type {Set<string>} */
-  const workloadRoots = new Set()
-  /** @type {[ReviewEdge, string][]} */
-  const roots = []
-  for (const edge of edges) {
-    const path = commentTreePath(edge)
-    const root = path[0] ?? ""
-    roots.push([edge, root])
-    if (
-      !edge.lineage_recorded ||
-      path.includes("Runner.Worker") ||
-      stepAnnotationName(edge.github_step) !== ""
-    ) {
-      workloadRoots.add(root)
-    }
-  }
-  /** @type {Set<string>} */
-  const ids = new Set()
-  for (const [edge, root] of roots) {
-    if (workloadRoots.has(root)) ids.add(destinationIdentity(edge, names))
-  }
-  return ids
-}
-
-/**
- * The registrable domain (eTLD+1) of a recorded hostname, computed from the
- * versioned public-suffix table — data, not heuristics. Empty for address
- * literals, single labels, and unknown inputs.
- * @param {string} name
- */
-function registrableDomain(name) {
-  const host = name.toLowerCase().replace(/\.$/, "")
-  if (host === "" || isAddressLike(host) || !host.includes(".")) return ""
-  const labels = host.split(".")
-  let suffixLen = 1
-  for (let i = 0; i < labels.length; i += 1) {
-    const candidate = labels.slice(i).join(".")
-    const kind = PUBLIC_SUFFIX_RULES.get(candidate)
-    if (kind === "exception") {
-      suffixLen = labels.length - i - 1
-      break
-    }
-    const wildcardParent =
-      i + 1 < labels.length &&
-      PUBLIC_SUFFIX_RULES.get(labels.slice(i + 1).join(".")) === "wildcard"
-    if (kind === "rule" || wildcardParent) {
-      suffixLen = labels.length - i
-      break
-    }
-  }
-  if (labels.length <= suffixLen) return ""
-  return labels.slice(labels.length - suffixLen - 1).join(".")
-}
-/**
- * The retrieval date of the vendored published GitHub meta ranges, carried in
- * the garnet:summary marker so a stale range list is diagnosable from any
- * live comment.
- */
-const GITHUB_META_RETRIEVED = GITHUB_META_IP_RANGES.retrieved
-
-// Service blocks only (web/api): the `actions` block is runner address space,
-// where an attacker-controlled endpoint in another org can sit, so a
-// same-process substitution there is weaker proof and never joins.
-const GITHUB_META_BLOCKS = [...new Set([...GITHUB_META_IP_RANGES.web, ...GITHUB_META_IP_RANGES.api])]
-
-/**
- * The numeric value of an IPv4/IPv6 literal, or null when the text is not one.
- * @param {string} address
- * @returns {bigint | null}
- */
-function ipToBigInt(address) {
-  if (address.includes(":")) {
-    // IPv6 (no embedded-IPv4 forms in the vendored data).
-    const [head, tail] = address.split("::")
-    const headParts = head === undefined || head === "" ? [] : head.split(":")
-    const tailParts = tail === undefined || tail === "" ? [] : tail.split(":")
-    if (tail === undefined && headParts.length !== 8) return null
-    const parts = [
-      ...headParts,
-      ...Array(8 - headParts.length - tailParts.length).fill("0"),
-      ...tailParts,
-    ]
-    if (parts.length !== 8 || parts.some((part) => !/^[0-9a-fA-F]{1,4}$/.test(part))) return null
-    return parts.reduce((acc, part) => (acc << 16n) | BigInt(parseInt(part, 16)), 0n)
-  }
-  const octets = address.split(".")
-  if (octets.length !== 4 || octets.some((o) => !/^\d{1,3}$/.test(o) || Number(o) > 255)) {
-    return null
-  }
-  return octets.reduce((acc, o) => (acc << 8n) | BigInt(Number(o)), 0n)
-}
-
 /**
  * One parsed published block: its text, family, and the shift/value pair the
  * prefix match compares.
  * @typedef {{ cidr: string, v6: boolean, shift: bigint, value: bigint }} MetaBlock
  */
-
-/** @type {MetaBlock[]} */
-const GITHUB_META_PARSED = GITHUB_META_BLOCKS.map((cidr) => {
-  const [networkText, prefixText] = cidr.split("/")
-  const network = networkText ?? ""
-  const v6 = network.includes(":")
-  const bits = v6 ? 128n : 32n
-  const prefix = BigInt(prefixText ?? "0")
-  const value = ipToBigInt(network) ?? 0n
-  return { cidr, v6, shift: bits - prefix, value: value >> (bits - prefix) }
-})
-
-/**
- * The published GitHub infrastructure block containing an address, else "".
- * Longest (most specific) matching prefix wins so the join key is stable.
- * @param {string} address
- * @returns {string}
- */
-function githubInfraBlock(address) {
-  const text = String(address ?? "")
-  const value = ipToBigInt(text)
-  if (value === null) return ""
-  const v6 = text.includes(":")
-  /** @type {MetaBlock | null} */
-  let best = null
-  for (const block of GITHUB_META_PARSED) {
-    if (block.v6 !== v6) continue
-    if (value >> block.shift === block.value) {
-      if (best === null || block.shift < best.shift) best = block
-    }
-  }
-  return best === null ? "" : best.cidr
-}
-
-
-
-/**
- * @param {TreeNode} node
- * @param {{ steps?: boolean, inheritedSteps?: Set<string> }} [options]
- */
-function diffNodeLine(node, { steps = true, inheritedSteps = new Set() } = {}) {
-  const step = steps
-    ? annotatedStepNames(node, inheritedSteps)
-        .map((name) => ` (step: "${fenceText(truncateMiddle(name))}")`)
-        .join("")
-    : ""
-  const provenance = ranFromNote(node.executables)
-  const ranFrom = provenance !== "" ? ` (${fenceText(provenance)})` : ""
-  return `${fenceText(truncateMiddle(displayProcessName(completedNodeName(node))))}${step}${ranFrom}`
-}
-
-/**
- * @param {ReviewEdge} edge
- * @param {boolean} [annotateAddress]
- * @param {string} [rotatedFrom]
- */
-function diffLeafLine(edge, annotateAddress = false, rotatedFrom = "") {
-  const identity = edgePrimaryDestination(edge)
-  const parts = [VOCAB.terminalNetwork, fenceText(defangHostname(truncateMiddle(identity)))]
-  // A marked (+/−) leaf carries the recorded address as one trailing bracket
-  // annotation only when an oppositely-marked line in the same fence shares
-  // its registrable domain; context lines carry none, and a bare-address
-  // identity never repeats its own address.
-  if (annotateAddress && edge.remote_address !== "" && edge.remote_address !== identity) {
-    parts.push(`(${fenceText(edge.remote_address)})`)
-  }
-  // A joined rotation carries the trust cue and the identity it replaced in
-  // one bracket, so the line reads as context with its provenance attached.
-  if (rotatedFrom !== "") {
-    parts.push(
-      `(${fenceText(
-        `${CONTRACT_VOCAB.notes.githubInfrastructure.text} · rotated from ${defangHostname(rotatedFrom)}`,
-      )})`,
-    )
-  }
-  for (const note of edgeNotes(edge, { detections: false })) {
-    // One bracket per fact: the rotation bracket already names GitHub infra.
-    if (rotatedFrom !== "" && note === CONTRACT_VOCAB.notes.githubInfrastructure.text) continue
-    parts.push(`(${fenceText(note)})`)
-  }
-  return parts.join(" ")
-}
-
-/**
- * Git-shaped branch mark for a process node: `+` when every destination
- * leaf beneath it is added (the whole branch is new from its divergence
- * point), `−` when every leaf beneath it left the record; mixed subtrees
- * stay context. Marked lineage lines never count — fold-row `+A −R` stays
- * destination-anchored.
- * @param {TreeNode} node
- * @param {Map<ReviewEdge, string>} marks
- * @returns {string}
- */
-function diffBranchMark(node, marks) {
-  /** @type {Set<string>} */
-  const leafMarks = new Set()
-  const visit = (/** @type {TreeNode} */ current) => {
-    for (const edge of current.associations) {
-      leafMarks.add(marks.get(edge) ?? " ")
-    }
-    for (const child of current.children) visit(child)
-  }
-  visit(node)
-  if (leafMarks.size === 1) {
-    const only = [...leafMarks][0]
-    if (only === "+" || only === "-") return only
-  }
-  return " "
-}
-
-/**
- * @param {TreeNode} node
- * @param {string} prefix
- * @param {string[]} lines
- * @param {Map<ReviewEdge, string>} marks
- * @param {Set<ReviewEdge>} annotated
- * @param {Set<string>} [inheritedSteps]
- * @param {Map<ReviewEdge, string>} [rotatedByEdge]
- */
-function renderDiffChildren(
-  node,
-  prefix,
-  lines,
-  marks,
-  annotated,
-  inheritedSteps = new Set(),
-  rotatedByEdge = new Map(),
-) {
-  /** @type {({ kind: "process", child: TreeNode } | { kind: "destination", edge: ReviewEdge })[]} */
-  const entries = [
-    ...node.children.map((child) => ({ kind: /** @type {"process"} */ ("process"), child })),
-    ...node.associations.map((edge) => ({ kind: /** @type {"destination"} */ ("destination"), edge })),
-  ]
-  entries.forEach((entry, index) => {
-    const last = index === entries.length - 1
-    const branch = last ? "└─ " : "├─ "
-    const childPrefix = `${prefix}${last ? "   " : "│  "}`
-    if (entry.kind === "process") {
-      const mark = diffBranchMark(entry.child, marks)
-      lines.push(`${mark} ${prefix}${branch}${diffNodeLine(entry.child, { inheritedSteps })}`)
-      renderDiffChildren(
-        entry.child,
-        childPrefix,
-        lines,
-        marks,
-        annotated,
-        inheritSteps(entry.child, inheritedSteps),
-        rotatedByEdge,
-      )
-    } else {
-      const mark = marks.get(entry.edge) ?? " "
-      lines.push(
-        `${mark} ${prefix}${branch}${diffLeafLine(
-          entry.edge,
-          annotated.has(entry.edge),
-          rotatedByEdge.get(entry.edge) ?? "",
-        )}`,
-      )
-    }
-  })
-}
-
-/**
- * Render one changed job's marked tree as the body of a `diff` fence: the
- * union of the head tree and the no-longer-recorded chains, one `@@` header
- * carrying the head-vs-previous attribution and the exact delta.
- * @param {ReviewJob} job
- * @param {EdgeDelta} delta
- * @param {string} headSha
- * @param {string} previousSha
- */
-function renderJobDiffTree(job, delta, headSha, previousSha) {
-  /** @type {Map<ReviewEdge, string>} */
-  const marks = new Map()
-  const names = addressNameMap(job.edges, delta.removed)
-  /** @type {Map<string, ReviewEdge>} */
-  const representatives = new Map()
-  for (const edge of [...job.edges, ...delta.removed].sort(edgeComparator)) {
-    const id = destinationIdentity(edge, names)
-    const current = representatives.get(id)
-    const named = edge.remote_names.some((name) => name !== "")
-    const currentNamed = current?.remote_names.some((name) => name !== "")
-    if (!current || (named && !currentNamed)) representatives.set(id, edge)
-  }
-  // Provable-rotation join: the joined identity renders unmarked, carrying
-  // the identity it replaced. More than one rotation in a fence would turn
-  // every line into an annotation, so the fence summarizes them instead
-  // (contract comment.rotationJoin).
-  /** @type {Map<ReviewEdge, string>} */
-  const rotatedByEdge = new Map()
-  const unionEdges = [...representatives.entries()].map(([id, edge]) => {
-    marks.set(edge, delta.addedIds.has(id) ? "+" : delta.removedIds.has(id) ? "-" : " ")
-    const rotatedFrom = delta.rotations.get(id)
-    if (rotatedFrom !== undefined) rotatedByEdge.set(edge, rotatedFrom)
-    return edge
-  })
-  if (rotatedByEdge.size > 1) rotatedByEdge.clear()
-  unionEdges.sort((a, b) => {
-    const ka = destinationIdentity(a, names)
-    const kb = destinationIdentity(b, names)
-    return ka < kb ? -1 : ka > kb ? 1 : edgeComparator(a, b)
-  })
-  // Same-domain pair annotation: a marked line carries its recorded address
-  // only when an oppositely-marked line in this fence shares its eTLD+1.
-  /** @type {Set<string>} */
-  const addedDomains = new Set()
-  /** @type {Set<string>} */
-  const removedDomains = new Set()
-  for (const edge of unionEdges) {
-    const domain = registrableDomain(destinationIdentity(edge, names))
-    if (domain === "") continue
-    if (marks.get(edge) === "+") addedDomains.add(domain)
-    if (marks.get(edge) === "-") removedDomains.add(domain)
-  }
-  const annotated = new Set(
-    unionEdges.filter((edge) => {
-      const mark = marks.get(edge)
-      if (mark !== "+" && mark !== "-") return false
-      const domain = registrableDomain(destinationIdentity(edge, names))
-      return domain !== "" && (mark === "+" ? removedDomains : addedDomains).has(domain)
-    }),
-  )
-  // Previous SHA first, roles named: the reader scans old → new like a diff.
-  const lines = [
-    `@@ ${fenceText(previousSha.slice(0, 7) || "unknown")} (previous) vs ${fenceText(headSha.slice(0, 7) || "unknown")} (current) @@`,
-  ]
-  const root = treeForAssociations(unionEdges)
-  // Findings first: workload roots render before infrastructure roots, and
-  // within each group roots carrying any marked (+/−) line render before
-  // all-context roots — a workload change is never buried below runner
-  // plumbing; canonical order holds within each tier.
-  /** @type {(node: TreeNode) => boolean} */
-  const subtreeHasMark = (node) =>
-    node.associations.some((edge) => (marks.get(edge) ?? " ") !== " ") ||
-    node.children.some(subtreeHasMark)
-  /** @type {(children: TreeNode[]) => TreeNode[]} */
-  const withMarks = (children) => [
-    ...children.filter(subtreeHasMark),
-    ...children.filter((child) => !subtreeHasMark(child)),
-  ]
-  const orderedRoots = [
-    ...withMarks(root.children.filter(isWorkloadRoot)),
-    ...withMarks(root.children.filter((child) => !isWorkloadRoot(child))),
-  ]
-  // Boundary label: a moved non-workload root announces its subtree's marks
-  // where the secondary evidence begins — '(runner background · +A −B)' in
-  // the fence's plain parenthetical context grammar. The count sits beside
-  // the marks it counts; workload roots and unmoved roots carry no label.
-  /** @type {(node: TreeNode) => { added: number, removed: number }} */
-  const subtreeMarkCounts = (node) => {
-    const counts = { added: 0, removed: 0 }
-    /** @type {(n: TreeNode) => void} */
-    const walk = (n) => {
-      for (const edge of n.associations) {
-        const mark = marks.get(edge) ?? " "
-        if (mark === "+") counts.added += 1
-        if (mark === "-") counts.removed += 1
-      }
-      n.children.forEach(walk)
-    }
-    walk(node)
-    return counts
-  }
-  /** @type {(child: TreeNode) => string} */
-  const boundaryLabel = (child) => {
-    if (isWorkloadRoot(child)) return ""
-    const { added, removed } = subtreeMarkCounts(child)
-    if (added + removed === 0) return ""
-    const sides = []
-    if (added > 0) sides.push(`+${added}`)
-    if (removed > 0) sides.push(`−${removed}`)
-    return ` (${VOCAB.runnerBackground} · ${sides.join(" ")})`
-  }
-  orderedRoots.forEach((child, index) => {
-    // Independent recorded roots separate with one fence-safe " " line.
-    if (index > 0) lines.push(" ")
-    const mark = diffBranchMark(child, marks)
-    lines.push(`${mark} ${diffNodeLine(child)}${boundaryLabel(child)}`)
-    renderDiffChildren(
-      child,
-      "",
-      lines,
-      marks,
-      annotated,
-      inheritSteps(child, new Set()),
-      rotatedByEdge,
-    )
-  })
-  return lines.join("\n")
-}
 
 /**
  * A count with its inflected unit, glued with `&nbsp;` so `11 chains` never
@@ -161632,87 +160481,6 @@ function renderJobDiffTree(job, delta, headSha, previousSha) {
  */
 function countPhrase(n, unit) {
   return `${n}&nbsp;${unit}${n === 1 ? "" : "s"}`
-}
-
-/**
- * Named workload delta — `+A −R destination(s)` — numbers bold, unit
- * named, zero sides dropped (`−1 destination`, never `+0 −1`). The unit
- * inflects on the total moved identities.
- * @param {number} added
- * @param {number} removed
- * @param {{ bold?: boolean, unit?: boolean }} [options]
- */
-function deltaPhrase(added, removed, { bold = true, unit = true } = {}) {
-  const sides = []
-  if (added > 0) sides.push(`+${added}`)
-  if (removed > 0) sides.push(`−${removed}`)
-  const numbers = sides.join("&nbsp;")
-  const marked = bold ? `<b>${numbers}</b>` : numbers
-  if (!unit) return marked
-  return `${marked}&nbsp;${added + removed === 1 ? "destination" : "destinations"}`
-}
-
-/**
- * The fold identity line: `workflow / job ↗` — the job-id text is the
- * hyperlink. Target: the specific Actions job URL when recorded, else the
- * run URL. Matrix cells are distinct jobs; the cell identity lives in the
- * job-id slot.
- * @param {{ name: string, workflow: string, job_url?: string, run_url?: string }} job
- */
-function jobIdentity(job) {
-  const wf = `<code>${escapeHtml(job.workflow)}</code>`
-  const url = job.job_url || job.run_url
-  const name = url
-    ? `<a href="${escapeHtmlAttr(url)}"><code>${escapeHtml(job.name)}</code>&nbsp;↗</a>`
-    : `<code>${escapeHtml(job.name)}</code>`
-  return job.workflow !== "" ? `${wf} / ${name}` : name
-}
-
-/**
- * Explicit medium-forced omission line.
- * @param {number} x
- * @param {number} y
- */
-const truncationLine = (x, y) =>
-  CONTRACT_VOCAB.copy.truncationTemplate
-    .replace("X", String(x))
-    .replace("Y", String(y))
-
-/**
- * Concise orientation fold with a lineage-exact mini tree. Open while
- * pending and on the first recorded result; collapsed on later updates.
- * @param {{ open?: boolean, comparison?: boolean, background?: boolean }} [options]
- */
-function renderExplainer({ open = false, comparison = false, background = false } = {}) {
-  // One mini tree of exactly the constructs the real renderer emits, with
-  // ← arrow callouts aligned in one italic column at visible offset 23 —
-  // every callout line fits ~44 monospace columns, so the tree teaches
-  // without horizontal scroll at 390px. One reading sentence and one legend
-  // line follow as proportional <sub> lines that wrap instead of scrolling.
-  const callout = (/** @type {string} */ label) => `<em>← ${label}</em>`
-  const lines = [
-    `<details${open ? " open" : ""}><summary><sub>${VOCAB.explainerLabel}</sub></summary>`,
-    "",
-    "<pre>",
-    `Runner.Worker          ${callout(VOCAB.explainerCalloutPath)}`,
-    "└─ npm",
-    `   └─ <strong>node</strong>             ${callout(VOCAB.explainerCalloutActed)}`,
-    `      └─ ${VOCAB.terminalNetwork} npmjs[.]org ${callout(VOCAB.explainerCalloutAction)}`,
-    "</pre>",
-    "",
-    `<sub><i>${VOCAB.explainerReadingLine}</i></sub>`,
-    "",
-    `<sub><i>${VOCAB.explainerLegendLine}</i></sub>`,
-  ]
-  if (comparison) {
-    // The legend teaches the boundary-label vocabulary only when a label
-    // actually renders above it.
-    const segments = [VOCAB.explainerComparisonLine]
-    if (background) segments.push(VOCAB.explainerBackgroundSegment)
-    lines.push("", `<sub><i>${segments.join(" · ")}</i></sub>`)
-  }
-  lines.push("", "</details>")
-  return lines.join("\n")
 }
 
 /**
@@ -161762,688 +160530,12 @@ function displayStepName(name) {
 function isSentinelStep(name) {
   return displayStepName(name) === "Runner Processes"
 }
-
-/**
- * Total background-attributed movement in a job delta.
- * @param {JobDelta | null | undefined} delta
- * @returns {number}
- */
-function backgroundDelta(delta) {
-  if (delta === null || delta === undefined) return 0
-  return delta.backgroundAddedCount + delta.backgroundRemovedCount
-}
-
-/**
- * Fold summary row — the row's facts are the identity and the destination
- * count; no step-name sentence, no chain counts. Changed rows lead with
- * the bold delta as their only destination fact; unchanged comparison rows
- * read `· N destinations · unchanged` — adjacency scopes the claim to the
- * destination projection.
- * @param {ReviewJob} job
- * @param {{ delta?: JobDelta | null, treeEdges?: ReviewEdge[] | null }} [options]
- */
-function jobSummaryLine(job, { delta = null, treeEdges = null } = {}) {
-  const tree = treeEdges ?? job.edges
-  const displayEdges = dedupeDestinationEdges(tree)
-  const names = addressNameMap(tree)
-  const treeCounts = new Set(displayEdges.map((edge) => destinationIdentity(edge, names))).size
-  const parts = []
-  // Changed rows lead with the bold delta: the left edge is the scan column,
-  // so what moved reads top-to-bottom without reading a single job name.
-  // The comparison base commit renders once at run scope (metadata line) and
-  // inside the diff's @@ header — the fold row carries only its own delta.
-  // The meta block's changed segment names the destination unit once for
-  // the whole comment; the fold row carries only its own bold split.
-  const changed = delta !== null && delta.addedCount + delta.removedCount > 0
-  if (changed) {
-    parts.push(`${deltaPhrase(delta.addedCount, delta.removedCount, { unit: false })} ·`)
-  }
-  parts.push(jobIdentity(job))
-  if (!changed) parts.push(`· ${countPhrase(treeCounts, "destination")}`)
-  // The workload-scoped 'unchanged' claim only renders when the runner
-  // background held still too — a row never claims 'unchanged' beside a
-  // quiet background split.
-  if (delta !== null && !changed && backgroundDelta(delta) === 0) {
-    parts.push(`· ${VOCAB.noChange}`)
-  }
-  return parts.join(" ")
-}
-
-/**
- * Per-job edge retention order under medium truncation: IMDS edges first
- * (never evicted while any non-IMDS edge renders), then canonical order.
- * @param {ReviewEdge[]} edges
- */
-function retentionOrder(edges) {
-  /** @type {ReviewEdge[]} */
-  const imds = []
-  /** @type {ReviewEdge[]} */
-  const rest = []
-  for (const e of edges) (IMDS_ADDRESSES.has(e.remote_address) ? imds : rest).push(e)
-  return [...imds, ...rest]
-}
-
-/**
- * Render the PR comment body with `kept` edges per job (kept = Map job.id →
- * count from the job's retention order; display stays canonical order).
- */
-/**
- * Markdown commit reference: linked short sha when the commit URL is known.
- * @param {string} sha
- * @param {string} commitUrl
- */
-function commitRef(sha, commitUrl) {
-  const sha7 = escapeCode(sha.slice(0, 7) || "unknown")
-  const url = safeHTTPURL(commitUrl)
-  return url !== "" ? `[\`${sha7}\`](${url})` : `\`${sha7}\``
-}
-
-/**
- * The previous profiled commit's reference, linked when derivable.
- * @param {RunReview & { comparison: ReviewComparison }} review
- */
-function previousCommitRef(review) {
-  const prev = review.comparison.previousSha
-  const url =
-    review.commitUrl !== "" && review.sha !== "" && review.commitUrl.endsWith(review.sha)
-      ? review.commitUrl.slice(0, review.commitUrl.length - review.sha.length) + prev
-      : ""
-  return commitRef(prev, url)
-}
-
-/**
- * The category heading — the core primitive stated as the high-level
- * summary: Execution Profiles belong to jobs; the commit is the trigger.
- * All counts and change facts live in the metadata line and job folds.
- * @param {RunReview} review
- */
-function headlineSentence(review) {
-  const k = review.counts.jobs
-  const jobsNoun = `${k} job${k === 1 ? "" : "s"}`
-  // Bold body line, not a `#` heading — a recurring bot comment speaks at
-  // body register; the primitive is the emphasis, not the type size.
-  return `**${VOCAB.headlineLead} ${jobsNoun}, triggered by ${commitRef(review.sha, review.commitUrl)}**`
-}
-
-/**
- * Comment-register counts: `destinations` totals the job folds' trees
- * exactly — each job's distinct destination identities, summed, so the
- * metadata count equals the fold rows' counts by inspection. `chains` is
- * the machine-register chain aggregate (every recorded destination
- * association) — it never renders on the human surface. Capture
- * multiplicity stays in the Step Summary and the review model.
- * @param {ReviewJob[]} jobs
- */
-function commentRegisterCounts(jobs) {
-  let chains = 0
-  let destinations = 0
-  for (const job of jobs) {
-    const names = addressNameMap(job.edges)
-    const shown = commentEdges(job.edges)
-    chains += job.edges.length
-    destinations += new Set(shown.map((edge) => destinationIdentity(edge, names))).size
-  }
-  return { chains, destinations }
-}
-
-/**
- * The human-line timestamp at minute precision; the machine marker keeps
- * the record's full-precision stamp.
- * @param {string} stamp
- */
-function minuteStamp(stamp) {
-  return stamp.replace(/(\d{2}:\d{2}):\d{2}/, "$1")
-}
-
-/**
- * Meta block — two blockquote lines in every state. The first line is the
- * finding: on a zero-delta comparison the verdict (`No changes since
- * <prev7>`); on comparison comments with movement the job segments (changed
- * with its +A −R delta, unchanged, no-outbound, no-longer-recorded — each
- * counting the folds/entries rendered beneath it) plus the comparison
- * pointer; on snapshot comments the destination total across the job folds.
- * The second line is one quiet `<sub>` provenance line: kernel provenance
- * and the record's timestamp at minute precision. Chain counts never render
- * here.
- * @param {RunReview} review
- * @param {ReturnType<typeof changeAccounting>} accounting
- */
-function metaBlock(review, accounting) {
-  /** @type {string[]} */
-  const findings = []
-  if (review.comparison !== null) {
-    const comparisonReview =
-      /** @type {RunReview & { comparison: ReviewComparison }} */ (review)
-    const zeroDelta =
-      accounting.changedJobs === 0 &&
-      accounting.vanishedJobCount === 0 &&
-      accounting.added === 0 &&
-      accounting.removed === 0 &&
-      accounting.backgroundAdded === 0 &&
-      accounting.backgroundRemoved === 0
-    if (zeroDelta) {
-      // Zero-delta comparison: the verdict is the finding.
-      findings.push(`No changes ${VOCAB.sinceWord} ${previousCommitRef(comparisonReview)}`)
-    } else {
-      if (accounting.changedJobs > 0) {
-        findings.push(
-          `${countPhrase(accounting.changedJobs, "job")} ${VOCAB.jobsLineChanged} ${deltaPhrase(accounting.added, accounting.removed, { bold: false })}`,
-        )
-      }
-      if (accounting.unchangedJobs > 0) {
-        findings.push(`${countPhrase(accounting.unchangedJobs, "job")} ${VOCAB.jobsLineUnchanged}`)
-      }
-      if (accounting.noOutboundJobs > 0) {
-        findings.push(`${countPhrase(accounting.noOutboundJobs, "job")} ${VOCAB.jobsLineNoOutbound}`)
-      }
-      if (accounting.vanishedJobCount > 0) {
-        findings.push(`${countPhrase(accounting.vanishedJobCount, "job")} ${VOCAB.jobsLineVanished}`)
-      }
-      findings.push(`compared with ${previousCommitRef(comparisonReview)}`)
-    }
-  } else {
-    // Snapshot: the destination total is the finding — the visible sum of
-    // the fold rows beneath it (dns-resolver leaves included, every root).
-    const { destinations } = commentRegisterCounts(review.jobs)
-    let total = countPhrase(destinations, "destination")
-    if (review.jobs.length > 1) {
-      total += ` across ${countPhrase(review.jobs.length, "job")}`
-    }
-    findings.push(total)
-  }
-  const provenance = [CONTRACT_VOCAB.copy.kernelProvenance]
-  if (review.recordedThrough !== "") provenance.push(minuteStamp(review.recordedThrough))
-  return [`> *${findings.join(" · ")}*`, `> <sub>${provenance.join(" · ")}</sub>`]
-}
-
-/**
- * Comparison identity of a job: matrix cells are distinct jobs, so the cell
- * discriminator belongs in the key — otherwise every cell of a matrix would
- * diff against one arbitrary earlier cell.
- * @param {{ workflow: string, name: string, job_index?: string }} job
- */
-const comparisonIdentity = (job) =>
-  `${job.workflow}\u0000${job.name}\u0000${job.job_index ?? ""}`
-
-/**
- * @param {{ workflow: string, name: string }} job
- */
-const jobNameKey = (job) => `${job.workflow}\u0000${job.name}`
-
-/**
- * @template T
- * @param {T[]} jobs
- * @param {(job: T) => string} key
- */
-const countByKey = (jobs, key) => {
-  /** @type {Map<string, number>} */
-  const counts = new Map()
-  for (const job of jobs) counts.set(key(job), (counts.get(key(job)) ?? 0) + 1)
-  return counts
-}
-
-/**
- * Pair each recorded job with its counterpart on the previous profiled commit.
- * Matching is exact on workflow + job + matrix cell, so matrix cells never
- * diff against each other. When a record carries no cell index at all, the
- * name alone identifies the job — but only while it is unique on both sides.
- * @param {ReviewJob[]} headJobs
- * @param {PreviousJob[]} previousJobs
- * @returns {{ pairs: Map<number, PreviousJob | null>, matched: Set<PreviousJob> }}
- */
-function pairWithPreviousJobs(headJobs, previousJobs) {
-  const prevByIdentity = new Map(previousJobs.map((j) => [comparisonIdentity(j), j]))
-  const prevByName = new Map(previousJobs.map((j) => [jobNameKey(j), j]))
-  const headNameCounts = countByKey(headJobs, jobNameKey)
-  const prevNameCounts = countByKey(previousJobs, jobNameKey)
-
-  /** @type {Map<number, PreviousJob | null>} */
-  const pairs = new Map()
-  /** @type {Set<PreviousJob>} */
-  const matched = new Set()
-  for (const job of headJobs) {
-    let prev = prevByIdentity.get(comparisonIdentity(job))
-    if (
-      prev === undefined &&
-      headNameCounts.get(jobNameKey(job)) === 1 &&
-      prevNameCounts.get(jobNameKey(job)) === 1
-    ) {
-      prev = prevByName.get(jobNameKey(job))
-    }
-    pairs.set(job.id, prev ?? null)
-    if (prev !== undefined && prev !== null) matched.add(prev)
-  }
-  return { pairs, matched }
-}
-
-/**
- * Per-job comparison deltas over comment-visible chains, keyed by job id.
- * Returns null when the review carries no comparison.
- * @param {RunReview} review
- * @returns {Map<number, JobDelta> | null}
- */
-function reviewDeltas(review) {
-  if (review.comparison === null) return null
-  const { pairs } = pairWithPreviousJobs(review.jobs, review.comparison.previousJobs)
-  /** @type {Map<number, JobDelta>} */
-  const deltas = new Map()
-  for (const job of review.jobs) {
-    const prev = pairs.get(job.id)
-    const prevEdges = prev ? prev.edges : []
-    // One identity-set diff per job over every recorded chain — whole-job
-    // destination identity, no partition, no quieting layer.
-    const names = addressNameMap(job.edges, prevEdges)
-    deltas.set(job.id, {
-      ...compareJobEdges(job.edges, prevEdges),
-      names,
-    })
-  }
-  return deltas
-}
-
-/**
- * Jobs recorded on the previous profiled commit with no counterpart on this
- * one. Their destinations left the record, so they carry their own removal
- * count instead of disappearing from the comparison — destination counts
- * are the same pointable unit as everywhere else.
- * @param {RunReview} review
- * @returns {{ job: PreviousJob, destinations: number }[]}
- */
-function vanishedJobs(review) {
-  if (review.comparison === null) return []
-  const { matched } = pairWithPreviousJobs(review.jobs, review.comparison.previousJobs)
-  return review.comparison.previousJobs
-    .filter((job) => !matched.has(job))
-    .map((job) => {
-      const names = addressNameMap(job.edges)
-      const shown = commentEdges(job.edges)
-      const destinations = new Set(
-        shown.map((edge) => destinationIdentity(edge, names)),
-      ).size
-      return { job, destinations }
-    })
-    .filter((entry) => entry.destinations > 0)
-}
-
-/**
- * Change accounting for a review: per-job ordering tier plus the run-scope
- * job totals the jobs line and machine summary speak. Tier 0 is a
- * destination change, 1 no change, 2 no outbound destinations.
- * @param {RunReview} review
- */
-function changeAccounting(review) {
-  const deltas = reviewDeltas(review)
-  /** @type {Map<number, number>} */
-  const tiers = new Map()
-  const totals = {
-    changedJobs: 0,
-    unchangedJobs: 0,
-    noOutboundJobs: 0,
-    added: 0,
-    removed: 0,
-    backgroundAdded: 0,
-    backgroundRemoved: 0,
-  }
-  for (const job of review.jobs) {
-    let tier
-    const delta = deltas ? deltas.get(job.id) : null
-    if (delta !== null && delta !== undefined) {
-      totals.backgroundAdded += delta.backgroundAddedCount
-      totals.backgroundRemoved += delta.backgroundRemovedCount
-    }
-    // A workload destination delta outranks an empty head record: a job
-    // whose whole record left is a changed job, never "no outbound
-    // destinations". Background-only movement never makes a changed job —
-    // the fold row and fence carry it, the changed count does not.
-    if (delta !== null && delta !== undefined && delta.addedCount + delta.removedCount > 0) {
-      tier = 0
-      totals.changedJobs += 1
-      totals.added += delta.addedCount
-      totals.removed += delta.removedCount
-    } else if (job.edges.length === 0 && backgroundDelta(delta ?? null) === 0) {
-      tier = 2
-      totals.noOutboundJobs += 1
-    } else {
-      tier = 1
-      totals.unchangedJobs += 1
-    }
-    tiers.set(job.id, tier)
-  }
-  const vanished = vanishedJobs(review)
-  return {
-    deltas,
-    tiers,
-    ...totals,
-    vanishedJobCount: vanished.length,
-    vanishedDestinations: vanished.reduce((n, entry) => n + entry.destinations, 0),
-  }
-}
-
-/**
- * The machine summary marker: one HTML comment carrying the run-scope
- * counts as JSON so agents read structure instead of parsing the human
- * surface. Every number equals the corresponding rendered count;
- * comparison-only fields are null on snapshot comments.
- * @param {RunReview} review
- * @param {ReturnType<typeof changeAccounting>} accounting
- */
-function machineSummaryMarker(review, accounting) {
-  const { chains, destinations } = commentRegisterCounts(review.jobs)
-  const comparing = review.comparison !== null
-  const summary = {
-    contract: CONTRACT_VOCAB.version,
-    githubMeta: GITHUB_META_RETRIEVED,
-    commit: review.sha,
-    previous: review.comparison !== null ? review.comparison.previousSha : null,
-    jobs: review.jobs.length,
-    changed: comparing ? accounting.changedJobs : null,
-    unchanged: comparing ? accounting.unchangedJobs : null,
-    noOutbound: comparing ? accounting.noOutboundJobs : null,
-    vanished: comparing ? accounting.vanishedJobCount : null,
-    added: comparing ? accounting.added : null,
-    removed: comparing ? accounting.removed : null,
-    backgroundAdded: comparing ? accounting.backgroundAdded : null,
-    backgroundRemoved: comparing ? accounting.backgroundRemoved : null,
-    vanishedDestinations: comparing ? accounting.vanishedDestinations : null,
-    chains,
-    destinations,
-    recorded: review.recordedThrough !== "" ? review.recordedThrough : null,
-    kinds: ["network"],
-  }
-  // `--` is escaped inside JSON strings so a hostile record-sourced value
-  // can never terminate the HTML comment; JSON.parse restores the bytes.
-  const json = JSON.stringify(summary).replace(/--/g, "-\\u002d")
-  return `<!-- ${VOCAB.machineSummaryMarker} ${json} -->`
-}
-
-/**
- * @param {RunReview} review
- * @param {Map<number, number>} kept
- * @param {{ explainerOpen?: boolean }} [options]
- */
-function renderCommentBody(review, kept, { explainerOpen = false } = {}) {
-  const lines = [RUNTIME_REVIEW_MARKER, COMMENT_MARKER]
-  if (review.sha !== "") lines.push(`<!-- garnet:commit ${review.sha} -->`)
-  const accounting = changeAccounting(review)
-  const deltas = accounting.deltas
-  lines.push(machineSummaryMarker(review, accounting))
-  lines.push(headlineSentence(review))
-  lines.push("")
-  lines.push(...metaBlock(review, accounting))
-  lines.push("")
-
-  const previousSha = review.comparison ? review.comparison.previousSha : ""
-
-  for (const job of review.jobs) {
-    const delta = deltas ? deltas.get(job.id) : null
-    const changed =
-      delta !== null && delta !== undefined && delta.addedCount + delta.removedCount > 0
-    // Any movement — workload or runner background — renders the marked
-    // fence; only a workload delta makes a changed job (bold row, open
-    // fold, changed count).
-    const hasDelta = changed || backgroundDelta(delta ?? null) > 0
-    const keptCount = kept.get(job.id) ?? job.edges.length
-    const retained = new Set(retentionOrder(job.edges).slice(0, keptCount))
-    const shownRaw = job.edges.filter((e) => retained.has(e))
-    // One block per job: every recorded root of the job's projection — no
-    // attribution partition, no category labels.
-    const shown = commentEdges(shownRaw)
-    // An empty projection renders a plain row that keeps the job's
-    // Execution Profile link when known — an empty egress projection never
-    // implies Garnet observed nothing.
-    if (job.edges.length === 0 && !hasDelta) {
-      const link = profilePermalink(job, review.appUrl, "pr_comment")
-      const profilePart =
-        link !== ""
-          ? ` · <a href="${escapeHtmlAttr(link)}">${VOCAB.artifact}</a>`
-          : ""
-      lines.push(`<sub>${jobIdentity(job)} — ${VOCAB.emptyPeers}${profilePart}</sub>`)
-      lines.push("")
-      continue
-    }
-    // Quiet by default: the only folds that ever open are changed folds
-    // within the budget. Snapshot, first-profile, and unchanged folds stay
-    // collapsed — their rows carry the counts.
-    const open = changed && accounting.changedJobs <= FOLD_OPEN_BUDGET
-    lines.push(
-      `<details${open ? " open" : ""}><summary>${jobSummaryLine(job, { delta: delta ?? null, treeEdges: shown })}</summary>`,
-    )
-    lines.push("")
-    /** @type {string[]} */
-    const fenceNotes = []
-    if (hasDelta && delta !== null && delta !== undefined) {
-      lines.push("```diff")
-      lines.push(renderJobDiffTree({ ...job, edges: shown }, delta, review.sha, previousSha))
-      lines.push("```")
-      lines.push("")
-      // Several provable rotations in one fence read as one quiet summary
-      // instead of an annotation on every line (contract comment.rotationJoin).
-      if (delta.rotations.size > 1) {
-        fenceNotes.push(
-          `<i>${delta.rotations.size} addresses rotated (${CONTRACT_VOCAB.notes.githubInfrastructure.text})</i>`,
-        )
-      }
-    } else if (shown.length > 0) {
-      lines.push("<pre>")
-      lines.push(renderJobTree(job, shown))
-      lines.push("</pre>")
-      lines.push("")
-    }
-    if (shownRaw.length < job.edges.length) {
-      fenceNotes.push(truncationLine(shownRaw.length, job.edges.length))
-    }
-    // Quiet notes under a fence merge into one line — never stacked.
-    if (fenceNotes.length > 0) {
-      lines.push(`<sub>${fenceNotes.join(" · ")}</sub>`)
-      lines.push("")
-    }
-    const link = profilePermalink(job, review.appUrl, "pr_comment")
-    if (link !== "") {
-      lines.push(
-        `<p align="right"><sub><a href="${escapeHtmlAttr(link)}">${VOCAB.permalinkLabel}</a></sub></p>`,
-      )
-      lines.push("")
-    }
-    lines.push("</details>")
-    lines.push("")
-  }
-
-  // Jobs that left the record sit below this commit's behavior, in one
-  // collapsed self-counting fold — destination counts, the same pointable
-  // unit as everywhere else.
-  const vanished = vanishedJobs(review)
-  if (vanished.length > 0) {
-    lines.push(
-      `<details><summary><sub>${VOCAB.vanishedJobsLabel} · ${countPhrase(vanished.length, "job")} · ${countPhrase(accounting.vanishedDestinations, "destination")}</sub></summary>`,
-    )
-    lines.push("")
-    lines.push(
-      vanished
-        .map(
-          ({ job, destinations }) =>
-            `<sub>${jobIdentity(job)} · ${countPhrase(destinations, "destination")}</sub>`,
-        )
-        .join("<br>\n"),
-    )
-    lines.push("")
-    lines.push("</details>")
-    lines.push("")
-  }
-
-  // The explainer sits at the bottom under a divider; open only on a
-  // first-profile comment.
-  lines.push("---")
-  lines.push("")
-  // The legend teaches the boundary-label vocabulary only when a label
-  // actually renders above it.
-  const hasBackgroundLabel = lines.some((line) => line.includes(`(${VOCAB.runnerBackground} ·`))
-  lines.push(
-    renderExplainer({
-      open: explainerOpen,
-      comparison: review.comparison !== null,
-      background: hasBackgroundLabel,
-    }),
-  )
-
-  while (lines.length > 0 && lines[lines.length - 1] === "") lines.pop()
-  return lines.join("\n")
-}
-
-/**
- * Deterministic explicit minimal fallback for the pathological case where
- * even zero kept edges (the fixed per-job fold overhead) exceeds the medium
- * budget: markers, heading, headline, coverage count, the exact truncation
- * line, and — when they still fit — the run-index link(s).
- * @param {RunReview} review
- */
-function renderMinimalComment(review) {
-  const head = [RUNTIME_REVIEW_MARKER, COMMENT_MARKER]
-  if (review.sha !== "") head.push(`<!-- garnet:commit ${review.sha} -->`)
-  head.push(headlineSentence(review))
-  head.push("")
-  head.push(`<sub>${truncationLine(0, review.counts.associations)}</sub>`)
-  return head.join("\n")
-}
-
-/**
- * Render the Garnet Runtime Review PR comment. Jobs in review order
- * (change tiers on comparison comments, else alphabetic by
- * `workflow / job`); edges in canonical deterministic order.
- * Truncation (only because of the medium budget, never silently) drops edges
- * via a deterministic fair round-robin across jobs in canonical order — IMDS
- * associations retained first — and emits an explicit destination-association
- * line per truncated fold.
- * @param {RunReview} review
- * @param {RenderRunReviewOptions} [opts] explainer opens on the first
- * recorded result and collapses on later updates; `budget` lowers the
- * serialized byte budget below the contract default when the caller wraps
- * the review with additional payload (never raises it)
- */
-function renderRunReview(review, opts = {}) {
-  const explainerOpen = opts.explainerOpen === true
-  const budget =
-    typeof opts.budget === "number" && Number.isSafeInteger(opts.budget) && opts.budget < SIZE_BUDGET
-      ? opts.budget
-      : SIZE_BUDGET
-  const full = renderCommentBody(review, new Map(), { explainerOpen })
-  if (Buffer.byteLength(full, "utf8") <= budget) return full
-
-  // Global round-robin retention order: round r keeps the r-th edge of each
-  // job's retention queue, jobs visited in canonical order.
-  const queues = review.jobs.map((j) => ({ id: j.id, total: j.edges.length }))
-  /** @type {{id: number}[]} */
-  const order = []
-  for (let round = 0; order.length < review.counts.associations; round += 1) {
-    for (const q of queues) {
-      if (round < q.total) order.push({ id: q.id })
-    }
-  }
-
-  const bodyFor = (/** @type {number} */ keepTotal) => {
-    /** @type {Map<number, number>} */
-    const kept = new Map(review.jobs.map((j) => [j.id, 0]))
-    for (let i = 0; i < keepTotal; i += 1) {
-      const entry = order[i]
-      if (entry === undefined) break
-      kept.set(entry.id, (kept.get(entry.id) ?? 0) + 1)
-    }
-    return renderCommentBody(review, kept, { explainerOpen })
-  }
-
-  // Largest edge total whose serialized body fits the budget (binary search
-  // — rendering is deterministic, so this is reproducible).
-  let lo = 0
-  let hi = review.counts.associations - 1
-  let best = bodyFor(0)
-  while (lo <= hi) {
-    const mid = (lo + hi) >> 1
-    const body = bodyFor(mid)
-    if (Buffer.byteLength(body, "utf8") <= budget) {
-      best = body
-      lo = mid + 1
-    } else {
-      hi = mid - 1
-    }
-  }
-  // True final cap: when even the zero-edge body's fixed overhead exceeds
-  // the budget, fall back to the deterministic minimal comment.
-  if (Buffer.byteLength(best, "utf8") > budget) return renderMinimalComment(review)
-  return best
-}
-
 /**
  * @typedef {{
  *   explainerOpen?: boolean
  *   budget?: number
  * }} RenderRunReviewOptions
  */
-
-/**
- * The waiting/pending comment: open explainer + hourglass, but no timestamp,
- * renderer clock, count, expected denominator, or permalink.
- * @param {{sha?: string, commitUrl?: string, appMode?: boolean}} input
- */
-function renderPendingReview(input = {}) {
-  const sha = String(input.sha || "")
-  const lines = [RUNTIME_REVIEW_MARKER, COMMENT_MARKER]
-  if (sha !== "") lines.push(`<!-- garnet:commit ${sha} -->`)
-  lines.push(
-    `**${CONTRACT_VOCAB.copy.headlinePendingLead} ${commitRef(sha, String(input.commitUrl || ""))}**`,
-  )
-  lines.push("")
-  lines.push(CONTRACT_VOCAB.copy.pendingStatus)
-  lines.push("")
-  lines.push("---")
-  lines.push("")
-  lines.push(renderExplainer({ open: true }))
-  return lines.join("\n")
-}
-
-/**
- * Wrap an exact renderer body as the testbed-only "after" comment while
- * replacing ownership markers that the App and Action fallback use.
- * Visible renderer copy and layout remain unchanged.
- * @param {string} body
- */
-function renderReferenceMockup(body, stepSummary = "") {
-  const projectedBody = String(body)
-    .replaceAll(RUNTIME_REVIEW_MARKER, "<!-- garnet-reference-renderer-body -->")
-    .replaceAll(COMMENT_MARKER, "<!-- garnet-reference-renderer-owner:none -->")
-    .replace(
-      /<!-- garnet:commit ([0-9a-f]+) -->/gi,
-      "<!-- garnet-reference-renderer-commit $1 -->",
-    )
-
-  const lines = [
-    REFERENCE_MOCKUP_MARKER,
-    `<!-- garnet-reference-renderer-contract:v${CONTRACT_VOCAB.version} -->`,
-    `> **After — v${CONTRACT_VOCAB.version} reference renderer.** Generated from this PR's captured profiles by the contract active in this branch. Compare it with the installed GitHub App's live **Before** comment on this PR. This preview updates in place; neither the App nor the Action fallback owns it.`,
-    "",
-    projectedBody,
-  ]
-
-  // Second surface: the exact job Step Summary (lineage-keyed egress table)
-  // as it renders in the Actions run Summary tab — embedded here so this one
-  // isolated comment shows BOTH shipped surfaces for review in one place.
-  if (String(stepSummary).trim()) {
-    lines.push(
-      "",
-      "<!-- garnet-reference-renderer-step-summary -->",
-      "<details><summary><strong>Step Summary</strong> — as rendered in the Actions run Summary tab</summary>",
-      "",
-      String(stepSummary).trim(),
-      "",
-      "</details>",
-    )
-  }
-
-  return lines.join("\n")
-}
-
-// ---------------------------------------------------------------------------
-// Step Summary.
-// ---------------------------------------------------------------------------
-
 /**
  * One destination-first Step Summary row (one source peer).
  * @typedef {{
@@ -162453,42 +160545,6 @@ function renderReferenceMockup(body, stepSummary = "") {
  *   associations: ReviewEdge[]
  * }} DestinationRow
  */
-
-/**
- * Destination-first Step Summary projection: one row per source peer in the
- * profile's recorded order, with every process tree retained in source order.
- * @param {ReviewEdge[]} edges
- * @returns {DestinationRow[]}
- */
-function buildDestinationRows(edges) {
-  /** @type {DestinationRow[]} */
-  const rows = []
-  /** @type {Map<number, DestinationRow>} */
-  const byKey = new Map()
-  for (const edge of edges) {
-    const key = edge.flow_id
-    let row = byKey.get(key)
-    if (!row) {
-      row = {
-        flow_id: edge.flow_id,
-        remote_address: edge.remote_address,
-        remote_names: edge.remote_names,
-        associations: [],
-      }
-      byKey.set(key, row)
-      rows.push(row)
-    }
-    row.associations.push(edge)
-  }
-  return rows
-    .sort((a, b) => a.flow_id - b.flow_id)
-    .map((row) => ({
-      ...row,
-      associations: row.associations
-        .slice()
-        .sort((a, b) => a.tree_index - b.tree_index),
-    }))
-}
 
 /**
  * Screenshot-style compact ancestry: first node, ellipsis, final three nodes.
@@ -162591,9 +160647,9 @@ function lineageDestinationsCell(row) {
   // record never captured (ordinals would), and the glue keeps the glyph
   // from orphaning onto its own line at phone width. A single destination
   // renders bare — a marker of one is noise.
-  if (labels.length === 1) return `<code>${escapeHtmlCell(truncateMiddle(labels[0]))}</code>`
+  if (labels.length === 1) return `<code>${escapeHtmlCell(truncateMiddle(defangHostname(labels[0])))}</code>`
   return labels
-    .map((label) => `· <code>${escapeHtmlCell(truncateMiddle(label))}</code>`)
+    .map((label) => `· <code>${escapeHtmlCell(truncateMiddle(defangHostname(label)))}</code>`)
     .join("<br>")
 }
 
@@ -162605,9 +160661,11 @@ function lineageDestinationsCell(row) {
  * @param {LineageRow[]} rows
  */
 function renderLineageTable(rows) {
-  const lines = ["| Process Tree | Destinations |", "| --- | --- |"]
+  const lines = ["| Execution chain | Destinations |", "| --- | --- |"]
   for (const row of rows) {
-    lines.push(`| ${processTreeCell(row.edge, true)} | ${lineageDestinationsCell(row)} |`)
+    const step = stepAnnotationName(row.edge.github_step)
+    const context = step === "" ? "" : `<br><sub>step: <code>${escapeHtmlCell(truncateMiddle(step))}</code></sub>`
+    lines.push(`| ${processTreeCell(row.edge, true)}${context} | ${lineageDestinationsCell(row)} |`)
   }
   return lines.join("\n")
 }
@@ -162631,34 +160689,10 @@ function lineageRetentionOrder(rows) {
 }
 
 /**
- * @param {ReviewJob} job
- */
-function hasExplainableTelemetry(job) {
-  if (
-    job.telemetry.total_domains === null ||
-    job.telemetry.total_connections === null ||
-    telemetryDiscrepancies(job).length > 0
-  ) {
-    return false
-  }
-  return true
-}
-
-/**
- * Djalal's sensor + derived telemetry semantics in the approved prose shape.
- * @param {ReviewJob} job
- */
-function renderTelemetry(job) {
-  if (!hasExplainableTelemetry(job)) return ""
-  const domains = `${job.telemetry.total_domains} unique domain${job.telemetry.total_domains === 1 ? "" : "s"}`
-  const connections = `${job.telemetry.total_connections} connection${job.telemetry.total_connections === 1 ? "" : "s"}`
-  return `Network telemetry observed ${domains}, ${job.counts.destinations} destination${job.counts.destinations === 1 ? "" : "s"}, ${connections}, and ${job.counts.flows} flow${job.counts.flows === 1 ? "" : "s"}.`
-}
-
-/**
  * @param {ReviewEdge[]} edges
+ * @param {boolean} detections
  */
-function renderRecordedContextPreview(edges) {
+function renderRecordedContextPreview(edges, detections) {
   if (edges.length === 0) return ""
   const lines = [
     "<details><summary><strong>Recorded context preview</strong></summary>",
@@ -162671,13 +160705,13 @@ function renderRecordedContextPreview(edges) {
     const context = []
     if (edge.github_step !== "") context.push(`step: ${escapeMarkdownCell(edge.github_step)}`)
     context.push(
-      ...edgeNotes(edge, { detections: true }).map((note) =>
+      ...edgeNotes(edge, { detections }).map((note) =>
         note.startsWith("detection: ")
           ? `\`${escapeCodeCell(note)}\``
           : `(${escapeMarkdownCell(note)})`,
       ),
     )
-    if (edge.result.toLowerCase() === "attention") context.push("⚠ attention")
+    if (edge.result.toLowerCase() === "attention") context.push("attention")
     lines.push(
       `| <code>${destinationDisplay(edge, escapeHtmlCell)}</code> | ${processTreeCell(edge)} | ${context.join(" · ") || "—"} |`,
     )
@@ -162760,38 +160794,121 @@ function renderAssertionPreview(assertions) {
  * @param {string} appUrl
  */
 function renderStepSummaryFooter(job, appUrl) {
-  // Workflow, run, and job identity live in the Workload table; the footer
-  // adds only the recording timestamp and the product path.
-  const stamp = formatTimestamp(job.timestamp)
+  // Identity and the recording timestamp live in the workload context; the
+  // footer carries only the product path.
   const lines = ['<div align="right">']
-  if (stamp !== "") lines.push(`<sub>${stamp}</sub><br>`)
   const link = profilePermalink(job, appUrl, "step_summary")
   const cta =
     link === ""
       ? "<strong>Powered by Garnet</strong>"
       : `<a href="${escapeHtmlAttr(link)}">${VOCAB.permalinkLabel}</a>`
+  // The CTA is the last element: GitHub prints its own "Job summary generated
+  // at run-time" line under every job summary.
   lines.push(cta, "</div>")
-  if (job.run_url !== "") {
-    lines.push(
-      "",
-      `<sub><a href="${escapeHtmlAttr(job.run_url)}">Job summary generated at run-time</a></sub>`,
-    )
-  } else {
-    lines.push("", "<sub>Job summary generated at run-time</sub>")
-  }
   return lines.join("\n")
 }
 
 /**
+ * Post-step facts about the recording that the profile itself does not
+ * carry, already phrased for display. An empty field renders no row.
+ * @typedef {{
+ *   sensor: string
+ *   capture: string
+ *   sensorIntegrity: string
+ *   sensorAuthenticity: string
+ *   steps: string
+ *   jobTotal?: string
+ * }} StepSummaryContext
+ */
+
+/**
+ * @typedef {{
+ *   previewAssertions: boolean
+ *   detections: boolean
+ *   context: StepSummaryContext | null
+ * }} ProfileSummaryOptions
+ */
+
+/**
+ * A chain belongs to the workload when it descends through `Runner.Worker`,
+ * carries a real recorded step, or has no recorded lineage (an unprovable
+ * chain is never quieted into the runner); everything else is the runner.
+ * @param {ReviewEdge} edge
+ */
+function isWorkloadEdge(edge) {
+  if (!edge.lineage_recorded) return true
+  if (edgeProcessPath(edge).includes("Runner.Worker")) return true
+  return stepAnnotationName(edge.github_step) !== ""
+}
+
+/**
+ * `3 execution chains · 5 destinations · 7 destination associations`
+ * for one side of the workload/runner split.
+ * @param {ReviewEdge[]} edges
+ */
+function activityCell(edges) {
+  if (edges.length === 0) return "none recorded"
+  return [
+    countPhrase(buildLineageRows(edges).length, "execution chain"),
+    countPhrase(edgeCounts(edges).destinations, "destination"),
+    countPhrase(edges.length, "destination association"),
+  ].join(" · ")
+}
+
+/**
+ * @param {ReviewJob} job
+ */
+function sensorTotalsCell(job) {
+  /** @type {string[]} */
+  const parts = []
+  if (job.telemetry.total_domains !== null) parts.push(countPhrase(job.telemetry.total_domains, "unique domain"))
+  if (job.telemetry.total_connections !== null) parts.push(countPhrase(job.telemetry.total_connections, "connection"))
+  return parts.length === 0 ? "network totals not recorded" : parts.join(" · ")
+}
+
+/**
+ * A record-sourced table cell, escaped and wrapped in <code>.
+ * @param {unknown} value
+ */
+function recordCell(value) {
+  return `<code>${escapeHtmlCell(value)}</code>`
+}
+
+/**
+ * A matrix leg reads `<job> (i of N)`, the label the App uses, with `i`
+ * one-based from the recorded `job_index`. N comes from the `job_total`
+ * input; without it the leg keeps the bare job name.
+ * @param {ReviewJob} job
+ * @param {StepSummaryContext | null} context
+ */
+function matrixJobLabel(job, context) {
+  const index = Number(job.job_index)
+  const total = Number(context?.jobTotal ?? "")
+  if (job.job_index === "" || !Number.isInteger(index) || !Number.isInteger(total) || total < index + 1) {
+    return job.name
+  }
+  return `${job.name} (${index + 1} of ${total})`
+}
+
+/**
+ * A loopback DNS resolver is the runner talking to itself, not a destination:
+ * it is neither rendered nor counted.
+ * @param {ReviewEdge} edge
+ */
+function isLoopbackResolver(edge) {
+  return LOOPBACK_RE.test(edge.remote_address) && edge.remote_ports.some((port) => numericPort(port) === 53)
+}
+
+/**
+ * The always-visible head of a job's receipt: every identity, coverage and
+ * capture fact the record (and the post step) carries, one row each. A
+ * field the record does not carry renders no row rather than a guess.
  * @param {ReviewJob} job
  * @param {string} appUrl
- * @param {number} keptDestinations
- * @param {boolean} previewAssertions
+ * @param {StepSummaryContext | null} context
+ * @returns {[string, string][]}
  */
-function renderProfileSummary(job, appUrl, keptDestinations, previewAssertions) {
-  const lines = [`## ${VOCAB.stepSummaryHeading}`, ""]
-
-  lines.push("### Workload Summary", "")
+function workloadContextRows(job, appUrl, context) {
   /** @type {[string, string][]} */
   const rows = []
   if (job.profile_id !== "") {
@@ -162802,27 +160919,171 @@ function renderProfileSummary(job, appUrl, keptDestinations, previewAssertions) 
         : `[${escapeMarkdownCell(job.profile_id)}](${profileLink})`
     rows.push(["Profile", profileCell])
   }
-  if (job.workflow !== "") rows.push(["Workflow", escapeMarkdownCell(job.workflow)])
-  if (job.repository !== "") rows.push(["Repository", escapeMarkdownCell(job.repository)])
-  if (job.ref !== "") rows.push(["Branch", escapeMarkdownCell(job.ref)])
+  // Record-sourced text renders inside <code>: GitHub's mention and issue
+  // reference filters skip code, while entity-encoding alone is decoded
+  // before they run.
+  if (job.workflow !== "") rows.push(["Workflow", recordCell(job.workflow)])
+  if (job.name !== "") rows.push(["Job", recordCell(matrixJobLabel(job, context))])
+  if (job.job_index !== "") rows.push(["Matrix job index", recordCell(job.job_index)])
+  if (job.repository !== "") rows.push(["Repository", recordCell(job.repository)])
+  if (job.ref !== "") rows.push(["Branch", recordCell(job.ref)])
   if (job.pr_url !== "") {
     const prNumber = job.pr_url.split("/").pop()
     rows.push(["Pull request", `[#${escapeMarkdownCell(prNumber ?? "")}](${job.pr_url})`])
   }
-  if (job.sha !== "") rows.push(["Commit", escapeMarkdownCell(job.sha)])
-  if (job.actor !== "") rows.push(["Triggered by", escapeMarkdownCell(job.actor)])
-  if (job.run_id !== "" || job.name !== "") {
-    rows.push(["Run ID / Job", escapeMarkdownCell([job.run_id, job.name].filter(Boolean).join(" / "))])
+  if (job.sha !== "") rows.push(["Commit", recordCell(job.sha)])
+  if (job.event_name !== "") rows.push(["Event", recordCell(job.event_name)])
+  if (job.actor !== "") rows.push(["Triggered by", recordCell(job.actor)])
+  if (job.run_id !== "") {
+    const attempt = job.run_attempt === "" ? "" : ` · attempt ${recordCell(job.run_attempt)}`
+    const run = job.run_url === "" ? escapeMarkdownCell(job.run_id) : `[${escapeMarkdownCell(job.run_id)}](${job.run_url})`
+    rows.push(["Run", `${run}${attempt}`])
   }
-  if (job.job_index !== "") rows.push(["Matrix job index", escapeMarkdownCell(job.job_index)])
+  const runner = [job.runner_os, job.runner_arch].filter((value) => value !== "").join(" ")
+  const provenance =
+    runner === ""
+      ? CONTRACT_VOCAB.copy.kernelProvenance
+      : CONTRACT_VOCAB.copy.kernelProvenance.replace("at the kernel", `at the kernel (${recordCell(runner)})`)
+  rows.push(["Coverage", `${provenance}. ${CONTRACT_VOCAB.copy.captureBestEffort}`])
+  if (context !== null) {
+    if (context.capture !== "") rows.push(["Capture", recordCell(context.capture)])
+    if (context.sensor !== "") rows.push(["Sensor", escapeMarkdownCell(context.sensor)])
+    if (context.sensorIntegrity !== "") rows.push(["Sensor integrity", escapeMarkdownCell(context.sensorIntegrity)])
+    if (context.sensorAuthenticity !== "") {
+      rows.push(["Sensor authenticity", escapeMarkdownCell(context.sensorAuthenticity)])
+    }
+    if (context.steps !== "") rows.push(["Workflow steps", escapeMarkdownCell(context.steps)])
+  }
+  rows.push(["Workload activity", activityCell(job.edges.filter(isWorkloadEdge))])
+  rows.push(["Runner activity", activityCell(job.edges.filter((edge) => !isWorkloadEdge(edge)))])
+  rows.push(["Sensor network totals", sensorTotalsCell(job)])
+  const stamp = formatTimestamp(job.timestamp)
+  // formatTimestamp emits a fixed `YYYY-MM-DD HH:MM:SS UTC` shape built from
+  // a parsed Date, never raw record text.
+  if (stamp !== "") rows.push(["Recorded at", stamp])
+  return rows
+}
+
+/**
+ * Text inside the `<pre>` fold: HTML-escaped, with brackets entity-encoded
+ * so a recorded value can never read as a link reference.
+ * @param {unknown} value
+ */
+function escapeChainText(value) {
+  return escapeHtml(value).replaceAll("[", "&#91;").replaceAll("]", "&#93;")
+}
+
+/**
+ * One group of chains that share the exact same recorded ancestry above
+ * their acting process. The shared names render once; each acting process
+ * (its own PID) is a separate leaf with every destination association it
+ * owns beneath it. Nothing is merged on a partial prefix.
+ * @param {LineageRow[]} group
+ * @param {boolean} detections
+ */
+function renderChainGroup(group, detections) {
+  const first = group[0]
+  if (first === undefined) return ""
+  const parents = edgeProcessPath(first.edge).slice(0, -1)
+  const lines = parents.map((name, index) =>
+    index === 0 ? escapeChainText(name) : `${"   ".repeat(index - 1)}└─ ${escapeChainText(name)}`,
+  )
+  const leafIndent = parents.length === 0 ? "" : "   ".repeat(parents.length - 1)
+  group.forEach((row, rowIndex) => {
+    const path = edgeProcessPath(row.edge)
+    const leafName = path[path.length - 1] ?? VOCAB.unknownLineage
+    const pid = row.edge.pid === "" ? "" : ` <em>(pid ${escapeChainText(row.edge.pid)})</em>`
+    const step = stepAnnotationName(row.edge.github_step)
+    const stepNote = step === "" ? "" : ` <em>(step: &quot;${escapeChainText(step)}&quot;)</em>`
+    const ranFrom = row.edge.executable === "" ? "" : ranFromNote(new Set([row.edge.executable]))
+    const ranFromText = ranFrom === "" ? "" : ` ${renderNote(ranFrom)}`
+    const leaf = `<strong>${escapeChainText(leafName)}</strong>${pid}${stepNote}${ranFromText}`
+    let childPrefix = ""
+    if (parents.length === 0) {
+      lines.push(leaf)
+    } else {
+      const last = rowIndex === group.length - 1
+      lines.push(`${leafIndent}${last ? "└─ " : "├─ "}${leaf}`)
+      childPrefix = `${leafIndent}${last ? "   " : "│  "}`
+    }
+    row.associations.forEach((edge, index) => {
+      const branch = index === row.associations.length - 1 ? "└─ " : "├─ "
+      const destination = destinationDisplay(edge, (value) => escapeChainText(defangHostname(value)))
+      const notes = edgeNotes(edge, { detections }).map(renderNote)
+      const suffix = notes.length === 0 ? "" : ` ${notes.join(" ")}`
+      lines.push(`${childPrefix}${branch}${VOCAB.terminalNetwork} ${destination}${suffix}`)
+    })
+  })
+  return lines.join("\n")
+}
+
+/**
+ * Every destination association as root-to-action chains. The record
+ * carries ancestry names and the acting process's PID only, so two
+ * processes with the same name cannot be proven to be one node: chains are
+ * grouped only when their full recorded ancestry above the acting process
+ * matches exactly, and two PIDs never share a node. Destinations, chains
+ * and groups are ordered by destination identity; workload groups render
+ * before runner groups.
+ * @param {LineageRow[]} rows
+ * @param {boolean} [detections]
+ */
+function renderExecutionChains(rows, detections = false) {
+  const names = addressNameMap(rows.flatMap((row) => row.associations))
+  const compareEdges = (/** @type {ReviewEdge} */ a, /** @type {ReviewEdge} */ b) =>
+    compareDestinationIdentities(a, b, names) || edgeComparator(a, b)
+  const firstEdge = (/** @type {LineageRow} */ row) => row.associations[0] ?? row.edge
+  const compareRows = (/** @type {LineageRow} */ a, /** @type {LineageRow} */ b) => {
+    const identityOrder = compareDestinationIdentities(firstEdge(a), firstEdge(b), names)
+    if (identityOrder !== 0) return identityOrder
+    const difference = Number(a.edge.pid) - Number(b.edge.pid)
+    if (Number.isFinite(difference) && difference !== 0) return difference
+    return compareEdges(firstEdge(a), firstEdge(b))
+  }
+  const orderedRows = rows
+    .map((row) => ({ edge: row.edge, associations: [...row.associations].sort(compareEdges) }))
+    .sort(compareRows)
+  /** @type {Map<string, LineageRow[]>} */
+  const groups = new Map()
+  for (const row of orderedRows) {
+    const parents = edgeProcessPath(row.edge).slice(0, -1)
+    const key =
+      !row.edge.lineage_recorded || parents.length === 0 ? `root:${groups.size}` : JSON.stringify(parents)
+    const group = groups.get(key)
+    if (group === undefined) {
+      groups.set(key, [row])
+    } else {
+      group.push(row)
+    }
+  }
+  const ordered = [...groups.values()]
+  const isWorkloadGroup = (/** @type {LineageRow[]} */ group) => group.some((row) => isWorkloadEdge(row.edge))
+  return [...ordered.filter(isWorkloadGroup), ...ordered.filter((group) => !isWorkloadGroup(group))]
+    .map((group) => renderChainGroup(group, detections))
+    .join("\n\n")
+}
+
+/**
+ * One job's receipt: workload context (always visible), the execution
+ * chain table, the collapsed chains fold, preview-only material, then the
+ * Execution Profile CTA.
+ * @param {ReviewJob} job
+ * @param {string} appUrl
+ * @param {number} keptDestinations
+ * @param {ProfileSummaryOptions} options
+ */
+function renderProfileSummary(job, appUrl, keptDestinations, options) {
+  const lines = [`## ${VOCAB.stepSummaryHeading}`, ""]
+
+  lines.push("### Workload context", "")
   lines.push("| Field | Value |")
   lines.push("| --- | --- |")
-  for (const [key, value] of rows) {
+  for (const [key, value] of workloadContextRows(job, appUrl, options.context)) {
     lines.push(`| ${escapeMarkdownCell(key)} | ${value} |`)
   }
   lines.push("")
 
-  lines.push("### Network Egress Summary", "")
+  lines.push("### Network egress", "")
   const lineageRows = buildLineageRows(job.edges)
   if (lineageRows.length === 0) {
     lines.push(VOCAB.emptyPeers)
@@ -162835,32 +161096,22 @@ function renderProfileSummary(job, appUrl, keptDestinations, previewAssertions) 
     lines.push(renderLineageTable(shown))
     lines.push("")
     if (shown.length < lineageRows.length) {
-      lines.push(
-        `<sub>rendered ${shown.length} of ${lineageRows.length} execution chains</sub>`,
-      )
+      lines.push(`<sub>rendered ${shown.length} of ${lineageRows.length} execution chains</sub>`)
       lines.push("")
     }
-  }
-
-  // Absolute recorded tree in the PR-comment grammar; no comparison material.
-  if (job.edges.length > 0) {
-    lines.push("<details><summary><sub>Full recorded tree</sub></summary>")
+    lines.push(
+      `<details><summary><sub>Execution chains · ${countPhrase(job.edges.length, "destination association")}</sub></summary>`,
+    )
     lines.push("")
     lines.push("<pre>")
-    lines.push(renderJobTree(job, job.edges, { defang: false }))
+    lines.push(renderExecutionChains(lineageRows, options.detections))
     lines.push("</pre>")
     lines.push("</details>")
     lines.push("")
   }
 
-  const telemetry = renderTelemetry(job)
-  if (telemetry !== "") {
-    lines.push(telemetry)
-    lines.push("")
-  }
-
-  if (previewAssertions) {
-    lines.push(renderRecordedContextPreview(job.edges))
+  if (options.previewAssertions) {
+    lines.push(renderRecordedContextPreview(job.edges, options.detections))
     lines.push("")
     lines.push(renderAssertionPreview(job.assertions))
     lines.push("")
@@ -162871,12 +161122,12 @@ function renderProfileSummary(job, appUrl, keptDestinations, previewAssertions) 
 }
 
 /**
- * Render the GitHub Step Summary: heading `## Garnet Runtime Summary`,
- * Workload first, then the lineage-first network-egress table, source-
- * backed telemetry, optional preview-only assertions, and the aligned footer.
+ * Render the GitHub Step Summary, the job's full receipt: workload context
+ * first, then the execution chain table, the collapsed chains fold,
+ * optional preview-only material, and the Execution Profile CTA.
  * The 1 MiB budget uses deterministic fair-round-robin retention.
  * @param {unknown[]} profiles raw parsed Jibril profiles
- * @param {{appUrl?: string, preview?: boolean}} [opts]
+ * @param {{appUrl?: string, preview?: boolean, detections?: boolean, context?: StepSummaryContext | null}} [opts]
  */
 function renderStepSummary(profiles, opts = {}) {
   const appUrl = String(opts.appUrl || "https://app.garnet.ai").replace(/\/+$/, "")
@@ -162887,7 +161138,11 @@ function renderStepSummary(profiles, opts = {}) {
   const render = (/** @type {Map<number, number>} */ kept) =>
     jobs
       .map((j, i) =>
-        renderProfileSummary(j, appUrl, kept.get(i) ?? Infinity, opts.preview === true),
+        renderProfileSummary(j, appUrl, kept.get(i) ?? Infinity, {
+          previewAssertions: opts.preview === true,
+          detections: opts.detections === true,
+          context: opts.context ?? null,
+        }),
       )
       .join("\n\n---\n\n")
 
@@ -162952,61 +161207,6 @@ function renderMinimalStepSummary(jobs) {
   ].join("\n")
 }
 
-/**
- * Semantic surface linter — guards the whole class of "same fact rendered
- * twice in one visual block" regressions (e.g. telemetry counts printed in
- * both the prose line and the footer). Byte-goldens cannot catch this because
- * they lock whatever the renderer emits, duplication included. The Step
- * Summary is split into per-job sections; the PR comment is checked whole.
- * Returns a list of human-readable violations; an empty array means clean.
- * @param {string} surface rendered markdown/HTML for one run
- * @param {"pr"|"step-summary"} kind
- * @returns {string[]}
- */
-function lintRenderedSurface(surface, kind) {
-  /** @type {string[]} */
-  const violations = []
-  const count = (/** @type {string} */ text, /** @type {RegExp} */ re) => (text.match(re) || []).length
-  if (kind === "step-summary") {
-    const sections = surface.split(/\n\n---\n\n/)
-    sections.forEach((section, i) => {
-      /** @type {[string, RegExp][]} */
-      const families = [
-        ["telemetry unique-domain count", /\bunique domain/gi],
-        ["telemetry connection count", /\d+ connections?\b/gi],
-        ["Powered by Garnet footer", /Powered by Garnet/gi],
-        // The exact profile selector renders in exactly two designated
-        // places: the Workload table's Profile row and the footer CTA.
-        ["profile permalink (Profile row)", /\| Profile \| \[/g],
-        ["profile permalink (footer CTA)", new RegExp(`>${VOCAB.permalinkLabel.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}<`, "g")],
-      ]
-      for (const [name, re] of families) {
-        const n = count(section, re)
-        if (n > 1) {
-          violations.push(
-            `step-summary job section ${i}: "${name}" appears ${n}× (expected \u2264 1)`,
-          )
-        }
-      }
-    })
-  } else {
-    // The PR comment carries no telemetry counts at all; any occurrence means
-    // a fact family leaked into the wrong surface.
-    /** @type {[string, RegExp][]} */
-    const forbidden = [
-      ["telemetry prose", /Network telemetry observed/gi],
-      ["telemetry unique-domain count", /\bunique domain/gi],
-    ]
-    for (const [name, re] of forbidden) {
-      const n = count(surface, re)
-      if (n > 0) {
-        violations.push(`pr comment: "${name}" must not appear (found ${n}\u00d7)`)
-      }
-    }
-  }
-  return violations
-}
-
 ;// CONCATENATED MODULE: ./src/job-summary.js
 
 
@@ -163040,7 +161240,7 @@ function renderUnrecordedSummary(reason) {
         .replaceAll("<", "&lt;")
         .replaceAll(">", "&gt;")
         .replace(/[\\`*_[\]!]/g, "\\$&")
-    return ["**Execution Profile for this job · not recorded**", "", escaped].join("\n")
+    return ["### Runtime behavior not recorded", "", escaped].join("\n")
 }
 
 ;// CONCATENATED MODULE: ./src/oidc.js
@@ -164064,7 +162264,113 @@ function parseCoreVersion(tag) {
     return { major: Number(major), minor: Number(minor), patch: Number(patch) }
 }
 
+;// CONCATENATED MODULE: ./src/recording-context.js
+
+
+
+/** @typedef {import("./jibril-status.js").JibrilStatus} JibrilStatus */
+/** @typedef {import("./runtime-review.js").StepSummaryContext} StepSummaryContext */
+
+/**
+ * What the main step recorded about the sensor binary it installed.
+ * `matched` means every bundle digest matched the signed release manifest;
+ * `unavailable` means the release predates signed bundles.
+ * @typedef {"matched" | "unavailable" | ""} SensorBundleState
+ */
+
+/**
+ * `signed` means `gh attestation verify` accepted the expected signer
+ * workflow; the skipped states name why the check did not run.
+ * @typedef {"signed" | "skipped_no_token" | "skipped_no_gh" | "unavailable" | ""} SensorAttestationState
+ */
+
+/**
+ * @typedef {object} RecordingObservations
+ * @property {string} jibrilVersion
+ * @property {string} sensorBundle - the main step's saved SensorBundleState
+ * @property {string} sensorAttestation - the main step's saved SensorAttestationState
+ * @property {"completed" | "timed_out"} stopOutcome
+ * @property {boolean} forceStopped
+ * @property {number} stopTimeoutSeconds
+ * @property {JibrilStatus | null} runStatus
+ */
+
+/** @type {Readonly<Record<string, string>>} */
+const SENSOR_INTEGRITY = Object.freeze({
+    matched: "bundle digests match the signed release manifest",
+    unavailable: "not checked: this Jibril release ships no signed bundle",
+})
+
+/** @type {Readonly<Record<string, string>>} */
+const SENSOR_AUTHENTICITY = Object.freeze({
+    signed: "signed by the jibril-releases release workflow (gh attestation)",
+    skipped_no_token: "not checked: github_token is unset",
+    skipped_no_gh: "not checked: gh CLI is unavailable",
+    unavailable: "not checked: this Jibril release ships no attestation",
+})
+
+/**
+ * Phrases how the capture went, from the sensor's own account. Gaps are
+ * named; a clean account is still only what the sensor reported.
+ * @param {RecordingObservations} observations
+ * @returns {string}
+ */
+function describeCapture(observations) {
+    /** @type {string[]} */
+    const gaps = []
+    if (observations.stopOutcome === "timed_out") {
+        const forced = observations.forceStopped ? "; sensor force-stopped" : ""
+        gaps.push(`stop timed out after ${observations.stopTimeoutSeconds}s${forced}`)
+    }
+
+    const runStatus = observations.runStatus
+    if (runStatus !== null) {
+        if (runStatus.ebpf === null) {
+            gaps.push("no eBPF counters reported")
+        } else {
+            const errors = formatEbpfErrors(runStatus.ebpf.errors)
+            if (errors !== "") gaps.push(`eBPF errors: ${errors}`)
+        }
+    }
+
+    if (gaps.length > 0) return `capture incomplete: ${gaps.join("; ")}`
+    if (runStatus !== null) return "no capture gaps reported by the sensor"
+    if (versionAtLeast(observations.jibrilVersion, 2, 17, 0)) return "capture state not reported by the sensor"
+    return "capture state not reported (sensor before v2.17)"
+}
+
+/**
+ * @param {JibrilStatus | null} runStatus
+ * @returns {string}
+ */
+function describeSteps(runStatus) {
+    const steps = runStatus === null ? null : runStatus.githubSteps
+    if (steps === null) return ""
+    const source = steps.source === null ? "" : ` (source: ${steps.source})`
+    const degraded = steps.status === "degraded" ? "; step attribution degraded" : ""
+    return `${steps.count} recorded${source}${degraded}`
+}
+
+/**
+ * The Step Summary's post-step context. Every value is phrased from what
+ * the action or the sensor recorded; nothing here claims more than the
+ * named check showed.
+ * @param {RecordingObservations} observations
+ * @returns {StepSummaryContext}
+ */
+function buildRecordingContext(observations) {
+    return {
+        sensor: observations.jibrilVersion === "" ? "" : `Jibril ${observations.jibrilVersion}`,
+        capture: describeCapture(observations),
+        sensorIntegrity: SENSOR_INTEGRITY[observations.sensorBundle] ?? "",
+        sensorAuthenticity: SENSOR_AUTHENTICITY[observations.sensorAttestation] ?? "",
+        steps: describeSteps(observations.runStatus),
+    }
+}
+
 ;// CONCATENATED MODULE: ./src/post.js
+
+
 
 
 
@@ -164137,7 +162443,7 @@ const STOP_TIMED_OUT_EXIT_CODE = 124
 // This is the post step for the action. It is called by the GitHub Actions
 // runtime. It stops the Jibril service so the daemon flushes all pending events
 // and writes the JSON profile before we read it. It then renders the Garnet
-// Runtime Summary (Step Summary) from the Run Profile. The Runtime Review PR
+// Garnet Execution Summary (Step Summary) from the Execution Profile. The Runtime Review PR
 // comment is published by the Garnet GitHub App, not by this action.
 
 async function run() {
@@ -164219,10 +162525,7 @@ async function run() {
         // and the file landing on disk.
         const appeared = await waitForRootFile(jsonProfilerFile, profileWaitSeconds * 1000)
         if (!appeared) {
-            info(
-                `${JSON_PROFILE_LABEL} was not written within the bounded wait; ` +
-                    "the Runtime Review below is rendered without this run's profile",
-            )
+            info(`${JSON_PROFILE_LABEL} was not written within the bounded wait: ${jsonProfilerFile}`)
         }
 
         let forceStopped = false
@@ -164295,13 +162598,25 @@ async function run() {
             }
         }
 
-        await appendRuntimeReviewSummary(profile)
+        const context = {
+            ...buildRecordingContext({
+                jibrilVersion: getState("jibrilVersion"),
+                sensorBundle: getState("sensorBundle"),
+                sensorAttestation: getState("sensorAttestation"),
+                stopOutcome,
+                forceStopped,
+                stopTimeoutSeconds,
+                runStatus,
+            }),
+            jobTotal: getState("jobTotal"),
+        }
+        await appendRuntimeReviewSummary(profile, context)
         if (profile !== null) {
             logProfileReportLink(profile)
         }
     } catch (err) {
         // Never fail the job because of the Runtime Review step.
-        warning(`failed to write Runtime Review summary: ${getErrorMessage(err)}`)
+        annotateDeliveryFailure("summary_failed", `failed to write Runtime Review summary: ${getErrorMessage(err)}`)
     }
 }
 
@@ -164327,19 +162642,19 @@ async function readProfile(jsonProfilerFile, debug) {
 
         switch (result.state) {
             case "missing":
-                info(`${JSON_PROFILE_LABEL} not found: ${jsonProfilerFile}`)
+                annotateDeliveryFailure("profile_not_written", `${JSON_PROFILE_LABEL} path: ${jsonProfilerFile}`)
                 break
             case "empty":
-                info(`${JSON_PROFILE_LABEL} is empty: ${jsonProfilerFile}`)
+                annotateDeliveryFailure("profile_empty", `${JSON_PROFILE_LABEL} path: ${jsonProfilerFile}`)
                 break
             case "invalid":
-                warning(`failed to parse ${JSON_PROFILE_LABEL}: ${result.detail}`)
+                annotateDeliveryFailure("profile_invalid", result.detail)
                 break
         }
 
         return result
     } catch (error) {
-        warning(`failed to read ${JSON_PROFILE_LABEL}: ${getErrorMessage(error)}`)
+        annotateDeliveryFailure("profile_unreadable", getErrorMessage(error))
         return {
             state: "invalid",
             profile: null,
@@ -164379,7 +162694,7 @@ async function buildAgentStopped(observations) {
 
 /**
  * Reports to the control plane that this run's sensor stopped without leaving
- * a usable Run Profile, authenticated as the agent itself. Best-effort: every
+ * a usable Execution Profile, authenticated as the agent itself. Best-effort: every
  * failure is logged and swallowed so the job stays green.
  * @param {string} agentToken
  * @param {AgentStoppedRequest} request
@@ -164414,7 +162729,7 @@ function readRelayAgent() {
     try {
         return JSON.parse(saved)
     } catch (error) {
-        warning(`Garnet run artifact skipped: the recorded agent is unreadable (${getErrorMessage(error)})`)
+        annotateDeliveryFailure("relay_agent_unreadable", getErrorMessage(error))
         return null
     }
 }
@@ -164639,12 +162954,13 @@ function resolveControlPlaneBaseURL() {
 
 /**
  * @param {LoadedProfile | null} profile
+ * @param {import("./runtime-review.js").StepSummaryContext} context
  * @returns {Promise<void>}
  */
-async function appendRuntimeReviewSummary(profile) {
+async function appendRuntimeReviewSummary(profile, context) {
     if (profile === null) {
         await appendUnrecordedSummary(
-            "The job ended without a usable Execution Profile. No runtime evidence is available for this job.",
+            "The job ended without a usable record of its runtime behavior. Capture is best-effort.",
         )
         return
     }
@@ -164656,14 +162972,15 @@ async function appendRuntimeReviewSummary(profile) {
     }
 
     const preview = getState("preview") === "true"
-    const content = renderStepSummary([profile.raw], { appUrl: resolveAppBaseURL(), preview })
+    const detections = getState("showDetections") === "true"
+    const content = renderStepSummary([profile.raw], { appUrl: resolveAppBaseURL(), preview, detections, context })
 
     await promises_.appendFile(summaryFile, `\n${content}\n`)
-    info("Garnet Runtime Summary written to job summary")
+    info("Garnet Execution Summary written to job summary")
 }
 
 /**
- * Logs the public Run Profile report link to the job log so it is reachable
+ * Logs the public Execution Profile report link to the job log so it is reachable
  * from every run (push, schedule, forks without comment permissions), not
  * only from PR comments and the Step Summary. The exact per-profile selector
  * is preferred when the profile carries an envelope ID; otherwise the
@@ -164693,7 +163010,7 @@ function logProfileReportLink(profile) {
         return
     }
 
-    info(`Garnet Run Profile report: ${link}`)
+    info(`Garnet Execution Profile report: ${link}`)
 }
 
 /**

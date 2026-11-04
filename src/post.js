@@ -28,6 +28,8 @@ import { classifyAgentStop, formatAgentStopDetail } from "./post-signal.js"
 import { resolveJobStatusFromGitHub } from "./github-job-status.js"
 import { resolveStopTimeoutFromSettings, resolveStopTimeoutFromUnit } from "./post-stop-timeout.js"
 import { versionAtLeast } from "./jibril-version.js"
+import { annotateDeliveryFailure } from "./delivery-annotations.js"
+import { buildRecordingContext } from "./recording-context.js"
 import {
     JIBRIL_RUN_STATUS_FILE,
     formatAttachFailures,
@@ -84,7 +86,7 @@ const STOP_TIMED_OUT_EXIT_CODE = 124
 // This is the post step for the action. It is called by the GitHub Actions
 // runtime. It stops the Jibril service so the daemon flushes all pending events
 // and writes the JSON profile before we read it. It then renders the Garnet
-// Runtime Summary (Step Summary) from the Run Profile. The Runtime Review PR
+// Garnet Execution Summary (Step Summary) from the Execution Profile. The Runtime Review PR
 // comment is published by the Garnet GitHub App, not by this action.
 
 async function run() {
@@ -166,10 +168,7 @@ async function run() {
         // and the file landing on disk.
         const appeared = await waitForRootFile(jsonProfilerFile, profileWaitSeconds * 1000)
         if (!appeared) {
-            core.info(
-                `${JSON_PROFILE_LABEL} was not written within the bounded wait; ` +
-                    "the Runtime Review below is rendered without this run's profile",
-            )
+            core.info(`${JSON_PROFILE_LABEL} was not written within the bounded wait: ${jsonProfilerFile}`)
         }
 
         let forceStopped = false
@@ -242,13 +241,25 @@ async function run() {
             }
         }
 
-        await appendRuntimeReviewSummary(profile)
+        const context = {
+            ...buildRecordingContext({
+                jibrilVersion: core.getState("jibrilVersion"),
+                sensorBundle: core.getState("sensorBundle"),
+                sensorAttestation: core.getState("sensorAttestation"),
+                stopOutcome,
+                forceStopped,
+                stopTimeoutSeconds,
+                runStatus,
+            }),
+            jobTotal: core.getState("jobTotal"),
+        }
+        await appendRuntimeReviewSummary(profile, context)
         if (profile !== null) {
             logProfileReportLink(profile)
         }
     } catch (err) {
         // Never fail the job because of the Runtime Review step.
-        core.warning(`failed to write Runtime Review summary: ${getErrorMessage(err)}`)
+        annotateDeliveryFailure("summary_failed", `failed to write Runtime Review summary: ${getErrorMessage(err)}`)
     }
 }
 
@@ -274,19 +285,19 @@ async function readProfile(jsonProfilerFile, debug) {
 
         switch (result.state) {
             case "missing":
-                core.info(`${JSON_PROFILE_LABEL} not found: ${jsonProfilerFile}`)
+                annotateDeliveryFailure("profile_not_written", `${JSON_PROFILE_LABEL} path: ${jsonProfilerFile}`)
                 break
             case "empty":
-                core.info(`${JSON_PROFILE_LABEL} is empty: ${jsonProfilerFile}`)
+                annotateDeliveryFailure("profile_empty", `${JSON_PROFILE_LABEL} path: ${jsonProfilerFile}`)
                 break
             case "invalid":
-                core.warning(`failed to parse ${JSON_PROFILE_LABEL}: ${result.detail}`)
+                annotateDeliveryFailure("profile_invalid", result.detail)
                 break
         }
 
         return result
     } catch (error) {
-        core.warning(`failed to read ${JSON_PROFILE_LABEL}: ${getErrorMessage(error)}`)
+        annotateDeliveryFailure("profile_unreadable", getErrorMessage(error))
         return {
             state: "invalid",
             profile: null,
@@ -326,7 +337,7 @@ async function buildAgentStopped(observations) {
 
 /**
  * Reports to the control plane that this run's sensor stopped without leaving
- * a usable Run Profile, authenticated as the agent itself. Best-effort: every
+ * a usable Execution Profile, authenticated as the agent itself. Best-effort: every
  * failure is logged and swallowed so the job stays green.
  * @param {string} agentToken
  * @param {AgentStoppedRequest} request
@@ -361,7 +372,7 @@ function readRelayAgent() {
     try {
         return JSON.parse(saved)
     } catch (error) {
-        core.warning(`Garnet run artifact skipped: the recorded agent is unreadable (${getErrorMessage(error)})`)
+        annotateDeliveryFailure("relay_agent_unreadable", getErrorMessage(error))
         return null
     }
 }
@@ -586,12 +597,13 @@ function resolveControlPlaneBaseURL() {
 
 /**
  * @param {LoadedProfile | null} profile
+ * @param {import("./runtime-review.js").StepSummaryContext} context
  * @returns {Promise<void>}
  */
-async function appendRuntimeReviewSummary(profile) {
+async function appendRuntimeReviewSummary(profile, context) {
     if (profile === null) {
         await appendUnrecordedSummary(
-            "The job ended without a usable Execution Profile. No runtime evidence is available for this job.",
+            "The job ended without a usable record of its runtime behavior. Capture is best-effort.",
         )
         return
     }
@@ -603,14 +615,15 @@ async function appendRuntimeReviewSummary(profile) {
     }
 
     const preview = core.getState("preview") === "true"
-    const content = renderStepSummary([profile.raw], { appUrl: resolveAppBaseURL(), preview })
+    const detections = core.getState("showDetections") === "true"
+    const content = renderStepSummary([profile.raw], { appUrl: resolveAppBaseURL(), preview, detections, context })
 
     await fs.appendFile(summaryFile, `\n${content}\n`)
-    core.info("Garnet Runtime Summary written to job summary")
+    core.info("Garnet Execution Summary written to job summary")
 }
 
 /**
- * Logs the public Run Profile report link to the job log so it is reachable
+ * Logs the public Execution Profile report link to the job log so it is reachable
  * from every run (push, schedule, forks without comment permissions), not
  * only from PR comments and the Step Summary. The exact per-profile selector
  * is preferred when the profile carries an envelope ID; otherwise the
@@ -640,7 +653,7 @@ function logProfileReportLink(profile) {
         return
     }
 
-    core.info(`Garnet Run Profile report: ${link}`)
+    core.info(`Garnet Execution Profile report: ${link}`)
 }
 
 /**

@@ -130,7 +130,7 @@ const RULES = [
 ]
 
 /**
- * Returns `value` with any detected secrets replaced by a mask.
+ * Returns `value` with any matched secrets replaced by a mask.
  * @param {string} value
  * @returns {string}
  */
