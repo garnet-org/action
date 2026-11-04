@@ -80,6 +80,9 @@ test("wording gate: README, action.yaml and agent rules carry no superseded word
   for (const file of ["README.md", "action.yaml", "AGENTS.md", ".cursor/BUGBOT.md", "src/job-summary.js", "src/start-failure.js"]) {
     assertNoneOf(file, readFileSync(file, "utf8"), BANNED_EVERYWHERE)
   }
+  const actionYaml = readFileSync("action.yaml", "utf8")
+  const [, description = ""] = actionYaml.match(/^description:\s*"([^"]*)"/m) ?? []
+  assert.ok(description.length > 0 && description.length <= 125, `action.yaml description must be 1..125 chars (got ${description.length})`)
 })
 
 test("wording gate: the vendored comment-final reference states carry the heading family and shared lines", () => {

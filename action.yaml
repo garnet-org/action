@@ -1,6 +1,6 @@
 name: "Garnet Runtime Review"
 author: "Garnet Labs Inc."
-description: "Garnet records your CI runner at runtime. The Action writes the Step Summary and uploads the record; the Garnet App posts the pull request comment, including on fork PRs."
+description: "Records your CI runner at runtime: writes the Step Summary and uploads the record; the Garnet App comments on PRs and forks."
 branding:
     icon: "activity"
     color: "purple"
