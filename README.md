@@ -112,7 +112,7 @@ The workflow continues and the job is not marked failed either way.
 >
 > ```yaml
 > # Pinned to v2.4.1
-> - uses: garnet-org/action@96e9f81ec0f59f2322e8c67b43c4d4017d932ad3
+> - uses: garnet-org/action@96e9f81ec0f59f2322e8c67b43c4d4017d932ad3 # v2.4.1
 > ```
 >
 > The SHA of the latest release is published at [garnet.ai/pins](https://garnet.ai/pins). Exact tags such as `garnet-org/action@v2.4.1` also work.
