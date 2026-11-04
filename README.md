@@ -32,9 +32,13 @@ Garnet runs [Jibril](https://github.com/garnet-org/jibril-releases), an eBPF sen
 Install the GitHub App, add one step. No code changes, no secret.
 
 - **Action**: adds the step; Jibril records the job; the Garnet Execution Summary lands in the job's Step Summary with a public Execution Profile permalink, and the record is uploaded to Garnet (on fork pull requests, as a `garnet-run-*` workflow artifact). The Action posts no pull request comment.
-- **Companion GitHub App**: posts the pull request comment, including on fork pull requests, and owns the single Runtime Review comment per pull request — one fold per recorded job, a comparison against the previous recorded commit, and a per-job Execution Profile link.
+- **Companion GitHub App**: posts the single Runtime Review comment per pull request, including on fork pull requests. It compares each recorded job with the last 10 recorded runs of that job on the base branch; runner and GitHub traffic is shown separately and is not counted as workload change.
 
-See what the comment looks like at [docs.garnet.ai/consume](https://docs.garnet.ai/consume).
+Public example: adding Puppeteer as a devDependency shows [the #8 Runtime Review comment](https://github.com/garnet-labs/ghaw-garnet-reference/pull/8#issuecomment-6615094423) with `node` newly reaching `storage.googleapis[.]com`, compared with the PR base.
+
+<img src="docs/images/pr-comment-ghaw-8.png" alt="Runtime behavior changed: node newly reaches storage.googleapis[.]com, with the workload and runner trees open" width="800">
+
+<p align="center"><sub>Open view of the <a href="https://github.com/garnet-labs/ghaw-garnet-reference/pull/8#issuecomment-6615094423">public comment on #8</a>.</sub></p>
 
 ## What Garnet records
 
@@ -120,7 +124,15 @@ When neither credential is available, a pull request run is relayed to the App t
 
 The companion GitHub App owns the comment: one per pull request, one row per recorded job, updated in place as each job's Execution Profile lands, with a link from each job to its full Execution Profile in Garnet. Its current shape and how to read it are documented at [docs.garnet.ai/consume](https://docs.garnet.ai/consume).
 
-The Action alone gives you the Step Summary: the same record is appended to the job's Step Summary as the **Garnet Execution Summary** ([example run](https://github.com/garnet-labs/pnpm/actions/runs/35818535654)). The pull request comment needs the App.
+The comment uses five headings: `Runtime behavior changed`, `Nothing new recorded`, `Runtime behavior recorded`, `Recording runtime behavior`, and `Runtime behavior not recorded`.
+
+Recorded states show the changed-job count, optional coverage, one comparison line, and a best-effort capture line. Each job has one top-level fold, with workload and runner/GitHub traffic in separate trees, followed by available job-log and full-record links. The footer is a separator, a `How to read this` fold, then `Recorded by Garnet · Add it to your CI ↗` linking to garnet.ai.
+
+The Action alone gives you the Step Summary: the same record is appended to the job's Step Summary as the **Garnet Execution Summary** ([job log](https://github.com/garnet-labs/ghaw-garnet-reference/actions/runs/41724401762/job/126225267839) · [public report](https://app.garnet.ai/public/runs/41724401762?profile=01a1a35e-dafc-77da-9438-781a3c2f2a4b)). The pull request comment needs the App.
+
+Marker counts mirror the rendered added and removed workload rows. The headline outcome follows novelty: a destination is new only when none of the last 10 recorded base-branch runs reached it, and removals never change that outcome. Step labels, commit tables, `diff ↗`, and the former circular leaf marker are not part of the comment.
+
+In the posted #8 example, the comment compares with PR base `main`: `node` newly reaches `storage.googleapis[.]com`. Runner and GitHub traffic is shown in its own tree and never counts toward workload change.
 
 ## For coding agents
 
@@ -139,7 +151,7 @@ Read the record for what it is: what Garnet recorded, not a statement that nothi
 - **Matrix jobs.** Jobs that share a name across a matrix can be aggregated under one fold and undercount destinations.
 - **No completeness claim.** The record states what was captured; it does not declare that every connection was captured.
 - **Post-step time.** Stopping the sensor waits for Jibril to flush its Execution Profile, bounded by `stop_timeout_seconds`. On busy jobs this has been measured at 1–3 minutes; lower the bound if post-step latency matters more than a complete flush.
-- **Comparison needs a recorded pair.** The diff view appears only when the previous recorded commit on the pull request has a profile for the same job; otherwise the fold shows the current record alone.
+- **Comparison uses recorded history.** Each job uses the last 10 recorded runs of that job on the base branch; when no base record exists, the previous push is used only if it is part of the pull request.
 - **Matrix legs need `job_index`.** GitHub gives every leg of a `strategy.matrix` job the same job name, so without the `job_index` input the legs are indistinguishable to Garnet. See [Matrix jobs](#matrix-jobs).
 
 ## Under the hood
