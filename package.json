@@ -40,6 +40,10 @@
         "@vercel/ncc": "^0.45.0",
         "typescript": "^7.0.2"
     },
+    "overrides": {
+        "glob": ">=14.0.2",
+        "minimatch": ">=11.0.1"
+    },
     "prettier": {
         "semi": false,
         "arrowParens": "avoid",
