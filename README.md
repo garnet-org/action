@@ -111,11 +111,11 @@ The workflow continues and the job is not marked failed either way.
 > **Pinning:** `@v2` follows the latest `v2.x.x` release. To pin exactly, use the full commit SHA (Dependabot keeps SHA pins current):
 >
 > ```yaml
-> # Pinned to v2.3.0
-> - uses: garnet-org/action@245ad6be82de3200c205109c8ca7ac816dc692ea
+> # Pinned to v2.4.1
+> - uses: garnet-org/action@96e9f81ec0f59f2322e8c67b43c4d4017d932ad3
 > ```
 >
-> The SHA of the latest release is published at [garnet.ai/pins](https://garnet.ai/pins). Exact tags such as `garnet-org/action@v2.3.0` also work.
+> The SHA of the latest release is published at [garnet.ai/pins](https://garnet.ai/pins). Exact tags such as `garnet-org/action@v2.4.1` also work.
 
 ### 2. Install the companion GitHub App
 
