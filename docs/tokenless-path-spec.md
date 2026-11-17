@@ -241,3 +241,5 @@ against two shapes).
 5. **Phase 2 trigger**: what evidence (Marketplace installs? fork-PR volume?)
    promotes the OIDC anonymous-ingestion work from direction to committed
    scope?
+
+<!-- UAT: Garnet record ready check run (ENG-1660). Not for merge. -->
