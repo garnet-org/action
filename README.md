@@ -44,8 +44,8 @@ Public example: adding Puppeteer as a devDependency shows [the #8 Runtime Review
 
 - **Execution chains and destinations, not contents** — process names, the step they ran under when known, and outbound domains, IPs, ports and protocols. Not your source, not your secrets.
 - **Observe-only** — Jibril reads kernel events through eBPF programs checked by the kernel verifier. It does not block or modify anything.
-- **Scoped egress** — the action and Jibril talk to `api.garnet.ai` (or your `api_url`) and download the Jibril release from `github.com/garnet-org/jibril-releases` over HTTPS. The release bundle's checksums are verified and its signature is checked with `gh attestation verify` before Jibril runs when `github_token` and the `gh` CLI are available; otherwise the action warns and skips attestation verification.
-- **Ephemeral** — Jibril runs as a systemd service and is stopped in the post step; its config and credentials are removed from the runner before the job ends.
+- **Scoped egress** — the action and Jibril talk to `api.garnet.ai` (or your `api_url`) and download the Jibril release from `github.com/garnet-org/jibril-releases` over HTTPS. The release bundle's checksums are checked and its signature is checked with `gh attestation verify` before Jibril runs when `github_token` and the `gh` CLI are available; otherwise the action warns and skips attestation verification.
+- **Post-step cleanup** — the post step stops the Jibril systemd service and attempts to remove `/etc/default/jibril`, which holds its credentials. The installed binary, systemd unit, configuration and logs remain on the runner; use an ephemeral runner or manage those files on self-hosted runners.
 
 ## Permissions
 
@@ -124,13 +124,13 @@ When neither credential is available, a pull request run is relayed to the App t
 
 The companion GitHub App owns the comment: one per pull request, one row per recorded job, updated in place as each job's Execution Profile lands, with a link from each job to its full Execution Profile in Garnet. Its current shape and how to read it are documented at [docs.garnet.ai/consume](https://docs.garnet.ai/consume).
 
-The comment uses five headings: `Runtime behavior changed`, `Nothing new recorded`, `Runtime behavior recorded`, `Recording runtime behavior`, and `Runtime behavior not recorded`.
+The comment reference uses five headings: `Runtime behavior changed`, `No runtime changes`, `Runtime behavior recorded`, `Recording runtime behavior`, and `Runtime behavior not recorded`.
 
-Recorded states show the changed-job count, optional coverage, one comparison line, and a best-effort capture line. Each job has one top-level fold, with workload and runner/GitHub traffic in separate trees, followed by available job-log and full-record links. The footer is a separator, a `How to read this` fold, then `Recorded by Garnet · Add it to your CI ↗` linking to garnet.ai.
+Recorded states show destination additions, job counts, coverage and the compared commits where available. Recorded job folds separate workload from runner traffic and include available job-log and full-record links. The footer has a `How to read this` fold, `Capture is best-effort.`, and `Runtime behavior, recorded by Garnet.` with an `Add it to your CI ↗` link.
 
 The Action alone gives you the Step Summary: the same record is appended to the job's Step Summary as the **Garnet Execution Summary** ([job log](https://github.com/garnet-labs/ghaw-garnet-reference/actions/runs/41724401762/job/126225267839) · [public report](https://app.garnet.ai/public/runs/41724401762?profile=01a1a35e-dafc-77da-9438-781a3c2f2a4b)). The pull request comment needs the App.
 
-Marker counts mirror the rendered added and removed workload rows. The headline outcome follows novelty: a destination is new only when none of the last 10 recorded base-branch runs reached it, and removals never change that outcome. Step labels, commit tables, `diff ↗`, and the former circular leaf marker are not part of the comment.
+Counts describe the rendered added and removed workload destinations. A destination is new only when none of the last 10 recorded base-branch runs reached it. Recorded step names appear in the execution trees when available.
 
 In the posted #8 example, the comment compares with PR base `main`: `node` newly reaches `storage.googleapis[.]com`. Runner and GitHub traffic is shown in its own tree and never counts toward workload change.
 
@@ -138,8 +138,8 @@ In the posted #8 example, the comment compares with PR base `main`: `node` newly
 
 Coding agents and review bots read the same record a human does. Nothing extra is recorded for them.
 
-- **Hosted MCP (public repositories, no token):** `https://garnet-runtime-review-mcp.vercel.app/mcp` — tools `get_runtime_review(repo, pr)` and `get_execution_profile(url)`. One line in Claude Code: `claude mcp add --transport http garnet-runtime-review https://garnet-runtime-review-mcp.vercel.app/mcp`; any client: `npx -y add-mcp https://garnet-runtime-review-mcp.vercel.app/mcp -g`.
-- **How agents read it:** the verdict (`changed`, `unchanged`, `recorded`, `undeterminable`) is bound to the pull request's head commit. `undeterminable` means unknown, never clean. Evidence never approves a pull request; the reviewer and repository policy decide. Contract and agent instructions: [docs.garnet.ai/consume](https://docs.garnet.ai/consume#coding-agents-and-the-mcp).
+- **Garnet Runtime Review MCP:** connect to `https://api.garnet.ai/api/v2/mcp`. In Claude Code: `claude mcp add --transport http garnet https://api.garnet.ai/api/v2/mcp`. Discover the deployed tools and schemas when connecting; use `profiles` for job records. Client setup and authentication: [reviewer kit](https://github.com/garnet-labs/garnet-runtime-review-mcp).
+- **How agents read it:** read the finalized App comment bound to the pull request's current head commit for the comparison. Use MCP job records for detail, matching the repository, workflow run, attempt, job and head SHA, and paginate the results. Missing, pending, stale or incomplete capture means unknown. Runtime evidence does not approve a pull request; the reviewer and repository policy decide. Contract and agent instructions: [docs.garnet.ai/consume](https://docs.garnet.ai/consume#coding-agents-and-the-mcp).
 - **Machine-readable surfaces:** every docs page has a Markdown twin (append `.md`), [docs.garnet.ai/llms.txt](https://docs.garnet.ai/llms.txt), the public report JSON described at [app.garnet.ai/llms.txt](https://app.garnet.ai/llms.txt), and the pinned release SHA at [garnet.ai/pins.txt](https://www.garnet.ai/pins.txt).
 
 ## Known limitations
@@ -150,7 +150,7 @@ Read the record for what it is: what Garnet recorded, not a statement that nothi
 - **Merge commit, not PR head.** On `pull_request` runs GitHub checks out the synthetic merge commit. The action reports your PR head SHA to Garnet, but the comment headline and the public Execution Profile currently label the run by the commit the workflow ran on — the merge commit. Aligning them to the PR head is tracked in the control plane.
 - **Matrix jobs.** Jobs that share a name across a matrix can be aggregated under one fold and undercount destinations.
 - **No completeness claim.** The record states what was captured; it does not declare that every connection was captured.
-- **Post-step time.** Stopping the sensor waits for Jibril to flush its Execution Profile, bounded by `stop_timeout_seconds`. On busy jobs this has been measured at 1–3 minutes; lower the bound if post-step latency matters more than a complete flush.
+- **Post-step time.** Stopping the sensor waits for Jibril to write its Execution Profile and flush events, bounded by `stop_timeout_seconds`. Lowering the bound can interrupt profile writing; raising it allows more shutdown time but does not guarantee a profile or complete capture. Capture is best-effort.
 - **Comparison uses recorded history.** Each job uses the last 10 recorded runs of that job on the base branch; when no base record exists, the previous push is used only if it is part of the pull request.
 - **Matrix legs need `job_index`.** GitHub gives every leg of a `strategy.matrix` job the same job name, so without the `job_index` input the legs are indistinguishable to Garnet. See [Matrix jobs](#matrix-jobs).
 
@@ -163,12 +163,14 @@ Read the record for what it is: what Garnet recorded, not a statement that nothi
 
 ## Configuration
 
+Jibril `v2.18.0` (previewed in `v2.18.0-rc.4`) prints the shutdown profile synchronously, outside the event dispatcher's queue and drain deadline. This addresses the shutdown-profile loss reported with `v2.17.0` at the five-minute drain limit. It does not bypass the Action's stop timeout or guarantee complete capture. The default below is the Action's stable pin, managed by the daily `update-jibril-version` workflow.
+
 | Input               | Required | Default                 | Description                                    |
 | ------------------- | -------- | ----------------------- | ---------------------------------------------- |
 | `api_token`         | No       | —                       | Garnet API token from app.garnet.ai. When set it is used as-is and no OIDC token is requested. When empty the action tries GitHub OIDC (`id-token: write`). With neither, a pull request run is recorded locally and relayed to the GitHub App through a `garnet-run-*` workflow artifact; any other event skips recording with a warning and a Job Summary explanation. The workflow continues. |
 | `github_token`      | No       | `${{ github.token }}`   | Used by `gh attestation verify` on the Jibril release and to read the job's status when no Execution Profile was produced. If unset, attestation verification is skipped with a warning. |
 | `api_url`           | No       | `https://api.garnet.ai` | Garnet API base URL (HTTPS)                    |
-| `jibril_version`    | No       | `v2.17.0`               | Jibril release tag (for example `v2.16.0`), `latest`, or empty to resolve from the action tag (`@v0` resolves to daily builds) |
+| `jibril_version`    | No       | `v2.17.0`               | Explicit Jibril release tag or `latest`. An empty value uses the Action's stable pin for branches, SHAs, exact tags and `@v2`; `@v0` resolves to daily builds (`v0.0`), and `@v1` to `v2.10.4`. |
 | `job_index`         | No       | —                       | **Strongly recommended on matrix jobs**: pass `${{ strategy.job-index }}`. Without it every leg of a matrix shares one identity and the Runtime Review reports a single leg. See [Matrix jobs](#matrix-jobs). |
 | `job_total`         | No       | —                       | Optional, matrix jobs only: pass `${{ strategy.job-total }}` next to `job_index` so the Step Summary labels the leg `<job> (i of N)`; without it the leg shows the bare job name. The App's PR comment does not need it. |
 | `stop_timeout_seconds` | No    | `1800`                  | Seconds Jibril gets at shutdown to finish writing its Execution Profile. The post step waits this long plus a small grace, then force-stops the sensor. `0` or negative disables the bound. |

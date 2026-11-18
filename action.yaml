@@ -24,7 +24,7 @@ inputs:
         required: false
         default: "https://api.garnet.ai"
     jibril_version:
-        description: "Jibril version (for example v2.16.0, v0.0, or 'latest'); empty resolves from the action tag"
+        description: "Jibril release tag or 'latest'; empty uses the Action's stable pin except @v0 (v0.0) and @v1 (v2.10.4)"
         required: false
         default: "v2.17.0"
     job_index:
@@ -58,7 +58,8 @@ inputs:
             Maximum seconds Jibril is given at shutdown to finish writing its Execution Profile and flushing
             events. The post step waits this long (plus a small grace) and then force stops the sensor,
             so a heavy backlog cannot stall the job indefinitely. Lower it to bound the post step;
-            raise it on long jobs where the profile matters more than post-step latency. Set to `0`
+            raise it to allow more shutdown time. Interrupting shutdown can lose the profile;
+            a longer timeout does not guarantee complete capture. Set to `0`
             or a negative integer to disable the flush timeout entirely.
         required: false
         default: "1800"
