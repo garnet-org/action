@@ -124,9 +124,9 @@ When neither credential is available, a pull request run is relayed to the App t
 
 The companion GitHub App owns the comment: one per pull request, one row per recorded job, updated in place as each job's Execution Profile lands, with a link from each job to its full Execution Profile in Garnet. Its current shape and how to read it are documented at [docs.garnet.ai/consume](https://docs.garnet.ai/consume).
 
-The App uses six headings: `Runtime behavior changed`, `Nothing new recorded`, `No runtime changes`, `Runtime behavior recorded`, `Recording runtime behavior`, and `Runtime behavior not recorded`. When the comparison finds no new workload destinations, `Nothing new recorded` applies to best-effort or otherwise non-complete capture; `No runtime changes` applies only to complete capture.
+The App's heading family has six entries: `Runtime behavior changed`, `Nothing new recorded`, `No runtime changes`, `Runtime behavior recorded`, `Recording runtime behavior`, and `Runtime behavior not recorded`. When the comparison finds no new workload destinations, `Nothing new recorded` applies to best-effort or otherwise non-complete capture; `No runtime changes` is reserved for complete capture. The App currently declares only best-effort or partial capture, never complete capture, so no-new-destination comparisons currently read `Nothing new recorded`.
 
-Recorded states show destination additions, job counts, coverage and the compared commits where available. Recorded job folds separate workload from runner traffic and include available job-log and full-record links. The footer has a `How to read this` fold, `Capture is best-effort.`, and `Runtime behavior, recorded by Garnet.` with an `Add it to your CI ↗` link.
+Recorded states show destination additions, job counts, coverage and what the run was compared with: the PR base, recorded runs on the base branch, or the previous push, where available. Recorded job folds separate workload from runner traffic and include available job-log and full-record links. Below the job folds, the comment has a `How to read this` fold, a best-effort capture note when applicable, Garnet attribution and an installation link.
 
 The Action alone gives you the Step Summary: the same record is appended to the job's Step Summary as the **Garnet Execution Summary** ([job log](https://github.com/garnet-labs/ghaw-garnet-reference/actions/runs/41724401762/job/126225267839) · [public report](https://app.garnet.ai/public/runs/41724401762?profile=01a1a35e-dafc-77da-9438-781a3c2f2a4b)). The pull request comment needs the App.
 
@@ -163,7 +163,7 @@ Read the record for what it is: what Garnet recorded, not a statement that nothi
 
 ## Configuration
 
-Jibril `v2.18.0` prints the shutdown profile synchronously, outside the event dispatcher's queue and drain deadline, addressing the shutdown-profile loss reported with `v2.17.0` at the five-minute drain limit. This does not bypass the Action's stop timeout or guarantee complete capture; the default below is the Action's stable pin.
+At the verified `v2.18.0-rc.4` release candidate (`v2.18.0` stable is not yet tagged), Jibril prints the shutdown profile synchronously, outside the event dispatcher's queue and drain deadline, and shortens the dispatcher event-drain deadline from five minutes in `v2.17.0` to one minute. These changes do not bypass the Action's stop timeout or guarantee a profile or complete capture; the Action default remains its stable pin, currently `v2.17.0` without these changes, until the daily version-update workflow's pin bump is merged.
 
 | Input               | Required | Default                 | Description                                    |
 | ------------------- | -------- | ----------------------- | ---------------------------------------------- |
@@ -247,7 +247,7 @@ On Windows, macOS and arm64 the action logs a warning and skips recording; the w
 | "Garnet skipped this Runtime Review because no authentication mechanism was available" | `api_token` was empty and no OIDC token could be requested, on an event that cannot be relayed (anything other than a pull request). Pass `api_token` from a secret or grant `id-token: write`; the job continues either way. |
 | No pull request comment                   | The comment is posted by the companion GitHub App — [install it](https://github.com/apps/garnet-runtime-review/installations/select_target) on the repository. The Job Summary and the profile in app.garnet.ai do not depend on the App. |
 | `(step: "<unknown>")` labels              | Step attribution is best effort (see Known limitations). The chain was recorded; only its step is unknown. |
-| Post step is slow                         | The sensor is flushing its record. Lower `stop_timeout_seconds` to bound it. |
+| Post step is slow                         | The sensor is flushing its record. Lower `stop_timeout_seconds` to bound it, but interrupting shutdown can lose the Execution Profile. |
 | No Execution Summary                      | Set `debug: "true"` to upload Jibril logs as artifacts, then inspect `jibril.log` and `jibril.err`. |
 
 ### Security & license
