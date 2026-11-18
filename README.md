@@ -124,13 +124,13 @@ When neither credential is available, a pull request run is relayed to the App t
 
 The companion GitHub App owns the comment: one per pull request, one row per recorded job, updated in place as each job's Execution Profile lands, with a link from each job to its full Execution Profile in Garnet. Its current shape and how to read it are documented at [docs.garnet.ai/consume](https://docs.garnet.ai/consume).
 
-The comment reference uses five headings: `Runtime behavior changed`, `No runtime changes`, `Runtime behavior recorded`, `Recording runtime behavior`, and `Runtime behavior not recorded`.
+The App uses six headings: `Runtime behavior changed`, `Nothing new recorded`, `No runtime changes`, `Runtime behavior recorded`, `Recording runtime behavior`, and `Runtime behavior not recorded`. When the comparison finds no new workload destinations, `Nothing new recorded` applies to best-effort or otherwise non-complete capture; `No runtime changes` applies only to complete capture.
 
 Recorded states show destination additions, job counts, coverage and the compared commits where available. Recorded job folds separate workload from runner traffic and include available job-log and full-record links. The footer has a `How to read this` fold, `Capture is best-effort.`, and `Runtime behavior, recorded by Garnet.` with an `Add it to your CI ↗` link.
 
 The Action alone gives you the Step Summary: the same record is appended to the job's Step Summary as the **Garnet Execution Summary** ([job log](https://github.com/garnet-labs/ghaw-garnet-reference/actions/runs/41724401762/job/126225267839) · [public report](https://app.garnet.ai/public/runs/41724401762?profile=01a1a35e-dafc-77da-9438-781a3c2f2a4b)). The pull request comment needs the App.
 
-Counts describe the rendered added and removed workload destinations. A destination is new only when none of the last 10 recorded base-branch runs reached it. Recorded step names appear in the execution trees when available.
+Counts describe the rendered added and removed workload destinations. A destination is new only when none of the last 10 recorded base-branch runs reached it. Removals alone never make the comparison `changed`; new workload destinations in compared jobs or newly recorded jobs with workload destinations do. Recorded step names appear in the execution trees when available.
 
 In the posted #8 example, the comment compares with PR base `main`: `node` newly reaches `storage.googleapis[.]com`. Runner and GitHub traffic is shown in its own tree and never counts toward workload change.
 
@@ -163,7 +163,7 @@ Read the record for what it is: what Garnet recorded, not a statement that nothi
 
 ## Configuration
 
-Jibril `v2.18.0` (previewed in `v2.18.0-rc.4`) prints the shutdown profile synchronously, outside the event dispatcher's queue and drain deadline. This addresses the shutdown-profile loss reported with `v2.17.0` at the five-minute drain limit. It does not bypass the Action's stop timeout or guarantee complete capture. The default below is the Action's stable pin, managed by the daily `update-jibril-version` workflow.
+Jibril `v2.18.0` prints the shutdown profile synchronously, outside the event dispatcher's queue and drain deadline, addressing the shutdown-profile loss reported with `v2.17.0` at the five-minute drain limit. This does not bypass the Action's stop timeout or guarantee complete capture; the default below is the Action's stable pin.
 
 | Input               | Required | Default                 | Description                                    |
 | ------------------- | -------- | ----------------------- | ---------------------------------------------- |
