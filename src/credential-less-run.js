@@ -1,5 +1,5 @@
-// Called only when api_token resolved empty. Fork pull requests need
-// remediation that does not expose credentials to untrusted code.
+// Repo readers can download relay artifacts, so only fork pull_request jobs,
+// which lack repository secrets, may relay; same-repo and pull_request_target jobs can access secrets.
 
 import * as fs from "node:fs/promises"
 import { getEnv, getOptionalRecord, getOptionalString } from "./shared.js"
@@ -30,10 +30,6 @@ import { getEnv, getOptionalRecord, getOptionalString } from "./shared.js"
 const REMEDIATION =
     "Grant 'id-token: write' to this job to authenticate with OIDC, or pass a Garnet API token to the 'api_token' input."
 
-// The relay exists to put a Runtime Review on a pull request; nothing
-// downstream reads an artifact belonging to a push or a schedule.
-const RELAY_EVENT_NAMES = new Set(["pull_request", "pull_request_target"])
-
 /**
  * Decides how a run with no `api_token` proceeds. Never throws: the event
  * payload only refines the wording, so an unexpected shape or a read error
@@ -46,18 +42,14 @@ export async function resolveCredentialMode(context) {
         return { mode: "authenticated", reason: "OIDC is available" }
     }
 
-    if (RELAY_EVENT_NAMES.has(context.eventName)) {
-        const fromFork = await isForkPullRequest(context.eventPath, context.repository)
+    if (context.eventName === "pull_request" && (await isForkPullRequest(context.eventPath, context.repository))) {
         return {
             mode: "relay",
-            reason: fromFork
-                ? "This pull request comes from a forked repository, which GitHub denies both repository secrets " +
-                  "and an OIDC ID token, so this job cannot authenticate with Garnet. Jibril still records the " +
-                  "job locally and the run is uploaded as a workflow artifact, which the Garnet GitHub App " +
-                  "collects with its own credentials after the workflow finishes."
-                : "No authentication mechanism was available: the 'api_token' input resolved empty and no OIDC " +
-                  "ID token could be requested. Jibril still records this job locally and the run is uploaded " +
-                  `as a workflow artifact for the Garnet GitHub App to collect. ${REMEDIATION}`,
+            reason:
+                "This pull request comes from a forked repository, which GitHub denies both repository secrets " +
+                "and an OIDC ID token, so this job cannot authenticate with Garnet. Jibril still records the " +
+                "job locally and the run is uploaded as a workflow artifact, which the Garnet GitHub App " +
+                "collects with its own credentials after the workflow finishes.",
         }
     }
 
@@ -110,6 +102,10 @@ async function isForkPullRequest(eventPath, repository) {
         return false
     }
 
+    if (isDependabot(payloadRecord.sender) || isDependabot(pullRequest.user)) {
+        return false
+    }
+
     const head = getOptionalRecord(pullRequest.head)
     if (head === null) {
         return false
@@ -126,4 +122,15 @@ async function isForkPullRequest(eventPath, repository) {
     }
 
     return headRepoFullName.toLowerCase() !== repository.toLowerCase()
+}
+
+/**
+ * @param {unknown} actor
+ * @returns {boolean}
+ */
+function isDependabot(actor) {
+    const actorRecord = getOptionalRecord(actor)
+    const login = actorRecord === null ? undefined : getOptionalString(actorRecord.login)
+
+    return login?.toLowerCase() === "dependabot[bot]"
 }

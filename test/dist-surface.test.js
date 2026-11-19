@@ -74,7 +74,7 @@ test("dist: the post bundle still renders the Step Summary and uploads the relay
     }
 })
 
-test("relay: the garnet-run-* artifact name and payload bytes are unchanged", () => {
+test("relay: the garnet-run-* artifact name and stripped envelope match the pinned payload", () => {
     const profile = JSON.parse(readFileSync("test/fixtures/renderer-testdata/synthetic/credential-argv.json", "utf8"))
     const name = resolveRunArtifactName({ job: "relay", jobIndex: 1, runAttempt: "1", uniqueSuffix: "a1b2c3d4" })
     assert.equal(name, "garnet-run-relay-1-attempt-1")
