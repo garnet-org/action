@@ -1,7 +1,6 @@
 /**
- * Gates for a run with neither `api_token` nor an OIDC ID-token grant. A
- * pull request is relayed through a workflow artifact and must not be
- * skipped; every other event is skipped gracefully *and* says why, naming
+ * Gates for a run with neither `api_token` nor an OIDC ID-token grant. Only
+ * fork `pull_request` runs are relayed; other cases skip gracefully and name
  * both credentials.
  */
 import test from "node:test"
@@ -43,12 +42,14 @@ async function writeEventPayload(payload) {
 
 /**
  * @param {string} headRepoFullName
+ * @param {string} [userLogin]
  * @returns {Record<string, unknown>}
  */
-function pullRequestPayload(headRepoFullName) {
+function pullRequestPayload(headRepoFullName, userLogin = "contributor") {
     return {
         pull_request: {
             number: 7,
+            user: { login: userLogin },
             head: {
                 sha: "a".repeat(40),
                 repo: { full_name: headRepoFullName },
@@ -89,9 +90,8 @@ async function withEnv(overlay, fn) {
 
 const NO_OIDC = { ACTIONS_ID_TOKEN_REQUEST_URL: undefined, ACTIONS_ID_TOKEN_REQUEST_TOKEN: undefined }
 
-test("no credentials on a pull request: relays instead of skipping", async () => {
+test("no credentials on a fork pull_request: relays instead of skipping", async () => {
     const fork = await writeEventPayload(pullRequestPayload("outside/fork"))
-    const sameRepo = await writeEventPayload(pullRequestPayload(REPOSITORY))
 
     await withEnv(NO_OIDC, async () => {
         const forked = await resolveCredentialMode({
@@ -102,18 +102,34 @@ test("no credentials on a pull request: relays instead of skipping", async () =>
         assert.equal(forked.mode, "relay")
         assert.match(forked.reason, /forked repository/)
         assert.match(forked.reason, /workflow artifact/)
+    })
 
-        // The event alone decides; no fork check gates the run.
-        for (const eventName of ["pull_request", "pull_request_target"]) {
-            const decision = await resolveCredentialMode({ eventName, eventPath: sameRepo, repository: REPOSITORY })
-            assert.equal(decision.mode, "relay")
-            assert.doesNotMatch(decision.reason, /forked repository/)
+    await rm(dirname(fork), { recursive: true, force: true })
+})
+
+test("no credentials on same-repo, pull_request_target, or Dependabot PRs: skips", async () => {
+    const sameRepo = await writeEventPayload(pullRequestPayload(REPOSITORY))
+    const fork = await writeEventPayload(pullRequestPayload("outside/fork"))
+    const dependabot = await writeEventPayload(pullRequestPayload("outside/fork", "dependabot[bot]"))
+
+    await withEnv(NO_OIDC, async () => {
+        const cases = [
+            { eventName: "pull_request", eventPath: sameRepo },
+            { eventName: "pull_request_target", eventPath: sameRepo },
+            { eventName: "pull_request_target", eventPath: fork },
+            { eventName: "pull_request", eventPath: dependabot },
+        ]
+
+        for (const { eventName, eventPath } of cases) {
+            const decision = await resolveCredentialMode({ eventName, eventPath, repository: REPOSITORY })
+            assert.equal(decision.mode, "skip")
             assertNamesBothCredentials(decision.reason)
         }
     })
 
-    await rm(dirname(fork), { recursive: true, force: true })
     await rm(dirname(sameRepo), { recursive: true, force: true })
+    await rm(dirname(fork), { recursive: true, force: true })
+    await rm(dirname(dependabot), { recursive: true, force: true })
 })
 
 test("push + no credentials: skips, because no artifact of a push is ever collected", async () => {
@@ -161,7 +177,7 @@ test("OIDC grant: always authenticated, never relayed", async () => {
     await rm(dirname(eventPath), { recursive: true, force: true })
 })
 
-test("detection never throws: malformed payloads still relay, with the generic reason", async () => {
+test("malformed payloads and missing event file: skip with the generic reason", async () => {
     await withEnv(NO_OIDC, async () => {
         const payloads = [{}, { pull_request: null }, { pull_request: { head: { repo: { full_name: "" } } } }]
         for (const payload of payloads) {
@@ -171,8 +187,9 @@ test("detection never throws: malformed payloads still relay, with the generic r
                 eventPath,
                 repository: REPOSITORY,
             })
-            assert.equal(decision.mode, "relay")
+            assert.equal(decision.mode, "skip")
             assert.doesNotMatch(decision.reason, /forked repository/)
+            assertNamesBothCredentials(decision.reason)
             await rm(dirname(eventPath), { recursive: true, force: true })
         }
 
@@ -181,7 +198,8 @@ test("detection never throws: malformed payloads still relay, with the generic r
             eventPath: "/nonexistent/event.json",
             repository: REPOSITORY,
         })
-        assert.equal(missing.mode, "relay")
+        assert.equal(missing.mode, "skip")
+        assertNamesBothCredentials(missing.reason)
     })
 })
 

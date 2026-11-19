@@ -31861,8 +31861,8 @@ async function getProfileSha() {
 }
 
 ;// CONCATENATED MODULE: ./src/credential-less-run.js
-// Called only when api_token resolved empty. Fork pull requests need
-// remediation that does not expose credentials to untrusted code.
+// Repo readers can download relay artifacts, so only fork pull_request jobs,
+// which lack repository secrets, may relay; same-repo and pull_request_target jobs can access secrets.
 
 
 
@@ -31893,10 +31893,6 @@ async function getProfileSha() {
 const REMEDIATION =
     "Grant 'id-token: write' to this job to authenticate with OIDC, or pass a Garnet API token to the 'api_token' input."
 
-// The relay exists to put a Runtime Review on a pull request; nothing
-// downstream reads an artifact belonging to a push or a schedule.
-const RELAY_EVENT_NAMES = new Set(["pull_request", "pull_request_target"])
-
 /**
  * Decides how a run with no `api_token` proceeds. Never throws: the event
  * payload only refines the wording, so an unexpected shape or a read error
@@ -31909,18 +31905,14 @@ async function resolveCredentialMode(context) {
         return { mode: "authenticated", reason: "OIDC is available" }
     }
 
-    if (RELAY_EVENT_NAMES.has(context.eventName)) {
-        const fromFork = await isForkPullRequest(context.eventPath, context.repository)
+    if (context.eventName === "pull_request" && (await isForkPullRequest(context.eventPath, context.repository))) {
         return {
             mode: "relay",
-            reason: fromFork
-                ? "This pull request comes from a forked repository, which GitHub denies both repository secrets " +
-                  "and an OIDC ID token, so this job cannot authenticate with Garnet. Jibril still records the " +
-                  "job locally and the run is uploaded as a workflow artifact, which the Garnet GitHub App " +
-                  "collects with its own credentials after the workflow finishes."
-                : "No authentication mechanism was available: the 'api_token' input resolved empty and no OIDC " +
-                  "ID token could be requested. Jibril still records this job locally and the run is uploaded " +
-                  `as a workflow artifact for the Garnet GitHub App to collect. ${REMEDIATION}`,
+            reason:
+                "This pull request comes from a forked repository, which GitHub denies both repository secrets " +
+                "and an OIDC ID token, so this job cannot authenticate with Garnet. Jibril still records the " +
+                "job locally and the run is uploaded as a workflow artifact, which the Garnet GitHub App " +
+                "collects with its own credentials after the workflow finishes.",
         }
     }
 
@@ -31973,6 +31965,10 @@ async function isForkPullRequest(eventPath, repository) {
         return false
     }
 
+    if (isDependabot(payloadRecord.sender) || isDependabot(pullRequest.user)) {
+        return false
+    }
+
     const head = shared_getOptionalRecord(pullRequest.head)
     if (head === null) {
         return false
@@ -31989,6 +31985,17 @@ async function isForkPullRequest(eventPath, repository) {
     }
 
     return headRepoFullName.toLowerCase() !== repository.toLowerCase()
+}
+
+/**
+ * @param {unknown} actor
+ * @returns {boolean}
+ */
+function isDependabot(actor) {
+    const actorRecord = shared_getOptionalRecord(actor)
+    const login = actorRecord === null ? undefined : getOptionalString(actorRecord.login)
+
+    return login?.toLowerCase() === "dependabot[bot]"
 }
 
 ;// CONCATENATED MODULE: ./src/job-summary.js
@@ -43007,6 +43014,10 @@ function readStringList(value) {
 
 const MASK = "***"
 
+// Relay artifacts are readable to repository readers; regex masking is best-effort.
+// The deep walk prevents a new profile location from reintroducing these fields.
+const COMMAND_LINE_FIELDS = new Set(["arguments", "args", "cmd", "envs", "env", "prev_args", "prev_envs"])
+
 // Rules err on the side of over-masking: a redacted value that turned out to be
 // harmless only costs a little telemetry, whereas a missed one is a leak. Every
 // rule must be idempotent, so re-running over already masked text is a no-op.
@@ -43192,6 +43203,50 @@ function redactProfile(profile) {
     redactProfileDetections(root.profile_detections)
 
     return cloned
+}
+
+/**
+ * Returns a copy of `profile` without fields that can contain command lines or
+ * environment variables. The input is not modified.
+ * @template T
+ * @param {T} profile
+ * @returns {T}
+ */
+function stripCommandLines(profile) {
+    if (!isRecord(profile) || Array.isArray(profile)) {
+        return profile
+    }
+
+    const cloned = structuredClone(profile)
+    stripCommandLineFields(cloned)
+
+    return cloned
+}
+
+/**
+ * @param {unknown} value
+ * @returns {void}
+ */
+function stripCommandLineFields(value) {
+    if (Array.isArray(value)) {
+        for (const item of value) {
+            stripCommandLineFields(item)
+        }
+
+        return
+    }
+
+    if (!isRecord(value)) {
+        return
+    }
+
+    for (const [key, nested] of Object.entries(value)) {
+        if (COMMAND_LINE_FIELDS.has(key)) {
+            delete value[key]
+        } else {
+            stripCommandLineFields(nested)
+        }
+    }
 }
 
 /**

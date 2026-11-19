@@ -5,6 +5,8 @@
  */
 import test from "node:test"
 import assert from "node:assert/strict"
+import { readFileSync } from "node:fs"
+import { stripCommandLines } from "../src/redact.js"
 import {
     buildRunArtifact,
     readProfileJobIndex,
@@ -45,6 +47,8 @@ const STOPPED = {
     jibril: { stopOutcome: "completed", forceStopped: false },
 }
 
+const COMMAND_LINE_FIELDS = new Set(["arguments", "args", "cmd", "envs", "env", "prev_args", "prev_envs"])
+
 /**
  * @param {Partial<RunArtifactNameInput>} overrides
  * @returns {string}
@@ -58,6 +62,37 @@ function nameWith(overrides) {
         ...overrides,
     })
 }
+
+/**
+ * @param {unknown} value
+ * @param {Set<string>} fieldNames
+ * @returns {void}
+ */
+function assertNoFields(value, fieldNames) {
+    if (Array.isArray(value)) {
+        for (const item of value) {
+            assertNoFields(item, fieldNames)
+        }
+
+        return
+    }
+
+    if (typeof value !== "object" || value === null) {
+        return
+    }
+
+    for (const [key, nested] of Object.entries(value)) {
+        assert.ok(!fieldNames.has(key), `unexpected field ${JSON.stringify(key)}`)
+        assertNoFields(nested, fieldNames)
+    }
+}
+
+test("stripCommandLines: keeps the redactProfile non-record guard", () => {
+    const array = [{ arguments: "deploy.sh s3cr3tvalue123" }]
+
+    assert.equal(stripCommandLines(null), null)
+    assert.equal(stripCommandLines(array), array)
+})
 
 test("envelope: schema_version 1 over the exact bodies the authenticated path POSTs", () => {
     const envelope = buildRunArtifact({ agent: AGENT, jobIndex: 2, profile: null, stopped: STOPPED })
@@ -131,33 +166,62 @@ test("serialize: profile passed through, dropped when it blows the budget", () =
     AGENT_STOPPED_REQUEST_SCHEMA.parse(parsed.stopped)
 })
 
-test("buildRunArtifact: redacts secrets in the profile before serialization", () => {
+test("buildRunArtifact: strips arguments from the captured profile and preserves executable", () => {
+    const profile = JSON.parse(
+        readFileSync(new URL("./fixtures/profiles/record-workload-egress.json", import.meta.url), "utf8"),
+    )
+    const serialized = serializeRunArtifact(
+        buildRunArtifact({ agent: AGENT, jobIndex: 1, profile, stopped: STOPPED }),
+    )
+    const parsed = JSON.parse(serialized.content)
+
+    assert.equal(serialized.profileOmitted, false)
+    assertNoFields(parsed.profile, new Set(["arguments"]))
+    assert.ok(!serialized.content.includes('"arguments"'))
+    assert.ok(parsed.profile.network.egress.peers[0].proc_trees[0].executable)
+})
+
+test("buildRunArtifact: strips command and environment fields at every profile depth without mutating input", () => {
+    const secret = "deploy.sh s3cr3tvalue123"
     const profile = {
-        scenarios: { github: { job_index: 1 } },
         network: {
-            egress: {
-                peers: [
-                    {
-                        proc_trees: [
-                            {
-                                arguments: "curl -H 'Authorization: Bearer super-secret' --token my-token",
-                            },
-                        ],
-                    },
-                ],
+            egress: { peers: [{ proc_trees: [{ arguments: secret }] }] },
+            ingress: { peers: [{ proc_trees: [{ arguments: secret }] }] },
+            local: { peers: [{ proc_trees: [{ arguments: secret }] }] },
+        },
+        assertions: [
+            {
+                evidence: [{ peer: { proc_trees: [{ arguments: secret }] } }],
+            },
+        ],
+        profile_detections: [
+            {
+                digested_detections: [{ proc_trees: [{ arguments: secret }] }],
+            },
+        ],
+        background: {
+            ancestry: [
+                {
+                    cmd: secret,
+                    args: secret,
+                    envs: secret,
+                    prev_args: secret,
+                    prev_envs: secret,
+                },
+            ],
+            containers: {
+                containers: [{ cmd: [secret], env: [secret] }],
             },
         },
     }
+    const original = structuredClone(profile)
 
     const serialized = serializeRunArtifact(
         buildRunArtifact({ agent: AGENT, jobIndex: 1, profile, stopped: STOPPED }),
     )
     const parsed = JSON.parse(serialized.content)
 
-    assert.equal(
-        parsed.profile.network.egress.peers[0].proc_trees[0].arguments,
-        "curl -H 'Authorization: Bearer ***' --token ***",
-    )
-    assert.ok(!serialized.content.includes("super-secret"))
-    assert.ok(!serialized.content.includes("my-token"))
+    assertNoFields(parsed.profile, COMMAND_LINE_FIELDS)
+    assert.ok(!serialized.content.includes(secret))
+    assert.deepEqual(profile, original)
 })

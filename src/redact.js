@@ -11,6 +11,10 @@ import { getOptionalRecord, isRecord } from "./shared.js"
 
 const MASK = "***"
 
+// Relay artifacts are readable to repository readers; regex masking is best-effort.
+// The deep walk prevents a new profile location from reintroducing these fields.
+const COMMAND_LINE_FIELDS = new Set(["arguments", "args", "cmd", "envs", "env", "prev_args", "prev_envs"])
+
 // Rules err on the side of over-masking: a redacted value that turned out to be
 // harmless only costs a little telemetry, whereas a missed one is a leak. Every
 // rule must be idempotent, so re-running over already masked text is a no-op.
@@ -196,6 +200,50 @@ export function redactProfile(profile) {
     redactProfileDetections(root.profile_detections)
 
     return cloned
+}
+
+/**
+ * Returns a copy of `profile` without fields that can contain command lines or
+ * environment variables. The input is not modified.
+ * @template T
+ * @param {T} profile
+ * @returns {T}
+ */
+export function stripCommandLines(profile) {
+    if (!isRecord(profile) || Array.isArray(profile)) {
+        return profile
+    }
+
+    const cloned = structuredClone(profile)
+    stripCommandLineFields(cloned)
+
+    return cloned
+}
+
+/**
+ * @param {unknown} value
+ * @returns {void}
+ */
+function stripCommandLineFields(value) {
+    if (Array.isArray(value)) {
+        for (const item of value) {
+            stripCommandLineFields(item)
+        }
+
+        return
+    }
+
+    if (!isRecord(value)) {
+        return
+    }
+
+    for (const [key, nested] of Object.entries(value)) {
+        if (COMMAND_LINE_FIELDS.has(key)) {
+            delete value[key]
+        } else {
+            stripCommandLineFields(nested)
+        }
+    }
 }
 
 /**
