@@ -26,7 +26,7 @@ inputs:
     jibril_version:
         description: "Jibril version (for example v2.16.0, v0.0, or 'latest'); empty resolves from the action tag"
         required: false
-        default: "v2.17.0"
+        default: "v2.18.0"
     job_index:
         description: |
             Index of this leg within a matrix job. Strongly recommended on matrix jobs: set it to
