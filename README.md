@@ -43,8 +43,8 @@ Public example: adding Puppeteer as a devDependency shows [the #8 Runtime Review
 ## What Garnet records
 
 - **Execution chains and destinations, not contents** — observed process ancestry, steps when known, and outbound domains, IPs, ports and protocols, rather than source code or payload contents. Observed names can contain sensitive data; redaction is best-effort.
-- **Observe-only by default** — Garnet records and does not block, unless your project's managed network policy enables enforcement.
-- **Egress and release checks** — the Action and Jibril communicate with Garnet (or `api_url`) and GitHub. For Jibril v2.17.0+ bundles, the Action checks digests. With `github_token` and `gh`, it also authenticates the release-workflow signer with `gh attestation verify`; otherwise it warns and skips attestation verification. Older tags skip these checks. Allow GitHub's download and attestation-verification dependencies too.
+- **Network policy** — authenticated runs install the Garnet-managed network policy (the system-wide policy merged with your project's rules), which can block destinations. Credential-free relay runs only record.
+- **Egress and release checks** — the Action and Jibril communicate with Garnet (or `api_url`) and GitHub. For Jibril v2.17.0+ bundles, the Action checks digests. With `github_token` and `gh`, it also authenticates the release-workflow signer with `gh attestation verify`; otherwise it warns and skips attestation verification. Older tags skip these checks. Allow GitHub's download and attestation-verification dependencies too, including `api.github.com`, `objects.githubusercontent.com` and `tuf-repo-cdn.sigstore.dev`.
 - **Post-step cleanup** — the post step stops the Jibril systemd service and attempts to remove `/etc/default/jibril`, which holds its credentials. The installed binary, systemd unit, configuration and logs remain on the runner; use an ephemeral runner or manage those files on self-hosted runners.
 
 ## Permissions
@@ -68,12 +68,15 @@ The App requests these installation permissions:
 
 ```yaml
 pull-requests: write  # post and edit one Runtime Review comment per pull request
-actions: read         # know when the run's jobs finish, so the comment updates in place
+actions: read         # read run jobs and relay artifacts; receive workflow_run events
 contents: read        # map the temporary merge commit back to your PR commit
 metadata: read        # required by GitHub
+checks: write         # optional: completed Garnet record ready check after the final comment
 ```
 
 The installation permission screen is authoritative for the App's requested grants. These are separate from the workflow token; the App cannot push code.
+
+The optional `Garnet record ready` check is off by default and not enabled in production today, as described in the [permissions documentation](https://docs.garnet.ai/security#github-app-permissions). When enabled, installation owners must accept the Checks read/write grant first. It needs no workflow `checks: write`; success means the record was delivered, not approval.
 
 ### 2. Add one pinned step after checkout
 
@@ -142,7 +145,7 @@ Coding agents and review bots read the same record a human does. Nothing extra i
 
 - **Garnet Runtime Review MCP:** connect to `https://api.garnet.ai/api/v2/mcp`. In Claude Code: `claude mcp add --transport http garnet https://api.garnet.ai/api/v2/mcp`. Discover deployed schemas: optional preview tool `outcome` reads the PR-level result; `profiles` provides job detail. If `outcome` is missing or unavailable, use the App comment, never infer no change. Setup: [reviewer kit](https://github.com/garnet-labs/garnet-runtime-review-mcp).
 - **How agents read it:** require both comment commit markers to match the current PR head, finalized status and declared best-effort or complete capture. Partial, missing, stale or incomplete records are unknown. For preview `outcome`, check `determinable`, head binding, capture quality and reasons. Match job detail to repository, run, attempt, job and head SHA; paginate. Evidence never approves a PR. [Custom reviewers need separate setup and matching rules](https://docs.garnet.ai/devin-review); installing a skill or MCP connection does not enable one.
-- **MCP authentication:** public matching records need no token. Private detail uses project authorization: call `create_device_authorization`, open `verificationURIComplete`, approve the project and poll `device_authorization_status` at its returned interval until approval, denial or expiry. The token is returned once; never expose it. This is separate from CI OIDC/API-token authentication.
+- **MCP authentication:** public matching records need no token. Private detail uses project authorization: call `create_device_authorization`, open `verificationURIComplete`, approve the project and poll `device_authorization_status` at `pollIntervalSeconds` until approved, rejected or expired. The token is returned once; never expose it. This is separate from CI OIDC/API-token authentication.
 - **Profile links and machine-readable surfaces:** the Action's `report_url` is a dashboard run link, not proof of capture. Published public reports and their JSON require an exact run/profile pair (`?profile=`); a 404 does not prove no profile exists. Overall report totals can include runner traffic, unlike PR workload deltas. See [app.garnet.ai/llms.txt](https://app.garnet.ai/llms.txt). Docs have Markdown twins (append `.md`) and [llms.txt](https://docs.garnet.ai/llms.txt); release pins are at [garnet.ai/pins.txt](https://www.garnet.ai/pins.txt).
 
 ## Known limitations
@@ -181,9 +184,9 @@ In `v2.18.0` (same shutdown code as the `v2.18.0-rc.4` release candidate), Jibri
 | `preview`           | No       | `false`                 | Render the full-fidelity Step Summary record. Unstable shape; may change without a major version bump |
 | `show_detections`   | No       | `false`                 | Show the sensor's detection labels (for example `exec_from_unusual_dir`) next to recorded destinations in the Step Summary. Off by default |
 
-> **Fork PRs:** without Garnet credentials, supported `pull_request` jobs record locally and upload a `garnet-run-*` GitHub workflow artifact. The job does not upload directly to Garnet or write a Garnet credential to disk. The installed App collects the artifact after the run; without the App, the record stays in GitHub.
+> **Credential-free PRs (forks included):** supported `pull_request` and `pull_request_target` jobs without Garnet credentials record locally and upload a `garnet-run-*` GitHub workflow artifact whether or not the App is installed. The job does not upload directly to Garnet or write a Garnet credential to disk. Only collection needs the installed App; without it, the record stays in GitHub until artifact retention expires.
 >
-> **Dependabot PRs:** Dependabot-triggered runs read `secrets.*` from the Dependabot secrets store, so an Actions-only `GARNET_API_TOKEN` resolves empty and the run falls back to the same artifact relay. To record them through the control plane directly, add the same token under the same name in **Settings → Secrets and variables → Dependabot**.
+> **Dependabot PRs:** Dependabot-triggered runs read `secrets.*` from the Dependabot secrets store, so an Actions-only `GARNET_API_TOKEN` resolves empty. Without OIDC too, the run uses the same artifact relay. For direct token authentication, add the token under the same name in **Settings → Secrets and variables → Dependabot**.
 
 ### Matrix jobs
 
@@ -231,7 +234,7 @@ Worked example: [What Garnet saw during Shai-Hulud](https://www.garnet.ai/resour
 
 - Linux x86_64 runner with systemd (`ubuntu-latest` or a label from the table below)
 - passwordless `sudo` (to install Jibril and run it as a systemd service)
-- For direct Garnet upload: `api_token` from a repository secret or `id-token: write` for OIDC. Supported PR jobs without either use the installed App's artifact relay.
+- For direct Garnet upload: `api_token` from a repository secret or `id-token: write` for OIDC. Supported `pull_request` and `pull_request_target` jobs without either upload a relay artifact regardless of App installation; the installed App collects it.
 
 ### Supported runners
 
