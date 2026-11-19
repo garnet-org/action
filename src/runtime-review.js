@@ -513,7 +513,7 @@ export function safeRepositorySlug(value) {
 }
 
 /**
- * A server base URL that parses as http(s) with no path, query, fragment,
+ * A normalized origin that parses as http(s) with no path, query, fragment,
  * or credentials; anything else falls back to "".
  * @param {unknown} value
  * @returns {string}
@@ -533,7 +533,8 @@ export function safeServerURL(value) {
     parsed.hash === "" &&
     parsed.username === "" &&
     parsed.password === ""
-  return isHTTP && isBare ? raw : ""
+  const isValidHostname = /^[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?$/.test(parsed.hostname)
+  return isHTTP && isBare && isValidHostname ? parsed.origin : ""
 }
 
 /**
@@ -565,7 +566,11 @@ export function safeHTTPURL(value) {
   } catch (_) {
     return ""
   }
-  return parsed.protocol === "https:" || parsed.protocol === "http:" ? raw : ""
+  const isHTTP = parsed.protocol === "https:" || parsed.protocol === "http:"
+  if (!isHTTP) return ""
+  // Markdown/HTML link target delimiters can break out of the link.
+  if (/[\s\u0000-\u001f\u007f()<>\[\]"'`\\]/.test(raw)) return ""
+  return raw
 }
 
 /**
@@ -716,7 +721,7 @@ export function buildRunReview(input) {
       repository: String(j.repository || ""),
       sha: String(j.sha || ""),
       ref: String(j.ref || ""),
-      pr_url: String(j.pr_url || ""),
+      pr_url: safeHTTPURL(j.pr_url),
       actor: String(j.actor || ""),
       run_attempt: String(j.run_attempt || ""),
       event_name: String(j.event_name || ""),

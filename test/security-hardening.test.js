@@ -7,6 +7,7 @@ import { test } from "node:test"
 
 import { validateApiURL, validateJibrilVersion, validateNetworkPolicyYAML } from "../src/action.js"
 import {
+    buildRunReview,
     pullRequestURL,
     safeHTTPURL,
     safeRepositorySlug,
@@ -59,9 +60,16 @@ test("repository slug and server URL sinks fail closed", () => {
     assert.equal(safeRepositorySlug("evil/repo](javascript:alert(1))"), "")
     assert.equal(safeRepositorySlug("a/b/c"), "")
     assert.equal(safeServerURL("https://github.com"), "https://github.com")
+    assert.equal(safeServerURL("https://x)**SPOOF**"), "")
+    assert.equal(safeServerURL("https://a)b"), "")
+    assert.equal(safeServerURL("https://git\nhub.com"), "https://github.com")
+    assert.equal(safeServerURL("https://GitHub.com/"), "https://github.com")
+    assert.equal(safeServerURL("https://ghe.example.com:8443"), "https://ghe.example.com:8443")
     assert.equal(safeServerURL("javascript:alert(1)//"), "")
     assert.equal(safeServerURL("https://evil.com/path?x=1"), "")
     assert.equal(safeHTTPURL("https://github.com/garnet-org/action"), "https://github.com/garnet-org/action")
+    assert.equal(safeHTTPURL("https://github.com/a/b/pull/7)](https://evil.example)"), "")
+    assert.equal(safeHTTPURL("https://github.com/a b"), "")
     assert.equal(safeHTTPURL("javascript:alert(1)"), "")
     assert.equal(safeHTTPURL(""), "")
 })
@@ -82,5 +90,13 @@ test("forged repository and server_url never reach a rendered link target", () =
     assert.equal(
         pullRequestURL({ ref: "refs/pull/7/merge", repository: "garnet-org/action", server_url: "https://github.com" }),
         "https://github.com/garnet-org/action/pull/7",
+    )
+    assert.equal(
+        pullRequestURL({ ref: "refs/pull/7/merge", repository: "a/b", server_url: "https://x)**SPOOF**" }),
+        "",
+    )
+    assert.equal(
+        buildRunReview({ jobs: [{ pr_url: "https://x)**SPOOF**/a/b/pull/7" }] }).jobs[0].pr_url,
+        "",
     )
 })
