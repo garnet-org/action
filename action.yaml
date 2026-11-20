@@ -9,9 +9,9 @@ inputs:
         description: |
             Garnet API token from app.garnet.ai. Optional when the job has `id-token: write`
             (GitHub OIDC). When set, the token is used as-is instead of OIDC.
-            If neither OIDC nor api_token is available, a pull request run, including a fork,
-            is recorded locally and uploaded
-            as a workflow artifact for the Garnet GitHub App to collect. On any other event runtime
+            If neither OIDC nor api_token is available, a pull request run is recorded locally and
+            uploaded as a workflow artifact for the Garnet GitHub App to collect. This includes
+            pull_request runs from forks, which get neither secrets nor OIDC. On any other event runtime
             recording is skipped with a warning and a Job Summary explanation. The workflow continues.
         required: false
     github_token:
@@ -55,7 +55,7 @@ inputs:
         description: |
             Maximum seconds Jibril is given at shutdown to finish writing its Execution Profile and flushing
             events. The post step waits this long (plus a small grace) and then force stops the sensor.
-            Interrupting shutdown can lose the profile. Set to `0`
+            Interrupting shutdown can lose the profile; a longer timeout does not guarantee a profile. Set to `0`
             or a negative integer to disable the flush timeout entirely.
         required: false
         default: "1800"
@@ -66,7 +66,7 @@ outputs:
     report_url:
         description: "Run URL set before capture; use the comment or Step Summary for an exact profile permalink"
     agent_id:
-        description: "Sensor identifier assigned at registration"
+        description: "Sensor identifier assigned at registration; registration alone does not confirm capture"
 runs:
     using: "node24"
     main: "dist/main/index.js"

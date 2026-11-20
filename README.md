@@ -43,7 +43,7 @@ Public example: adding Puppeteer as a devDependency shows [the #8 Runtime Review
 ## What Garnet records
 
 - **Execution chains and destinations, not contents** — observed process ancestry, steps when known, and outbound domains, IPs, ports and protocols, rather than source code or payload contents. Observed names can contain sensitive data; redaction is best-effort.
-- **Network policy** — the default Jibril `v2.17.0` pin enforces `/etc/jibril/netpolicy.yaml`: authenticated runs install the Garnet-managed policy (the system-wide policy merged with your project's rules), which can block destinations, and credential-free relay runs keep the policy bundled with the release.
+- **Network policy** — with Jibril `v2.18.0` and later, the default configuration does not load a network policy, so Garnet records and does not block. Earlier versions, including the current `v2.17.0` pin, enforce `/etc/jibril/netpolicy.yaml`: authenticated runs install the Garnet-managed policy (the system-wide policy merged with your project's rules), which can block destinations, and credential-free relay runs keep the policy bundled with the release.
 - **Egress and release checks** — the Action and Jibril communicate with Garnet (or `api_url`) and GitHub. For Jibril v2.17.0+ bundles, the Action checks digests. With `github_token` and `gh`, it also authenticates the release-workflow signer with `gh attestation verify`; otherwise it warns and skips attestation verification. Older tags skip these checks. Allow GitHub's download and attestation-verification dependencies too, including `api.github.com`, `objects.githubusercontent.com` and `tuf-repo-cdn.sigstore.dev`.
 - **Post-step cleanup** — the post step stops the Jibril systemd service and attempts to remove `/etc/default/jibril`, which holds its credentials. The installed binary, systemd unit, configuration and logs remain on the runner; use an ephemeral runner or manage those files on self-hosted runners.
 
@@ -55,6 +55,8 @@ Public example: adding Puppeteer as a devDependency shows [the #8 Runtime Review
 | `id-token: write` | Only without `api_token` | Lets the action request a GitHub OIDC token and exchange it with the Garnet control plane. Not needed when you pass `api_token`. |
 
 When a job produces no Execution Profile, the action looks up the job's status to explain why. That lookup needs `actions: read`; without it the lookup is skipped and the job is unaffected. Add `actions: read` only if you want that explanation.
+
+The Action posts no pull request comment and never needs `pull-requests: write`; the companion GitHub App posts the comment under its own installation.
 
 ## Quickstart
 
@@ -121,7 +123,7 @@ Add it to the step:
 
 When neither credential is available, a pull request run is relayed to the App through a `garnet-run-*` workflow artifact. Other events skip recording with a warning and a Job Summary explanation. The workflow continues.
 
-Open your next PR, check the App comment's current head and capture state, open a job fold, then follow **Full record in Garnet**. Record the base branch too to build comparison history.
+Open your next PR, check the App comment's current head and capture state, open a job fold, then follow **Full record in Garnet**. No comparison yet means no usable baseline, not approval. Record the base branch too to build comparison history.
 
 ## Comment anatomy
 
@@ -146,6 +148,7 @@ Counts describe the rendered added and removed workload destinations. A destinat
 
 - **Step attribution is best effort.** Workload attribution uses ancestry and other context; inspect the full chain when a step label is unknown.
 - **PR head and execution commit.** A PR workflow can execute GitHub's synthetic merge commit. The App comment is bound to the PR head; profiles expose `scenarios.github.head_sha` when that linkage succeeds. Do not bind evidence using the execution SHA alone.
+- **Matrix jobs.** Jobs that share a name across a matrix can be aggregated under one fold and undercount destinations.
 - **Post-step time.** Stopping the sensor waits for Jibril to write its Execution Profile and flush events, bounded by `stop_timeout_seconds`. Lowering the bound can interrupt profile writing; raising it allows more shutdown time but does not guarantee a profile or complete capture. Capture is best-effort.
 - **Comparison uses recorded history.** The comment names its basis and run counts. A previous PR push can be used when no usable base record exists.
 - **Matrix legs need `job_index`.** GitHub gives every leg of a `strategy.matrix` job the same job name, so without the `job_index` input the legs are indistinguishable to Garnet. See [Matrix jobs](#matrix-jobs).
@@ -158,6 +161,8 @@ Counts describe the rendered added and removed workload destinations. A destinat
 ---
 
 ## Configuration
+
+In `v2.18.0` (same shutdown code as the `v2.18.0-rc.4` release candidate), Jibril prints the shutdown profile synchronously, outside the event dispatcher's queue and drain deadline, and shortens the dispatcher event-drain deadline from five minutes in `v2.17.0` to one minute. These changes do not bypass the Action's stop timeout or guarantee a profile or complete capture; the Action default remains its stable pin, currently `v2.17.0` without these changes, until the daily version-update workflow's pin bump is merged.
 
 | Input               | Required | Default                 | Description                                    |
 | ------------------- | -------- | ----------------------- | ---------------------------------------------- |
@@ -203,8 +208,8 @@ Without it, all legs record under one identity: the Runtime Review shows a singl
 | Output           | Description                                                          |
 | ---------------- | -------------------------------------------------------------------- |
 | `profile_result` | Reserved for compatibility; not set by this action |
-| `report_url`     | Run URL set in the main step, before capture; use the `?profile=` link in the comment or Execution Summary for an exact profile permalink. |
-| `agent_id`       | Sensor identifier assigned at registration. |
+| `report_url`     | Run URL set in the main step, before capture. Not a profile permalink and not proof of upload; use the `?profile=` link in the comment or Execution Summary. |
+| `agent_id`       | Sensor identifier assigned at registration. Registration alone does not confirm capture. |
 
 ---
 
