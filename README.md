@@ -224,8 +224,6 @@ Without it, all legs record under one identity: the Runtime Review shows a singl
 
 Code review sees the diff. CI runs it: postinstall scripts execute, agent-written steps spawn processes, build steps open connections. None of that is in the diff. Runtime Review puts the record of what ran, and where it connected, next to the review.
 
-Worked example: [What Garnet saw during Shai-Hulud](https://www.garnet.ai/resources/garnet-saw-shai-hulud) — a postinstall hook bootstrapping Bun, running TruffleHog against runner secrets and registering a rogue runner, as Garnet recorded it.
-
 ---
 
 ## Setup & support
