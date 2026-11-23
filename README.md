@@ -27,12 +27,12 @@
 
 GitHub shows you what files changed in a PR. Garnet shows you what changed at runtime when CI ran it.
 
-Garnet runs [Jibril](https://github.com/garnet-org/jibril-releases), an eBPF sensor, on the runner for the duration of the job. It records each execution chain — one path through the process tree, from the runner's root process to an observed action, today an outbound connection — and the destination reached. The record is written to the job's Step Summary; the companion GitHub App posts it to the pull request. Garnet reports; you review.
+Garnet runs [Jibril](https://github.com/garnet-org/jibril-releases), an eBPF sensor, from the recording step until its post step stops the sensor. It records observed outbound connections, the execution chain behind each observation and the destination reached. An execution chain is one path from the runner's root to an action, today an outbound connection. The record goes to the job's Step Summary; the companion GitHub App posts the Runtime Review to the pull request.
 
-Install the GitHub App, add one step. No code changes, no secret.
+Install the GitHub App, add one step.
 
-- **Action**: adds the step; Jibril records the job; the Garnet Execution Summary lands in the job's Step Summary with a public Execution Profile permalink, and the record is uploaded to Garnet (on fork pull requests, as a `garnet-run-*` workflow artifact). The Action posts no pull request comment.
-- **Companion GitHub App**: posts the single Runtime Review comment per pull request, including on fork pull requests. It compares each recorded job with the last 10 recorded runs of that job on the base branch; runner and GitHub traffic is shown separately and is not counted as workload change.
+- **Action**: Jibril records the job; the Garnet Execution Summary lands in the Step Summary with an Execution Profile link. The record is uploaded to Garnet, or on credential-free pull requests, to a `garnet-run-*` GitHub workflow artifact for the App to collect.
+- **Companion GitHub App**: posts one Runtime Review comment per pull request, including forks, updated in place. It compares matching recorded jobs with available history; the comment names its comparison basis and run counts. Runner and GitHub traffic is separate and does not count as workload change.
 
 Public example: adding Puppeteer as a devDependency shows [the #8 Runtime Review comment](https://github.com/garnet-labs/ghaw-garnet-reference/pull/8#issuecomment-6615094423) with `node` newly reaching `storage.googleapis[.]com`, compared with the PR base.
 
@@ -42,21 +42,21 @@ Public example: adding Puppeteer as a devDependency shows [the #8 Runtime Review
 
 ## What Garnet records
 
-- **Execution chains and destinations, not contents** — process names, the step they ran under when known, and outbound domains, IPs, ports and protocols. Not your source, not your secrets.
-- **Observe-only** — Jibril reads kernel events through eBPF programs checked by the kernel verifier. It does not block or modify anything.
-- **Scoped egress** — the action and Jibril talk to `api.garnet.ai` (or your `api_url`) and download the Jibril release from `github.com/garnet-org/jibril-releases` over HTTPS. The release bundle's checksums are verified and its signature is checked with `gh attestation verify` before Jibril runs when `github_token` and the `gh` CLI are available; otherwise the action warns and skips attestation verification.
-- **Ephemeral** — Jibril runs as a systemd service and is stopped in the post step; its config and credentials are removed from the runner before the job ends.
+- **Execution chains and destinations, not contents** — observed process ancestry, steps when known, and outbound domains, IPs, ports and protocols, rather than source code or payload contents. Observed names can contain sensitive data; redaction is best-effort.
+- **Network policy** — with Jibril `v2.18.0` and later, the default configuration does not load a network policy, so Garnet records and does not block. Earlier versions, including the current `v2.17.0` pin, enforce `/etc/jibril/netpolicy.yaml`: authenticated runs install the Garnet-managed policy (the system-wide policy merged with your project's rules), which can block destinations, and credential-free relay runs keep the policy bundled with the release.
+- **Egress and release checks** — the Action and Jibril communicate with Garnet (or `api_url`) and GitHub. For Jibril v2.17.0+ bundles, the Action checks digests. With `github_token` and `gh`, it also authenticates the release-workflow signer with `gh attestation verify`; otherwise it warns and skips attestation verification. Older tags skip these checks. Allow GitHub's download and attestation-verification dependencies too, including `api.github.com`, `objects.githubusercontent.com` and `tuf-repo-cdn.sigstore.dev`.
+- **Post-step cleanup** — the post step stops the Jibril systemd service and attempts to remove `/etc/default/jibril`, which holds its credentials. The installed binary, systemd unit, configuration and logs remain on the runner; use an ephemeral runner or manage those files on self-hosted runners.
 
 ## Permissions
 
 | Permission | Required | Why |
 | :--- | :--- | :--- |
-| `contents: read` | Yes | The minimum job token. The action uses it for `gh attestation verify` and to fetch the running workflow file through the GitHub API when there is no checkout. No write scope is needed; the action does not post comments. |
+| `contents: read` | Yes | Used by `gh attestation verify` and to fetch the running workflow file through the GitHub API when there is no checkout. |
 | `id-token: write` | Only without `api_token` | Lets the action request a GitHub OIDC token and exchange it with the Garnet control plane. Not needed when you pass `api_token`. |
 
 When a job produces no Execution Profile, the action looks up the job's status to explain why. That lookup needs `actions: read`; without it the lookup is skipped and the job is unaffected. Add `actions: read` only if you want that explanation.
 
-The Action never needs `pull-requests: write`; the pull request comment is posted by the companion GitHub App under its own installation.
+The Action posts no pull request comment and never needs `pull-requests: write`; the companion GitHub App posts the comment under its own installation.
 
 ## Quickstart
 
@@ -68,12 +68,15 @@ The App requests these installation permissions:
 
 ```yaml
 pull-requests: write  # post and edit one Runtime Review comment per pull request
-actions: read         # know when the run's jobs finish, so the comment updates in place
+actions: read         # read run jobs and relay artifacts; receive workflow_run events
 contents: read        # map the temporary merge commit back to your PR commit
 metadata: read        # required by GitHub
+checks: write         # optional: completed Garnet record ready check after the final comment
 ```
 
-The App uses `contents: read` for one commit lookup only; it cannot push, and it cannot set a check or status.
+The installation permission screen is authoritative for the App's requested grants.
+
+The optional `Garnet record ready` check is off by default, as described in the [permissions documentation](https://docs.garnet.ai/security#github-app-permissions). When enabled, installation owners must accept the Checks read/write grant first.
 
 ### 2. Add one pinned step after checkout
 
@@ -100,7 +103,7 @@ jobs:
           npm test
 ```
 
-The Action exchanges a GitHub OIDC token for a short-lived, workflow-scoped token. No secret is needed.
+The Action exchanges a GitHub OIDC token for a short-lived, workflow-scoped token. No secret is needed. Add the step to each job you want recorded, before dependency installation, builds and tests; earlier steps are not recorded.
 
 > **Pinning:** the example uses the full v2.5.2 commit SHA. The SHA of the latest release is published at [garnet.ai/pins](https://garnet.ai/pins). Exact tags such as `garnet-org/action@v2.5.2` also work.
 
@@ -108,7 +111,7 @@ The Action exchanges a GitHub OIDC token for a short-lived, workflow-scoped toke
 
 **Already have a `GARNET_API_TOKEN`?** Keep it. The token is used as-is and no OIDC token is requested.
 
-Create the token in [app.garnet.ai](https://app.garnet.ai) and store it as the repository secret `GARNET_API_TOKEN`.
+Create the token in [app.garnet.ai](https://app.garnet.ai) under **Settings → API Tokens** and store it as the repository secret `GARNET_API_TOKEN`.
 
 Add it to the step:
 
@@ -120,38 +123,34 @@ Add it to the step:
 
 When neither credential is available, a pull request run is relayed to the App through a `garnet-run-*` workflow artifact. Other events skip recording with a warning and a Job Summary explanation. The workflow continues.
 
+Open your next PR, check the App comment's current head and capture state, open a job fold, then follow **Full record in Garnet**. No comparison yet means no usable baseline, not approval. Record the base branch too to build comparison history.
+
 ## Comment anatomy
 
 The companion GitHub App owns the comment: one per pull request, one row per recorded job, updated in place as each job's Execution Profile lands, with a link from each job to its full Execution Profile in Garnet. Its current shape and how to read it are documented at [docs.garnet.ai/consume](https://docs.garnet.ai/consume).
 
-The comment uses five headings: `Runtime behavior changed`, `Nothing new recorded`, `Runtime behavior recorded`, `Recording runtime behavior`, and `Runtime behavior not recorded`.
+Read the `status` and `outcome` fields in the App's `garnet:summary` marker as the primary contract, not the heading text. The deployed App uses `Runtime behavior changed`, `No new runtime behavior recorded`, `Runtime behavior recorded`, `Recording runtime behavior`, and `Runtime behavior not recorded`. A comparison with no new workload destinations or newly recorded jobs reads `No new runtime behavior recorded`, including best-effort capture; the App currently declares only best-effort or partial capture, never complete capture. A `changed` outcome can also use `Runtime behavior recorded` when only newly recorded jobs drive it, so the heading alone does not identify the outcome.
 
-Recorded states show the changed-job count, optional coverage, one comparison line, and a best-effort capture line. Each job has one top-level fold, with workload and runner/GitHub traffic in separate trees, followed by available job-log and full-record links. The footer is a separator, a `How to read this` fold, then `Recorded by Garnet · Add it to your CI ↗` linking to garnet.ai.
+Recorded states show destination additions, job counts, coverage and what the run was compared with: the PR base, recorded runs on the base branch, or the previous push, where available. Recorded job folds separate workload from runner traffic and include available job-log and full-record links. The `How to read this` fold explains the marks and best-effort capture. Garnet attribution and an installation link follow.
 
-The Action alone gives you the Step Summary: the same record is appended to the job's Step Summary as the **Garnet Execution Summary** ([job log](https://github.com/garnet-labs/ghaw-garnet-reference/actions/runs/41724401762/job/126225267839) · [public report](https://app.garnet.ai/public/runs/41724401762?profile=01a1a35e-dafc-77da-9438-781a3c2f2a4b)). The pull request comment needs the App.
+The Action appends the **Garnet Execution Summary** to the job's Step Summary ([job log](https://github.com/garnet-labs/ghaw-garnet-reference/actions/runs/41724401762/job/126225267839) · [public report](https://app.garnet.ai/public/runs/41724401762?profile=01a1a35e-dafc-77da-9438-781a3c2f2a4b)).
 
-Marker counts mirror the rendered added and removed workload rows. The headline outcome follows novelty: a destination is new only when none of the last 10 recorded base-branch runs reached it, and removals never change that outcome. Step labels, commit tables, `diff ↗`, and the former circular leaf marker are not part of the comment.
-
-In the posted #8 example, the comment compares with PR base `main`: `node` newly reaches `storage.googleapis[.]com`. Runner and GitHub traffic is shown in its own tree and never counts toward workload change.
+Counts describe the rendered added and removed workload destinations. A destination is new only when none of the compared base-branch runs reached it; the comment names the comparison basis and run count. Removals alone never make the comparison `changed`; new workload destinations in compared jobs or newly recorded jobs can do so, even when a newly recorded job has no workload destinations. Missing records can leave the outcome `incomplete` instead. Recorded step names appear in the execution trees when available.
 
 ## For coding agents
 
-Coding agents and review bots read the same record a human does. Nothing extra is recorded for them.
-
-- **Hosted MCP (public repositories, no token):** `https://garnet-runtime-review-mcp.vercel.app/mcp` — tools `get_runtime_review(repo, pr)` and `get_execution_profile(url)`. One line in Claude Code: `claude mcp add --transport http garnet-runtime-review https://garnet-runtime-review-mcp.vercel.app/mcp`; any client: `npx -y add-mcp https://garnet-runtime-review-mcp.vercel.app/mcp -g`.
-- **How agents read it:** the verdict (`changed`, `unchanged`, `recorded`, `undeterminable`) is bound to the pull request's head commit. `undeterminable` means unknown, never clean. Evidence never approves a pull request; the reviewer and repository policy decide. Contract and agent instructions: [docs.garnet.ai/consume](https://docs.garnet.ai/consume#coding-agents-and-the-mcp).
-- **Machine-readable surfaces:** every docs page has a Markdown twin (append `.md`), [docs.garnet.ai/llms.txt](https://docs.garnet.ai/llms.txt), the public report JSON described at [app.garnet.ai/llms.txt](https://app.garnet.ai/llms.txt), and the pinned release SHA at [garnet.ai/pins.txt](https://www.garnet.ai/pins.txt).
+- **Garnet Runtime Review MCP:** connect to `https://api.garnet.ai/api/v2/mcp`. In Claude Code: `claude mcp add --transport http garnet https://api.garnet.ai/api/v2/mcp`. Discover deployed schemas: optional preview tool `outcome` reads the PR-level result; `profiles` provides job detail. If `outcome` is missing or unavailable, use the App comment, never infer no change. Setup: [reviewer kit](https://github.com/garnet-labs/garnet-runtime-review-mcp).
+- **How agents read it:** require both comment commit markers to match the current PR head, finalized status and declared best-effort or complete capture. Partial, missing, stale or incomplete records are unknown. For preview `outcome`, check `determinable`, head binding, capture quality and reasons. Match job detail to repository, run, attempt, job and head SHA; paginate. Evidence never approves a PR. [Custom reviewers need separate setup and matching rules](https://docs.garnet.ai/devin-review); installing a skill or MCP connection does not enable one.
+- **MCP authentication:** public matching records need no token. Private detail uses project authorization: call `create_device_authorization`, open `verificationURIComplete`, approve the project and poll `device_authorization_status` at `pollIntervalSeconds` until approved, rejected or expired. The token is returned once; never expose it. This is separate from CI OIDC/API-token authentication.
+- **Profile links and machine-readable surfaces:** the Action's `report_url` is a dashboard run link, not proof of capture. Published public reports and their JSON require an exact run/profile pair (`?profile=`); a 404 does not prove no profile exists. Overall report totals can include runner traffic, unlike PR workload deltas. See [app.garnet.ai/llms.txt](https://app.garnet.ai/llms.txt). Docs have Markdown twins (append `.md`) and [llms.txt](https://docs.garnet.ai/llms.txt); release pins are at [garnet.ai/pins.txt](https://www.garnet.ai/pins.txt).
 
 ## Known limitations
 
-Read the record for what it is: what Garnet recorded, not a statement that nothing else happened.
-
-- **Step attribution is best effort.** `(step: "…")` labels come from correlating process start times with the runner's step boundaries. Some chains land under the wrong step or under `(step: "<unknown>")`. Capture is unaffected; read those as *step unknown*, not as background activity and not as a gap in the record.
-- **Merge commit, not PR head.** On `pull_request` runs GitHub checks out the synthetic merge commit. The action reports your PR head SHA to Garnet, but the comment headline and the public Execution Profile currently label the run by the commit the workflow ran on — the merge commit. Aligning them to the PR head is tracked in the control plane.
+- **Step attribution is best effort.** Workload attribution uses ancestry and other context; inspect the full chain when a step label is unknown.
+- **PR head and execution commit.** A PR workflow can execute GitHub's synthetic merge commit. The App comment is bound to the PR head; profiles expose `scenarios.github.head_sha` when that linkage succeeds. Do not bind evidence using the execution SHA alone.
 - **Matrix jobs.** Jobs that share a name across a matrix can be aggregated under one fold and undercount destinations.
-- **No completeness claim.** The record states what was captured; it does not declare that every connection was captured.
-- **Post-step time.** Stopping the sensor waits for Jibril to flush its Execution Profile, bounded by `stop_timeout_seconds`. On busy jobs this has been measured at 1–3 minutes; lower the bound if post-step latency matters more than a complete flush.
-- **Comparison uses recorded history.** Each job uses the last 10 recorded runs of that job on the base branch; when no base record exists, the previous push is used only if it is part of the pull request.
+- **Post-step time.** Stopping the sensor waits for Jibril to write its Execution Profile and flush events, bounded by `stop_timeout_seconds`. Lowering the bound can interrupt profile writing; raising it allows more shutdown time but does not guarantee a profile or complete capture. Capture is best-effort.
+- **Comparison uses recorded history.** The comment names its basis and run counts. A previous PR push can be used when no usable base record exists.
 - **Matrix legs need `job_index`.** GitHub gives every leg of a `strategy.matrix` job the same job name, so without the `job_index` input the legs are indistinguishable to Garnet. See [Matrix jobs](#matrix-jobs).
 
 ## Under the hood
@@ -163,22 +162,24 @@ Read the record for what it is: what Garnet recorded, not a statement that nothi
 
 ## Configuration
 
+In `v2.18.0` (same shutdown code as the `v2.18.0-rc.4` release candidate), Jibril prints the shutdown profile synchronously, outside the event dispatcher's queue and drain deadline, and shortens the dispatcher event-drain deadline from five minutes in `v2.17.0` to one minute. These changes do not bypass the Action's stop timeout or guarantee a profile or complete capture; the Action default remains its stable pin, currently `v2.17.0` without these changes, until the daily version-update workflow's pin bump is merged.
+
 | Input               | Required | Default                 | Description                                    |
 | ------------------- | -------- | ----------------------- | ---------------------------------------------- |
 | `api_token`         | No       | —                       | Garnet API token from app.garnet.ai. When set it is used as-is and no OIDC token is requested. When empty the action tries GitHub OIDC (`id-token: write`). With neither, a pull request run is recorded locally and relayed to the GitHub App through a `garnet-run-*` workflow artifact; any other event skips recording with a warning and a Job Summary explanation. The workflow continues. |
 | `github_token`      | No       | `${{ github.token }}`   | Used by `gh attestation verify` on the Jibril release and to read the job's status when no Execution Profile was produced. If unset, attestation verification is skipped with a warning. |
 | `api_url`           | No       | `https://api.garnet.ai` | Garnet API base URL (HTTPS)                    |
-| `jibril_version`    | No       | `v2.18.0`               | Jibril release tag (for example `v2.16.0`), `latest`, or empty to resolve from the action tag (`@v0` resolves to daily builds) |
+| `jibril_version`    | No       | `v2.18.0`               | Explicit Jibril release tag or `latest`. An empty value uses the Action's stable pin for branches, SHAs, exact tags and `@v2`; `@v0` resolves to daily builds (`v0.0`), and `@v1` to `v2.10.4`. |
 | `job_index`         | No       | —                       | **Strongly recommended on matrix jobs**: pass `${{ strategy.job-index }}`. Without it every leg of a matrix shares one identity and the Runtime Review reports a single leg. See [Matrix jobs](#matrix-jobs). |
-| `job_total`         | No       | —                       | Optional, matrix jobs only: pass `${{ strategy.job-total }}` next to `job_index` so the Step Summary labels the leg `<job> (i of N)`; without it the leg shows the bare job name. The App's PR comment does not need it. |
+| `job_total`         | No       | —                       | Optional, matrix jobs only: pass `${{ strategy.job-total }}` next to `job_index` so the Step Summary labels the leg `<job> (i of N)`; without it the leg shows the bare job name. |
 | `stop_timeout_seconds` | No    | `1800`                  | Seconds Jibril gets at shutdown to finish writing its Execution Profile. The post step waits this long plus a small grace, then force-stops the sensor. `0` or negative disables the bound. |
 | `debug`             | No       | `false`                 | Verbose logging; uploads Jibril logs as artifacts |
 | `preview`           | No       | `false`                 | Render the full-fidelity Step Summary record. Unstable shape; may change without a major version bump |
 | `show_detections`   | No       | `false`                 | Show the sensor's detection labels (for example `exec_from_unusual_dir`) next to recorded destinations in the Step Summary. Off by default |
 
-> **Fork PRs:** `pull_request` runs from forks get no repository secrets and no `id-token: write`. The action records the job locally anyway and uploads it as a `garnet-run-*` workflow artifact; the companion GitHub App collects it after the run and publishes the Runtime Review. Nothing leaves the runner from the job itself, and no credential is written to disk. The Review is published only if the App is installed on the repository.
+> **Credential-free PRs (forks included):** supported `pull_request` and `pull_request_target` jobs without Garnet credentials record locally and upload a `garnet-run-*` GitHub workflow artifact whether or not the App is installed. The job does not upload directly to Garnet or write a Garnet credential to disk. Only collection needs the installed App; without it, the record stays in GitHub until artifact retention expires.
 >
-> **Dependabot PRs:** Dependabot-triggered runs read `secrets.*` from the Dependabot secrets store, so an Actions-only `GARNET_API_TOKEN` resolves empty and the run falls back to the same artifact relay. To record them through the control plane directly, add the same token under the same name in **Settings → Secrets and variables → Dependabot**.
+> **Dependabot PRs:** Dependabot-triggered runs read `secrets.*` from the Dependabot secrets store, so an Actions-only `GARNET_API_TOKEN` resolves empty. Without OIDC too, the run uses the same artifact relay. For direct token authentication, add the token under the same name in **Settings → Secrets and variables → Dependabot**.
 
 ### Matrix jobs
 
@@ -198,7 +199,7 @@ jobs:
                   job_total: ${{ strategy.job-total }}
 ```
 
-Without it, all legs record under one identity: the Runtime Review shows a single leg instead of every one, and comparison against the previous commit cannot line legs up. Nothing is lost on the way out — on the artifact relay each leg still uploads under a distinct `garnet-run-*` name — but the legs arrive unlabelled and cannot be told apart. Leave the input unset on non-matrix jobs.
+Without it, all legs record under one identity: the Runtime Review shows a single leg instead of every one, and comparison against the previous commit cannot line legs up. Leave the input unset on non-matrix jobs.
 
 ---
 
@@ -214,9 +215,7 @@ Without it, all legs record under one identity: the Runtime Review shows a singl
 
 ## Why
 
-Code review sees the diff. CI runs it: postinstall scripts execute, agent-written steps spawn processes, build steps open connections. None of that is in the diff. Runtime Review puts the record of what ran, and where it connected, next to the review.
-
-Worked example: [What Garnet saw during Shai-Hulud](https://www.garnet.ai/resources/garnet-saw-shai-hulud) — a postinstall hook bootstrapping Bun, running TruffleHog against runner secrets and registering a rogue runner, as Garnet recorded it.
+CI runs postinstall scripts, agent-written steps and builds. Runtime Review puts the record of what ran, and where it connected, next to the review.
 
 ---
 
@@ -226,7 +225,7 @@ Worked example: [What Garnet saw during Shai-Hulud](https://www.garnet.ai/resour
 
 - Linux x86_64 runner with systemd (`ubuntu-latest` or a label from the table below)
 - passwordless `sudo` (to install Jibril and run it as a systemd service)
-- `api_token` from a repository secret, **or** `id-token: write` for GitHub OIDC
+- For direct Garnet upload: `api_token` from a repository secret or `id-token: write` for OIDC. Supported `pull_request` and `pull_request_target` jobs without either upload a relay artifact regardless of App installation; the installed App collects it.
 
 ### Supported runners
 
@@ -236,16 +235,16 @@ Worked example: [What Garnet saw during Shai-Hulud](https://www.garnet.ai/resour
 | [Blacksmith](https://www.blacksmith.sh) Linux | for example `blacksmith-8vcpu-ubuntu-2404` | Used on [pnpm/pnpm](https://github.com/pnpm/pnpm) CI |
 | [Depot](https://depot.dev/docs/github-actions/runner-types) Linux | for example `depot-ubuntu-24.04` | x86_64 labels only; `-arm` labels are skipped |
 
-On Windows, macOS and arm64 the action logs a warning and skips recording; the workflow continues.
+On Windows, macOS and arm64 the action logs that recording is unsupported and skips it; the workflow continues.
 
 ### Troubleshooting
 
 | Symptom                                   | Fix                                                                                                    |
 | ----------------------------------------- | ------------------------------------------------------------------------------------------------------ |
 | "Garnet skipped this Runtime Review because no authentication mechanism was available" | `api_token` was empty and no OIDC token could be requested, on an event that cannot be relayed (anything other than a pull request). Pass `api_token` from a secret or grant `id-token: write`; the job continues either way. |
-| No pull request comment                   | The comment is posted by the companion GitHub App — [install it](https://github.com/apps/garnet-runtime-review/installations/select_target) on the repository. The Job Summary and the profile in app.garnet.ai do not depend on the App. |
-| `(step: "<unknown>")` labels              | Step attribution is best effort (see Known limitations). The chain was recorded; only its step is unknown. |
-| Post step is slow                         | The sensor is flushing its record. Lower `stop_timeout_seconds` to bound it. |
+| No pull request comment | [Install the App](https://github.com/apps/garnet-runtime-review/installations/select_target). Direct authenticated runs can write a summary and upload a profile without it; relay needs the App to ingest the artifact. |
+| Missing step label | Step attribution is best-effort; inspect ancestry and the full record. The App omits unknown step labels. |
+| Post step is slow                         | The sensor is flushing its record. Lower `stop_timeout_seconds` to bound it, but interrupting shutdown can lose the Execution Profile. |
 | No Execution Summary                      | Set `debug: "true"` to upload Jibril logs as artifacts, then inspect `jibril.log` and `jibril.err`. |
 
 ### Security & license
