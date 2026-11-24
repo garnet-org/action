@@ -151,7 +151,7 @@ Paste into `AGENTS.md`, `.cursor/rules`, or Devin rules:
 ```md
 # Garnet Runtime Review (pre-merge loop)
 
-1. After pushing to a PR, wait for the Garnet Runtime Review comment by `garnet-runtime-review[bot]`. The optional `Garnet record ready` check is off by default and does not replace reading the comment. If no comment for the current head has appeared once the PR's CI runs have finished (for example, the App is not installed), stop waiting and treat the evidence as unknown.
+1. After pushing to a PR, wait for the Garnet Runtime Review comment by `garnet-runtime-review[bot]`. The optional `Garnet record ready` check is off by default and does not replace reading the comment. The App posts after workflow runs complete, fork relays included; if no comment for the current head has appeared a few minutes after the PR's CI runs finish (for example, the App is not installed), stop waiting and treat the evidence as unknown.
 2. Confirm the SHA in `<!-- garnet:commit <sha> -->` and the `commit` field in `garnet:summary` both equal the current PR head. Require `status: finalized` and declared best-effort or complete capture. The App currently emits no complete-capture declaration; best-effort never means complete.
 3. Inspect new workload destinations and execution chains against the diff; fix unintended behavior before asking a human to review. Evidence never approves a PR.
 4. For job detail, use `profiles` at `https://api.garnet.ai/api/v2/mcp`. Filter with `githubOrg`, `repo`, `runID`, `runAttempt`, `job` and, for matrix legs, `jobIndex`; paginate with `pageArgs`. Use the comment's Job log link to identify the run and job. Confirm PR-head binding separately; an execution SHA alone is not enough.
