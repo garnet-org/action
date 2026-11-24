@@ -43,7 +43,7 @@ Public example: adding Puppeteer as a devDependency shows [the #8 Runtime Review
 ## What Garnet records
 
 - **Execution chains and destinations, not contents** — observed process ancestry, steps when known, and outbound domains, IPs, ports and protocols, rather than source code or payload contents. Observed names can contain sensitive data; redaction is best-effort.
-- **Network policy** — with Jibril `v2.18.0` and later, the default configuration does not load a network policy, so Garnet records and does not block. Earlier versions, including the current `v2.17.0` pin, enforce `/etc/jibril/netpolicy.yaml`: authenticated runs install the Garnet-managed policy (the system-wide policy merged with your project's rules), which can block destinations, and credential-free relay runs keep the policy bundled with the release.
+- **Network policy** — with Jibril `v2.18.0` and later, the default configuration does not load a network policy, so Garnet records and does not block. Earlier versions enforce `/etc/jibril/netpolicy.yaml`: authenticated runs install the Garnet-managed policy (the system-wide policy merged with your project's rules), which can block destinations, and credential-free relay runs keep the policy bundled with the release.
 - **Egress and release checks** — the Action and Jibril communicate with Garnet (or `api_url`) and GitHub. For Jibril v2.17.0+ bundles, the Action checks digests. With `github_token` and `gh`, it also authenticates the release-workflow signer with `gh attestation verify`; otherwise it warns and skips attestation verification. Older tags skip these checks. Allow GitHub's download and attestation-verification dependencies too, including `api.github.com`, `objects.githubusercontent.com` and `tuf-repo-cdn.sigstore.dev`.
 - **Post-step cleanup** — the post step stops the Jibril systemd service and attempts to remove `/etc/default/jibril`, which holds its credentials. The installed binary, systemd unit, configuration and logs remain on the runner; use an ephemeral runner or manage those files on self-hosted runners.
 
@@ -96,7 +96,7 @@ jobs:
 
     steps:
       - uses: actions/checkout@v6
-      - uses: garnet-org/action@673a06d87748bec49e4d8df22d371b2a3420aba4 # v2.5.2
+      - uses: garnet-org/action@7106b4f608f40dd8df44e44346066fdccbae4433 # v2.5.3
       - name: Your existing steps
         run: |
           npm ci
@@ -105,7 +105,7 @@ jobs:
 
 The Action exchanges a GitHub OIDC token for a short-lived, workflow-scoped token. No secret is needed. Add the step to each job you want recorded, before dependency installation, builds and tests; earlier steps are not recorded.
 
-> **Pinning:** the example uses the full v2.5.2 commit SHA. The SHA of the latest release is published at [garnet.ai/pins](https://garnet.ai/pins). Exact tags such as `garnet-org/action@v2.5.2` also work.
+> **Pinning:** the example uses the full v2.5.3 commit SHA. The SHA of the latest release is published at [garnet.ai/pins](https://garnet.ai/pins). Exact tags such as `garnet-org/action@v2.5.3` also work.
 
 ### Token instead of OIDC
 
@@ -116,7 +116,7 @@ Create the token in [app.garnet.ai](https://app.garnet.ai) under **Settings → 
 Add it to the step:
 
 ```yaml
-      - uses: garnet-org/action@673a06d87748bec49e4d8df22d371b2a3420aba4 # v2.5.2
+      - uses: garnet-org/action@7106b4f608f40dd8df44e44346066fdccbae4433 # v2.5.3
         with:
           api_token: ${{ secrets.GARNET_API_TOKEN }}
 ```
@@ -162,7 +162,7 @@ Counts describe the rendered added and removed workload destinations. A destinat
 
 ## Configuration
 
-In `v2.18.0` (same shutdown code as the `v2.18.0-rc.4` release candidate), Jibril prints the shutdown profile synchronously, outside the event dispatcher's queue and drain deadline, and shortens the dispatcher event-drain deadline from five minutes in `v2.17.0` to one minute. These changes do not bypass the Action's stop timeout or guarantee a profile or complete capture; the Action default remains its stable pin, currently `v2.17.0` without these changes, until the daily version-update workflow's pin bump is merged.
+In `v2.18.0` (same shutdown code as the `v2.18.0-rc.4` release candidate), Jibril prints the shutdown profile synchronously, outside the event dispatcher's queue and drain deadline, and shortens the dispatcher event-drain deadline from five minutes in `v2.17.0` to one minute. These changes do not bypass the Action's stop timeout or guarantee a profile or complete capture.
 
 | Input               | Required | Default                 | Description                                    |
 | ------------------- | -------- | ----------------------- | ---------------------------------------------- |
@@ -193,7 +193,7 @@ jobs:
                 node: [20, 22, 24]
         runs-on: ubuntu-latest
         steps:
-            - uses: garnet-org/action@673a06d87748bec49e4d8df22d371b2a3420aba4 # v2.5.2
+            - uses: garnet-org/action@7106b4f608f40dd8df44e44346066fdccbae4433 # v2.5.3
               with:
                   job_index: ${{ strategy.job-index }}
                   job_total: ${{ strategy.job-total }}
