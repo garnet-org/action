@@ -611,6 +611,24 @@ await test("gate: step summary PR link — pull_request refs link the PR row; ot
   assert.equal(summarizeProfile(noRepo).pr_url, "")
 })
 
+await test("security: Step Summary pull request link rejects a forged server_url", () => {
+  const forged = structuredClone(workload)
+  const forgedData = forged.data ?? forged
+  forgedData.scenarios.github.ref = "refs/pull/7/merge"
+  forgedData.scenarios.github.server_url = "https://x)**SPOOF**"
+  const forgedSummary = renderStepSummary([forged], { appUrl: APP_URL })
+  assert.ok(!forgedSummary.includes("SPOOF"))
+  assert.ok(!forgedSummary.includes("| Pull request |"))
+
+  const valid = structuredClone(forged)
+  const validData = valid.data ?? valid
+  validData.scenarios.github.server_url = "https://github.com"
+  const validSummary = renderStepSummary([valid], { appUrl: APP_URL })
+  assert.ok(
+    validSummary.includes("| Pull request | [#7](https://github.com/garnet-org/runtime-review-testbed/pull/7) |"),
+  )
+})
+
 await test("gate: step summary chains fold — collapsed, root-to-action, PIDs never merged, no diff markers", () => {
   assert.ok(EDGE_SUMMARY.includes("<details><summary><sub>Execution chains · "))
   assert.ok(!EDGE_SUMMARY.includes("Execution tree"))
