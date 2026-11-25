@@ -141770,6 +141770,10 @@ const client = new DefaultArtifactClient();
 
 const MASK = "***"
 
+// Relay artifacts are readable to repository readers; regex masking is best-effort.
+// The deep walk prevents a new profile location from reintroducing these fields.
+const COMMAND_LINE_FIELDS = new Set(["arguments", "args", "cmd", "envs", "env", "prev_args", "prev_envs"])
+
 // Rules err on the side of over-masking: a redacted value that turned out to be
 // harmless only costs a little telemetry, whereas a missed one is a leak. Every
 // rule must be idempotent, so re-running over already masked text is a no-op.
@@ -141955,6 +141959,50 @@ function redactProfile(profile) {
     redactProfileDetections(root.profile_detections)
 
     return cloned
+}
+
+/**
+ * Returns a copy of `profile` without fields that can contain command lines or
+ * environment variables. The input is not modified.
+ * @template T
+ * @param {T} profile
+ * @returns {T}
+ */
+function stripCommandLines(profile) {
+    if (!shared_isRecord(profile) || Array.isArray(profile)) {
+        return profile
+    }
+
+    const cloned = structuredClone(profile)
+    stripCommandLineFields(cloned)
+
+    return cloned
+}
+
+/**
+ * @param {unknown} value
+ * @returns {void}
+ */
+function stripCommandLineFields(value) {
+    if (Array.isArray(value)) {
+        for (const item of value) {
+            stripCommandLineFields(item)
+        }
+
+        return
+    }
+
+    if (!shared_isRecord(value)) {
+        return
+    }
+
+    for (const [key, nested] of Object.entries(value)) {
+        if (COMMAND_LINE_FIELDS.has(key)) {
+            delete value[key]
+        } else {
+            stripCommandLineFields(nested)
+        }
+    }
 }
 
 /**
@@ -142244,6 +142292,7 @@ const ARTIFACT_ENTRY_PATH = "garnet/run.json"
 
 // Over this the App drops the envelope, silently and without retrying.
 const MAX_ARTIFACT_BYTES = 16 * 1024 * 1024
+const RUN_ARTIFACT_RETENTION_DAYS = 7
 
 const MAX_JOB_NAME_LENGTH = 64
 const MAX_UINT32 = 0xffffffff
@@ -142287,7 +142336,7 @@ function buildRunArtifact(input) {
     return {
         schema_version: 1,
         agent: withJobIndex(input.agent, input.jobIndex),
-        profile: input.profile === null ? null : redactProfile(input.profile),
+        profile: input.profile === null ? null : stripCommandLines(input.profile),
         stopped: input.stopped,
     }
 }
@@ -142358,7 +142407,11 @@ async function uploadRunArtifact(name, envelope) {
         await promises_.mkdir(external_node_path_.dirname(entryPath), { recursive: true })
         await promises_.writeFile(entryPath, serialized.content)
 
-        await artifact.uploadArtifact(name, [entryPath], stagingDir)
+        // The App collects at workflow completion and skips expired artifacts.
+        // Seven days limits exposure without losing a run.
+        await artifact.uploadArtifact(name, [entryPath], stagingDir, {
+            retentionDays: RUN_ARTIFACT_RETENTION_DAYS,
+        })
         info(`Uploaded the Garnet run artifact '${name}'`)
     } catch (error) {
         annotateDeliveryFailure("artifact_upload_failed", `artifact '${name}': ${getErrorMessage(error)}`)

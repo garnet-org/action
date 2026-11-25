@@ -8,7 +8,7 @@ import * as fs from "node:fs/promises"
 import * as os from "node:os"
 import * as path from "node:path"
 import { default as artifactClient } from "@actions/artifact"
-import { redactProfile } from "./redact.js"
+import { stripCommandLines } from "./redact.js"
 import { getErrorMessage, getOptionalRecord } from "./shared.js"
 import { annotateDeliveryFailure } from "./delivery-annotations.js"
 
@@ -43,6 +43,7 @@ const ARTIFACT_ENTRY_PATH = "garnet/run.json"
 
 // Over this the App drops the envelope, silently and without retrying.
 const MAX_ARTIFACT_BYTES = 16 * 1024 * 1024
+const RUN_ARTIFACT_RETENTION_DAYS = 7
 
 const MAX_JOB_NAME_LENGTH = 64
 const MAX_UINT32 = 0xffffffff
@@ -86,7 +87,7 @@ export function buildRunArtifact(input) {
     return {
         schema_version: 1,
         agent: withJobIndex(input.agent, input.jobIndex),
-        profile: input.profile === null ? null : redactProfile(input.profile),
+        profile: input.profile === null ? null : stripCommandLines(input.profile),
         stopped: input.stopped,
     }
 }
@@ -157,7 +158,11 @@ export async function uploadRunArtifact(name, envelope) {
         await fs.mkdir(path.dirname(entryPath), { recursive: true })
         await fs.writeFile(entryPath, serialized.content)
 
-        await artifactClient.uploadArtifact(name, [entryPath], stagingDir)
+        // The App collects at workflow completion and skips expired artifacts.
+        // Seven days limits exposure without losing a run.
+        await artifactClient.uploadArtifact(name, [entryPath], stagingDir, {
+            retentionDays: RUN_ARTIFACT_RETENTION_DAYS,
+        })
         core.info(`Uploaded the Garnet run artifact '${name}'`)
     } catch (error) {
         annotateDeliveryFailure("artifact_upload_failed", `artifact '${name}': ${getErrorMessage(error)}`)
