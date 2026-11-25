@@ -121,7 +121,7 @@ Add it to the step:
           api_token: ${{ secrets.GARNET_API_TOKEN }}
 ```
 
-When neither credential is available, a pull request run is relayed to the App through a `garnet-run-*` workflow artifact. Other events skip recording with a warning and a Job Summary explanation. The workflow continues.
+When neither credential is available, only a `pull_request` from a fork is relayed to the App through a `garnet-run-*` workflow artifact. Same-repo pull requests, `pull_request_target`, Dependabot, and other credential-less runs skip recording with a warning and a Job Summary explanation. The workflow continues.
 
 Open your next PR, check the App comment's current head and capture state, open a job fold, then follow **Full record in Garnet**. No comparison yet means no usable baseline, not approval. Record the base branch too to build comparison history.
 
@@ -170,8 +170,8 @@ Paste into `AGENTS.md`, `.cursor/rules`, or Devin rules:
 
 ## Under the hood
 
-- **Main step**: downloads and verifies `jibril`, authenticates with the control plane (`api_token`, else GitHub OIDC) and starts Jibril as a systemd service. On a pull request with neither credential it runs the same way minus the control plane: no agent registration and no Garnet credential in `/etc/default/jibril`. If Jibril fails to start, later steps still run; the gap is disclosed in the job log and a Job Summary block with startup diagnostics, and a best-effort `start_failed` report is sent when the sensor was already registered.
-- **Post step (always)**: stops Jibril so it flushes its record, appends the Garnet Execution Summary to `GITHUB_STEP_SUMMARY`, and logs the Execution Profile permalink. If the flush exceeds `stop_timeout_seconds`, the sensor is force-stopped so the job cannot hang. When no usable Execution Profile is produced, the post step reports that to the control plane so the App can resolve the pending comment. On a run that could not authenticate, it uploads the agent, profile and stop signal as a single `garnet-run-*` workflow artifact instead. With `debug: "true"` it also uploads Jibril logs as artifacts.
+- **Main step**: downloads and verifies `jibril`, authenticates with the control plane (`api_token`, else GitHub OIDC) and starts Jibril as a systemd service. On a fork `pull_request` with neither credential it runs the same way minus the control plane: no agent registration and no Garnet credential in `/etc/default/jibril`. If Jibril fails to start, later steps still run; the gap is disclosed in the job log and a Job Summary block with startup diagnostics, and a best-effort `start_failed` report is sent when the sensor was already registered.
+- **Post step (always)**: stops Jibril so it flushes its record, appends the Garnet Execution Summary to `GITHUB_STEP_SUMMARY`, and logs the Execution Profile permalink. If the flush exceeds `stop_timeout_seconds`, the sensor is force-stopped so the job cannot hang. When no usable Execution Profile is produced, the post step reports that to the control plane so the App can resolve the pending comment. On a credential-less fork `pull_request`, it uploads the agent, profile and stop signal as a single `garnet-run-*` workflow artifact. With `debug: "true"` it also uploads Jibril logs as artifacts.
 
 ---
 
@@ -181,7 +181,7 @@ In `v2.18.0` (same shutdown code as the `v2.18.0-rc.4` release candidate), Jibri
 
 | Input               | Required | Default                 | Description                                    |
 | ------------------- | -------- | ----------------------- | ---------------------------------------------- |
-| `api_token`         | No       | —                       | Garnet API token from app.garnet.ai. When set it is used as-is and no OIDC token is requested. When empty the action tries GitHub OIDC (`id-token: write`). With neither, a pull request run is recorded locally and relayed to the GitHub App through a `garnet-run-*` workflow artifact; any other event skips recording with a warning and a Job Summary explanation. The workflow continues. |
+| `api_token`         | No       | —                       | Garnet API token from app.garnet.ai. When set it is used as-is and no OIDC token is requested. When empty the action tries GitHub OIDC (`id-token: write`). With neither, only a `pull_request` from a fork is recorded locally and relayed to the GitHub App through a `garnet-run-*` workflow artifact; same-repo pull requests, `pull_request_target`, Dependabot, and other events skip recording with a warning and a Job Summary explanation. The workflow continues. |
 | `github_token`      | No       | `${{ github.token }}`   | Used by `gh attestation verify` on the Jibril release and to read the job's status when no Execution Profile was produced. If unset, attestation verification is skipped with a warning. |
 | `api_url`           | No       | `https://api.garnet.ai` | Garnet API base URL (HTTPS)                    |
 | `jibril_version`    | No       | `v2.18.0`               | Explicit Jibril release tag or `latest`. An empty value uses the Action's stable pin for branches, SHAs, exact tags and `@v2`; `@v0` resolves to daily builds (`v0.0`), and `@v1` to `v2.10.4`. |
@@ -192,9 +192,9 @@ In `v2.18.0` (same shutdown code as the `v2.18.0-rc.4` release candidate), Jibri
 | `preview`           | No       | `false`                 | Render the full-fidelity Step Summary record. Unstable shape; may change without a major version bump |
 | `show_detections`   | No       | `false`                 | Show the sensor's detection labels (for example `exec_from_unusual_dir`) next to recorded destinations in the Step Summary. Off by default |
 
-> **Credential-free PRs (forks included):** supported `pull_request` and `pull_request_target` jobs without Garnet credentials record locally and upload a `garnet-run-*` GitHub workflow artifact whether or not the App is installed. The job does not upload directly to Garnet or write a Garnet credential to disk. Only collection needs the installed App; without it, the record stays in GitHub until artifact retention expires.
+> **Credential-free fork PRs:** supported fork `pull_request` jobs without Garnet credentials record locally and upload a `garnet-run-*` GitHub workflow artifact whether or not the App is installed. Command-line and environment fields are stripped from the profile, and artifact retention is seven days. The job does not upload directly to Garnet or write a Garnet credential to disk. Only collection needs the installed App; without it, the record stays in GitHub until artifact retention expires.
 >
-> **Dependabot PRs:** Dependabot-triggered runs read `secrets.*` from the Dependabot secrets store, so an Actions-only `GARNET_API_TOKEN` resolves empty. Without OIDC too, the run uses the same artifact relay. For direct token authentication, add the token under the same name in **Settings → Secrets and variables → Dependabot**.
+> **Dependabot PRs:** Dependabot-triggered runs read `secrets.*` from the Dependabot secrets store. If neither the API token nor OIDC is available, the run is skipped with a warning; add the token under the same name in **Settings → Secrets and variables → Dependabot**, or use OIDC.
 
 ### Matrix jobs
 
@@ -240,7 +240,7 @@ CI runs postinstall scripts, agent-written steps and builds. Runtime Review puts
 
 - Linux x86_64 runner with systemd (`ubuntu-latest` or a label from the table below)
 - passwordless `sudo` (to install Jibril and run it as a systemd service)
-- For direct Garnet upload: `api_token` from a repository secret or `id-token: write` for OIDC. Supported `pull_request` and `pull_request_target` jobs without either upload a relay artifact regardless of App installation; the installed App collects it.
+- For direct Garnet upload: `api_token` from a repository secret or `id-token: write` for OIDC. Fork `pull_request` jobs without either upload a relay artifact regardless of App installation; the installed App collects it. Other credential-less jobs skip recording.
 
 ### Supported runners
 
@@ -256,7 +256,7 @@ On Windows, macOS and arm64 the action logs that recording is unsupported and sk
 
 | Symptom                                   | Fix                                                                                                    |
 | ----------------------------------------- | ------------------------------------------------------------------------------------------------------ |
-| "Garnet skipped this Runtime Review because no authentication mechanism was available" | `api_token` was empty and no OIDC token could be requested, on an event that cannot be relayed (anything other than a pull request). Pass `api_token` from a secret or grant `id-token: write`; the job continues either way. |
+| "Garnet skipped this Runtime Review because no authentication mechanism was available" | `api_token` was empty and no OIDC token could be requested, on an event that cannot be relayed (anything other than a fork `pull_request`, including same-repo pull requests, `pull_request_target`, and Dependabot). Pass `api_token` from a secret or grant `id-token: write`; the job continues either way. |
 | No pull request comment | [Install the App](https://github.com/apps/garnet-runtime-review/installations/select_target). Direct authenticated runs can write a summary and upload a profile without it; relay needs the App to ingest the artifact. |
 | Missing step label | Step attribution is best-effort; inspect ancestry and the full record. The App omits unknown step labels. |
 | Post step is slow                         | The sensor is flushing its record. Lower `stop_timeout_seconds` to bound it, but interrupting shutdown can lose the Execution Profile. |
