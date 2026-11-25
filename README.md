@@ -240,7 +240,7 @@ CI runs postinstall scripts, agent-written steps and builds. Runtime Review puts
 
 - Linux x86_64 runner with systemd (`ubuntu-latest` or a label from the table below)
 - passwordless `sudo` (to install Jibril and run it as a systemd service)
-- For direct Garnet upload: `api_token` from a repository secret or `id-token: write` for OIDC. Supported `pull_request` and `pull_request_target` jobs without either upload a relay artifact regardless of App installation; the installed App collects it.
+- For direct Garnet upload: `api_token` from a repository secret or `id-token: write` for OIDC. Fork `pull_request` jobs without either upload a relay artifact regardless of App installation; the installed App collects it. Other credential-less jobs skip recording.
 
 ### Supported runners
 
