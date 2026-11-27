@@ -96,7 +96,7 @@ jobs:
 
     steps:
       - uses: actions/checkout@v6
-      - uses: garnet-org/action@7106b4f608f40dd8df44e44346066fdccbae4433 # v2.5.3
+      - uses: garnet-org/action@24833a47c19aad605bb10bcd9b8cad8f318ca187 # v2.6.0
       - name: Your existing steps
         run: |
           npm ci
@@ -105,7 +105,7 @@ jobs:
 
 The Action exchanges a GitHub OIDC token for a short-lived, workflow-scoped token. No secret is needed. Add the step to each job you want recorded, before dependency installation, builds and tests; earlier steps are not recorded.
 
-> **Pinning:** the example uses the full v2.5.3 commit SHA. The SHA of the latest release is published at [garnet.ai/pins](https://garnet.ai/pins). Exact tags such as `garnet-org/action@v2.5.3` also work.
+> **Pinning:** the example uses the full v2.6.0 commit SHA. The SHA of the latest release is published at [garnet.ai/pins](https://garnet.ai/pins). Exact tags such as `garnet-org/action@v2.6.0` also work.
 
 ### Token instead of OIDC
 
@@ -116,7 +116,7 @@ Create the token in [app.garnet.ai](https://app.garnet.ai) under **Settings → 
 Add it to the step:
 
 ```yaml
-      - uses: garnet-org/action@7106b4f608f40dd8df44e44346066fdccbae4433 # v2.5.3
+      - uses: garnet-org/action@24833a47c19aad605bb10bcd9b8cad8f318ca187 # v2.6.0
         with:
           api_token: ${{ secrets.GARNET_API_TOKEN }}
 ```
@@ -208,7 +208,7 @@ jobs:
                 node: [20, 22, 24]
         runs-on: ubuntu-latest
         steps:
-            - uses: garnet-org/action@7106b4f608f40dd8df44e44346066fdccbae4433 # v2.5.3
+            - uses: garnet-org/action@24833a47c19aad605bb10bcd9b8cad8f318ca187 # v2.6.0
               with:
                   job_index: ${{ strategy.job-index }}
                   job_total: ${{ strategy.job-total }}
